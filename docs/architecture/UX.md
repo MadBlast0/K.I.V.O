@@ -238,6 +238,10 @@ real runtime data over IPC, not mockup data.
 - [ ] **UX-02** · M1 · Close (X, Alt+F4, taskbar) hides the window and KIVO keeps running ("On close, keep KIVO running", on); the first close shows a one-time toast with Settings and Quit (§1)
 - [ ] **UX-03** · M1 · Tray: left-click opens the Control Center; right-click menu Open KIVO · Pause/Resume listening · Hide overlay for 1 hour · Stop everything · Settings · Quit KIVO (§1)
 - [ ] **UX-04** · M1 · Tray icon states: normal, listening, paused (slashed mic), error (badge), updating (§1)
+- [ ] **UX-56** · M1 · Tray tooltip: "KIVO · <state>" plus the permission mode and running-task count (mockup → System surfaces)
+- [ ] **UX-57** · M1 · Actionable Windows notifications with buttons routed back to the runtime: first close (Settings / Quit KIVO), microphone blocked (Open Windows settings / Type instead); later sources reuse the same template (§1, §7)
+- [ ] **UX-58** · M5 · Notification reply field ("Task finished … Want me to commit?" → Reply to KIVO / Send) and a taskbar jump list (Routines, New conversation, Pause listening, Stop everything) (mockup → System surfaces)
+- [ ] **UX-59** · M9 · "What's new in KIVO x.y" dialog shown once after an update, with Release notes / Got it (mockup → System surfaces, DIST-08)
 
 **Overlay: the Island (§2)**
 
@@ -275,7 +279,7 @@ real runtime data over IPC, not mockup data.
 
 **Onboarding (§4)**
 
-- [ ] **UX-33** · M2 · Steps 1–5: Welcome (black, Island demo), Microphone check, How you call KIVO, Hearing & speaking (engine + voice, background download), Your voice (optional enrollment with consent) (§4)
+- [ ] **UX-33** · M2 · Steps 1–5: Welcome (black, Island demo), Microphone check, How you call KIVO, Hearing & speaking (engine + voice, background download), Your voice (optional enrollment with consent); steps slide 18 px in the direction of travel and the progress dots stretch (DESIGN_SYSTEM §5) (§4)
 - [ ] **UX-34** · M3 · Step 6: Connect a brain (optional; sign-in; free options marked) (§4)
 - [ ] **UX-35** · M7 · Steps 7–11: Connect your apps and tools, Permission mode, Look & feel, Startup, Try it → Finish opens the Control Center; recommended choices preselected, optional steps skippable (§4)
 - [ ] **UX-36** · M7 · Recommendation engine: defaults chosen from hardware, installed software, GPU, RAM, network and providers; the user can override (§4, plan §130)

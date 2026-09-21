@@ -1,9 +1,11 @@
 /** Every component in one place, in both themes and all accents. The review surface for the design system. */
 import { useState } from "react";
 import { Island } from "../components/island/Island";
-import { ISLAND_LIVE, ISLAND_STATES, islandPreset, type IslandState } from "../components/island/presets";
+import { ISLAND_LIVE, ISLAND_NOTICES, ISLAND_STATES, islandPreset, type IslandState } from "../components/island/presets";
 import { PageHeader } from "../components/layout/Shell";
-import { HelloPreview, TrayMenuPreview, WindowsToastPreview } from "../components/system/SystemSurfaces";
+import {
+  EXPLORER_MENU, HelloPreview, JUMP_LIST, NativeMenuPreview, TRAY_MENU, TrayTooltipPreview, WindowsToastPreview,
+} from "../components/system/SystemSurfaces";
 import {
   AccentPicker, Alert, BudgetMeter, Button, Checkbox, ContextMenu, Dialog, DialogClose, Done, DropdownMenu, EmptyState,
   Group, IconButton, Keys, LevelMeter, Meta, Meter, Monogram, NewDot, Note, OptionCard, PageTabs, Pill, Popover, Radio,
@@ -11,7 +13,7 @@ import {
   TextArea, TextField, Tile, Tooltip, useToast, type MenuEntry,
 } from "../components/ui";
 import { Icon, ICONS, type IconName } from "../icons";
-import { useTheme, type ThemePref } from "../lib/theme";
+import { useTheme, type MotionPref, type ThemePref } from "../lib/theme";
 
 const MORE_MENU: MenuEntry[] = [
   { type: "item", label: "Rename", icon: "edit", shortcut: "F2" },
@@ -29,7 +31,7 @@ const MORE_MENU: MenuEntry[] = [
 ];
 
 export function Gallery() {
-  const { theme, setTheme, accent, setAccent } = useTheme();
+  const { theme, setTheme, accent, setAccent, motion, setMotion } = useTheme();
   const toast = useToast();
   const [island, setIsland] = useState<IslandState>("listening");
   const [shortcut, setShortcut] = useState(["Ctrl", "Space"]);
@@ -42,7 +44,11 @@ export function Gallery() {
           options={[{ value: "light", label: "Light" }, { value: "dark", label: "Dark" }, { value: "system", label: "System" }]} />} />
 
       <Section title="Accent" />
-      <Group><Row title="Accent colour" subtitle="Used for selection and status only" end={<AccentPicker value={accent} onChange={setAccent} />} /></Group>
+      <Group>
+        <Row title="Accent colour" subtitle="Used for selection and status only" end={<AccentPicker value={accent} onChange={setAccent} />} />
+        <Row title="Motion" subtitle="Reduced turns animations off in KIVO" end={<Segmented<MotionPref> label="Motion" value={motion} onChange={setMotion}
+          options={[{ value: "system", label: "Follow Windows" }, { value: "reduced", label: "Reduced" }]} />} />
+      </Group>
 
       <Section title="Buttons" />
       <Tile>
@@ -156,18 +162,23 @@ export function Gallery() {
         <Island model={islandPreset(island, { partial: "Play something calm on Spotify and" })} />
       </div>
       <div className="k-gallery-chips">
-        {[...ISLAND_STATES, ...ISLAND_LIVE].map((s) => (
+        {[...ISLAND_STATES, ...ISLAND_NOTICES, ...ISLAND_LIVE].map((s) => (
           <button key={s.id} type="button" className="k-gallery-chip" aria-pressed={island === s.id} onClick={() => setIsland(s.id)}>{s.label}</button>
         ))}
       </div>
 
       <Section title="System surfaces" aside="Previews of native Windows UI" />
-      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-start", paddingBottom: 12 }}>
-        <TrayMenuPreview />
-        <div style={{ display: "grid", gap: 16 }}>
-          <WindowsToastPreview title="Reminder" text="Call Maya about the design review." actions={["Snooze", "Done"]} />
-          <HelloPreview reason="send an email to maya@studio.com" />
-        </div>
+      <div className="k-gallery-surfaces">
+        <figure><NativeMenuPreview entries={TRAY_MENU} label="Tray menu" /><figcaption>Tray menu · right-click the tray icon</figcaption></figure>
+        <figure><TrayTooltipPreview state="Listening" mode="Auto" tasks={1} /><figcaption>Tray tooltip · hover the tray icon</figcaption></figure>
+        <figure><NativeMenuPreview entries={JUMP_LIST} label="Jump list" width={230} /><figcaption>Jump list · right-click KIVO in the taskbar</figcaption></figure>
+        <figure><WindowsToastPreview title="KIVO is still running" text="Say “Hey Kivo” or press Ctrl + Space anytime. Quit from the tray icon." actions={["Settings", "Quit KIVO"]} /><figcaption>First close</figcaption></figure>
+        <figure><WindowsToastPreview title="Claude finished in K.I.V.O" text="All 48 tests pass. Want me to commit?" reply /><figcaption>Task finished · reply inline</figcaption></figure>
+        <figure><WindowsToastPreview title="80% of your monthly budget used" text="$8.02 of $10.00. At the limit, KIVO will ask before using cloud AI." actions={["Open Usage", "OK"]} /><figcaption>Budget warning</figcaption></figure>
+        <figure><WindowsToastPreview title="KIVO 0.2 is ready" text="Takes about 20 seconds. Anything running is saved first." actions={["Install now", "When idle"]} /><figcaption>Update ready</figcaption></figure>
+        <figure><WindowsToastPreview title="KIVO can’t use the microphone" text="Windows is blocking microphone access for desktop apps." actions={["Open Windows settings", "Type instead"]} /><figcaption>Microphone blocked</figcaption></figure>
+        <figure><HelloPreview title="KIVO wants to send an email" detail="To maya@studio.com: “Design review moved to Thursday”" /><figcaption>Windows Hello · high-risk actions</figcaption></figure>
+        <figure><NativeMenuPreview entries={EXPLORER_MENU} label="File Explorer menu" width={230} /><figcaption>File Explorer menu · right-click a file</figcaption></figure>
       </div>
 
       <Section title="Icons" aside={`${Object.keys(ICONS).length} semantic names`} />

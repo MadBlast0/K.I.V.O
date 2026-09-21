@@ -1,14 +1,17 @@
 /**
  * The Island: KIVO's black pill at the top of the screen. It morphs between states with a
  * spring (width and height animate together). The waveform draws only while the Island is
- * audible and stops completely at rest, so an idle Island costs zero frames.
+ * audible and stops completely at rest, so an idle Island costs zero frames. When the state
+ * changes, the new content cross-fades in 120 ms after the shape starts to morph.
  */
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { AnimatePresence, motion, useReducedMotionConfig } from "motion/react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Icon } from "../../icons";
 import { Keys, Orb } from "../ui/Status";
 
 export interface IslandModel {
+  /** Identifies the state; content cross-fades when it changes (e.g. "listening", "acting"). */
+  state: string;
   /** Target width in px; height sizes to content. */
   width: number;
   label: ReactNode;
@@ -25,7 +28,7 @@ export interface IslandModel {
 }
 
 export function Island({ model, className, "aria-label": ariaLabel }: { model: IslandModel | null; className?: string; "aria-label"?: string }) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionConfig() ?? false;
   const [height, setHeight] = useState(36);
 
   // Size to content: one observer per mounted Island, attached through a callback ref
@@ -58,13 +61,23 @@ export function Island({ model, className, "aria-label": ariaLabel }: { model: I
           transition={spring}
           style={{ maxWidth: "100%" }}
         >
-          <div ref={inner} style={{ width: model.width, maxWidth: "100%" }}>
-            <div className="k-island__row">
-              {model.lead ?? <Orb />}
-              <span className="k-island__label">{model.label}{model.sub && <small>{model.sub}</small>}</span>
-              {model.trail === "wave" ? <Waveform active voice={model.voice ?? "user"} /> : model.trail}
-            </div>
-            {model.body && <div className="k-island__body">{model.body}</div>}
+          <div ref={inner} style={{ width: model.width, maxWidth: "100%", position: "relative" }}>
+            {/* popLayout takes the outgoing content out of flow, so the height measures the new state. */}
+            <AnimatePresence initial={false} mode="popLayout">
+              <motion.div
+                key={model.state}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1, transition: reduce ? { duration: 0 } : { delay: 0.12, duration: 0.18 } }}
+                exit={{ opacity: 0, transition: { duration: reduce ? 0 : 0.08 } }}
+              >
+                <div className="k-island__row">
+                  {model.lead ?? <Orb />}
+                  <span className="k-island__label">{model.label}{model.sub && <small>{model.sub}</small>}</span>
+                  {model.trail === "wave" ? <Waveform active voice={model.voice ?? "user"} /> : model.trail}
+                </div>
+                {model.body && <div className="k-island__body">{model.body}</div>}
+              </motion.div>
+            </AnimatePresence>
           </div>
         </motion.div>
       )}
@@ -78,7 +91,7 @@ const H = 36;
 /** Five rounded bars. Runs requestAnimationFrame only while `active`, then eases to rest and stops. */
 export function Waveform({ active, voice = "user", level }: { active: boolean; voice?: "user" | "kivo"; level?: () => number }) {
   const canvas = useRef<HTMLCanvasElement>(null);
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionConfig() ?? false;
 
   useEffect(() => {
     const c = canvas.current;

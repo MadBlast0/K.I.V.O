@@ -1,12 +1,16 @@
 /**
- * Theme state: Light (default) / Dark / System, accent colour and text size.
- * Applied as data attributes on <html>; persisted locally.
+ * Appearance state: theme (Light default / Dark / System), accent colour, text size and motion.
+ * Applied as data attributes on <html>, and to Motion through <MotionConfig>. Persisted locally
+ * until settings move to the runtime's kivo.toml (UX-37).
  */
+import { MotionConfig } from "motion/react";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
 export type ThemePref = "light" | "dark" | "system";
 export type Accent = "blue" | "violet" | "teal" | "green" | "amber" | "coral" | "graphite";
 export type TextSize = "normal" | "large";
+/** "system" follows Windows "Animation effects"; "reduced" turns motion off in KIVO only. */
+export type MotionPref = "system" | "reduced";
 
 export const ACCENTS: Array<{ id: Accent; label: string; swatch: string }> = [
   { id: "blue", label: "Blue", swatch: "#0A6CFF" },
@@ -23,15 +27,17 @@ interface ThemeState {
   resolved: "light" | "dark";
   accent: Accent;
   textSize: TextSize;
+  motion: MotionPref;
   setTheme: (t: ThemePref) => void;
   setAccent: (a: Accent) => void;
   setTextSize: (s: TextSize) => void;
+  setMotion: (m: MotionPref) => void;
 }
 
 const ThemeContext = createContext<ThemeState | null>(null);
 const KEY = "kivo.appearance";
 
-function load(): Partial<Pick<ThemeState, "theme" | "accent" | "textSize">> {
+function load(): Partial<Pick<ThemeState, "theme" | "accent" | "textSize" | "motion">> {
   try { return JSON.parse(localStorage.getItem(KEY) ?? "{}"); } catch { return {}; }
 }
 
@@ -40,6 +46,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<ThemePref>(saved.theme ?? "light");
   const [accent, setAccent] = useState<Accent>(saved.accent ?? "blue");
   const [textSize, setTextSize] = useState<TextSize>(saved.textSize ?? "normal");
+  const [motion, setMotion] = useState<MotionPref>(saved.motion ?? "system");
   const [systemDark, setSystemDark] = useState(() => matchMedia("(prefers-color-scheme: dark)").matches);
 
   useEffect(() => {
@@ -56,11 +63,21 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     root.dataset.theme = resolved;
     root.dataset.accent = accent;
     root.dataset.textsize = textSize;
-    try { localStorage.setItem(KEY, JSON.stringify({ theme, accent, textSize })); } catch { /* storage unavailable */ }
-  }, [resolved, theme, accent, textSize]);
+    if (motion === "reduced") root.dataset.motion = "reduced";
+    else delete root.dataset.motion;
+    try { localStorage.setItem(KEY, JSON.stringify({ theme, accent, textSize, motion })); } catch { /* storage unavailable */ }
+  }, [resolved, theme, accent, textSize, motion]);
 
-  const value = useMemo(() => ({ theme, resolved, accent, textSize, setTheme, setAccent, setTextSize }), [theme, resolved, accent, textSize]);
-  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+  const value = useMemo(
+    () => ({ theme, resolved, accent, textSize, motion, setTheme, setAccent, setTextSize, setMotion }),
+    [theme, resolved, accent, textSize, motion],
+  );
+  return (
+    <ThemeContext.Provider value={value}>
+      {/* "user" follows the OS setting; "always" also silences Motion's springs when KIVO's own setting is on. */}
+      <MotionConfig reducedMotion={motion === "reduced" ? "always" : "user"}>{children}</MotionConfig>
+    </ThemeContext.Provider>
+  );
 }
 
 export function useTheme(): ThemeState {

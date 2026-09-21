@@ -25,7 +25,7 @@ function Entries({ items }: { items: MenuEntry[] }) {
         if (e.type === "submenu") {
           return (
             <BMenu.SubmenuRoot key={i}>
-              <BMenu.SubmenuTrigger className="k-menu__item" openOnHover delay={80}>
+              <BMenu.SubmenuTrigger className="k-menu__item" openOnHover delay={120}>
                 {e.icon && <Icon name={e.icon} />}{e.label}
                 {e.hint && <span className="k-menu__shortcut">{e.hint}</span>}
                 <Icon name="chevronRight" className="k-menu__chevron" />

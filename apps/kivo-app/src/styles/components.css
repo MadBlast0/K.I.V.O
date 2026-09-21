@@ -166,6 +166,9 @@
 .k-popup { background: var(--group); border-radius: 10px; box-shadow: 0 0 0 1px var(--border), var(--shadow); padding: 4px; min-width: 200px; font-size: 13px; outline: 0;
   transform-origin: var(--transform-origin); transition: opacity var(--t-fast) var(--ease-out), transform var(--t-base) var(--ease-spring); }
 .k-popup[data-starting-style], .k-popup[data-ending-style] { opacity: 0; transform: scale(.96); }
+/* Submenus slide in 6 px from their parent menu. */
+.k-popup[data-side="right"][data-starting-style] { transform: translateX(-6px); }
+.k-popup[data-side="left"][data-starting-style] { transform: translateX(6px); }
 .k-popover { padding: 14px; min-width: 260px; max-width: 340px; }
 .k-popover__title { font-weight: 600; margin: 0 0 4px; }
 .k-popover__desc { margin: 0; color: var(--text-2); font-size: 12.5px; }
@@ -196,12 +199,12 @@
 .k-dialog__body { padding: 12px 20px 4px; }
 .k-dialog__foot { padding: 16px 20px 18px; display: flex; justify-content: flex-end; gap: 8px; }
 .k-sheet { position: fixed; top: 0; right: 0; bottom: 0; width: min(420px, 100vw); background: var(--win); box-shadow: -20px 0 60px -20px rgba(0, 0, 0, .4);
-  display: flex; flex-direction: column; outline: 0; transition: transform var(--t-slow) var(--ease-out); }
+  display: flex; flex-direction: column; outline: 0; transition: transform 350ms var(--ease-out); }
 .k-sheet[data-starting-style], .k-sheet[data-ending-style] { transform: translateX(105%); }
 .k-sheet__head { display: flex; justify-content: space-between; align-items: center; padding: 16px 18px; border-bottom: 1px solid var(--sep); }
 .k-sheet__title { margin: 0; font-family: var(--font-disp); font-size: 16px; }
 .k-sheet__body { flex: 1; overflow: auto; padding: 16px 18px 30px; }
-.k-sheet__body > * { animation: k-in .3s var(--ease-out) both; }
+.k-sheet__body > * { animation: k-in .3s var(--ease-out) both; animation-delay: calc(350ms + var(--k-i, 0) * 30ms); }
 
 /* ───────── Command palette (black, like the Island) ───────── */
 .k-palette { position: fixed; top: 12vh; left: 50%; translate: -50% 0; width: min(600px, calc(100vw - 32px)); background: #0B0B0C; color: #fff; border-radius: 16px;
@@ -221,7 +224,7 @@
 .k-toast-viewport { position: fixed; left: 50%; bottom: 26px; translate: -50% 0; display: flex; flex-direction: column; gap: 8px; align-items: center; z-index: 100; }
 .k-toast { display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 6px 0 14px; border-radius: 999px; background: #000; color: #fff; font-size: 13px;
   box-shadow: 0 14px 34px -12px rgba(0, 0, 0, .6); white-space: nowrap; transition: opacity var(--t-base), transform var(--t-slow) var(--ease-spring); }
-.k-toast[data-starting-style], .k-toast[data-ending-style] { opacity: 0; transform: translateY(20px); }
+.k-toast[data-starting-style], .k-toast[data-ending-style] { opacity: 0; transform: translateY(20px) scale(.96); }
 .k-toast svg { width: 16px; height: 16px; }
 .k-toast .k-btn { height: 28px; background: rgba(255, 255, 255, .14); color: #fff; }
 
@@ -284,3 +287,11 @@
 .k-native-menu .k-menu__item:hover { background: var(--fill); }
 .k-hello { width: 360px; max-width: 100%; background: var(--group); border-radius: 8px; box-shadow: 0 0 0 1px var(--border), var(--shadow); padding: 22px; text-align: center; animation: k-pop .28s var(--ease-out) both; }
 .k-hello__face { width: 56px; height: 56px; border-radius: 50%; margin: 10px auto; border: 2px solid var(--acc); display: grid; place-items: center; color: var(--acc); }
+.k-win-toast__x { margin-left: auto; font-size: 11px; color: var(--text-3); }
+.k-win-toast__reply { display: flex; gap: 8px; margin-top: 12px; }
+.k-win-toast__reply .k-btn { border-radius: 5px; }
+.k-hello__actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px; }
+.k-hello__actions .k-btn { border-radius: 5px; }
+.k-tray-tip { display: inline-flex; flex-direction: column; gap: 1px; background: var(--group); border-radius: 6px; padding: 7px 10px; font-size: 12px;
+  box-shadow: 0 0 0 1px var(--border), var(--shadow); animation: k-pop .28s var(--ease-out) both; }
+.k-tray-tip span { color: var(--text-2); }

@@ -140,6 +140,7 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 - [ ] **INT-06** · M8 · GitHub via the user's `gh` auth (REST/GraphQL) (§2)
 - [ ] **INT-07** · M8 · Tokens in Credential Manager, narrowest scopes requested incrementally, consumer session cookies never extracted (§2)
 - [ ] **INT-08** · Post · Restricted Google scopes (Gmail read, full Drive) once verification/CASA is funded; each other major app gets a research note before implementation (§0, §2)
+- [ ] **INT-15** · Post · File Explorer context menu "Ask KIVO about this" / "Summarize with KIVO" (needs package identity on Windows 11, DIST-06) (mockup → System surfaces)
 
 **Plugins (§3)**
 

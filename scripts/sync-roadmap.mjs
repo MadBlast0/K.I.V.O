@@ -20,6 +20,7 @@ const sources = [
 const MILESTONES = ["D0", "M0", "M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "M9", "L1", "L2", "L3", "L4", "L5", "Post"];
 const SPEC_LINE = /^- \[(.)\] \*\*([A-Z]+-\d+)\*\* · ([A-Za-z0-9]+) · (.*)$/;
 const COPY_LINE = /^- \[(.)\] \*\*([A-Z]+-\d+)\*\* · /;
+const SYNCED = /<!-- synced:(.) -->$/;
 const EXIT_LINE = /^- \[(.)\] \*\*([A-Za-z0-9]+)-X\d+\*\*/;
 
 const items = [];
@@ -46,13 +47,16 @@ for (const it of items) {
 const roadmapPath = join(docs, "ROADMAP.md");
 let roadmap = readFileSync(roadmapPath, "utf8");
 
-// Refuse to overwrite marks that were changed only in the ROADMAP copy.
+// Refuse to overwrite marks that were changed only in the ROADMAP copy. Each generated line
+// records the mark it was written with (<!-- synced:x -->). If the box no longer matches that
+// record, someone ticked it here by hand; unless the spec already agrees, stop so it isn't lost.
 for (const line of roadmap.split(/\r?\n/)) {
   const m = COPY_LINE.exec(line);
   if (!m) continue;
   const it = byId.get(m[2]);
-  if (it && it.mark !== m[1]) {
-    errors.push(`${m[2]} is [${m[1]}] in ROADMAP.md but [${it.mark}] in ${it.file}: mark it in the spec (with its "→" note), then re-run`);
+  const synced = SYNCED.exec(line)?.[1] ?? m[1];
+  if (it && m[1] !== synced && it.mark !== m[1]) {
+    errors.push(`${m[2]} was changed to [${m[1]}] in ROADMAP.md but is [${it.mark}] in ${it.file}: mark it in the spec (with its "→" note), then re-run`);
   }
 }
 
@@ -82,7 +86,7 @@ const itemBlock = (ms) => {
     const inFile = group.filter((it) => it.file === file);
     const name = file.split("/").pop();
     out.push("", `#### [${name}](${file}) (${inFile.length})`, "");
-    for (const it of inFile) out.push(`- [${it.mark}] **${it.id}** · ${it.text}`);
+    for (const it of inFile) out.push(`- [${it.mark}] **${it.id}** · ${it.text} <!-- synced:${it.mark} -->`);
   }
   return out.join("\n");
 };
