@@ -6,6 +6,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import i18n from "../i18n";
 import type { Event, Link, Method } from "./generated";
 
 interface Boot {
@@ -23,12 +24,13 @@ export interface RuntimeValue {
   start: () => Promise<void>;
 }
 
-const NOT_IN_APP = "This only works inside the KIVO app.";
+/** The error a request gets outside the KIVO app (a plain browser during UI work). */
+const notInApp = () => new Error(i18n.t("link.notInApp"));
 
 const RuntimeContext = createContext<RuntimeValue>({
   link: null,
-  request: () => Promise.reject(new Error(NOT_IN_APP)),
-  start: () => Promise.reject(new Error(NOT_IN_APP)),
+  request: () => Promise.reject(notInApp()),
+  start: () => Promise.reject(notInApp()),
 });
 
 /** Tauri rejects commands with the Rust error string; make it an Error. */
@@ -81,13 +83,13 @@ export function RuntimeProvider({
           ? invoke<T>("runtime_request", { method, params: params ?? null }).catch((e: unknown) => {
               throw asError(e);
             })
-          : Promise.reject(new Error(NOT_IN_APP)),
+          : Promise.reject(notInApp()),
       start: () =>
         isTauri()
           ? invoke<void>("runtime_start").catch((e: unknown) => {
               throw asError(e);
             })
-          : Promise.reject(new Error(NOT_IN_APP)),
+          : Promise.reject(notInApp()),
     }),
     [link],
   );

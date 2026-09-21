@@ -8,6 +8,7 @@
 //!   message and a code, and raw OS detail goes to the log only.
 
 use kivo_core::capability::CapabilitySettings;
+use kivo_core::text;
 use kivo_core::tool::{Provenance, ToolCall, ToolError, ToolErrorCode, ToolResult, ToolSpec};
 use kivo_security::Permit;
 use serde_json::Value;
@@ -106,7 +107,7 @@ pub async fn execute(
         return finish(
             Err(ToolError::new(
                 ToolErrorCode::AccessDenied,
-                "That action wasn't approved.",
+                text::t("error.notApproved"),
             )),
             None,
         );
@@ -118,10 +119,10 @@ pub async fn execute(
     let outcome = tokio::select! {
         joined = job => match joined {
             Ok(result) => result,
-            Err(e) => Err(ToolError::new(ToolErrorCode::Failed, "Something went wrong doing that.").with_detail(e.to_string())),
+            Err(e) => Err(ToolError::new(ToolErrorCode::Failed, text::t("error.failed")).with_detail(e.to_string())),
         },
-        () = tokio::time::sleep(timeout) => Err(ToolError::new(ToolErrorCode::Timeout, "That took too long, so I stopped waiting.")),
-        () = cancel.cancelled() => Err(ToolError::new(ToolErrorCode::Cancelled, "Cancelled.")),
+        () = tokio::time::sleep(timeout) => Err(ToolError::new(ToolErrorCode::Timeout, text::t("error.timeout"))),
+        () = cancel.cancelled() => Err(ToolError::new(ToolErrorCode::Cancelled, text::t("reply.cancelled"))),
     };
     match outcome {
         Ok(output) => finish(Ok(output.data.clone()), Some(output)),

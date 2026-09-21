@@ -208,6 +208,9 @@ or a budget warning. Rules:
 
 - **UI strings:** from day one, every UI string goes through i18n (`i18next` / ICU message
   format). There are no hard-coded strings, and English is the source locale.
+  Text the runtime produces itself (tray menu, notifications, spoken replies, action titles,
+  refusals) comes from a catalog in `crates/kivo-core/locales/<lang>.json` with the same nesting
+  and `{name}` placeholders; English is the fallback for missing keys.
 - **Layout:** CSS logical properties (`margin-inline-start`, etc.), so RTL (Arabic) works by
   switching `dir`. The fonts need Devanagari, Gurmukhi, CJK and Arabic coverage (Noto fallbacks
   bundled per language pack).
@@ -310,7 +313,7 @@ real runtime data over IPC, not mockup data.
 
 **Internationalization and accessibility (§9–10)**
 
-- [ ] **UX-49** · M1 · Every UI string goes through i18n (`i18next`, ICU messages), English source locale; no hard-coded strings (§9) — note: the current component gallery has hard-coded English, to be moved to i18n in M1
+- [x] **UX-49** · M1 · Every UI string goes through i18n (`i18next`, ICU messages), English source locale; no hard-coded strings (§9) → done: the Control Center, the Island and the gallery read every string from `src/i18n/locales/en.json` (i18next + ICU, `withNodes` for sentences with elements); the runtime's own text (tray, notifications, spoken replies, action titles, refusals) comes from `crates/kivo-core/locales/en.json` through `kivo_core::text` · verified: `pnpm test` (presets have translated labels), `cargo test -p kivo-core --test text_keys` (every key the code uses exists), tray and tool tests assert no raw keys, sweep of `.tsx` for literal text (2026-09-22)
 - [ ] **UX-50** · M1 · CSS logical properties so RTL works by switching `dir`; dates and numbers via `Intl` (§9)
 - [ ] **UX-51** · L1 · Language settings show each language's status (Supported / Alpha / Planned) (§9)
 - [~] **UX-52** · M1 · ARIA roles, full keyboard navigation and visible focus rings in the overlay and Control Center (§10) → partial: components use Base UI (ARIA, keyboard) and a focus ring · missing: overlay window, audit

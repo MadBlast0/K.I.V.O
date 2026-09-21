@@ -4,6 +4,7 @@
 
 use crate::registry::{Output, Tool};
 use kivo_core::capability::Capability;
+use kivo_core::text;
 use kivo_core::tool::{
     CapabilityTier, Platform, Provenance, Reversibility, Risk, SideEffect, Target, ToolError,
     ToolErrorCode, ToolSpec,
@@ -50,22 +51,16 @@ impl Tool for Builtin {
 pub fn platform_error(e: PlatformError) -> ToolError {
     let detail = format!("{e:?}");
     let (code, message) = match e {
-        PlatformError::NotFound(what) => {
-            (ToolErrorCode::NotFound, format!("I couldn't find {what}."))
+        PlatformError::NotFound(what) => (
+            ToolErrorCode::NotFound,
+            text::tf("error.notFound", &[("what", &what)]),
+        ),
+        PlatformError::Unsupported => (ToolErrorCode::Unsupported, text::t("error.unsupported")),
+        PlatformError::AccessDenied => (ToolErrorCode::AccessDenied, text::t("error.accessDenied")),
+        PlatformError::Cancelled => (ToolErrorCode::Cancelled, text::t("reply.cancelled")),
+        PlatformError::Conflict(_) | PlatformError::Os { .. } => {
+            (ToolErrorCode::Failed, text::t("error.failed"))
         }
-        PlatformError::Unsupported => (
-            ToolErrorCode::Unsupported,
-            "That isn't supported on this PC.".into(),
-        ),
-        PlatformError::AccessDenied => (
-            ToolErrorCode::AccessDenied,
-            "Windows didn't allow that.".into(),
-        ),
-        PlatformError::Cancelled => (ToolErrorCode::Cancelled, "Cancelled.".into()),
-        PlatformError::Conflict(_) | PlatformError::Os { .. } => (
-            ToolErrorCode::Failed,
-            "Something went wrong doing that.".into(),
-        ),
     };
     ToolError::new(code, message).with_detail(detail)
 }
@@ -77,15 +72,17 @@ fn done(say: impl Into<String>, data: Value) -> Result<Output, ToolError> {
     })
 }
 
+/// A missing argument; `what` names it in `error.missing.*`.
 fn invalid(what: &str) -> ToolError {
-    ToolError::new(ToolErrorCode::InvalidArgs, format!("I didn't get {what}."))
+    ToolError::new(
+        ToolErrorCode::InvalidArgs,
+        text::t(&format!("error.missing.{what}")),
+    )
 }
 
 /// `{"app": {"id", "name"}}` → the indexed app.
 fn app_arg(args: &Value, env: &Env) -> Result<AppEntry, ToolError> {
-    let id = args["app"]["id"]
-        .as_str()
-        .ok_or_else(|| invalid("which app"))?;
+    let id = args["app"]["id"].as_str().ok_or_else(|| invalid("app"))?;
     let name = args["app"]["name"].as_str().unwrap_or(id);
     let catalog = env
         .catalog
@@ -116,12 +113,12 @@ fn window_arg(args: &Value, env: &Env) -> Result<(WindowId, String), ToolError> 
         .windows
         .foreground()
         .map_err(platform_error)?
-        .ok_or_else(|| invalid("a window to use"))?;
+        .ok_or_else(|| invalid("window"))?;
     Ok((front.id, front.title))
 }
 
 fn number_arg(args: &Value) -> Result<f32, ToolError> {
-    let n = args["number"].as_f64().ok_or_else(|| invalid("a number"))?;
+    let n = args["number"].as_f64().ok_or_else(|| invalid("number"))?;
     #[allow(clippy::cast_possible_truncation, reason = "0–100")]
     Ok((n as f32 / 100.0).clamp(0.0, 1.0))
 }
@@ -152,9 +149,10 @@ pub fn targets(tool: &str, args: &Value) -> Vec<Target> {
     out
 }
 
+/// A tool's definition. Its title (shown on confirmation cards and in Activity) is
+/// `tool.<id>` in the text catalog; the description is for models and stays in English.
 struct Def {
     id: &'static str,
-    title: &'static str,
     description: &'static str,
     params: Value,
     risk: Risk,
@@ -169,7 +167,7 @@ fn spec(d: &Def) -> ToolSpec {
     ToolSpec {
         id: d.id.into(),
         description: d.description.into(),
-        title: d.title.into(),
+        title: text::t(&format!("tool.{}", d.id)),
         params: d.params.clone(),
         result: json!({ "type": "object" }),
         risk: d.risk,
@@ -217,9 +215,8 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
             run,
         })
     };
-    let def = |id, title, description, params, risk, effects, capability, reversibility| Def {
+    let def = |id, description, params, risk, effects, capability, reversibility| Def {
         id,
-        title,
         description,
         params,
         risk,
@@ -233,7 +230,6 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
         tool(
             def(
                 "apps.launch",
-                "Open {app}",
                 "Open an installed app.",
                 app_param(),
                 Risk::Low,
@@ -244,13 +240,15 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
             Box::new(|args, env| {
                 let app = app_arg(args, env)?;
                 env.apps.launch(&app, &[]).map_err(platform_error)?;
-                done(format!("Opening {}.", app.name), json!({ "app": app.name }))
+                done(
+                    text::tf("reply.opening", &[("name", &app.name)]),
+                    json!({ "app": app.name }),
+                )
             }),
         ),
         tool(
             def(
                 "apps.close",
-                "Close {app}",
                 "Close every window of an app (it may ask to save).",
                 app_param(),
                 Risk::Medium,
@@ -262,7 +260,7 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
                 let app = app_arg(args, env)?;
                 let closed = env.apps.close(&app).map_err(platform_error)?;
                 done(
-                    format!("Closing {}.", app.name),
+                    text::tf("reply.closing", &[("name", &app.name)]),
                     json!({ "app": app.name, "windows": closed }),
                 )
             }),
@@ -270,7 +268,6 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
         tool(
             def(
                 "windows.focus",
-                "Switch to {window}",
                 "Bring a window to the front.",
                 window_param(true),
                 Risk::Low,
@@ -281,13 +278,15 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
             Box::new(|args, env| {
                 let (id, title) = window_arg(args, env)?;
                 env.windows.focus(id).map_err(platform_error)?;
-                done(format!("Switched to {title}."), json!({ "window": title }))
+                done(
+                    text::tf("reply.switched", &[("title", &title)]),
+                    json!({ "window": title }),
+                )
             }),
         ),
         tool(
             def(
                 "windows.minimize",
-                "Minimize {window}",
                 "Minimize a window (the one in front by default).",
                 window_param(false),
                 Risk::Low,
@@ -298,13 +297,12 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
             Box::new(|args, env| {
                 let (id, title) = window_arg(args, env)?;
                 env.windows.minimize(id).map_err(platform_error)?;
-                done("Minimized.", json!({ "window": title }))
+                done(text::t("reply.minimized"), json!({ "window": title }))
             }),
         ),
         tool(
             def(
                 "windows.maximize",
-                "Maximize {window}",
                 "Maximize a window (the one in front by default).",
                 window_param(false),
                 Risk::Low,
@@ -315,13 +313,12 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
             Box::new(|args, env| {
                 let (id, title) = window_arg(args, env)?;
                 env.windows.maximize(id).map_err(platform_error)?;
-                done("Maximized.", json!({ "window": title }))
+                done(text::t("reply.maximized"), json!({ "window": title }))
             }),
         ),
         tool(
             def(
                 "windows.close",
-                "Close {window}",
                 "Close a window (the one in front by default; it may ask to save).",
                 window_param(false),
                 Risk::Medium,
@@ -332,13 +329,12 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
             Box::new(|args, env| {
                 let (id, title) = window_arg(args, env)?;
                 env.windows.close(id).map_err(platform_error)?;
-                done("Closed.", json!({ "window": title }))
+                done(text::t("reply.closed"), json!({ "window": title }))
             }),
         ),
         tool(
             def(
                 "audio.mute",
-                "Mute the sound",
                 "Mute the speakers.",
                 none(),
                 Risk::Low,
@@ -348,13 +344,12 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
             ),
             Box::new(|_, env| {
                 env.control.set_muted(true).map_err(platform_error)?;
-                done("Muted.", json!({ "muted": true }))
+                done(text::t("reply.muted"), json!({ "muted": true }))
             }),
         ),
         tool(
             def(
                 "audio.unmute",
-                "Unmute the sound",
                 "Unmute the speakers.",
                 none(),
                 Risk::Low,
@@ -364,13 +359,12 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
             ),
             Box::new(|_, env| {
                 env.control.set_muted(false).map_err(platform_error)?;
-                done("Sound is on.", json!({ "muted": false }))
+                done(text::t("reply.soundOn"), json!({ "muted": false }))
             }),
         ),
         tool(
             def(
                 "audio.volume_set",
-                "Set the volume to {number}%",
                 "Set the speaker volume (0–100).",
                 object(
                     json!({ "number": { "type": "number", "minimum": 0, "maximum": 100 } }),
@@ -385,13 +379,15 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
                 let level = number_arg(args)?;
                 env.control.set_volume(level).map_err(platform_error)?;
                 let percent = (level * 100.0).round();
-                done(format!("Volume {percent}%."), json!({ "volume": percent }))
+                done(
+                    text::tf("reply.volume", &[("percent", &percent)]),
+                    json!({ "volume": percent }),
+                )
             }),
         ),
         tool(
             def(
                 "audio.volume_up",
-                "Turn the volume up",
                 "Raise the volume by 10%.",
                 none(),
                 Risk::Low,
@@ -404,7 +400,6 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
         tool(
             def(
                 "audio.volume_down",
-                "Turn the volume down",
                 "Lower the volume by 10%.",
                 none(),
                 Risk::Low,
@@ -417,7 +412,6 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
         tool(
             def(
                 "audio.mic_mute",
-                "Mute the microphone",
                 "Mute the default microphone for every app.",
                 none(),
                 Risk::Low,
@@ -427,13 +421,12 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
             ),
             Box::new(|_, env| {
                 env.control.set_mic_muted(true).map_err(platform_error)?;
-                done("Microphone muted.", json!({ "micMuted": true }))
+                done(text::t("reply.micMuted"), json!({ "micMuted": true }))
             }),
         ),
         tool(
             def(
                 "audio.mic_unmute",
-                "Unmute the microphone",
                 "Unmute the default microphone.",
                 none(),
                 Risk::Low,
@@ -443,13 +436,12 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
             ),
             Box::new(|_, env| {
                 env.control.set_mic_muted(false).map_err(platform_error)?;
-                done("Microphone on.", json!({ "micMuted": false }))
+                done(text::t("reply.micOn"), json!({ "micMuted": false }))
             }),
         ),
         tool(
             def(
                 "media.play_pause",
-                "Play or pause",
                 "Play or pause whatever is playing.",
                 none(),
                 Risk::Low,
@@ -461,13 +453,12 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
                 env.control
                     .media(MediaAction::PlayPause)
                     .map_err(nothing_playing)?;
-                done("Okay.", json!({}))
+                done(text::t("reply.okay"), json!({}))
             }),
         ),
         tool(
             def(
                 "media.next",
-                "Next track",
                 "Skip to the next track.",
                 none(),
                 Risk::Low,
@@ -479,13 +470,12 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
                 env.control
                     .media(MediaAction::Next)
                     .map_err(nothing_playing)?;
-                done("Next.", json!({}))
+                done(text::t("reply.next"), json!({}))
             }),
         ),
         tool(
             def(
                 "media.previous",
-                "Previous track",
                 "Go back to the previous track.",
                 none(),
                 Risk::Low,
@@ -497,13 +487,12 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
                 env.control
                     .media(MediaAction::Previous)
                     .map_err(nothing_playing)?;
-                done("Previous.", json!({}))
+                done(text::t("reply.previous"), json!({}))
             }),
         ),
         tool(
             def(
                 "media.now_playing",
-                "Say what's playing",
                 "Report the current track.",
                 none(),
                 Risk::Safe,
@@ -515,23 +504,25 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
                 |_, env| match env.control.now_playing().map_err(platform_error)? {
                     Some(p) if !p.title.is_empty() => {
                         let say = if p.artist.is_empty() {
-                            format!("{}.", p.title)
+                            text::tf("reply.track", &[("title", &p.title)])
                         } else {
-                            format!("{} by {}.", p.title, p.artist)
+                            text::tf(
+                                "reply.trackBy",
+                                &[("title", &p.title), ("artist", &p.artist)],
+                            )
                         };
                         done(
                             say,
                             json!({ "title": p.title, "artist": p.artist, "app": p.app, "playing": p.playing }),
                         )
                     }
-                    _ => done("Nothing is playing.", json!({ "playing": false })),
+                    _ => done(text::t("reply.nothingPlaying"), json!({ "playing": false })),
                 },
             ),
         ),
         tool(
             def(
                 "screen.screenshot",
-                "Take a screenshot",
                 "Save a screenshot of the screen in front to Pictures\\Screenshots.",
                 none(),
                 Risk::Low,
@@ -546,7 +537,7 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
                     .map_err(platform_error)?;
                 let path = save_png(&env.screenshots, &image)?;
                 done(
-                    "Screenshot saved.",
+                    text::t("reply.screenshotSaved"),
                     json!({ "path": path.to_string_lossy(), "width": image.width, "height": image.height }),
                 )
             }),
@@ -554,7 +545,6 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
         tool(
             def(
                 "system.lock",
-                "Lock the computer",
                 "Lock Windows (sign-in needed to return).",
                 none(),
                 Risk::Low,
@@ -566,13 +556,12 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
                 env.control
                     .power(PowerAction::Lock)
                     .map_err(platform_error)?;
-                done("Locked.", json!({}))
+                done(text::t("reply.locked"), json!({}))
             }),
         ),
         tool(
             def(
                 "system.sleep",
-                "Put the computer to sleep",
                 "Put the PC to sleep.",
                 none(),
                 Risk::Medium,
@@ -584,13 +573,12 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
                 env.control
                     .power(PowerAction::Sleep)
                     .map_err(platform_error)?;
-                done("Going to sleep.", json!({}))
+                done(text::t("reply.sleeping"), json!({}))
             }),
         ),
         tool(
             def(
                 "system.restart",
-                "Restart the computer",
                 "Restart Windows. Unsaved work in other apps may be lost.",
                 none(),
                 Risk::High,
@@ -602,13 +590,12 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
                 env.control
                     .power(PowerAction::Restart)
                     .map_err(platform_error)?;
-                done("Restarting in a few seconds.", json!({}))
+                done(text::t("reply.restarting"), json!({}))
             }),
         ),
         tool(
             def(
                 "system.shutdown",
-                "Shut down the computer",
                 "Shut Windows down. Unsaved work in other apps may be lost.",
                 none(),
                 Risk::High,
@@ -620,13 +607,12 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
                 env.control
                     .power(PowerAction::Shutdown)
                     .map_err(platform_error)?;
-                done("Shutting down in a few seconds.", json!({}))
+                done(text::t("reply.shuttingDown"), json!({}))
             }),
         ),
         tool(
             def(
                 "notifications.show",
-                "Show a notification",
                 "Show a Windows notification.",
                 object(
                     json!({ "title": {"type": "string"}, "body": {"type": "string"} }),
@@ -638,7 +624,7 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
                 NotApplicable,
             ),
             Box::new(|args, env| {
-                let title = args["title"].as_str().ok_or_else(|| invalid("a title"))?;
+                let title = args["title"].as_str().ok_or_else(|| invalid("title"))?;
                 let body = args["body"].as_str().unwrap_or_default();
                 env.notifications
                     .show(&Notification {
@@ -648,7 +634,7 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
                         reply: false,
                     })
                     .map_err(platform_error)?;
-                done("Done.", json!({}))
+                done(text::t("reply.done"), json!({}))
             }),
         ),
         tool(
@@ -656,7 +642,6 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
                 egress: true,
                 ..def(
                     "browser.open_url",
-                    "Open {url}",
                     "Open a web address in the default browser.",
                     object(
                         json!({ "url": { "type": "string", "format": "uri" } }),
@@ -669,7 +654,7 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
                 )
             },
             Box::new(|args, env| {
-                let url = args["url"].as_str().ok_or_else(|| invalid("an address"))?;
+                let url = args["url"].as_str().ok_or_else(|| invalid("address"))?;
                 env.control.open_url(url).map_err(platform_error)?;
                 let host = url
                     .split("://")
@@ -678,7 +663,10 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
                     .split('/')
                     .next()
                     .unwrap_or(url);
-                done(format!("Opening {host}."), json!({ "url": url }))
+                done(
+                    text::tf("reply.opening", &[("name", &host)]),
+                    json!({ "url": url }),
+                )
             }),
         ),
         tool(
@@ -686,7 +674,6 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
                 egress: true,
                 ..def(
                     "browser.search",
-                    "Search the web for “{text}”",
                     "Search the web in the default browser.",
                     object(json!({ "text": { "type": "string" } }), &["text"]),
                     Risk::Low,
@@ -696,13 +683,16 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
                 )
             },
             Box::new(|args, env| {
-                let text = args["text"]
+                let query = args["text"]
                     .as_str()
                     .filter(|t| !t.trim().is_empty())
-                    .ok_or_else(|| invalid("what to search for"))?;
-                let url = format!("https://www.google.com/search?q={}", encode_query(text));
+                    .ok_or_else(|| invalid("query"))?;
+                let url = format!("https://www.google.com/search?q={}", encode_query(query));
                 env.control.open_url(&url).map_err(platform_error)?;
-                done(format!("Searching for {text}."), json!({ "url": url }))
+                done(
+                    text::tf("reply.searching", &[("text", &query)]),
+                    json!({ "url": url }),
+                )
             }),
         ),
     ]
@@ -711,7 +701,7 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
 fn nothing_playing(e: PlatformError) -> ToolError {
     match e {
         PlatformError::NotFound(_) => {
-            ToolError::new(ToolErrorCode::NotFound, "Nothing is playing.")
+            ToolError::new(ToolErrorCode::NotFound, text::t("reply.nothingPlaying"))
         }
         other => platform_error(other),
     }
@@ -722,7 +712,10 @@ fn step_volume(env: &Env, delta: f32) -> Result<Output, ToolError> {
     let level = (now.level + delta).clamp(0.0, 1.0);
     env.control.set_volume(level).map_err(platform_error)?;
     let percent = (level * 100.0).round();
-    done(format!("Volume {percent}%."), json!({ "volume": percent }))
+    done(
+        text::tf("reply.volume", &[("percent", &percent)]),
+        json!({ "volume": percent }),
+    )
 }
 
 /// Percent-encodes a search query.
@@ -743,7 +736,7 @@ fn encode_query(text: &str) -> String {
 /// Writes `image` as `KIVO <date> <time>.png` in `dir`.
 fn save_png(dir: &std::path::Path, image: &kivo_platform::Image) -> Result<PathBuf, ToolError> {
     let fail = |e: &dyn std::fmt::Display| {
-        ToolError::new(ToolErrorCode::Failed, "I couldn't save the screenshot.")
+        ToolError::new(ToolErrorCode::Failed, text::t("error.screenshot"))
             .with_detail(e.to_string())
     };
     std::fs::create_dir_all(dir).map_err(|e| fail(&e))?;
@@ -899,7 +892,7 @@ mod tests {
             json!({"app": {"id": "Chrome", "name": "Google Chrome"}}),
         )
         .unwrap_err();
-        assert_eq!(e.message, "I couldn't find Google Chrome.");
+        assert_eq!(e.message, "I couldn’t find Google Chrome.");
         let e = run(&r, "media.next", json!({})).unwrap_err();
         assert_eq!(e.message, "Nothing is playing.");
         let e = run(&r, "audio.volume_set", json!({})).unwrap_err();
@@ -966,8 +959,19 @@ mod tests {
                 "{}",
                 s.id
             );
+            assert!(
+                !s.title.starts_with("tool."),
+                "{} has a catalog title",
+                s.id
+            );
             assert_eq!(s.params["type"], "object");
             assert!(s.timeout_ms > 0 && !s.side_effects.is_empty());
+        }
+        for what in ["app", "window", "number", "title", "address", "query"] {
+            assert!(
+                !invalid(what).message.starts_with("error."),
+                "{what} is worded"
+            );
         }
     }
 }

@@ -12,14 +12,15 @@ export type TextSize = "normal" | "large";
 /** "system" follows Windows "Animation effects"; "reduced" turns motion off in KIVO only. */
 export type MotionPref = "system" | "reduced";
 
-export const ACCENTS: Array<{ id: Accent; label: string; swatch: string }> = [
-  { id: "blue", label: "Blue", swatch: "#0A6CFF" },
-  { id: "violet", label: "Violet", swatch: "#7C5CFF" },
-  { id: "teal", label: "Teal", swatch: "#0E9494" },
-  { id: "green", label: "Green", swatch: "#1F9D55" },
-  { id: "amber", label: "Amber", swatch: "#C98300" },
-  { id: "coral", label: "Coral", swatch: "#E5533D" },
-  { id: "graphite", label: "Graphite", swatch: "#6E6E73" },
+/** Accent presets; their names are `accent.<id>` in the translations. */
+export const ACCENTS: Array<{ id: Accent; swatch: string }> = [
+  { id: "blue", swatch: "#0A6CFF" },
+  { id: "violet", swatch: "#7C5CFF" },
+  { id: "teal", swatch: "#0E9494" },
+  { id: "green", swatch: "#1F9D55" },
+  { id: "amber", swatch: "#C98300" },
+  { id: "coral", swatch: "#E5533D" },
+  { id: "graphite", swatch: "#6E6E73" },
 ];
 
 interface ThemeState {

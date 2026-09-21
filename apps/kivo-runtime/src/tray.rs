@@ -6,6 +6,7 @@ use crate::core::{Core, describe};
 use crate::engine::Engine;
 use kivo_core::SessionState;
 use kivo_core::config::PermissionMode;
+use kivo_core::text;
 use kivo_ipc::StateSnapshot;
 use kivo_platform::{Tray, TrayIcon, TrayMenuItem};
 use kivo_platform_windows::{TrayEvent, WindowsTray};
@@ -27,22 +28,15 @@ const MODE_PREFIX: &str = "mode:";
 /// Bypass needs its confirmation step, which lives in the Control Center (SEC-03).
 const BYPASS: &str = "mode:bypass";
 
-const MODES: [(PermissionMode, &str, &str); 4] = [
-    (PermissionMode::Ask, "mode:ask", "Ask every time"),
-    (
-        PermissionMode::AcceptEdits,
-        "mode:accept-edits",
-        "Accept edits",
-    ),
-    (PermissionMode::Plan, "mode:plan", "Plan first"),
-    (PermissionMode::Auto, "mode:auto", "Auto"),
+const MODES: [(PermissionMode, &str); 4] = [
+    (PermissionMode::Ask, "mode:ask"),
+    (PermissionMode::AcceptEdits, "mode:accept-edits"),
+    (PermissionMode::Plan, "mode:plan"),
+    (PermissionMode::Auto, "mode:auto"),
 ];
 
-fn mode_label(mode: PermissionMode) -> &'static str {
-    MODES
-        .iter()
-        .find(|(m, _, _)| *m == mode)
-        .map_or("Bypass permissions", |(_, _, label)| label)
+fn mode_label(mode: PermissionMode) -> String {
+    text::t(&format!("mode.{}", text::key_of(&mode)))
 }
 
 /// What the tray shows: it changes with these.
@@ -69,51 +63,52 @@ fn menu(shown: Shown) -> Vec<TrayMenuItem> {
         mode,
         island_hidden,
     } = shown;
-    let item = |id: &str, label: &str, enabled: bool| TrayMenuItem::Item {
+    // `key` is under `tray.` in the text catalog.
+    let item = |id: &str, key: &str, enabled: bool| TrayMenuItem::Item {
         id: id.into(),
-        label: label.into(),
+        label: text::t(&format!("tray.{key}")),
         enabled,
     };
     let listening = if state == SessionState::Paused {
-        item(RESUME, "Resume listening", true)
+        item(RESUME, "resume", true)
     } else {
         // Pausing is possible only when KIVO isn't in the middle of a request.
         item(
             PAUSE,
-            "Pause listening",
+            "pause",
             matches!(state, SessionState::Idle | SessionState::FollowUp),
         )
     };
     let mut modes: Vec<TrayMenuItem> = MODES
         .iter()
-        .map(|(m, id, label)| TrayMenuItem::Check {
+        .map(|(m, id)| TrayMenuItem::Check {
             id: (*id).into(),
-            label: (*label).into(),
+            label: mode_label(*m),
             checked: *m == mode,
         })
         .collect();
     modes.push(TrayMenuItem::Check {
         id: BYPASS.into(),
-        label: "Bypass permissions…".into(),
+        label: text::t("tray.bypass"),
         checked: mode == PermissionMode::Bypass,
     });
     vec![
-        item(OPEN, "Open KIVO", true),
+        item(OPEN, "open", true),
         listening,
         TrayMenuItem::Submenu {
-            label: "Permission mode".into(),
+            label: text::t("tray.modeMenu"),
             items: modes,
         },
         if island_hidden {
-            item(SHOW_ISLAND, "Show the Island", true)
+            item(SHOW_ISLAND, "showIsland", true)
         } else {
-            item(HIDE_ISLAND, "Hide Island for 1 hour", true)
+            item(HIDE_ISLAND, "hideIsland", true)
         },
         TrayMenuItem::Separator,
-        item(STOP, "Stop everything", true),
+        item(STOP, "stop", true),
         TrayMenuItem::Separator,
-        item(SETTINGS, "Settings", true),
-        item(QUIT, "Quit KIVO", true),
+        item(SETTINGS, "settings", true),
+        item(QUIT, "quit", true),
     ]
 }
 
@@ -129,10 +124,13 @@ fn icon(state: SessionState) -> TrayIcon {
 /// "KIVO · Ready", then the permission mode and running tasks (UX-56).
 fn tooltip(state: SessionState, mode: PermissionMode) -> String {
     // Tasks arrive in M5; until then nothing runs in the background.
-    format!(
-        "KIVO · {}\n{} mode · 0 tasks running",
-        describe(state),
-        mode_label(mode)
+    text::tf(
+        "tray.tooltip",
+        &[
+            ("state", &describe(state)),
+            ("mode", &mode_label(mode)),
+            ("tasks", &text::plural("tray.tasks", 0, &[])),
+        ],
     )
 }
 
@@ -180,8 +178,8 @@ fn handle(core: &Arc<Core>, engine: Option<&Arc<Engine>>, event: &TrayEvent) {
                 Ok(())
             }
             mode if mode.starts_with(MODE_PREFIX) => {
-                match MODES.iter().find(|(_, id, _)| *id == mode) {
-                    Some((m, _, _)) => core.set_mode(*m).map(drop),
+                match MODES.iter().find(|(_, id)| *id == mode) {
+                    Some((m, _)) => core.set_mode(*m).map(drop),
                     None => Ok(()),
                 }
             }
@@ -302,6 +300,22 @@ mod tests {
             })
             .collect();
         assert_eq!(checked, ["mode:plan"]);
+        let labels: Vec<&str> = menu
+            .iter()
+            .chain(items)
+            .filter_map(|i| match i {
+                TrayMenuItem::Item { label, .. }
+                | TrayMenuItem::Check { label, .. }
+                | TrayMenuItem::Submenu { label, .. } => Some(label.as_str()),
+                TrayMenuItem::Separator => None,
+            })
+            .collect();
+        assert!(
+            labels
+                .iter()
+                .all(|l| !l.starts_with("tray.") && !l.starts_with("mode.")),
+            "every tray label is worded: {labels:?}"
+        );
         assert_eq!(items.len(), 5, "four modes and Bypass");
     }
 

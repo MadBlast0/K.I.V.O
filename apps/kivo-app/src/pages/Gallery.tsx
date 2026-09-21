@@ -1,11 +1,14 @@
 /** Every component in one place, in both themes and all accents. The review surface for the design system. */
-import { useState } from "react";
+import type { TFunction } from "i18next";
+import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Island } from "../components/island/Island";
 import {
   ISLAND_LIVE,
   ISLAND_NOTICES,
   ISLAND_STATES,
   islandPreset,
+  islandStateLabel,
   type IslandState,
 } from "../components/island/presets";
 import { PageHeader } from "../components/layout/Shell";
@@ -67,115 +70,120 @@ import {
 import { Icon, ICONS, isIconName } from "../icons";
 import { useTheme, type MotionPref, type ThemePref } from "../lib/theme";
 
-const MORE_MENU: MenuEntry[] = [
-  { type: "item", label: "Rename", icon: "edit", shortcut: "F2" },
-  { type: "item", label: "Duplicate", icon: "layers", shortcut: "Ctrl+D" },
-  {
-    type: "submenu",
-    label: "Move to",
-    icon: "folder",
-    items: [
-      { type: "item", label: "Work" },
-      { type: "item", label: "Personal" },
-      {
-        type: "submenu",
-        label: "Archive",
-        items: [
-          { type: "item", label: "2026" },
-          { type: "item", label: "2025" },
-        ],
-      },
-    ],
-  },
-  { type: "separator" },
-  { type: "label", label: "Run" },
-  { type: "item", label: "When I sign in", checked: true },
-  { type: "item", label: "Every morning", checked: false },
-  { type: "separator" },
-  { type: "item", label: "Delete", icon: "delete", shortcut: "Del", danger: true },
-];
+/** The demo menu, built per render so the labels follow the language. */
+function menu(t: TFunction): MenuEntry[] {
+  return [
+    { type: "item", label: t("gallery.rename"), icon: "edit", shortcut: "F2" },
+    { type: "item", label: t("gallery.duplicate"), icon: "layers", shortcut: "Ctrl+D" },
+    {
+      type: "submenu",
+      label: t("gallery.moveTo"),
+      icon: "folder",
+      items: [
+        { type: "item", label: t("gallery.work") },
+        { type: "item", label: t("gallery.personal") },
+        {
+          type: "submenu",
+          label: t("gallery.archive"),
+          items: [
+            { type: "item", label: "2026" },
+            { type: "item", label: "2025" },
+          ],
+        },
+      ],
+    },
+    { type: "separator" },
+    { type: "label", label: t("gallery.run") },
+    { type: "item", label: t("gallery.whenISignIn"), checked: true },
+    { type: "item", label: t("gallery.everyMorning"), checked: false },
+    { type: "separator" },
+    { type: "item", label: t("gallery.delete"), icon: "delete", shortcut: "Del", danger: true },
+  ];
+}
 
 export function Gallery() {
+  const { t } = useTranslation();
   const { theme, setTheme, accent, setAccent, motion, setMotion } = useTheme();
   const toast = useToast();
   const [island, setIsland] = useState<IslandState>("listening");
   const [shortcut, setShortcut] = useState(["Ctrl", "Space"]);
   const [dialog, setDialog] = useState(false);
+  const moreMenu = useMemo(() => menu(t), [t]);
 
   return (
     <>
       <PageHeader
-        title="Components"
-        subtitle="Every building block of KIVO. Switch theme and accent to check both."
+        title={t("gallery.components")}
+        subtitle={t("gallery.everyBuildingBlockOfKivo")}
         actions={
           <Segmented<ThemePref>
-            label="Theme"
+            label={t("gallery.theme")}
             value={theme}
             onChange={setTheme}
             options={[
-              { value: "light", label: "Light" },
-              { value: "dark", label: "Dark" },
-              { value: "system", label: "System" },
+              { value: "light", label: t("gallery.light") },
+              { value: "dark", label: t("gallery.dark") },
+              { value: "system", label: t("gallery.system") },
             ]}
           />
         }
       />
 
-      <Section title="Accent" />
+      <Section title={t("gallery.accent")} />
       <Group>
         <Row
-          title="Accent colour"
-          subtitle="Used for selection and status only"
+          title={t("gallery.accentColour")}
+          subtitle={t("gallery.usedForSelectionAndStatus")}
           end={<AccentPicker value={accent} onChange={setAccent} />}
         />
         <Row
-          title="Motion"
-          subtitle="Reduced turns animations off in KIVO"
+          title={t("gallery.motion")}
+          subtitle={t("gallery.reducedTurnsAnimationsOffIn")}
           end={
             <Segmented<MotionPref>
-              label="Motion"
+              label={t("gallery.motion")}
               value={motion}
               onChange={setMotion}
               options={[
-                { value: "system", label: "Follow Windows" },
-                { value: "reduced", label: "Reduced" },
+                { value: "system", label: t("gallery.followWindows") },
+                { value: "reduced", label: t("gallery.reduced") },
               ]}
             />
           }
         />
       </Group>
 
-      <Section title="Buttons" />
+      <Section title={t("gallery.buttons")} />
       <Tile>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           <Button variant="primary" icon="add">
-            Add
+            {t("gallery.add")}
           </Button>
-          <Button>Secondary</Button>
-          <Button variant="plain">Plain</Button>
-          <Button variant="link">Link</Button>
+          <Button>{t("gallery.secondary")}</Button>
+          <Button variant="plain">{t("gallery.plain")}</Button>
+          <Button variant="link">{t("gallery.link")}</Button>
           <Button variant="destructive" icon="delete">
-            Delete
+            {t("gallery.delete")}
           </Button>
           <Button variant="stop" icon="stop">
-            Stop
+            {t("gallery.stop")}
           </Button>
-          <Button size="sm">Small</Button>
-          <Button disabled>Disabled</Button>
-          <Tooltip content="More options">
-            <IconButton icon="more" label="More" />
+          <Button size="sm">{t("gallery.small")}</Button>
+          <Button disabled>{t("gallery.disabled")}</Button>
+          <Tooltip content={t("gallery.moreOptions")}>
+            <IconButton icon="more" label={t("gallery.more")} />
           </Tooltip>
         </div>
       </Tile>
 
-      <Section title="Menus" aside="Dropdown with submenus, checks, shortcuts; right-click menu" />
+      <Section title={t("gallery.menus")} aside={t("gallery.dropdownWithSubmenusChecksShortcuts")} />
       <Tile>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-          <DropdownMenu trigger={<Button icon="more">Actions</Button>} items={MORE_MENU} />
-          <Popover trigger={<Button icon="info">Popover</Button>} title="Wake word">
-            Say “Hey Kivo” from anywhere. KIVO listens only for the wake word until you say it.
+          <DropdownMenu trigger={<Button icon="more">{t("gallery.actions")}</Button>} items={moreMenu} />
+          <Popover trigger={<Button icon="info">{t("gallery.popover")}</Button>} title={t("gallery.wakeWord")}>
+            {t("gallery.sayHeyKivoFromAnywhere")}
           </Popover>
-          <ContextMenu items={MORE_MENU}>
+          <ContextMenu items={moreMenu}>
             <div
               style={{
                 padding: "10px 14px",
@@ -184,165 +192,177 @@ export function Gallery() {
                 color: "var(--text-2)",
               }}
             >
-              Right-click here
+              {t("gallery.rightClickHere")}
             </div>
           </ContextMenu>
         </div>
       </Tile>
 
-      <Section title="Dialogs, sheets and toasts" />
+      <Section title={t("gallery.dialogsSheetsAndToasts")} />
       <Tile>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <Button onClick={() => setDialog(true)}>Dialog</Button>
+          <Button onClick={() => setDialog(true)}>{t("gallery.dialog")}</Button>
           <Dialog
             open={dialog}
             onOpenChange={setDialog}
-            title="Forget this conversation?"
-            description="KIVO removes it from memory and history. You can’t undo this."
+            title={t("gallery.forgetThisConversation")}
+            description={t("gallery.kivoRemovesItFromMemory")}
             footer={
               <>
                 <DialogClose>
-                  <Button>Cancel</Button>
+                  <Button>{t("gallery.cancel")}</Button>
                 </DialogClose>
                 <DialogClose>
-                  <Button variant="destructive">Forget</Button>
+                  <Button variant="destructive">{t("gallery.forget")}</Button>
                 </DialogClose>
               </>
             }
           />
-          <Sheet trigger={<Button>Side sheet</Button>} title="Spotify">
+          <Sheet trigger={<Button>{t("gallery.sideSheet")}</Button>} title={t("gallery.spotify")}>
             <Group>
               <Row
                 lead={<Monogram text="S" color="#1DB954" />}
-                title="Spotify"
-                subtitle="Connected · music.play, music.search"
+                title={t("gallery.spotify")}
+                subtitle={t("gallery.connectedMusicPlayMusicSearch")}
               />
               <Row
                 icon="permissions"
-                title="Permissions"
-                subtitle="Ask before purchases"
-                onClick={() => toast("Opens Spotify’s permissions")}
+                title={t("gallery.permissions")}
+                subtitle={t("gallery.askBeforePurchases")}
+                onClick={() => toast(t("gallery.opensSpotifySPermissions"))}
               />
             </Group>
           </Sheet>
-          <Button onClick={() => toast("Saved")}>Toast</Button>
-          <Button onClick={() => toast("Moved 3 files to Archive", { onUndo: () => toast("Restored") })}>
-            Toast with Undo
+          <Button onClick={() => toast(t("gallery.saved"))}>{t("gallery.toast")}</Button>
+          <Button
+            onClick={() => toast(t("gallery.moved3FilesToArchive"), { onUndo: () => toast(t("gallery.restored")) })}
+          >
+            {t("gallery.toastWithUndo")}
           </Button>
         </div>
       </Tile>
 
-      <Section title="Tabs" />
+      <Section title={t("gallery.tabs")} />
       <PageTabs
-        label="Extensions"
+        label={t("gallery.extensions")}
         tabs={[
           {
             value: "connectors",
-            label: "Connectors",
+            label: t("gallery.connectors"),
             content: (
               <Group>
-                <Row icon="connector" title="Gmail" subtitle="Connected" end={<Tag tone="success">On</Tag>} />
+                <Row
+                  icon="connector"
+                  title={t("gallery.gmail")}
+                  subtitle={t("gallery.connected")}
+                  end={<Tag tone="success">{t("gallery.on")}</Tag>}
+                />
               </Group>
             ),
           },
           {
             value: "mcp",
-            label: "MCP servers",
+            label: t("gallery.mcpServers"),
             content: (
               <Group>
                 <Row
                   icon="server"
-                  title="filesystem"
-                  subtitle="Local · 12 tools"
-                  end={<Switch defaultChecked label="Enable filesystem" />}
+                  title={t("gallery.filesystem")}
+                  subtitle={t("gallery.local12Tools")}
+                  end={<Switch defaultChecked label={t("gallery.enableFilesystem")} />}
                 />
               </Group>
             ),
           },
           {
             value: "plugins",
-            label: "Plugins",
+            label: t("gallery.plugins"),
             content: (
               <EmptyState
                 icon="plugin"
-                title="No plugins yet"
+                title={t("gallery.noPluginsYet")}
                 action={
                   <Button variant="primary" icon="add">
-                    Browse plugins
+                    {t("gallery.browsePlugins")}
                   </Button>
                 }
               >
-                Plugins bundle connectors, skills and routines.
+                {t("gallery.pluginsBundleConnectorsSkillsAnd")}
               </EmptyState>
             ),
           },
           {
             value: "skills",
-            label: "Skills",
+            label: t("gallery.skills"),
             content: (
               <Group>
-                <Row icon="skill" title="Summarize page" subtitle="Found on this PC" end={<NewDot />} />
+                <Row
+                  icon="skill"
+                  title={t("gallery.summarizePage")}
+                  subtitle={t("gallery.foundOnThisPc")}
+                  end={<NewDot />}
+                />
               </Group>
             ),
           },
         ]}
       />
 
-      <Section title="Controls" />
+      <Section title={t("gallery.controls")} />
       <Group>
         <Row
           icon="mic"
-          title="Wake word"
-          subtitle="Listen for “Hey Kivo”"
-          end={<Switch defaultChecked label="Wake word" />}
+          title={t("gallery.wakeWord")}
+          subtitle={t("gallery.listenForHeyKivo")}
+          end={<Switch defaultChecked label={t("gallery.wakeWord")} />}
         />
         <Row
           icon="speed"
-          title="Speech rate"
+          title={t("gallery.speechRate")}
           end={
             <div style={{ width: 160 }}>
-              <Slider label="Speech rate" defaultValue={60} />
+              <Slider label={t("gallery.speechRate")} defaultValue={60} />
             </div>
           }
         />
         <Row
           icon="theme"
-          title="Theme"
+          title={t("gallery.theme")}
           end={
             <Select
-              label="Theme"
+              label={t("gallery.theme")}
               value={theme}
               onChange={setTheme}
               items={[
-                { value: "light", label: "Light" },
-                { value: "dark", label: "Dark" },
-                { value: "system", label: "System" },
+                { value: "light", label: t("gallery.light") },
+                { value: "dark", label: t("gallery.dark") },
+                { value: "system", label: t("gallery.system") },
               ]}
             />
           }
         />
         <Row
           icon="keyboard"
-          title="Push to talk"
+          title={t("gallery.pushToTalk")}
           end={
             <ShortcutRecorder
               value={shortcut}
               onChange={setShortcut}
-              conflict={(k) => (k.join("+") === "Ctrl+C" ? "Ctrl+C is used for Copy" : null)}
+              conflict={(k) => (k.join("+") === "Ctrl+C" ? t("gallery.usedForCopy", { keys: "Ctrl+C" }) : null)}
             />
           }
         />
         <Row
           icon="volume"
-          title="Sounds"
+          title={t("gallery.sounds")}
           end={
             <Segmented
-              label="Sounds"
+              label={t("gallery.sounds")}
               defaultValue="subtle"
               options={[
-                { value: "off", label: "Off" },
-                { value: "subtle", label: "Subtle" },
-                { value: "full", label: "Full" },
+                { value: "off", label: t("gallery.off") },
+                { value: "subtle", label: t("gallery.subtle") },
+                { value: "full", label: t("gallery.full") },
               ]}
             />
           }
@@ -351,44 +371,48 @@ export function Gallery() {
       <div style={{ height: 12 }} />
       <Tile>
         <div style={{ display: "grid", gap: 10 }}>
-          <Checkbox defaultChecked>Show transcript while I speak</Checkbox>
-          <RadioGroup label="Position" defaultValue="top">
-            <Radio value="top">Top of screen</Radio>
-            <Radio value="bottom">Bottom of screen</Radio>
+          <Checkbox defaultChecked>{t("gallery.showTranscriptWhileISpeak")}</Checkbox>
+          <RadioGroup label={t("gallery.position")} defaultValue="top">
+            <Radio value="top">{t("gallery.topOfScreen")}</Radio>
+            <Radio value="bottom">{t("gallery.bottomOfScreen")}</Radio>
           </RadioGroup>
           <TextField icon="globe" placeholder="https://" />
-          <SearchField placeholder="Search settings" />
-          <TextArea placeholder="Notes for KIVO…" rows={3} />
+          <SearchField placeholder={t("gallery.searchSettings")} />
+          <TextArea placeholder={t("gallery.notesForKivo")} rows={3} />
         </div>
       </Tile>
       <div style={{ height: 12 }} />
-      <RadioGroup label="Permission mode" defaultValue="auto">
+      <RadioGroup label={t("gallery.permissionMode")} defaultValue="auto">
         <div style={{ display: "grid", gap: 8 }}>
-          <OptionCard value="ask" title="Ask every time" description="KIVO asks before any change." />
+          <OptionCard
+            value="ask"
+            title={t("gallery.askEveryTime")}
+            description={t("gallery.kivoAsksBeforeAnyChange")}
+          />
           <OptionCard
             value="auto"
-            title="Auto"
-            description="Routine actions run automatically. Only high-risk actions ask."
-            badge={<Pill tone="accent">Recommended</Pill>}
+            title={t("gallery.auto")}
+            description={t("gallery.routineActionsRunAutomaticallyOnly")}
+            badge={<Pill tone="accent">{t("gallery.recommended")}</Pill>}
           />
           <OptionCard
             value="bypass"
-            title="Bypass permissions"
-            description="Everything runs without asking. Turns off after 1 hour."
-            badge={<Pill tone="danger">Use with care</Pill>}
+            title={t("gallery.bypassPermissions")}
+            description={t("gallery.everythingRunsWithoutAskingTurns")}
+            badge={<Pill tone="danger">{t("gallery.useWithCare")}</Pill>}
           />
         </div>
       </RadioGroup>
 
-      <Section title="Status" />
+      <Section title={t("gallery.status")} />
       <Tile>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-          <Tag tone="success">Connected</Tag>
-          <Tag tone="warning">Needs sign-in</Tag>
-          <Tag tone="danger">Error</Tag>
-          <Tag>Off</Tag>
-          <Pill tone="accent">New</Pill>
-          <Pill>Local</Pill>
+          <Tag tone="success">{t("gallery.connected")}</Tag>
+          <Tag tone="warning">{t("gallery.needsSignIn")}</Tag>
+          <Tag tone="danger">{t("gallery.error")}</Tag>
+          <Tag>{t("gallery.off")}</Tag>
+          <Pill tone="accent">{t("gallery.new")}</Pill>
+          <Pill>{t("gallery.local")}</Pill>
           <Keys keys={["Ctrl", "Alt", "Shift", "Esc"]} />
           <NewDot />
           <Spinner />
@@ -396,117 +420,114 @@ export function Gallery() {
           <Monogram text="GH" color="#24292F" />
         </div>
         <div style={{ display: "grid", gap: 12, marginTop: 14 }}>
-          <Meter value={42} label="Context used" />
-          <BudgetMeter value={83} label="Monthly spend" />
+          <Meter value={42} label={t("gallery.contextUsed")} />
+          <BudgetMeter value={83} label={t("gallery.monthlySpend")} />
           <LevelMeter />
         </div>
       </Tile>
       <div
         style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginTop: 12 }}
       >
-        <Stat value="1.4 s" label="Median response" />
-        <Stat value="$3.20" label="This month" />
-        <Stat value="128" label="Actions today" />
+        <Stat value="1.4 s" label={t("gallery.medianResponse")} />
+        <Stat value="$3.20" label={t("gallery.thisMonth")} />
+        <Stat value="128" label={t("gallery.actionsToday")} />
       </div>
 
-      <Section title="Alerts and empty states" />
+      <Section title={t("gallery.alertsAndEmptyStates")} />
       <div style={{ display: "grid", gap: 8 }}>
-        <Alert kind="info" title="Updates are checked daily.">
-          You can change this in Settings.
+        <Alert kind="info" title={t("gallery.updatesAreCheckedDaily")}>
+          {t("gallery.youCanChangeThisIn")}
         </Alert>
-        <Alert kind="success" title="Voice profile trained." />
-        <Alert kind="warning" title="Bypass is on.">
-          It turns off in 52 minutes.
+        <Alert kind="success" title={t("gallery.voiceProfileTrained")} />
+        <Alert kind="warning" title={t("gallery.bypassIsOn")}>
+          {t("gallery.itTurnsOffIn52")}
         </Alert>
-        <Alert kind="danger" title="Microphone unavailable.">
-          Another app is using it.
+        <Alert kind="danger" title={t("gallery.microphoneUnavailable")}>
+          {t("gallery.anotherAppIsUsingIt")}
         </Alert>
       </div>
-      <Note>Notes explain a setting in one or two lines, under its group.</Note>
-      <Meta>Updated 2 minutes ago</Meta>
+      <Note>{t("gallery.notesExplainASettingIn")}</Note>
+      <Meta>{t("gallery.updated2MinutesAgo")}</Meta>
 
-      <Section title="Island" aside="States and live activities" />
+      <Section title={t("gallery.island")} aside={t("gallery.statesAndLiveActivities")} />
       <div className="k-gallery-stage">
-        <Island model={islandPreset(island, { partial: "Play something calm on Spotify and" })} />
+        <Island model={islandPreset(island, { partial: t("gallery.partial") })} />
       </div>
       <div className="k-gallery-chips">
-        {[...ISLAND_STATES, ...ISLAND_NOTICES, ...ISLAND_LIVE].map((s) => (
+        {[...ISLAND_STATES, ...ISLAND_NOTICES, ...ISLAND_LIVE].map((id) => (
           <button
-            key={s.id}
+            key={id}
             type="button"
             className="k-gallery-chip"
-            aria-pressed={island === s.id}
-            onClick={() => setIsland(s.id)}
+            aria-pressed={island === id}
+            onClick={() => setIsland(id)}
           >
-            {s.label}
+            {islandStateLabel(id)}
           </button>
         ))}
       </div>
 
-      <Section title="System surfaces" aside="Previews of native Windows UI" />
+      <Section title={t("gallery.systemSurfaces")} aside={t("gallery.previewsOfNativeWindowsUi")} />
       <div className="k-gallery-surfaces">
         <figure>
-          <NativeMenuPreview entries={TRAY_MENU} label="Tray menu" />
-          <figcaption>Tray menu · right-click the tray icon</figcaption>
+          <NativeMenuPreview entries={TRAY_MENU} label={t("gallery.trayMenu")} />
+          <figcaption>{t("gallery.trayMenuRightClickThe")}</figcaption>
         </figure>
         <figure>
-          <TrayTooltipPreview state="Listening" mode="Auto" tasks={1} />
-          <figcaption>Tray tooltip · hover the tray icon</figcaption>
+          <TrayTooltipPreview state={t("gallery.listening")} mode={t("gallery.auto")} tasks={1} />
+          <figcaption>{t("gallery.trayTooltipHoverTheTray")}</figcaption>
         </figure>
         <figure>
-          <NativeMenuPreview entries={JUMP_LIST} label="Jump list" width={230} />
-          <figcaption>Jump list · right-click KIVO in the taskbar</figcaption>
-        </figure>
-        <figure>
-          <WindowsToastPreview
-            title="KIVO is still running"
-            text="Say “Hey Kivo” or press Ctrl + Space anytime. Quit from the tray icon."
-            actions={["Settings", "Quit KIVO"]}
-          />
-          <figcaption>First close</figcaption>
-        </figure>
-        <figure>
-          <WindowsToastPreview title="Claude finished in K.I.V.O" text="All 48 tests pass. Want me to commit?" reply />
-          <figcaption>Task finished · reply inline</figcaption>
+          <NativeMenuPreview entries={JUMP_LIST} label={t("gallery.jumpList")} width={230} />
+          <figcaption>{t("gallery.jumpListRightClickKivo")}</figcaption>
         </figure>
         <figure>
           <WindowsToastPreview
-            title="80% of your monthly budget used"
-            text="$8.02 of $10.00. At the limit, KIVO will ask before using cloud AI."
-            actions={["Open Usage", "OK"]}
+            title={t("gallery.kivoIsStillRunning")}
+            text={t("gallery.sayHeyKivoOrPress")}
+            actions={[t("gallery.settings"), t("palette.quit")]}
           />
-          <figcaption>Budget warning</figcaption>
+          <figcaption>{t("gallery.firstClose")}</figcaption>
+        </figure>
+        <figure>
+          <WindowsToastPreview title={t("gallery.claudeFinishedInKI")} text={t("gallery.all48TestsPassWant")} reply />
+          <figcaption>{t("gallery.taskFinishedReplyInline")}</figcaption>
         </figure>
         <figure>
           <WindowsToastPreview
-            title="KIVO 0.2 is ready"
-            text="Takes about 20 seconds. Anything running is saved first."
-            actions={["Install now", "When idle"]}
+            title={t("gallery.n80OfYourMonthlyBudget")}
+            text={t("gallery.n802Of1000")}
+            actions={[t("gallery.openUsage"), t("gallery.ok")]}
           />
-          <figcaption>Update ready</figcaption>
+          <figcaption>{t("gallery.budgetWarning")}</figcaption>
         </figure>
         <figure>
           <WindowsToastPreview
-            title="KIVO can’t use the microphone"
-            text="Windows is blocking microphone access for desktop apps."
-            actions={["Open Windows settings", "Type instead"]}
+            title={t("gallery.kivo02IsReady")}
+            text={t("gallery.takesAbout20SecondsAnything")}
+            actions={[t("gallery.installNow"), t("gallery.whenIdle")]}
           />
-          <figcaption>Microphone blocked</figcaption>
+          <figcaption>{t("gallery.updateReady")}</figcaption>
         </figure>
         <figure>
-          <HelloPreview
-            title="KIVO wants to send an email"
-            detail="To maya@studio.com: “Design review moved to Thursday”"
+          <WindowsToastPreview
+            title={t("gallery.kivoCanTUseThe")}
+            text={t("gallery.windowsIsBlockingMicrophoneAccess")}
+            actions={[t("gallery.openWindowsSettings"), t("gallery.typeInstead")]}
           />
-          <figcaption>Windows Hello · high-risk actions</figcaption>
+          <figcaption>{t("gallery.microphoneBlocked")}</figcaption>
         </figure>
         <figure>
-          <NativeMenuPreview entries={EXPLORER_MENU} label="File Explorer menu" width={230} />
-          <figcaption>File Explorer menu · right-click a file</figcaption>
+          <HelloPreview title={t("gallery.kivoWantsToSendAn")} detail={t("gallery.toMayaStudioComDesign")} />
+          <figcaption>{t("gallery.windowsHelloHighRiskActions")}</figcaption>
+        </figure>
+        <figure>
+          <NativeMenuPreview entries={EXPLORER_MENU} label={t("gallery.fileExplorerMenu")} width={230} />
+          <figcaption>{t("gallery.fileExplorerMenuRightClick")}</figcaption>
         </figure>
       </div>
 
-      <Section title="Icons" aside={`${Object.keys(ICONS).length} semantic names`} />
+      <Section title={t("gallery.icons")} aside={t("gallery.iconCount", { count: Object.keys(ICONS).length })} />
       <div className="k-gallery-icons">
         {Object.keys(ICONS)
           .filter(isIconName)

@@ -8,6 +8,7 @@ import { AnimatePresence, motion, useReducedMotionConfig } from "motion/react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Icon } from "../../icons";
 import { Keys, Orb } from "../ui/Status";
+import { useTranslation } from "react-i18next";
 
 export interface IslandModel {
   /** Identifies the state; content cross-fades when it changes (e.g. "listening", "acting"). */
@@ -177,8 +178,14 @@ export function Waveform({
 
 /* ───────── Building blocks for Island bodies ───────── */
 
-export const IslandSpin = () => <span className="k-island__spin" aria-label="Working" />;
-export const IslandOk = () => <span className="k-island__ok" aria-label="Done" />;
+export function IslandSpin() {
+  const { t } = useTranslation();
+  return <span className="k-island__spin" aria-label={t("ui.working")} />;
+}
+export function IslandOk() {
+  const { t } = useTranslation();
+  return <span className="k-island__ok" aria-label={t("ui.done")} />;
+}
 export const IslandDot = ({ color }: { color: string }) => (
   <span className="k-island__dot" style={{ background: color }} />
 );

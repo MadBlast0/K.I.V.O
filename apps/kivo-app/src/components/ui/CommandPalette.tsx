@@ -3,6 +3,7 @@
 import { Dialog as BDialog } from "@base-ui/react/dialog";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Icon, type IconName } from "../../icons";
+import { useTranslation } from "react-i18next";
 
 export interface Command {
   id: string;
@@ -22,6 +23,7 @@ export function CommandPalette({
   open: boolean;
   onOpenChange: (o: boolean) => void;
 }) {
+  const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const [index, setIndex] = useState(0);
   const input = useRef<HTMLInputElement>(null);
@@ -56,13 +58,13 @@ export function CommandPalette({
     <BDialog.Root open={open} onOpenChange={setOpen}>
       <BDialog.Portal>
         <BDialog.Backdrop className="k-backdrop" />
-        <BDialog.Popup className="k-palette" aria-label="Search KIVO" initialFocus={input}>
+        <BDialog.Popup className="k-palette" aria-label={t("palette.label")} initialFocus={input}>
           <div className="k-palette__input">
             <Icon name="search" />
             <input
               ref={input}
               value={query}
-              placeholder="Search settings, run routines, ask KIVO…"
+              placeholder={t("palette.placeholder")}
               role="combobox"
               aria-expanded
               aria-controls={listId}
@@ -88,10 +90,10 @@ export function CommandPalette({
               }}
             />
           </div>
-          <div role="listbox" id={listId} aria-label="Results">
+          <div role="listbox" id={listId} aria-label={t("palette.results")}>
             {results.length === 0 && query && (
               <>
-                <div className="k-palette__group">Ask KIVO</div>
+                <div className="k-palette__group">{t("palette.ask")}</div>
                 <div className="k-palette__item" data-selected="true">
                   <Icon name="ai" />“{query}”<span className="k-palette__hint">↵</span>
                 </div>
@@ -125,9 +127,9 @@ export function CommandPalette({
             ))}
           </div>
           <div className="k-palette__foot">
-            <span>↑↓ move</span>
-            <span>↵ open</span>
-            <span>Esc close</span>
+            <span>{t("palette.move")}</span>
+            <span>{t("palette.open")}</span>
+            <span>{t("palette.close")}</span>
           </div>
         </BDialog.Popup>
       </BDialog.Portal>

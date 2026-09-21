@@ -5,6 +5,7 @@
  * matching the mockup's System surfaces section.
  */
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Icon, type IconName } from "../../icons";
 import { Button } from "../ui/Button";
 import { TextField } from "../ui/Fields";
@@ -12,6 +13,7 @@ import { Mark } from "../ui/Status";
 
 /* ───────── Native menus (tray, jump list, Explorer) ───────── */
 
+/** Menu entries; each `label` is a translation key. */
 export type NativeMenuEntry =
   | {
       type: "item";
@@ -27,48 +29,48 @@ export type NativeMenuEntry =
 
 /** Right-click on the tray icon (UX §1). */
 export const TRAY_MENU: NativeMenuEntry[] = [
-  { type: "item", label: "Open KIVO", strong: true },
-  { type: "item", label: "Pause listening", icon: "pause" },
+  { type: "item", label: "surfaces.menu.openKivo", strong: true },
+  { type: "item", label: "surfaces.menu.pauseListening", icon: "pause" },
   {
     type: "item",
-    label: "Permission mode",
+    label: "surfaces.menu.permissionMode",
     icon: "permissions",
     sub: [
-      { label: "Ask every time" },
-      { label: "Accept edits" },
-      { label: "Plan first" },
-      { label: "Auto", checked: true },
-      { label: "Bypass permissions" },
+      { label: "surfaces.menu.askEveryTime" },
+      { label: "surfaces.menu.acceptEdits" },
+      { label: "surfaces.menu.planFirst" },
+      { label: "surfaces.menu.auto", checked: true },
+      { label: "surfaces.menu.bypassPermissions" },
     ],
   },
-  { type: "item", label: "Hide Island for 1 hour", icon: "eyeOff" },
+  { type: "item", label: "surfaces.menu.hideIslandFor1", icon: "eyeOff" },
   { type: "separator" },
-  { type: "item", label: "Stop everything", icon: "stop", danger: true },
+  { type: "item", label: "surfaces.menu.stopEverything", icon: "stop", danger: true },
   { type: "separator" },
-  { type: "item", label: "Settings", icon: "settings" },
-  { type: "item", label: "Quit KIVO", icon: "power" },
+  { type: "item", label: "surfaces.menu.settings", icon: "settings" },
+  { type: "item", label: "surfaces.menu.quitKivo", icon: "power" },
 ];
 
 /** Right-click on KIVO in the taskbar (UX-58). */
 export const JUMP_LIST: NativeMenuEntry[] = [
-  { type: "header", label: "Routines" },
-  { type: "item", label: "Work mode", icon: "routine" },
-  { type: "item", label: "Morning brief", icon: "routine" },
-  { type: "header", label: "Tasks" },
-  { type: "item", label: "New conversation", icon: "chat" },
-  { type: "item", label: "Pause listening", icon: "pause" },
-  { type: "item", label: "Stop everything", icon: "stop" },
+  { type: "header", label: "surfaces.menu.routines" },
+  { type: "item", label: "surfaces.menu.workMode", icon: "routine" },
+  { type: "item", label: "surfaces.menu.morningBrief", icon: "routine" },
+  { type: "header", label: "surfaces.menu.tasks" },
+  { type: "item", label: "surfaces.menu.newConversation", icon: "chat" },
+  { type: "item", label: "surfaces.menu.pauseListening", icon: "pause" },
+  { type: "item", label: "surfaces.menu.stopEverything", icon: "stop" },
 ];
 
 /** Right-click on a file or folder in File Explorer (INT-15). */
 export const EXPLORER_MENU: NativeMenuEntry[] = [
-  { type: "item", label: "Open", icon: "folder" },
-  { type: "item", label: "Copy as path", icon: "link" },
+  { type: "item", label: "surfaces.menu.open", icon: "folder" },
+  { type: "item", label: "surfaces.menu.copyAsPath", icon: "link" },
   { type: "separator" },
-  { type: "item", label: "Ask KIVO about this", brand: true },
-  { type: "item", label: "Summarize with KIVO", icon: "ai" },
+  { type: "item", label: "surfaces.menu.askKivoAboutThis", brand: true },
+  { type: "item", label: "surfaces.menu.summarizeWithKivo", icon: "ai" },
   { type: "separator" },
-  { type: "item", label: "Rename", icon: "edit" },
+  { type: "item", label: "surfaces.menu.rename", icon: "edit" },
 ];
 
 export function NativeMenuPreview({
@@ -80,6 +82,7 @@ export function NativeMenuPreview({
   label: string;
   width?: number;
 }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState<number | null>(null);
   return (
     <div
@@ -95,7 +98,7 @@ export function NativeMenuPreview({
         if (e.type === "header")
           return (
             <div key={i} className="k-menu__label">
-              {e.label}
+              {t(e.label)}
             </div>
           );
         return (
@@ -109,7 +112,7 @@ export function NativeMenuPreview({
             style={{ position: "relative", fontWeight: e.strong ? 600 : undefined }}
           >
             {e.brand ? <Mark size={16} /> : e.icon && <Icon name={e.icon} />}
-            {e.label}
+            {t(e.label)}
             {e.sub && <Icon name="chevronRight" className="k-menu__chevron" />}
             {e.sub && open === i && (
               <div
@@ -127,7 +130,7 @@ export function NativeMenuPreview({
                     className="k-menu__item"
                   >
                     <span className="k-menu__check">{s.checked && <Icon name="check" />}</span>
-                    {s.label}
+                    {t(s.label)}
                   </div>
                 ))}
               </div>
@@ -141,14 +144,13 @@ export function NativeMenuPreview({
 
 /* ───────── Tray tooltip (UX-56) ───────── */
 export function TrayTooltipPreview({ state, mode, tasks }: { state: string; mode: string; tasks: number }) {
+  const { t } = useTranslation();
   return (
     <div className="k-tray-tip" role="tooltip">
       <div>
         <b>KIVO</b> · {state}
       </div>
-      <span>
-        {mode} mode · {tasks === 1 ? "1 task running" : `${tasks} tasks running`}
-      </span>
+      <span>{t("surfaces.tooltip", { mode, tasks })}</span>
     </div>
   );
 }
@@ -167,8 +169,9 @@ export function WindowsToastPreview({
   actions?: readonly string[];
   reply?: boolean;
 }) {
+  const { t } = useTranslation();
   return (
-    <div className="k-win-toast" role="img" aria-label={`Notification: ${title}`}>
+    <div className="k-win-toast" role="img" aria-label={t("surfaces.notification", { title })}>
       <div className="k-win-toast__head">
         <Mark size={16} />
         KIVO
@@ -180,9 +183,13 @@ export function WindowsToastPreview({
       <span className="k-win-toast__text">{text}</span>
       {reply && (
         <div className="k-win-toast__reply">
-          <TextField placeholder="Reply to KIVO…" aria-label="Reply to KIVO" style={{ flex: 1 }} />
+          <TextField
+            placeholder={t("surfaces.replyPlaceholder")}
+            aria-label={t("surfaces.reply")}
+            style={{ flex: 1 }}
+          />
           <Button size="sm" variant="primary">
-            Send
+            {t("surfaces.send")}
           </Button>
         </div>
       )}
@@ -201,17 +208,18 @@ export function WindowsToastPreview({
 
 /* ───────── Windows Hello prompt (SEC-11) ───────── */
 export function HelloPreview({ title, detail }: { title: string; detail: string }) {
+  const { t } = useTranslation();
   return (
-    <div className="k-hello" role="img" aria-label="Windows Hello prompt preview">
+    <div className="k-hello" role="img" aria-label={t("surfaces.hello")}>
       <div style={{ fontWeight: 600, fontSize: 15 }}>{title}</div>
       <div className="k-hello__face">
         <Icon name="user" size={26} />
       </div>
       <div style={{ color: "var(--text-2)", fontSize: 12.5 }}>{detail}</div>
       <div className="k-hello__actions">
-        <Button size="sm">Cancel</Button>
+        <Button size="sm">{t("surfaces.cancel")}</Button>
         <Button size="sm" variant="primary">
-          Use PIN
+          {t("surfaces.usePin")}
         </Button>
       </div>
     </div>

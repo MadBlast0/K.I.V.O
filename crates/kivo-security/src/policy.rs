@@ -7,6 +7,7 @@
 
 use kivo_core::capability::{Capability, CapabilitySettings};
 use kivo_core::config::PermissionMode;
+use kivo_core::text;
 use kivo_core::tool::{
     ConfirmSpec, ConfirmedBy, Initiator, Provenance, Reversibility, Risk, SideEffect, Strength,
     Target, ToolCall, ToolSpec,
@@ -143,15 +144,15 @@ fn deny(code: DenyCode, message: impl Into<String>) -> Decision {
 pub fn authorize(spec: &ToolSpec, call: &ToolCall, cx: &Context<'_>) -> Decision {
     // 1. Hard limits, in every mode (SEC-05).
     if cx.limits.stopped {
-        return deny(
-            DenyCode::EmergencyStop,
-            "Stopped. KIVO won't continue this request.",
-        );
+        return deny(DenyCode::EmergencyStop, text::t("policy.stopped"));
     }
     if !cx.capabilities.enabled(spec.capability) {
         return deny(
             DenyCode::CapabilityOff(spec.capability),
-            format!("{} is off. Turn it on?", spec.capability.label()),
+            text::tf(
+                "policy.capabilityOff",
+                &[("capability", &spec.capability.label())],
+            ),
         );
     }
     for target in &call.targets {
@@ -165,7 +166,7 @@ pub fn authorize(spec: &ToolSpec, call: &ToolCall, cx: &Context<'_>) -> Decision
             {
                 return deny(
                     DenyCode::BlockedApp,
-                    format!("KIVO isn't allowed to act on {name}."),
+                    text::tf("policy.blockedApp", &[("name", name)]),
                 );
             }
             Target::Destination {
@@ -174,9 +175,7 @@ pub fn authorize(spec: &ToolSpec, call: &ToolCall, cx: &Context<'_>) -> Decision
             } => {
                 return deny(
                     DenyCode::UntrustedDestination,
-                    format!(
-                        "{address} came from content KIVO read, not from you, so it won't send anything there."
-                    ),
+                    text::tf("policy.untrustedDestination", &[("address", address)]),
                 );
             }
             _ => {}
@@ -191,39 +190,32 @@ pub fn authorize(spec: &ToolSpec, call: &ToolCall, cx: &Context<'_>) -> Decision
     let risk = spec.risk;
     let tainted =
         matches!(cx.taint, Taint::Tainted(_)) || call.initiated_by != Initiator::UserDirect;
+    // `why` is a key under `policy.` in the text catalog.
     let confirm = |strength: Strength, why: &str, plan: bool| {
-        Decision::Confirm(confirm_spec(spec, call, cx, strength, why, plan))
+        let why = text::t(&format!("policy.{why}"));
+        Decision::Confirm(confirm_spec(spec, call, cx, strength, &why, plan))
     };
 
     // 3. Guests: reads and low-risk actions only, and low risk asks (SECURITY §2 table).
     if cx.session == SessionKind::Guest {
         return match risk {
             Risk::Safe => Decision::Allow(Permit::new(call, ConfirmedBy::Policy)),
-            Risk::Low => confirm(
-                Strength::Normal,
-                "KIVO doesn't recognize this voice.",
-                false,
-            ),
-            Risk::Medium | Risk::High => deny(
-                DenyCode::GuestNotAllowed,
-                "Only the owner can ask KIVO to do that.",
-            ),
+            Risk::Low => confirm(Strength::Normal, "guestLow", false),
+            Risk::Medium | Risk::High => {
+                deny(DenyCode::GuestNotAllowed, text::t("policy.guestDenied"))
+            }
         };
     }
 
     // 4. High always confirms; irreversible actions confirm up front (UX §8.1).
     if risk == Risk::High {
-        let why = if tainted {
-            "This can't be undone, and it was requested by the AI or after reading other content."
-        } else {
-            "This is a high-risk action."
-        };
+        let why = if tainted { "highTainted" } else { "high" };
         return confirm(Strength::Strong, why, cx.mode == PermissionMode::Plan);
     }
     if spec.reversibility == Reversibility::Irreversible {
         return confirm(
             Strength::Normal,
-            "This can't be undone.",
+            "irreversible",
             cx.mode == PermissionMode::Plan,
         );
     }
@@ -245,11 +237,7 @@ pub fn authorize(spec: &ToolSpec, call: &ToolCall, cx: &Context<'_>) -> Decision
         return if granted {
             allow(ConfirmedBy::Grant)
         } else {
-            confirm(
-                Strength::Normal,
-                "The AI asked for this, not you directly.",
-                false,
-            )
+            confirm(Strength::Normal, "aiAsked", false)
         };
     }
 
@@ -262,11 +250,7 @@ pub fn authorize(spec: &ToolSpec, call: &ToolCall, cx: &Context<'_>) -> Decision
             } else if granted {
                 allow(ConfirmedBy::Grant)
             } else {
-                confirm(
-                    Strength::Normal,
-                    "You asked KIVO to check with you before doing things.",
-                    false,
-                )
+                confirm(Strength::Normal, "askMode", false)
             }
         }
         PermissionMode::AcceptEdits => {
@@ -281,22 +265,14 @@ pub fn authorize(spec: &ToolSpec, call: &ToolCall, cx: &Context<'_>) -> Decision
                     ConfirmedBy::Policy
                 })
             } else {
-                confirm(
-                    Strength::Normal,
-                    "In Accept edits, KIVO checks before commands and settings.",
-                    false,
-                )
+                confirm(Strength::Normal, "acceptEditsMode", false)
             }
         }
         PermissionMode::Plan => {
             if read_only || risk == Risk::Safe {
                 allow(ConfirmedBy::Policy)
             } else {
-                confirm(
-                    Strength::Normal,
-                    "In Plan first, nothing changes until you approve the plan.",
-                    true,
-                )
+                confirm(Strength::Normal, "planMode", true)
             }
         }
     }
@@ -312,25 +288,24 @@ pub enum Answer {
 
 /// Turns the user's answer to `spec` into a permit (SEC-10, CONVERSATION §7).
 pub fn confirmed(spec: &ConfirmSpec, call: &ToolCall, answer: Answer) -> Result<Permit, Denial> {
-    let refuse = |message: &str| Denial {
+    // `key` is under `policy.` in the text catalog, except `reply.cancelled`.
+    let refuse = |key: &str| Denial {
         code: DenyCode::NotConfirmed,
-        message: message.into(),
+        message: text::t(key),
     };
     if spec.call_id != call.id || spec.tool != call.tool {
-        return Err(refuse("That approval was for a different action."));
+        return Err(refuse("policy.differentAction"));
     }
     match answer {
-        Answer::Deny => Err(refuse("Cancelled.")),
+        Answer::Deny => Err(refuse("reply.cancelled")),
         // High risk needs an on-screen click or Windows Hello; a spoken "yes" is not enough.
         Answer::Allow {
             by: ConfirmedBy::Voice,
-        } if spec.strength == Strength::Strong => Err(refuse(
-            "For this one, please click Allow or confirm with Windows Hello.",
-        )),
+        } if spec.strength == Strength::Strong => Err(refuse("policy.voiceNotEnough")),
         Answer::Allow {
             by: by @ (ConfirmedBy::Click | ConfirmedBy::Voice | ConfirmedBy::Hello),
         } => Ok(Permit::new(call, by)),
-        Answer::Allow { .. } => Err(refuse("That isn't a way to approve an action.")),
+        Answer::Allow { .. } => Err(refuse("policy.notAWay")),
     }
 }
 
@@ -359,13 +334,14 @@ fn confirm_spec(
     plan: bool,
 ) -> ConfirmSpec {
     let provenance = match (&cx.taint, call.initiated_by) {
-        (Taint::Tainted(sources), _) if !sources.is_empty() => {
-            format!("Requested after reading {}", sources.join(", "))
-        }
-        (_, Initiator::UserDirect) => "You asked".into(),
-        (_, Initiator::Brain) => "Suggested by the AI".into(),
-        (_, Initiator::Task) => "Part of a background task".into(),
-        (_, Initiator::Mcp) => "Requested by a connected tool".into(),
+        (Taint::Tainted(sources), _) if !sources.is_empty() => text::tf(
+            "policy.provenance.read",
+            &[("sources", &sources.join(", "))],
+        ),
+        (_, Initiator::UserDirect) => text::t("policy.provenance.user"),
+        (_, Initiator::Brain) => text::t("policy.provenance.brain"),
+        (_, Initiator::Task) => text::t("policy.provenance.task"),
+        (_, Initiator::Mcp) => text::t("policy.provenance.mcp"),
     };
     ConfirmSpec {
         call_id: call.id.clone(),

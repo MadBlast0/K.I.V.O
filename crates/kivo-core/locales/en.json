@@ -1,0 +1,229 @@
+{
+  "tray": {
+    "open": "Open KIVO",
+    "pause": "Pause listening",
+    "resume": "Resume listening",
+    "modeMenu": "Permission mode",
+    "bypass": "Bypass permissions…",
+    "showIsland": "Show the Island",
+    "hideIsland": "Hide Island for 1 hour",
+    "stop": "Stop everything",
+    "settings": "Settings",
+    "quit": "Quit KIVO",
+    "tooltip": "KIVO · {state}\n{mode} mode · {tasks}",
+    "tasks": {
+      "one": "{count} task running",
+      "other": "{count} tasks running"
+    }
+  },
+  "mode": {
+    "ask": "Ask every time",
+    "accept-edits": "Accept edits",
+    "plan": "Plan first",
+    "auto": "Auto",
+    "bypass": "Bypass permissions"
+  },
+  "state": {
+    "idle": "Ready",
+    "listening": "Listening",
+    "thinking": "Thinking",
+    "acting": "Working",
+    "speaking": "Speaking",
+    "followUp": "Listening for a follow-up",
+    "interrupted": "Stopping",
+    "paused": "Paused",
+    "awaitingConfirmation": "Waiting for your OK",
+    "error": "Something went wrong"
+  },
+  "capability": {
+    "mic-listening": "Microphone listening",
+    "push-to-talk": "Push-to-talk",
+    "speak-responses": "Speak responses",
+    "apps-and-windows": "Apps & windows",
+    "system-controls": "System controls",
+    "power-actions": "Power actions",
+    "files-read": "Reading files",
+    "files-modify": "Changing files",
+    "clipboard": "Clipboard",
+    "browser-open-links": "Opening links",
+    "browser-pages": "Reading and using web pages",
+    "browser-autonomous": "Autonomous browsing",
+    "ui-automation": "UI Automation",
+    "screen-awareness": "Screen awareness",
+    "computer-use": "Computer use",
+    "shell": "Shell commands",
+    "background-tasks": "Background tasks",
+    "routines": "Routines",
+    "memory": "Memory",
+    "cloud-brains": "Cloud AI",
+    "realtime-voice": "Realtime voice",
+    "cli-agents": "Coding agents",
+    "mcp-servers": "MCP servers",
+    "integrations": "Integrations",
+    "speaker-recognition": "Speaker recognition",
+    "remote-access": "Remote access",
+    "notifications": "Notifications"
+  },
+  "tool": {
+    "apps": {
+      "launch": "Open {app}",
+      "close": "Close {app}"
+    },
+    "windows": {
+      "focus": "Switch to {window}",
+      "minimize": "Minimize {window}",
+      "maximize": "Maximize {window}",
+      "close": "Close {window}"
+    },
+    "audio": {
+      "mute": "Mute the sound",
+      "unmute": "Unmute the sound",
+      "volume_set": "Set the volume to {number}%",
+      "volume_up": "Turn the volume up",
+      "volume_down": "Turn the volume down",
+      "mic_mute": "Mute the microphone",
+      "mic_unmute": "Unmute the microphone"
+    },
+    "media": {
+      "play_pause": "Play or pause",
+      "next": "Next track",
+      "previous": "Previous track",
+      "now_playing": "Say what’s playing"
+    },
+    "screen": {
+      "screenshot": "Take a screenshot"
+    },
+    "system": {
+      "lock": "Lock the computer",
+      "sleep": "Put the computer to sleep",
+      "restart": "Restart the computer",
+      "shutdown": "Shut down the computer"
+    },
+    "notifications": {
+      "show": "Show a notification"
+    },
+    "browser": {
+      "open_url": "Open {url}",
+      "search": "Search the web for “{text}”"
+    }
+  },
+  "reply": {
+    "opening": "Opening {name}.",
+    "closing": "Closing {name}.",
+    "switched": "Switched to {title}.",
+    "minimized": "Minimized.",
+    "maximized": "Maximized.",
+    "closed": "Closed.",
+    "muted": "Muted.",
+    "soundOn": "Sound is on.",
+    "volume": "Volume {percent}%.",
+    "micMuted": "Microphone muted.",
+    "micOn": "Microphone on.",
+    "okay": "Okay.",
+    "next": "Next.",
+    "previous": "Previous.",
+    "track": "{title}.",
+    "trackBy": "{title} by {artist}.",
+    "nothingPlaying": "Nothing is playing.",
+    "screenshotSaved": "Screenshot saved.",
+    "locked": "Locked.",
+    "sleeping": "Going to sleep.",
+    "restarting": "Restarting in a few seconds.",
+    "shuttingDown": "Shutting down in a few seconds.",
+    "done": "Done.",
+    "searching": "Searching for {text}.",
+    "cancelled": "Cancelled."
+  },
+  "error": {
+    "notFound": "I couldn’t find {what}.",
+    "unsupported": "That isn’t supported on this PC.",
+    "accessDenied": "Windows didn’t allow that.",
+    "failed": "Something went wrong doing that.",
+    "missing": {
+      "app": "I didn’t get which app.",
+      "window": "I didn’t get a window to use.",
+      "number": "I didn’t get a number.",
+      "title": "I didn’t get a title.",
+      "address": "I didn’t get an address.",
+      "query": "I didn’t get what to search for."
+    },
+    "screenshot": "I couldn’t save the screenshot.",
+    "notApproved": "That action wasn’t approved.",
+    "timeout": "That took too long, so I stopped waiting.",
+    "hint": {
+      "notFound": "{message} Try saying the name a different way.",
+      "accessDenied": "{message} You may need to allow it in Windows.",
+      "timeout": "{message} Try again."
+    }
+  },
+  "policy": {
+    "stopped": "Stopped. KIVO won’t continue this request.",
+    "capabilityOff": "{capability} is off. Turn it on?",
+    "blockedApp": "KIVO isn’t allowed to act on {name}.",
+    "untrustedDestination": "{address} came from content KIVO read, not from you, so it won’t send anything there.",
+    "guestLow": "KIVO doesn’t recognize this voice.",
+    "guestDenied": "Only the owner can ask KIVO to do that.",
+    "highTainted": "This can’t be undone, and it was requested by the AI or after reading other content.",
+    "high": "This is a high-risk action.",
+    "irreversible": "This can’t be undone.",
+    "aiAsked": "The AI asked for this, not you directly.",
+    "askMode": "You asked KIVO to check with you before doing things.",
+    "acceptEditsMode": "In Accept edits, KIVO checks before commands and settings.",
+    "planMode": "In Plan first, nothing changes until you approve the plan.",
+    "differentAction": "That approval was for a different action.",
+    "voiceNotEnough": "For this one, please click Allow or confirm with Windows Hello.",
+    "notAWay": "That isn’t a way to approve an action.",
+    "provenance": {
+      "read": "Requested after reading {sources}",
+      "user": "You asked",
+      "brain": "Suggested by the AI",
+      "task": "Part of a background task",
+      "mcp": "Requested by a connected tool"
+    }
+  },
+  "turn": {
+    "notUnderstood": "I can’t do that yet.",
+    "downloading": "I’m still downloading my speech model ({percent}%).",
+    "sttMissing": "My speech recognition isn’t installed yet. Open Voice settings to get it.",
+    "listenFailed": "I couldn’t start listening. {error}",
+    "nothingToSend": "There was nothing to send.",
+    "sttSlow": "My speech engine didn’t start in time. Try again.",
+    "sttLost": "I lost my speech engine. {error}",
+    "notCaught": "I didn’t catch that.",
+    "nothingWaiting": "There’s nothing waiting for an answer.",
+    "gone": "That isn’t available any more.",
+    "ttsLost": "I lost my voice engine for a moment. Try again.",
+    "micBlocked": "I can’t reach the microphone. Check Windows privacy settings.",
+    "notBusy": "KIVO isn’t busy ({state})",
+    "bypassNeedsStep": "Bypass permissions needs its confirmation step, which isn’t available yet",
+    "permissionGone": "That permission is already gone.",
+    "unknownModel": "KIVO doesn’t know a model called {id}"
+  },
+  "activity": {
+    "notKept": "(not kept)",
+    "on": "on",
+    "off": "off",
+    "capabilitySet": "{capability} = {value}",
+    "crashed": "{process} stopped unexpectedly",
+    "stoppedEverything": "Stopped everything"
+  },
+  "notice": {
+    "firstClose": {
+      "title": "KIVO is still running",
+      "body": "Closing the window keeps KIVO in the tray, ready when you call. Quit it from the tray.",
+      "settings": "Settings",
+      "quit": "Quit KIVO"
+    },
+    "mic": {
+      "title": "KIVO can’t use the microphone",
+      "body": "Windows is blocking it. You can allow it in Settings, or type to KIVO instead.",
+      "settings": "Open Windows settings",
+      "type": "Type instead"
+    },
+    "crash": {
+      "title": "KIVO stopped unexpectedly last time",
+      "body": "A crash report was saved on this PC. It isn’t sent anywhere.",
+      "folder": "Open folder"
+    }
+  }
+}

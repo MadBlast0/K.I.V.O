@@ -1,9 +1,12 @@
 /** The sidebar's live status line: "Connected · Ready", "Reconnecting…" (ARCH-04). */
+import { useTranslation } from "react-i18next";
 import { useRuntime } from "../../ipc/runtime";
 import { cn } from "../../lib/cn";
 import { viewLink } from "../../lib/session";
 
 export function RuntimeStatus({ onOpen }: { onOpen: () => void }) {
+  // Subscribes to language changes; the words come from `viewLink`.
+  useTranslation();
   const { link } = useRuntime();
   const view = viewLink(link);
   return (

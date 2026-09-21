@@ -73,7 +73,7 @@ impl Recorder {
             title: if self.keep_content {
                 text.to_owned()
             } else {
-                "(not kept)".into()
+                kivo_core::text::t("activity.notKept")
             },
             detail: None,
             status: "done".into(),
@@ -240,7 +240,7 @@ impl Recorder {
             title: if self.keep_content {
                 text.to_owned()
             } else {
-                "(not kept)".into()
+                kivo_core::text::t("activity.notKept")
             },
             detail: None,
             status: status.to_owned(),
@@ -286,7 +286,16 @@ impl Recorder {
             turn_id: None,
             task_id: None,
             tool: "capabilities.set".into(),
-            args_summary: format!("{} = {}", capability.label(), if on { "on" } else { "off" }),
+            args_summary: kivo_core::text::tf(
+                "activity.capabilitySet",
+                &[
+                    ("capability", &capability.label()),
+                    (
+                        "value",
+                        &kivo_core::text::t(if on { "activity.on" } else { "activity.off" }),
+                    ),
+                ],
+            ),
             risk: "medium".into(),
             decision: "allow".into(),
             confirmed_by: Some("click".into()),
@@ -316,7 +325,7 @@ impl Recorder {
             turn_id: None,
             task_id: None,
             kind: "crash".into(),
-            title: format!("{} stopped unexpectedly", report.process),
+            title: kivo_core::text::tf("activity.crashed", &[("process", &report.process)]),
             detail: report.summary.clone(),
             status: "failed".into(),
             data: None,
@@ -342,7 +351,7 @@ impl Recorder {
             turn_id: None,
             task_id: None,
             kind: "stop".into(),
-            title: "Stopped everything".into(),
+            title: kivo_core::text::t("activity.stoppedEverything"),
             detail: None,
             status: "done".into(),
             data: None,

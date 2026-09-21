@@ -11,7 +11,7 @@ import { withNodes } from "../i18n/nodes";
 import { useRuntime, useRuntimeEvents } from "../ipc/runtime";
 import { entries } from "../lib/activity";
 import { cn } from "../lib/cn";
-import { MODES, viewLink } from "../lib/session";
+import { modes, viewLink } from "../lib/session";
 
 /** How many recent requests Home shows. */
 const RECENT = 4;
@@ -128,7 +128,9 @@ export function Home({
             {t("home.pause")}
           </Button>
         ) : null}
-        {mode && <Select label={t("home.mode")} icon="permissions" items={MODES} value={mode} onChange={chooseMode} />}
+        {mode && (
+          <Select label={t("home.mode")} icon="permissions" items={modes()} value={mode} onChange={chooseMode} />
+        )}
         {link?.status === "reconnecting" && (
           <Button variant="primary" icon="power" disabled={busy} onClick={() => run(start)}>
             {t("home.start")}

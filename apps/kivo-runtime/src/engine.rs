@@ -12,6 +12,7 @@ use crate::speaker::{Cue, Speaker};
 use crate::voice::{Listener, VoiceSignal};
 use kivo_core::event::StepStatus;
 use kivo_core::event::{CancelReason, EventKind, IntentPath, TurnEvent, TurnSource, VoiceEvent};
+use kivo_core::text;
 use kivo_core::tool::{ConfirmSpec, ConfirmedBy, Initiator, ToolCall, ToolError, ToolErrorCode};
 use kivo_core::{Event, SessionInput, SessionState};
 use kivo_intent::{Context as GrammarContext, Index, IndexEntry, IntentRouter, Route};
@@ -180,10 +181,9 @@ impl Engine {
             // Speech isn't installed yet: say so instead of listening into nothing.
             let message = match self.core.speech_status() {
                 SpeechStatus::Downloading { percent } => {
-                    format!("I'm still downloading my speech model ({percent}%).")
+                    text::tf("turn.downloading", &[("percent", &percent)])
                 }
-                _ => "My speech recognition isn't installed yet. Open Voice settings to get it."
-                    .to_owned(),
+                _ => text::t("turn.sttMissing"),
             };
             self.core.flash_error(&message, COLLAPSE_AFTER);
             self.speaker.cue(Cue::Error);
@@ -251,7 +251,7 @@ impl Engine {
                     let current = lock(&engine.turn).as_ref().map(|t| t.utterance);
                     if current == Some(utterance) {
                         engine.cancel_listening();
-                        engine.fail_turn(&format!("I couldn't start listening. {e}"));
+                        engine.fail_turn(&text::tf("turn.listenFailed", &[("error", &e)]));
                     }
                 }
             }
@@ -309,7 +309,7 @@ impl Engine {
     pub async fn say(self: &Arc<Self>, text: &str) -> Result<(), String> {
         let text = text.trim();
         if text.is_empty() {
-            return Err("There was nothing to send.".into());
+            return Err(text::t("turn.nothingToSend"));
         }
         self.infer.warm();
         let id = self.turn_id();
@@ -355,21 +355,22 @@ impl Engine {
         if let Some(mut started) = started {
             let ready = tokio::time::timeout(WORKER_START, started.wait_for(|s| *s)).await;
             if !matches!(ready, Ok(Ok(_))) {
-                self.fail_turn("My speech engine didn't start in time. Try again.");
+                self.fail_turn(&text::t("turn.sttSlow"));
                 return;
             }
         }
         let text = match self.infer.finish_stt(utterance).await {
             Ok(final_text) => final_text.text,
             Err(e) => {
-                self.fail_turn(&format!("I lost my speech engine. {e}"));
+                self.fail_turn(&text::tf("turn.sttLost", &[("error", &e)]));
                 return;
             }
         };
         self.mark("t5FinalTranscript");
         if text.trim().is_empty() {
-            self.show_error("I didn't catch that.");
-            self.speak_and_finish("I didn't catch that.").await;
+            let message = text::t("turn.notCaught");
+            self.show_error(&message);
+            self.speak_and_finish(&message).await;
             return;
         }
         self.handle_transcript(&text).await;
@@ -483,8 +484,13 @@ impl Engine {
         let Some(tool) = self.registry.get(&call.tool, &capabilities) else {
             // The capability is off (or the tool doesn't exist here): say so plainly (CAP-02).
             let message = self.registry.known(&call.tool).map_or_else(
-                || "I can't do that yet.".to_owned(),
-                |spec| format!("{} is off. Turn it on?", spec.capability.label()),
+                || text::t("turn.notUnderstood"),
+                |spec| {
+                    text::tf(
+                        "policy.capabilityOff",
+                        &[("capability", &spec.capability.label())],
+                    )
+                },
             );
             self.recorder.tool_denied(&self.turn_key(), &call, &message);
             let capability = self.registry.known(&call.tool).map(|spec| spec.capability);
@@ -561,7 +567,7 @@ impl Engine {
                 .inspect(|_| t.pending = None)
         });
         let Some((spec, call)) = pending else {
-            return Err("There's nothing waiting for an answer.".into());
+            return Err(text::t("turn.nothingWaiting"));
         };
         self.core.update_turn(|view| view.confirm = None);
         if !allow {
@@ -569,8 +575,8 @@ impl Engine {
             self.recorder.confirmation(&self.turn_key(), &call, false);
             self.speaker.cue(Cue::Hangup);
             self.core
-                .update_turn(|view| view.answer = Some("Cancelled.".into()));
-            self.finish_turn("cancelled", Some("Cancelled."));
+                .update_turn(|view| view.answer = Some(text::t("reply.cancelled")));
+            self.finish_turn("cancelled", Some(&text::t("reply.cancelled")));
             return Ok(());
         }
         let permit = kivo_security::confirmed(
@@ -588,7 +594,7 @@ impl Engine {
         self.core.advance(SessionInput::Confirmed);
         let capabilities = self.core.config().capabilities;
         let Some(tool) = self.registry.get(&call.tool, &capabilities) else {
-            return Err("That isn't available any more.".into());
+            return Err(text::t("turn.gone"));
         };
         let title = tool.spec().title.clone();
         self.execute(tool, call, permit, &title).await;
@@ -882,7 +888,7 @@ impl Engine {
     /// The speech worker died mid-turn.
     pub fn engine_lost(&self) {
         if lock(&self.turn).is_some() {
-            self.fail_turn("I lost my voice engine for a moment. Try again.");
+            self.fail_turn(&text::t("turn.ttsLost"));
         }
     }
 
@@ -912,7 +918,7 @@ pub async fn handle_signal(engine: &Arc<Engine>, signal: VoiceSignal) {
         VoiceSignal::EndOfSpeech { utterance } => engine.end_of_speech(utterance).await,
         VoiceSignal::NoSpeech { utterance } => engine.nothing_heard(utterance),
         VoiceSignal::MicrophoneUnavailable => {
-            engine.fail_turn("I can't reach the microphone. Check Windows privacy settings.");
+            engine.fail_turn(&text::t("turn.micBlocked"));
         }
     }
 }
@@ -942,13 +948,11 @@ pub async fn handle_infer_event(engine: &Arc<Engine>, event: InferEvent) {
 /// Adds what the user can do about a failure (plan §146: cause plus an action).
 fn retry_hint(error: &ToolError) -> String {
     match error.code {
-        ToolErrorCode::NotFound => {
-            format!("{} Try saying the name a different way.", error.message)
-        }
+        ToolErrorCode::NotFound => text::tf("error.hint.notFound", &[("message", &error.message)]),
         ToolErrorCode::AccessDenied => {
-            format!("{} You may need to allow it in Windows.", error.message)
+            text::tf("error.hint.accessDenied", &[("message", &error.message)])
         }
-        ToolErrorCode::Timeout => format!("{} Try again.", error.message),
+        ToolErrorCode::Timeout => text::tf("error.hint.timeout", &[("message", &error.message)]),
         _ => error.message.clone(),
     }
 }

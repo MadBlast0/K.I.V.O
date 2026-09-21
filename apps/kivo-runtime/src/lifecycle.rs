@@ -6,6 +6,7 @@
 use crate::activity::Recorder;
 use crate::core::Core;
 use kivo_core::KivoConfig;
+use kivo_core::text;
 use kivo_platform::{Autostart, Notification, NotificationAction, Notifications, SystemControl};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -27,10 +28,11 @@ pub struct Lifecycle {
     command: String,
 }
 
-fn action(id: &str, label: &str) -> NotificationAction {
+/// A notification button; `key` is its label in the text catalog.
+fn action(id: &str, key: &str) -> NotificationAction {
     NotificationAction {
         id: id.into(),
-        label: label.into(),
+        label: text::t(key),
     }
 }
 
@@ -94,12 +96,11 @@ impl Lifecycle {
             self.core
                 .update_config(|c| c.general.first_close_seen = true);
             self.notify(&Notification {
-                title: "KIVO is still running".into(),
-                body: "Closing the window keeps KIVO in the tray, ready when you call. Quit it from the tray."
-                    .into(),
+                title: text::t("notice.firstClose.title"),
+                body: text::t("notice.firstClose.body"),
                 actions: vec![
-                    action(FIRST_CLOSE_SETTINGS, "Settings"),
-                    action(FIRST_CLOSE_QUIT, "Quit KIVO"),
+                    action(FIRST_CLOSE_SETTINGS, "notice.firstClose.settings"),
+                    action(FIRST_CLOSE_QUIT, "notice.firstClose.quit"),
                 ],
                 reply: false,
             });
@@ -110,12 +111,11 @@ impl Lifecycle {
     /// Windows is blocking the microphone for KIVO (UX-57).
     pub fn microphone_blocked(&self) {
         self.notify(&Notification {
-            title: "KIVO can't use the microphone".into(),
-            body: "Windows is blocking it. You can allow it in Settings, or type to KIVO instead."
-                .into(),
+            title: text::t("notice.mic.title"),
+            body: text::t("notice.mic.body"),
             actions: vec![
-                action(MIC_SETTINGS, "Open Windows settings"),
-                action(MIC_TYPE, "Type instead"),
+                action(MIC_SETTINGS, "notice.mic.settings"),
+                action(MIC_TYPE, "notice.mic.type"),
             ],
             reply: false,
         });
@@ -138,9 +138,9 @@ impl Lifecycle {
             self.recorder.crash_reported(report);
         }
         self.notify(&Notification {
-            title: "KIVO stopped unexpectedly last time".into(),
-            body: "A crash report was saved on this PC. It isn't sent anywhere.".into(),
-            actions: vec![action(CRASH_FOLDER, "Open folder")],
+            title: text::t("notice.crash.title"),
+            body: text::t("notice.crash.body"),
+            actions: vec![action(CRASH_FOLDER, "notice.crash.folder")],
             reply: false,
         });
     }

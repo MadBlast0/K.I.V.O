@@ -6,6 +6,7 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 // Segoe Fluent Icons (Windows 11) with Segoe MDL2 Assets (Windows 10) as the fallback,
 // so the buttons match the system caption buttons exactly.
@@ -17,6 +18,7 @@ const run = (action: Promise<unknown>) => {
 };
 
 export function WindowControls() {
+  const { t } = useTranslation();
   const [maximized, setMaximized] = useState(false);
 
   useEffect(() => {
@@ -44,12 +46,12 @@ export function WindowControls() {
   const win = getCurrentWindow();
 
   return (
-    <div className="k-caption" role="group" aria-label="Window">
+    <div className="k-caption" role="group" aria-label={t("shell.window")}>
       <button
         type="button"
         className="k-caption__btn"
-        aria-label="Minimize"
-        title="Minimize"
+        aria-label={t("shell.minimize")}
+        title={t("shell.minimize")}
         onClick={() => run(win.minimize())}
       >
         {GLYPH.minimize}
@@ -57,8 +59,8 @@ export function WindowControls() {
       <button
         type="button"
         className="k-caption__btn"
-        aria-label={maximized ? "Restore" : "Maximize"}
-        title={maximized ? "Restore" : "Maximize"}
+        aria-label={maximized ? t("shell.restore") : t("shell.maximize")}
+        title={maximized ? t("shell.restore") : t("shell.maximize")}
         onClick={() => run(win.toggleMaximize())}
       >
         {maximized ? GLYPH.restore : GLYPH.maximize}
@@ -66,8 +68,8 @@ export function WindowControls() {
       <button
         type="button"
         className="k-caption__btn k-caption__btn--close"
-        aria-label="Close"
-        title="Close"
+        aria-label={t("shell.close")}
+        title={t("shell.close")}
         onClick={() => run(win.close())}
       >
         {GLYPH.close}

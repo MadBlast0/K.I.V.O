@@ -168,7 +168,7 @@ impl Handler for Rpc {
                     if recorder.revoke_grant(id) {
                         Ok(Value::Null)
                     } else {
-                        Err(refuse("That permission is already gone.".to_owned()))
+                        Err(refuse(kivo_core::text::t("turn.permissionGone")))
                     }
                 }
                 method::AUDIT_LIST => {
@@ -238,7 +238,7 @@ fn capability_list(core: &Core) -> Vec<CapabilityItem> {
         .iter()
         .map(|&capability| CapabilityItem {
             capability,
-            label: capability.label().to_owned(),
+            label: capability.label(),
             enabled: settings.enabled(capability),
             default: capability.default_enabled(),
             badges: capability.badges().to_vec(),

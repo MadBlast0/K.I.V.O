@@ -1,50 +1,26 @@
 /** How the runtime's state reads in the UI: one place for the words used by Home and the sidebar. */
+import i18n from "../i18n";
 import type { Link, PermissionMode, SessionState } from "../ipc/generated";
 
-/** The permission modes as the user sees them (SECURITY §1.1), in menu order. */
-export const MODES: ReadonlyArray<{ value: PermissionMode; label: string }> = [
-  { value: "ask", label: "Ask every time" },
-  { value: "accept-edits", label: "Accept edits" },
-  { value: "plan", label: "Plan first" },
-  { value: "auto", label: "Auto" },
-  { value: "bypass", label: "Bypass permissions…" },
-];
+/** The permission modes in menu order (SECURITY §1.1). Bypass opens its confirmation step. */
+const MODE_ORDER: ReadonlyArray<PermissionMode> = ["ask", "accept-edits", "plan", "auto", "bypass"];
+
+/** The permission modes as the user sees them, translated. */
+export function modes(): ReadonlyArray<{ value: PermissionMode; label: string }> {
+  return MODE_ORDER.map((value) => ({
+    value,
+    label: value === "bypass" ? i18n.t("mode.bypassMenu") : i18n.t(`mode.${value}`),
+  }));
+}
 
 export function modeLabel(mode: PermissionMode): string {
-  return (MODES.find((m) => m.value === mode)?.label ?? mode).replace("…", "");
+  return i18n.t(`mode.${mode}`);
 }
 
 export interface StateText {
   title: string;
   detail: string;
 }
-
-const SESSION: Record<SessionState, StateText> = {
-  idle: { title: "KIVO is ready", detail: "It keeps running in the tray when you close this window." },
-  listening: { title: "Listening…", detail: "Go ahead, KIVO is listening." },
-  thinking: { title: "Thinking…", detail: "Working out what you asked for." },
-  acting: { title: "Working on it…", detail: "KIVO is doing what you asked." },
-  speaking: { title: "Speaking…", detail: "Say “stop” to interrupt." },
-  followUp: { title: "Listening for a follow-up", detail: "Keep talking, no wake word needed." },
-  interrupted: { title: "Stopping…", detail: "Cancelling what KIVO was doing." },
-  paused: { title: "Listening is paused", detail: "KIVO won’t listen until you resume." },
-  awaitingConfirmation: { title: "Waiting for your OK", detail: "KIVO needs your approval to continue." },
-  error: { title: "Something went wrong", detail: "KIVO will be ready again in a moment." },
-};
-
-/** A short label for the state ("Ready", "Paused"), matching the tray tooltip. */
-const SHORT: Record<SessionState, string> = {
-  idle: "Ready",
-  listening: "Listening",
-  thinking: "Thinking",
-  acting: "Working",
-  speaking: "Speaking",
-  followUp: "Listening for a follow-up",
-  interrupted: "Stopping",
-  paused: "Paused",
-  awaitingConfirmation: "Waiting for your OK",
-  error: "Something went wrong",
-};
 
 export type LinkTone = "ok" | "busy" | "off";
 
@@ -57,11 +33,12 @@ export interface LinkView extends StateText {
 
 /** What to show for the connection and state. `link` is null outside the KIVO app. */
 export function viewLink(link: Link | null): LinkView {
+  const t = i18n.t.bind(i18n);
   if (!link) {
     return {
-      title: "Not connected",
-      detail: "Open this in the KIVO app to see KIVO’s live status.",
-      status: "Preview · not connected",
+      title: t("link.preview.title"),
+      detail: t("link.preview.detail"),
+      status: t("link.preview.status"),
       tone: "off",
       session: null,
     };
@@ -69,31 +46,37 @@ export function viewLink(link: Link | null): LinkView {
   switch (link.status) {
     case "connecting":
       return {
-        title: "Starting KIVO…",
-        detail: link.message ?? "This takes a moment the first time.",
-        status: "Starting…",
+        title: t("link.connecting.title"),
+        detail: link.message ?? t("link.connecting.detail"),
+        status: t("link.connecting.status"),
         tone: "busy",
         session: null,
       };
     case "reconnecting":
       return {
-        title: "KIVO isn’t running",
-        detail: "It stopped unexpectedly. It reconnects as soon as KIVO is back.",
-        status: "Reconnecting…",
+        title: t("link.reconnecting.title"),
+        detail: t("link.reconnecting.detail"),
+        status: t("link.reconnecting.status"),
         tone: "busy",
         session: null,
       };
     case "incompatible":
       return {
-        title: "KIVO needs a restart",
-        detail: link.message ?? "Parts of KIVO are from different versions. Quit KIVO and open it again.",
-        status: "Restart needed",
+        title: t("link.incompatible.title"),
+        detail: link.message ?? t("link.incompatible.detail"),
+        status: t("link.incompatible.status"),
         tone: "off",
         session: null,
       };
     case "connected": {
       const session = link.snapshot?.session ?? "idle";
-      return { ...SESSION[session], status: `Connected · ${SHORT[session]}`, tone: "ok", session };
+      return {
+        title: t(`session.${session}.title`),
+        detail: t(`session.${session}.detail`),
+        status: t("link.connected", { state: t(`session.${session}.short`) }),
+        tone: "ok",
+        session,
+      };
     }
   }
 }

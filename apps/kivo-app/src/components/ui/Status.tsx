@@ -2,6 +2,7 @@
 import type { ReactNode } from "react";
 import { Icon } from "../../icons";
 import { cn } from "../../lib/cn";
+import { useTranslation } from "react-i18next";
 
 export type Tone = "neutral" | "success" | "warning" | "danger" | "accent";
 
@@ -32,15 +33,22 @@ export function Keys({ keys }: { keys: string[] }) {
   );
 }
 
-export const NewDot = () => <span className="k-new" title="New" aria-label="New" />;
-export const Spinner = ({ label = "Working" }: { label?: string }) => (
-  <span className="k-spinner" role="status" aria-label={label} />
-);
-export const Done = () => (
-  <span className="k-done" aria-label="Done">
-    <Icon name="check" />
-  </span>
-);
+export function NewDot() {
+  const { t } = useTranslation();
+  return <span className="k-new" title={t("ui.new")} aria-label={t("ui.new")} />;
+}
+export function Spinner({ label }: { label?: string }) {
+  const { t } = useTranslation();
+  return <span className="k-spinner" role="status" aria-label={label ?? t("ui.working")} />;
+}
+export function Done() {
+  const { t } = useTranslation();
+  return (
+    <span className="k-done" aria-label={t("ui.done")}>
+      <Icon name="check" />
+    </span>
+  );
+}
 
 export function Meter({ value, label }: { value: number; label: string }) {
   return (

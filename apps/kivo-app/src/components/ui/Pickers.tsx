@@ -3,18 +3,20 @@ import { useEffect, useState } from "react";
 import { ACCENTS, type Accent } from "../../lib/theme";
 import { Button } from "./Button";
 import { Keys } from "./Status";
+import { useTranslation } from "react-i18next";
 
 export function AccentPicker({ value, onChange }: { value: Accent; onChange: (a: Accent) => void }) {
+  const { t } = useTranslation();
   return (
-    <div className="k-swatches" role="radiogroup" aria-label="Accent colour">
+    <div className="k-swatches" role="radiogroup" aria-label={t("ui.accent")}>
       {ACCENTS.map((a) => (
         <button
           key={a.id}
           type="button"
           role="radio"
           aria-checked={value === a.id}
-          aria-label={a.label}
-          title={a.label}
+          aria-label={t(`accent.${a.id}`)}
+          title={t(`accent.${a.id}`)}
           className="k-swatch"
           style={{ background: a.swatch }}
           onClick={() => onChange(a.id)}
@@ -36,6 +38,7 @@ export function ShortcutRecorder({
   onChange?: (keys: string[]) => void;
   conflict?: (keys: string[]) => string | null;
 }) {
+  const { t } = useTranslation();
   const [recording, setRecording] = useState(false);
   const [warning, setWarning] = useState<string | null>(null);
 
@@ -66,13 +69,13 @@ export function ShortcutRecorder({
     <span style={{ display: "inline-flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
       {recording ? (
         <button type="button" className="k-hotkey k-hotkey--recording" onClick={() => setRecording(false)}>
-          Press keys… (Esc to cancel)
+          {t("ui.pressKeys")}
         </button>
       ) : (
         <span className="k-hotkey">
           <Keys keys={value} />
           <Button size="sm" variant="plain" onClick={() => setRecording(true)}>
-            Change
+            {t("ui.change")}
           </Button>
         </span>
       )}

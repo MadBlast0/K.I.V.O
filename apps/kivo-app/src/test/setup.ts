@@ -1,6 +1,10 @@
 // Browser APIs that jsdom doesn't implement but KIVO's components use.
 import { cleanup } from "@testing-library/react";
 import { afterEach } from "vitest";
+// Components read their words from the catalog; loading it registers it with react-i18next.
+import i18n from "../i18n";
+
+if (!i18n.isInitialized) throw new Error("the translations failed to load");
 
 afterEach(() => {
   cleanup();

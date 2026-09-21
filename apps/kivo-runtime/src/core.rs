@@ -108,7 +108,10 @@ impl Core {
     pub fn cancel_turn(&self) -> Result<SessionState, Refused> {
         let state = self.state.borrow().session;
         if !state.is_active() && state != SessionState::FollowUp {
-            return Err(Refused(format!("KIVO isn't busy ({})", describe(state))));
+            return Err(Refused(kivo_core::text::tf(
+                "turn.notBusy",
+                &[("state", &describe(state))],
+            )));
         }
         self.request(SessionInput::Cancel, "KIVO isn't busy")?;
         let next = if state == SessionState::FollowUp {
@@ -294,9 +297,7 @@ impl Core {
     /// here until that exists.
     pub fn set_mode(&self, mode: PermissionMode) -> Result<PermissionMode, Refused> {
         if mode == PermissionMode::Bypass {
-            return Err(Refused(
-                "Bypass permissions needs its confirmation step, which isn't available yet".into(),
-            ));
+            return Err(Refused(kivo_core::text::t("turn.bypassNeedsStep")));
         }
         let saved = {
             let mut config = self.config.lock().unwrap_or_else(|e| e.into_inner());
@@ -393,20 +394,9 @@ impl Core {
     }
 }
 
-/// A short, user-facing name for a state (tray tooltip, refusals).
-pub fn describe(state: SessionState) -> &'static str {
-    match state {
-        SessionState::Idle => "Ready",
-        SessionState::Listening => "Listening",
-        SessionState::Thinking => "Thinking",
-        SessionState::Acting => "Working",
-        SessionState::Speaking => "Speaking",
-        SessionState::FollowUp => "Listening for a follow-up",
-        SessionState::Interrupted => "Stopping",
-        SessionState::Paused => "Paused",
-        SessionState::AwaitingConfirmation => "Waiting for your OK",
-        SessionState::Error => "Something went wrong",
-    }
+/// A short, user-facing name for a state (tray tooltip, refusals), in the current language.
+pub fn describe(state: SessionState) -> String {
+    kivo_core::text::t(&format!("state.{}", kivo_core::text::key_of(&state)))
 }
 
 #[cfg(test)]

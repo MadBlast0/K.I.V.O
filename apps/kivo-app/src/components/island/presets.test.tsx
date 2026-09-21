@@ -1,6 +1,13 @@
 import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { ISLAND_LIVE, ISLAND_NOTICES, ISLAND_STATES, islandPreset, type IslandState } from "./presets";
+import {
+  ISLAND_LIVE,
+  ISLAND_NOTICES,
+  ISLAND_STATES,
+  islandPreset,
+  islandStateLabel,
+  type IslandState,
+} from "./presets";
 
 const ALL = [...ISLAND_STATES, ...ISLAND_NOTICES, ...ISLAND_LIVE];
 
@@ -27,8 +34,12 @@ function trailText(mode: "auto" | "plan" | "bypass") {
 
 describe("Island presets", () => {
   it("returns a model keyed by its own state for every visible state", () => {
-    const visible = ALL.filter((s) => s.id !== "idle");
-    expect(visible.map((s) => islandPreset(s.id)?.state)).toEqual(visible.map((s) => s.id));
+    const visible = ALL.filter((s) => s !== "idle");
+    expect(visible.map((s) => islandPreset(s)?.state)).toEqual(visible);
+  });
+
+  it("has a translated chip label for every state", () => {
+    expect(ALL.filter((s) => islandStateLabel(s).startsWith("demo."))).toEqual([]);
   });
 
   it("hides the Island when idle", () => {
@@ -36,12 +47,12 @@ describe("Island presets", () => {
   });
 
   it("uses unique state ids", () => {
-    expect(new Set(ALL.map((s) => s.id)).size).toBe(ALL.length);
+    expect(new Set(ALL).size).toBe(ALL.length);
   });
 
   // DESIGN_SYSTEM §4: the voice hint lists the words on the buttons, in the same order.
   it("lists exactly the button words, in order, in every voice hint", () => {
-    const hints = ALL.map((s) => hintOf(s.id)).filter((h) => h !== null);
+    const hints = ALL.map((s) => hintOf(s)).filter((h) => h !== null);
     expect(hints.length).toBeGreaterThanOrEqual(6);
     expect(hints.map((h) => h.spoken)).toEqual(hints.map((h) => h.buttons));
   });

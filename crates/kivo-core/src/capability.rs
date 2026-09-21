@@ -101,37 +101,9 @@ impl Capability {
         )
     }
 
-    /// The user-facing name, as in "Screen awareness is off".
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::MicListening => "Microphone listening",
-            Self::PushToTalk => "Push-to-talk",
-            Self::SpeakResponses => "Speak responses",
-            Self::AppsAndWindows => "Apps & windows",
-            Self::SystemControls => "System controls",
-            Self::PowerActions => "Power actions",
-            Self::FilesRead => "Reading files",
-            Self::FilesModify => "Changing files",
-            Self::Clipboard => "Clipboard",
-            Self::BrowserOpenLinks => "Opening links",
-            Self::BrowserPages => "Reading and using web pages",
-            Self::BrowserAutonomous => "Autonomous browsing",
-            Self::UiAutomation => "UI Automation",
-            Self::ScreenAwareness => "Screen awareness",
-            Self::ComputerUse => "Computer use",
-            Self::Shell => "Shell commands",
-            Self::BackgroundTasks => "Background tasks",
-            Self::Routines => "Routines",
-            Self::Memory => "Memory",
-            Self::CloudBrains => "Cloud AI",
-            Self::RealtimeVoice => "Realtime voice",
-            Self::CliAgents => "Coding agents",
-            Self::McpServers => "MCP servers",
-            Self::Integrations => "Integrations",
-            Self::SpeakerRecognition => "Speaker recognition",
-            Self::RemoteAccess => "Remote access",
-            Self::Notifications => "Notifications",
-        }
+    /// The user-facing name, as in "Screen awareness is off", in the current language.
+    pub fn label(self) -> String {
+        crate::text::t(&format!("capability.{}", crate::text::key_of(&self)))
     }
 
     pub fn badges(self) -> &'static [Badge] {
@@ -211,8 +183,12 @@ mod tests {
         assert!(!s.enabled(Capability::ScreenAwareness));
         assert_eq!(Capability::ALL.len(), 27);
         for c in Capability::ALL {
-            assert!(!c.label().is_empty());
+            assert!(
+                !c.label().starts_with("capability."),
+                "{c:?} has a name in the catalog"
+            );
         }
+        assert_eq!(Capability::AppsAndWindows.label(), "Apps & windows");
     }
 
     #[test]

@@ -1,5 +1,6 @@
 /** Window shell: grouped sidebar navigation plus the page area. */
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { Icon, type IconName } from "../../icons";
 import { cn } from "../../lib/cn";
 import { Keys, Mark } from "../ui/Status";
@@ -23,29 +24,28 @@ export type PageId =
 
 export interface NavItem {
   id: PageId;
-  label: string;
   icon: IconName;
   badge?: ReactNode;
 }
 
 export const NAV: NavItem[][] = [
   [
-    { id: "home", label: "Home", icon: "home" },
-    { id: "chat", label: "Chat", icon: "chat" },
-    { id: "tasks", label: "Tasks", icon: "tasks" },
-    { id: "activity", label: "Activity", icon: "activity" },
-    { id: "routines", label: "Routines", icon: "routine" },
+    { id: "home", icon: "home" },
+    { id: "chat", icon: "chat" },
+    { id: "tasks", icon: "tasks" },
+    { id: "activity", icon: "activity" },
+    { id: "routines", icon: "routine" },
   ],
   [
-    { id: "brains", label: "Brains", icon: "brain" },
-    { id: "agents", label: "Agents", icon: "agent" },
-    { id: "voice", label: "Voice", icon: "voice" },
-    { id: "extensions", label: "Extensions", icon: "extensions" },
+    { id: "brains", icon: "brain" },
+    { id: "agents", icon: "agent" },
+    { id: "voice", icon: "voice" },
+    { id: "extensions", icon: "extensions" },
   ],
   [
-    { id: "permissions", label: "Permissions", icon: "permissions" },
-    { id: "memory", label: "Memory", icon: "memory" },
-    { id: "usage", label: "Usage", icon: "usage" },
+    { id: "permissions", icon: "permissions" },
+    { id: "memory", icon: "memory" },
+    { id: "usage", icon: "usage" },
   ],
 ];
 
@@ -60,8 +60,9 @@ export function Sidebar({
   onSearch?: () => void;
   footer?: ReactNode;
 }) {
+  const { t } = useTranslation();
   return (
-    <nav className="k-side" aria-label="Main">
+    <nav className="k-side" aria-label={t("shell.nav")}>
       {/* Doubles as the left half of the title bar: drag here to move the window. */}
       <div className="k-side__brand" data-tauri-drag-region>
         <Mark size={22} />
@@ -70,8 +71,8 @@ export function Sidebar({
       {onSearch && (
         <button type="button" className="k-side__search" onClick={onSearch}>
           <Icon name="search" />
-          Search
-          <span style={{ marginLeft: "auto" }}>
+          {t("shell.search")}
+          <span style={{ marginInlineStart: "auto" }}>
             <Keys keys={["Ctrl", "K"]} />
           </span>
         </button>
@@ -84,11 +85,7 @@ export function Sidebar({
         </div>
       ))}
       <div className="k-side__spacer" />
-      <NavButton
-        item={{ id: "settings", label: "Settings", icon: "settings" }}
-        current={current}
-        onNavigate={onNavigate}
-      />
+      <NavButton item={{ id: "settings", icon: "settings" }} current={current} onNavigate={onNavigate} />
       {footer}
     </nav>
   );
@@ -103,6 +100,7 @@ function NavButton({
   current: PageId;
   onNavigate: (id: PageId) => void;
 }) {
+  const { t } = useTranslation();
   const active = item.id === current;
   return (
     <button
@@ -112,7 +110,7 @@ function NavButton({
       onClick={() => onNavigate(item.id)}
     >
       <Icon name={item.icon} />
-      {item.label}
+      {t(`nav.${item.id}`)}
       {item.badge && <span className="k-side__badge">{item.badge}</span>}
     </button>
   );

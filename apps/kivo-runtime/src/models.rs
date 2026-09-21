@@ -93,8 +93,8 @@ impl Models {
 
     /// Starts a download in the background (does nothing if it is installed or already running).
     pub fn install(self: &Arc<Self>, id: &str) -> Result<(), String> {
-        let manifest =
-            Self::manifest(id).ok_or_else(|| format!("KIVO doesn't know a model called {id}"))?;
+        let manifest = Self::manifest(id)
+            .ok_or_else(|| kivo_core::text::tf("turn.unknownModel", &[("id", &id)]))?;
         {
             let mut downloads = self
                 .downloads

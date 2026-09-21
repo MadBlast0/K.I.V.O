@@ -5,6 +5,7 @@ import { Tabs as BTabs } from "@base-ui/react/tabs";
 import { Tooltip as BTooltip } from "@base-ui/react/tooltip";
 import type { ReactElement, ReactNode } from "react";
 import { IconButton } from "./Button";
+import { useTranslation } from "react-i18next";
 
 /* ───────── Page tabs with a sliding underline ───────── */
 export interface TabDef<T extends string> {
@@ -86,6 +87,7 @@ export interface DialogProps {
 }
 
 export function Dialog({ open, onOpenChange, trigger, title, description, children, footer, noClose }: DialogProps) {
+  const { t } = useTranslation();
   return (
     <BDialog.Root open={open} onOpenChange={onOpenChange}>
       {trigger && <BDialog.Trigger render={trigger} />}
@@ -97,7 +99,7 @@ export function Dialog({ open, onOpenChange, trigger, title, description, childr
               <BDialog.Title className="k-dialog__title">{title}</BDialog.Title>
               {description && <BDialog.Description className="k-dialog__desc">{description}</BDialog.Description>}
             </div>
-            {!noClose && <BDialog.Close render={<IconButton icon="close" label="Close" size="sm" />} />}
+            {!noClose && <BDialog.Close render={<IconButton icon="close" label={t("shell.close")} size="sm" />} />}
           </div>
           {children && <div className="k-dialog__body">{children}</div>}
           {footer && <div className="k-dialog__foot">{footer}</div>}
@@ -118,6 +120,7 @@ export function Sheet({
   title,
   children,
 }: Omit<DialogProps, "description" | "footer" | "noClose">) {
+  const { t } = useTranslation();
   return (
     <BDialog.Root open={open} onOpenChange={onOpenChange}>
       {trigger && <BDialog.Trigger render={trigger} />}
@@ -126,7 +129,7 @@ export function Sheet({
         <BDialog.Popup className="k-sheet">
           <div className="k-sheet__head">
             <BDialog.Title className="k-sheet__title">{title}</BDialog.Title>
-            <BDialog.Close render={<IconButton icon="close" label="Close" size="sm" />} />
+            <BDialog.Close render={<IconButton icon="close" label={t("shell.close")} size="sm" />} />
           </div>
           <div className="k-sheet__body">{children}</div>
         </BDialog.Popup>

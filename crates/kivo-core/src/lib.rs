@@ -11,6 +11,7 @@ pub mod event;
 pub mod ids;
 pub mod secret;
 pub mod session;
+pub mod text;
 pub mod time;
 pub mod tool;
 pub mod turn;
