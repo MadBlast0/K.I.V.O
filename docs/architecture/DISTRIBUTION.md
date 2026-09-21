@@ -107,7 +107,7 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 - [ ] **DIST-07** · M9 · `tauri-plugin-updater` with a minisign-signed `latest.json` per channel (Stable, Beta, Experimental), channel chosen in Settings (§2)
 - [ ] **DIST-08** · M9 · Update flow: download + verify → ask (or install at idle if opted in) → runtime finishes/cancels turns and persists state → exits → installer `/UPDATE` → relaunch → health check (§2)
 - [ ] **DIST-09** · M9 · Rollback: if the runtime fails to start twice after an update, reinstall the previous version (kept for one version) (§2)
-- [ ] **DIST-10** · M0 · Config and database migrations run forward only, with a backup first (§2, ARCH-29)
+- [x] **DIST-10** · M0 · Config and database migrations run forward only, with a backup first (§2, ARCH-29) → done: config migrations back up to `kivo.toml.vN.bak` first; database upgrades take a `VACUUM INTO` copy (`kivo.db.vN.bak`) first; both forward-only (a newer database is refused, a newer config is left untouched) · verified: tests `older_files_are_backed_up_then_migrated_in_order`, `a_backup_is_a_complete_readable_copy`, `a_database_from_a_newer_kivo_is_not_downgraded`
 
 **Signing (§3)**
 

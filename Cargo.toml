@@ -19,6 +19,14 @@ tokio-util = { version = "0.7.19", default-features = false }
 tracing = "0.1.44"
 uuid = { version = "1.26.1", features = ["v7", "serde"] }
 zeroize = "1.9.0"
+toml = "1.1.6"
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+rusqlite_migration = "2.6.0"
+dirs = "7.0.0"
+tracing-subscriber = { version = "0.3.23", features = ["json", "env-filter"] }
+tracing-appender = "0.2.5"
+regex = "1.13.1"
+tempfile = "3.27.0"
 kivo-core = { path = "crates/kivo-core" }
 kivo-platform = { path = "crates/kivo-platform" }
 

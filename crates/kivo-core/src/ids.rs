@@ -24,6 +24,13 @@ macro_rules! id_type {
             }
         }
 
+        impl std::str::FromStr for $name {
+            type Err = uuid::Error;
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                Uuid::parse_str(s).map(Self)
+            }
+        }
+
         impl fmt::Display for $name {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 self.0.fmt(f)
@@ -74,5 +81,12 @@ mod tests {
         assert_eq!(json, format!("\"{id}\""));
         let back: TaskId = serde_json::from_str(&json).unwrap();
         assert_eq!(back, id);
+    }
+
+    #[test]
+    fn ids_parse_from_their_display_form() {
+        let id = ProfileId::new();
+        assert_eq!(id.to_string().parse::<ProfileId>().unwrap(), id);
+        assert!("not-a-uuid".parse::<ProfileId>().is_err());
     }
 }
