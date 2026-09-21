@@ -84,7 +84,7 @@ Navigation (updated 2026-09-21; 13 items, with tabs inside pages):
 | Group | Items |
 |---|---|
 | — | Home · Chat · Tasks · Activity · Routines |
-| Intelligence | Brains (Brains / Context) · Agents · Voice · Extensions (Installed / Browse; Apps, Tools, Skills) |
+| Intelligence | Brains (Brains / Context) · Agents · Voice · Extensions (Connectors / MCP servers / Skills) |
 | Control | Permissions (Mode / Capabilities / Privacy) · Memory · Usage |
 | System | Settings (General / Appearance / Island / Sounds / Notifications / Accessibility / Shortcuts / Performance / Diagnostics / About) |
 

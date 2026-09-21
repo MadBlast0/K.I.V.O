@@ -339,24 +339,6 @@ code{font-family:var(--mono);font-size:12px;background:var(--fill);padding:1px 5
 .themes .pv .mn{flex:1;display:flex;flex-direction:column;gap:6px;padding:10px 8px}
 .themes .pv .pill-i{width:46%;height:10px!important;border-radius:6px!important;background:#000;align-self:center;margin-bottom:4px}
 .themes .ot{display:flex;align-items:center;gap:8px}
-.xhead{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:-4px 0 18px}
-.xhead .l{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.chips{display:flex;gap:6px;flex-wrap:wrap}
-.chips button{height:26px;padding:0 11px;border-radius:999px;border:0;background:transparent;box-shadow:0 0 0 1px var(--border) inset;font-size:12.5px;color:var(--text-2);transition:background var(--t-fast),color var(--t-fast)}
-.chips button:hover{background:var(--fill)}
-.chips button[aria-pressed="true"]{background:var(--ink);color:var(--ink-fg);box-shadow:none}
-.chips .n{opacity:.55;margin-left:4px}
-.xgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:var(--gap)}
-.xcard{background:var(--group);box-shadow:0 0 0 1px var(--border);border-radius:var(--r-m);padding:14px;display:flex;flex-direction:column;gap:10px;min-height:150px;transition:box-shadow var(--t-base),transform var(--t-base) var(--out)}
-.xcard:hover{box-shadow:0 0 0 1px var(--border),var(--shadow);transform:translateY(-1px)}
-.xcard .top{display:flex;align-items:center;gap:10px}
-.xcard .top b{display:block}
-.xcard .kind{font-size:11.5px;color:var(--text-3)}
-.xcard p{margin:0;font-size:12.5px;color:var(--text-2);flex:1}
-.xcard .bot{display:flex;justify-content:space-between;align-items:center}
-.xdetail .hero{display:flex;gap:12px;align-items:center;margin-bottom:14px}
-.xdetail .hero b{display:block;font-family:var(--disp);font-size:17px}
-.xdetail .hero span{font-size:12.5px;color:var(--text-2)}
 .explain{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:18px}
 .explain .tile{display:flex;gap:10px;align-items:flex-start;cursor:pointer;transition:box-shadow var(--t-base)}
 .explain .tile:hover{box-shadow:0 0 0 1px var(--acc)}
@@ -787,14 +769,14 @@ const NAV = [
 ];
 const TABS = {
   brains:[['brains','Brains'],['context','Context']],
+  extensions:[['connectors','Connectors'],['mcp','MCP servers'],['skills','Skills']],
   permissions:[['permissions','Mode'],['capabilities','Capabilities'],['privacy','Privacy']],
   settings:[['settings','General'],['appearance','Appearance'],['island','Island'],['sounds','Sounds'],['notifications','Notifications'],['accessibility','Accessibility'],['shortcuts','Shortcuts'],['performance','Performance'],['diagnostics','Diagnostics'],['about','About']]
 };
 const PARENT = {}; Object.entries(TABS).forEach(([pg, ts]) => ts.forEach(([t]) => PARENT[t] = pg));
 S.tabs = S.tabs || {};
-const ALIAS = {companion:'island', connectors:'extensions', mcp:'extensions', skills:'extensions'};
-const XKIND = {connectors:'apps', mcp:'tools', skills:'skills'};
-const goTo = raw => { if (XKIND[raw]) { S.xkind = XKIND[raw]; S.xview = 'installed'; } const id = ALIAS[raw] || raw; const pg = PARENT[id] || id; S.sec = 'cc'; S.page = pg; if (TABS[pg]) S.tabs[pg] = id; };
+const ALIAS = {companion:'island'};
+const goTo = raw => { const id = ALIAS[raw] || raw; const pg = PARENT[id] || id; S.sec = 'cc'; S.page = pg; if (TABS[pg]) S.tabs[pg] = id; };
 const SUBS = {extensions:'Give KIVO more abilities. Not sure which? Start with Connectors.', permissions:'What KIVO may do, and how much it asks first.', brains:'How KIVO thinks, and what it starts each conversation with.', settings:''};
 const pageBody = () => {
   const pg = NAV.flatMap(g => g[1]).some(x => x[0]===S.page) ? S.page : 'home';
@@ -808,22 +790,6 @@ const TITLES = Object.fromEntries(NAV.flatMap(g => g[1]).map(x => [x[0], x[1]]))
 const editDel = () => `<button class="btn sm ic plain" aria-label="Edit">${I('edit')}</button><button class="btn sm ic plain" aria-label="Delete">${I('trash')}</button>`;
 
 const themeTile = (v, n, bg, side, line, isl='#000') => `<button class="option" aria-pressed="${S.themePref===v}" data-set="themePref" data-val="${v}"><div class="pv" style="background:${bg}"><div class="sb" style="background:${side}"><i style="background:${line};width:70%"></i><i style="background:${line};width:50%"></i><i style="background:${line};width:60%"></i></div><div class="mn"><i class="pill-i" style="background:${isl}"></i><i style="background:${line};width:60%"></i><i style="background:${line};width:85%"></i><i style="background:${line};width:40%"></i></div></div><span class="ot"><span class="rad ${S.themePref===v?'on':''}"></span><b>${n}</b></span></button>`;
-const XI = {
-  builtin:[['music','Media controls','Play, pause and skip in Spotify, YouTube Music and any player','Built in','media'],['code','Developer tools','git, GitHub CLI, VS Code and Terminal','Found on this PC','dev'],['globe','Browser extension','Read and act on your open tabs in Chrome and Edge','Not installed','browser']],
-  apps:[['GH','#24292F','GitHub','Connected as MadBlast0 · 12 actions',1,'github'],['GC','#1A73E8','Google Calendar','Connected as sam@gmail.com · 4 actions',1,'gcal']],
-  tools:[['FS','#5E5E63','Project files','Read and edit files in D:\\work · 5 tools',1,'fs'],['WX','#0EA5E9','Weather demo','Changed since you approved it',0,'wx']],
-  skills:[['release-notes','Turns commits into release notes',1,'rn'],['meeting-brief','Prepares a brief before meetings',1,'mb'],['pdf-tools','Fill, merge and split PDFs · runs scripts',1,'pdf']]
-};
-const XB = [
-  ['GD','#0F9D58','Google Drive','Find and open the files you choose','apps','Files'],['OL','#0078D4','Outlook','Mail and calendar for Microsoft 365','apps','Communication'],
-  ['TM','#5B5FC7','Microsoft Teams','Read chats and join meetings','apps','Communication'],['NO','#191919','Notion','Search and update pages','apps','Productivity'],
-  ['LI','#5E6AD2','Linear','Create and track issues','apps','Developer'],['SL','#4A154B','Slack','Read and send messages','apps','Communication'],
-  ['GM','#EA4335','Gmail','Search and draft email','apps','Communication','soon'],['FG','#A259FF','Figma','Inspect designs and export assets','tools','Design'],
-  ['SE','#362D59','Sentry','Look up errors and releases','tools','Developer'],['PG','#336791','Postgres','Query your databases, read-only by default','tools','Developer'],
-  ['SK','#6E6E73','Spreadsheet helper','Clean up and summarize spreadsheets','skills','Productivity'],['SK','#6E6E73','Brand guidelines','Write in your company’s style','skills','Productivity']
-];
-const xcount = k => k==='all' ? XI.apps.length+XI.tools.length+XI.skills.length : XI[k].length;
-const xrow = (lead, name, sub, on, id, extra='') => li(lead, name, sub, extra + (on===null ? '' : tog(on, name)) + `<button class="btn sm ic plain" data-sheet="ext:${id}" aria-label="Details">${chev}</button>`, 'click');
 const PAGES = {
 home: () => `<div class="home"><div class="big"><span class="orb"></span></div>
     <h2>Listening for “Hey Kivo”</h2><p>Or hold ${keys('Ctrl','Space')} to talk · ${keys('Ctrl','Shift','Space')} to type</p>
@@ -934,23 +900,6 @@ context: () => ph('Context','What the AI starts with in each new conversation. T
     li('chat','Conversation budget','How much recent conversation to send', seg(['Small','Balanced','Large'],'Balanced')),
     li('compress','Summarize older messages automatically','Keeps long conversations fast and cheap', tog(true)),
     li('clock','New conversation after','', seg(['30 min','2 hours','Never'],'30 min'))),
-extensions: () => {
-  const view = S.xview || 'installed', kind = S.xkind || 'all';
-  const kinds = [['all','All'],['apps','Apps'],['tools','Tools'],['skills','Skills']];
-  const head = `<div class="ph"><div><h2>Extensions</h2><p>Give KIVO more to work with: apps you use, extra tools and skills.</p></div><div class="acts"><div class="field" style="width:220px">${I('search')}<input placeholder="Search extensions"></div><button class="btn pri" data-modal="addext">${I('plus')}Add</button></div></div>`;
-  const bar = `<div class="xhead"><div class="l">${seg([['installed','Installed'],['browse','Browse']], view, v => `data-set="xview" data-val="${v}"`)}</div><div class="chips">${kinds.map(([k,l]) => `<button data-set="xkind" data-val="${k}" aria-pressed="${kind===k}">${l}${view==='installed'?`<span class="n">${xcount(k)}</span>`:''}</button>`).join('')}</div></div>`;
-  if (view === 'browse') {
-    const items = XB.filter(x => kind==='all' || x[4]===kind);
-    return head + bar + `<div class="xgrid">${items.map(([m,c,n,d,k,cat,soon]) => `<div class="xcard"><div class="top">${mono(m,c,1)}<div><b>${n}</b><span class="kind">${{apps:'App',tools:'Tool',skills:'Skill'}[k]} · ${cat}</span></div></div><p>${d}</p><div class="bot"><span class="kind">${k==='apps'?'Sign in, no keys':k==='tools'?'MCP server':'SKILL.md'}</span>${soon?'<button class="btn sm" disabled>Coming later</button>':`<button class="btn sm" data-toast="${n} ${k==='apps'?'connected':'added'}">${k==='apps'?'Connect':'Add'}</button>`}</div></div>`).join('')}</div>`;
-  }
-  const show = k => kind==='all' || kind===k;
-  return head + bar +
-    (kind==='all' ? sect('Built in', '<span class="meta">No setup needed</span>') + group(...XI.builtin.map(([ic,n,d,st,id]) => li(ic, n, d, (st==='Not installed' ? '<button class="btn sm">Install</button>' : tag(st,'g')) + `<button class="btn sm ic plain" data-sheet="ext:${id}" aria-label="Details">${chev}</button>`, 'click'))) : '') +
-    (show('apps') ? sect('Apps', '<span class="meta">Signed in with your account</span>') + group(...XI.apps.map(([m,c,n,d,on,id]) => xrow(mono(m,c), n, d, !!on, id))) : '') +
-    (show('tools') ? sect('Tools', '<span class="meta">From MCP servers</span>') + group(...XI.tools.map(([m,c,n,d,on,id]) => xrow(mono(m,c), n, d, on ? true : null, id, on ? '' : '<button class="btn sm">Review</button>'))) : '') +
-    (show('skills') ? sect('Skills', '<span class="meta">Only their names use context until needed</span>') + group(...XI.skills.map(([n,d,on,id]) => xrow('skill', n, d, !!on, id))) : '') +
-    `<p class="note">Looking for more? <button class="btn link" data-set="xview" data-val="browse">Browse extensions</button></p>`;
-},
 voice: () => ph('Voice','Wake words, how KIVO hears you, and how it sounds.') +
   sect('Wake words', `<button class="btn sm" data-modal="wake">${I('plus')}Add</button>`) + group(
     li('mic','Hey Kivo','Built in · trained model', tag('Good','g')+tog(true,'Hey Kivo')),
@@ -1315,12 +1264,6 @@ const MODALS = {
     <div class="mb"><div class="field">${I('sparkle')}<input value="When I say work mode, open VS Code and Slack and turn on Focus"></div><p class="note" style="margin:6px 2px 0">KIVO drafts the steps; you review them before saving.</p>
     ${sect('Templates')}${group(li('routine','Work mode','Open apps and turn on Focus',chev,'click'), li('clock','Focus timer','Timer and Do Not Disturb',chev,'click'), li('users','Meeting','Mute, headset, calendar link',chev,'click'), li('moon','Goodnight','Close apps, then sleep (asks first)',chev,'click'))}</div>
     <div class="mf"><button class="btn" data-close>Cancel</button><button class="btn pri" data-close>Continue</button></div></div>`,
-  addext: () => `<div class="modal"><div class="mh"><div><h3>Add an extension</h3><p>What would you like KIVO to work with?</p></div><button class="btn sm ic plain" data-close aria-label="Close">${I('x')}</button></div>
-    <div class="mb">${group(
-      li(I('plug'),'An app you use','Google Calendar, GitHub, Notion and more. Sign in, no keys.', `<button class="btn sm pri" data-close data-set="xview" data-val="browse">Browse apps</button>`),
-      li(I('server'),'A tool from a link','For MCP servers from developers', `<button class="btn sm" data-modal="mcpadd">Add link</button>`),
-      li(I('skill'),'A skill','A folder or zip with a SKILL.md file', `<button class="btn sm" data-close data-toast="Skill imported · review before enabling">Import</button>`))}</div>
-    <div class="mf"><button class="btn" data-close>Close</button></div></div>`,
   mcpadd: () => `<div class="modal"><div class="mh"><div><h3>Add an MCP server</h3><p>Paste a link from the developer, or pick a program on this PC.</p></div><button class="btn sm ic plain" data-close aria-label="Close">${I('x')}</button></div>
     <div class="mb">${seg(['Link (remote)','Program on this PC'],'Link (remote)')}
     <div class="field" style="margin-top:12px">${I('link')}<input value="https://mcp.linear.app/mcp"></div>
@@ -1347,26 +1290,6 @@ const SHEETS = {
     ${sect('Limits')}${group(li('list','Max steps per task','', `<div class="field" style="width:70px"><input value="25"></div>`), li('coin','Max cost per task','', `<div class="field" style="width:80px">$<input value="0.50"></div>`), li('clock','Time limit','', seg(['1 min','2 min','5 min'],'2 min')))}
     ${sect('Apps')}${group(li('check','Allowed apps','Notes, Photoshop, Figma', chev,'click'), li('lock','Never touch','Password managers, banking, Windows Security', chev,'click'))}
     <p class="note">Screenshots stay in memory and are never saved.</p></div>`,
-  ext: id => {
-    const D = {
-      github:['GH','#24292F','GitHub','App · connected as MadBlast0',[['Search issues and pull requests','Auto'],['Read files in repositories','Auto'],['Create issues','Ask'],['Comment on pull requests','Ask'],['Merge pull requests','Ask']]],
-      gcal:['GC','#1A73E8','Google Calendar','App · connected as sam@gmail.com',[['See your events','Auto'],['Create events','Ask'],['Change or delete events','Ask']]],
-      fs:['FS','#5E5E63','Project files','Tool · local MCP server',[['List and read files in D:\\work','Auto'],['Edit files in D:\\work','Ask']]],
-      wx:['WX','#0EA5E9','Weather demo','Tool · local MCP server',[['Get the forecast','Off']]],
-      rn:['RN','#6E6E73','release-notes','Skill · imported from a folder',[]],mb:['MB','#6E6E73','meeting-brief','Skill · made from a routine',[]],pdf:['PD','#6E6E73','pdf-tools','Skill · includes scripts',[]],
-      media:['','','Media controls','Built in · works with any player',[['Play, pause, skip','Auto'],['See what’s playing','Auto']]],
-      dev:['','','Developer tools','Built in · found on this PC',[['Run git and gh commands','Ask'],['Open folders in VS Code','Auto']]],
-      browser:['','','Browser extension','Built in · not installed yet',[]]
-    }[id] || ['','','Extension','',[]];
-    const [m,c,n,sub,acts] = D, isSkill = sub.startsWith('Skill'), isWx = id==='wx';
-    return `<div class="sh"><h3>Details</h3><button class="btn sm ic plain" data-closesheet aria-label="Close">${I('x')}</button></div><div class="sb xdetail">
-      <div class="hero">${m?mono(m,c,1):`<span style="color:var(--text-2)">${I(id==='browser'?'globe':id==='dev'?'code':'music')}</span>`}<div><b>${n}</b><span>${sub}</span></div></div>
-      ${isWx ? alertB('warn','This server changed','Its tool descriptions changed since you approved them. Review before turning it back on.') : ''}
-      ${acts.length ? sect('What KIVO can do') + group(...acts.map(([a,v]) => li('', a, '', seg(['Auto','Ask','Off'], v)))) + `<p class="note">Auto: KIVO does it when you ask. Ask: it checks with you first. Off: never.</p>` : ''}
-      ${isSkill ? sect('Inside this skill') + group(li('file','SKILL.md','Instructions KIVO reads when the skill is needed'), li('folder','scripts/','Run through KIVO’s shell, with your permission'), li('sparkle','Used','3 times this month')) : ''}
-      ${id==='browser' ? `<p style="color:var(--text-2)">Lets KIVO read the page you’re on and click or type for you in Chrome and Edge. It never reads password fields.</p><button class="btn pri">Install extension</button>` : ''}
-      <div style="display:flex;gap:8px;margin-top:18px;flex-wrap:wrap">${isSkill?'<button class="btn">Open folder</button><button class="btn destr">Delete skill</button>':m?`<button class="btn">${I('refresh')}Reconnect</button><button class="btn destr">${sub.startsWith('App')?'Disconnect':'Remove'}</button>`:''}</div></div>`;
-  },
   preview: () => `<div class="sh"><h3>What the AI sees</h3><button class="btn sm ic plain" data-closesheet aria-label="Close">${I('x')}</button></div><div class="sb">
     <p style="color:var(--text-2);margin:0 0 12px">The exact start of the next conversation with <b>Claude Sonnet</b>. Secrets are hidden.</p>
     <div class="code-edit"><span class="c"># System · 600 tokens · cached</span>
@@ -1384,7 +1307,7 @@ release-notes, meeting-brief, pdf-tools</div>
     <div style="display:flex;flex-direction:column;gap:8px">${MODES.map(([k,n,d,x]) => option(n, d, S.mode===k, x==='Recommended'?pill('Recommended','a'):k==='bypass'?pill('Use with care','r'):'', k==='bypass'&&S.mode!=='bypass'?'data-modal="bypass"':`data-set="mode" data-val="${k}"`)).join('')}</div>
     <p class="note">${keys('Ctrl','Shift','M')} cycles modes. The Island shows the current mode while KIVO acts.</p></div>`
 };
-const PAL = [['Settings','mic','Wake words','go:voice'],['Settings','shield','Permission mode','sheet:mode'],['Settings','hand','Computer use options','sheet:cu'],['Settings','palette','Accent color','go:settings'],['Settings','chart','Usage and limits','go:usage'],['Routines','routine','Run “Work mode”','toast:Work mode started'],['Routines','routine','Run “Morning brief”','toast:Morning brief started'],['Actions','plus','Add wake word','modal:wake'],['Actions','plug','Add an extension','modal:addext'],['Actions','pause','Pause listening','toast:Listening paused'],['Actions','stop','Stop everything','toast:Stopped everything']];
+const PAL = [['Settings','mic','Wake words','go:voice'],['Settings','shield','Permission mode','sheet:mode'],['Settings','hand','Computer use options','sheet:cu'],['Settings','palette','Accent color','go:settings'],['Settings','chart','Usage and limits','go:usage'],['Routines','routine','Run “Work mode”','toast:Work mode started'],['Routines','routine','Run “Morning brief”','toast:Morning brief started'],['Actions','plus','Add wake word','modal:wake'],['Actions','pause','Pause listening','toast:Listening paused'],['Actions','stop','Stop everything','toast:Stopped everything']];
 const palList = q => { const r = PAL.filter(x => x[2].toLowerCase().includes(q.toLowerCase())); let g = '';
   return r.length ? r.map((x,i) => { const h = x[0] !== g ? `<div class="pg">${(g = x[0])}</div>` : ''; return h + `<div class="pi ${i===0?'sel':''}" data-pal="${x[3]}">${I(x[1])}${x[2]}<span class="k">${x[3].startsWith('go')||x[3].startsWith('sheet')?'Open':x[3].startsWith('toast')?'Run':'Action'}</span></div>`; }).join('')
     : `<div class="pg">Ask KIVO</div><div class="pi sel">${I('sparkle')}“${q.replace(/[<>&]/g,'')}”<span class="k">↵</span></div>`; };
@@ -1440,7 +1363,7 @@ const toast = msg => { toastEl.innerHTML = `${I('check')}${msg}<button class="bt
 const openModal = k => { box.innerHTML = MODALS[k](); scrim.className = 'scrim on center'; };
 const openPalette = () => { box.innerHTML = paletteHTML(); scrim.className = 'scrim on'; setTimeout(() => document.getElementById('palIn')?.focus(), 30); };
 const closeOverlay = () => { scrim.className = 'scrim'; box.innerHTML = ''; };
-const openSheet = key => { const [k, arg] = key.split(':'); sheet.innerHTML = SHEETS[k](arg); sheet.classList.add('on'); };
+const openSheet = k => { sheet.innerHTML = SHEETS[k](); sheet.classList.add('on'); };
 const closeSheet = () => sheet.classList.remove('on');
 const runPal = a => { const i = a.indexOf(':'), k = a.slice(0,i), v = a.slice(i+1); closeOverlay();
   if (k==='go') { goTo(v); render(); } else if (k==='sheet') openSheet(v); else if (k==='modal') openModal(v); else toast(v); };
@@ -1449,7 +1372,6 @@ document.addEventListener('click', e => {
   const el = e.target.closest('button,a,[data-go],[data-palette],[data-sheet],[data-pal],[data-undo]'); if (!el) return;
   const d = el.dataset;
   if (d.sec) { stopT(); closeSheet(); S.sec = d.sec; render(); window.scrollTo(0,0); return; }
-  if (d.set && d.close !== undefined) closeOverlay();
   if (d.set) { const was = S[d.set]; S[d.set] = d.val; if (d.set==='mode') { closeSheet(); if (was !== d.val) toast(`${modeName(d.val)} mode`); } render(); return; }
   if (d.bypass !== undefined) { S.mode = 'bypass'; closeOverlay(); closeSheet(); render(); toast('Bypass is on for 1 hour'); return; }
   if (d.go) { closeSheet(); goTo(d.go); render(); return; }
