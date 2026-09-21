@@ -69,9 +69,28 @@ mod tests {
     }
 
     #[test]
-    fn user_paths_are_named_kivo() {
+    fn user_paths_are_named_kivo_and_files_never_collide() {
         let p = Paths::user().expect("per-user folders exist");
         assert!(p.roaming.ends_with("KIVO") && p.local.ends_with("KIVO"));
-        assert_ne!(p.roaming, p.local);
+        // macOS uses one folder for both roots; the subfolders keep settings and data apart.
+        let files = [
+            p.config_file(),
+            p.database(),
+            p.logs(),
+            p.run(),
+            p.models(),
+            p.crashes(),
+        ];
+        for (i, a) in files.iter().enumerate() {
+            assert!(
+                files[i + 1..]
+                    .iter()
+                    .all(|b| a != b && !a.starts_with(b) && !b.starts_with(a))
+            );
+        }
+        // On Windows, settings roam (%APPDATA%) and data stays local (%LOCALAPPDATA%).
+        if cfg!(windows) {
+            assert_ne!(p.roaming, p.local);
+        }
     }
 }
