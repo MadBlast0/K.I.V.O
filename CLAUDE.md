@@ -66,7 +66,7 @@ table at the top of [docs/ROADMAP.md](docs/ROADMAP.md). Update this section as m
 
 | Task | Command |
 |---|---|
-| Run the desktop app with hot reload | `preview.bat` (or `pnpm dev`; it builds `kivo-runtime` first, and the app starts it). Quit KIVO from the tray or Ctrl+K to stop the runtime too |
+| Run the desktop app with hot reload | `preview.bat` (or `pnpm dev`; it builds `kivo-runtime` and `kivo-infer` first, and the app starts the runtime). Quit KIVO from the tray or Ctrl+K to stop the runtime too |
 | Run the runtime, which launches and supervises the app | `cargo run -p kivo-runtime` (`-- --no-app` for the runtime alone) |
 | UI only, in a browser (port 1420) | `pnpm ui` |
 | Typecheck UI | `pnpm typecheck` |

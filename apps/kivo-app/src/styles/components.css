@@ -1197,6 +1197,19 @@
 .k-island__quote {
   color: var(--isl-2);
 }
+/* A transcript that may still change reads lighter (UX §2: "gray, live"). */
+.k-island__quote--live {
+  opacity: 0.7;
+}
+.k-island__action {
+  margin-block-start: 6px;
+  font-weight: 600;
+}
+.k-island__meta {
+  margin-block-start: 4px;
+  color: var(--isl-2);
+  font-size: 12px;
+}
 .k-island__answer {
   margin-top: 7px;
 }
@@ -1424,6 +1437,21 @@
   border-radius: 999px;
   padding: 7px 12px;
   font-size: 13px;
+}
+.k-island__input input {
+  flex: 1;
+  min-inline-size: 0;
+  background: transparent;
+  border: 0;
+  outline: none;
+  color: inherit;
+  font: inherit;
+}
+.k-island__input input::placeholder {
+  color: var(--isl-2);
+}
+.k-island__input .k-island__btn {
+  margin-block: -3px;
 }
 .k-island .k-kbd {
   background: rgba(255, 255, 255, 0.12);

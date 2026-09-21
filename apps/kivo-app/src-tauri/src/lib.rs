@@ -122,7 +122,10 @@ pub fn run() {
             ui_ready,
             runtime_request,
             runtime_start,
-            overlay::overlay_fit
+            overlay::overlay_fit,
+            overlay::overlay_interactive,
+            overlay::overlay_typing_done,
+            overlay::island_request
         ])
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {

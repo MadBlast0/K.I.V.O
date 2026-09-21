@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "packageManager": "pnpm@11.27.1",
   "scripts": {
-    "dev": "cargo build -p kivo-runtime && pnpm --filter kivo-app tauri dev",
+    "dev": "cargo build -p kivo-runtime -p kivo-infer && pnpm --filter kivo-app tauri dev",
     "ui": "pnpm --filter kivo-app dev",
     "build": "pnpm --filter kivo-app tauri build",
     "typecheck": "pnpm --filter kivo-app typecheck",

@@ -6,6 +6,9 @@ fn main() {
         "runtime_request",
         "runtime_start",
         "overlay_fit",
+        "overlay_interactive",
+        "overlay_typing_done",
+        "island_request",
     ]);
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(manifest))
         .expect("failed to run the Tauri build script");

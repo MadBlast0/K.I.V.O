@@ -74,7 +74,11 @@ impl Runtime {
             .filter(|_| link.status == LinkStatus::Connected);
         // While the Island is hidden for an hour, it shows nothing at all.
         let island_hidden = snapshot.is_some_and(|s| s.island_hidden);
-        crate::overlay::apply(app, snapshot.map(|s| s.session).filter(|_| !island_hidden));
+        crate::overlay::apply(
+            app,
+            snapshot.map(|s| s.session).filter(|_| !island_hidden),
+            snapshot.is_some_and(|s| s.turn.is_some()),
+        );
         // A change of mode while connected (not the first state seen) shows the Island's notice.
         if let (Some(before), Some(now)) = (previous_mode, snapshot.map(|s| s.mode))
             && before != now
@@ -244,6 +248,12 @@ pub async fn maintain(app: AppHandle) {
 /// Runtime events the app acts on.
 fn on_event(app: &AppHandle, event: &Event) {
     match &event.kind {
+        // Ctrl+Shift+Space asks for the Island's text field rather than the Control Center.
+        EventKind::Ui(UiEvent::ControlCenterRequested { page })
+            if page.as_deref() == Some("type") =>
+        {
+            crate::overlay::start_typing(app);
+        }
         EventKind::Ui(UiEvent::ControlCenterRequested { page }) => {
             crate::show_main_window(app, page.as_deref());
         }

@@ -10,9 +10,13 @@ use kivo_core::SessionState;
 use std::sync::Mutex;
 use std::time::Duration;
 use tauri::window::Color;
-use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindowBuilder};
+use tauri::{
+    AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindowBuilder,
+};
 
 pub const LABEL: &str = "overlay";
+/// Sent to the Island page to open its text field (UX-41).
+pub const TYPE_EVENT: &str = "island://type";
 /// Wide enough for the largest card (520 px) plus its shadow.
 const WIDTH: f64 = 560.0;
 /// Before the page reports its size: the collapsed Island (36 px) and its shadow.
@@ -33,6 +37,10 @@ struct State {
     session: Option<SessionState>,
     /// A mode-change notice is showing.
     noticing: bool,
+    /// The runtime has a turn to show (its answer stays up for a moment after the session ends).
+    turn: bool,
+    /// The user is typing to KIVO (UX-41): the Island stays and can take focus.
+    typing: bool,
 }
 
 #[derive(Default)]
@@ -59,12 +67,43 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
-/// The session changed (`None`: not connected): show the Island while it is active.
-pub fn apply(app: &AppHandle, session: Option<SessionState>) {
+/// The session changed (`None`: not connected): show the Island while it is active or has a turn
+/// to show.
+pub fn apply(app: &AppHandle, session: Option<SessionState>, turn: bool) {
     let state = app.state::<Overlay>();
     let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
     guard.session = session;
+    guard.turn = turn && session.is_some();
     update(app, &mut guard);
+}
+
+/// Ctrl+Shift+Space (UX-41): open the Island with a text field that has focus.
+pub fn start_typing(app: &AppHandle) {
+    {
+        let state = app.state::<Overlay>();
+        let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        guard.typing = true;
+        update(app, &mut guard);
+    }
+    if let Some(window) = app.get_webview_window(LABEL) {
+        let _ = window.set_focusable(true);
+        let _ = window.set_ignore_cursor_events(false);
+        let _ = window.set_focus();
+    }
+    let _ = app.emit_to(LABEL, TYPE_EVENT, ());
+}
+
+/// The Island asks to go back to never taking focus (typing finished or was cancelled).
+fn stop_typing(app: &AppHandle) {
+    {
+        let state = app.state::<Overlay>();
+        let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        guard.typing = false;
+        update(app, &mut guard);
+    }
+    if let Some(window) = app.get_webview_window(LABEL) {
+        let _ = window.set_focusable(false);
+    }
 }
 
 /// The permission mode changed: show the Island's notice for a moment.
@@ -90,7 +129,8 @@ fn update(app: &AppHandle, state: &mut State) {
     let active = state
         .session
         .is_some_and(|s| !matches!(s, SessionState::Idle | SessionState::Paused));
-    let visible = active || (state.noticing && state.session.is_some());
+    let visible =
+        active || state.turn || state.typing || (state.noticing && state.session.is_some());
     state.generation += 1;
     if visible {
         if !state.shown {
@@ -177,4 +217,54 @@ fn place(app: &AppHandle, window: &tauri::WebviewWindow) {
     let top = (TOP * scale).round() as i32;
     let left = origin.x + i32::try_from(area.width.saturating_sub(width) / 2).unwrap_or(0);
     let _ = window.set_position(PhysicalPosition::new(left, origin.y + top));
+}
+
+/// The Island's buttons (Allow, Deny, Stop, the text field) must receive clicks; the rest of the
+/// time it lets clicks through to what is underneath (UX §2: it never gets in the way).
+#[tauri::command]
+pub fn overlay_interactive(window: tauri::WebviewWindow, interactive: bool) {
+    if window.label() == LABEL {
+        let _ = window.set_ignore_cursor_events(!interactive);
+    }
+}
+
+/// The Island's text field closed: it no longer takes focus.
+#[tauri::command]
+pub fn overlay_typing_done(window: tauri::WebviewWindow) {
+    if window.label() == LABEL {
+        stop_typing(window.app_handle());
+    }
+}
+
+/// What the Island may ask the runtime: only the actions its own buttons offer (SECURITY §9: the
+/// overlay window gets almost nothing).
+const ISLAND_METHODS: [&str; 5] = [
+    kivo_ipc::method::SESSION_CANCEL,
+    kivo_ipc::method::SESSION_SAY,
+    kivo_ipc::method::SESSION_TALK,
+    kivo_ipc::method::PERMISSIONS_ANSWER,
+    kivo_ipc::method::SESSION_STOP_ALL,
+];
+
+/// A request from one of the Island's buttons.
+#[tauri::command]
+pub async fn island_request(
+    window: tauri::WebviewWindow,
+    runtime: tauri::State<'_, crate::runtime::Runtime>,
+    method: String,
+    params: Option<serde_json::Value>,
+) -> Result<serde_json::Value, String> {
+    if window.label() != LABEL {
+        return Err("only the Island sends these".into());
+    }
+    if method == "island.openControlCenter" {
+        crate::show_main_window(window.app_handle(), Some("activity"));
+        return Ok(serde_json::Value::Null);
+    }
+    if !ISLAND_METHODS.contains(&method.as_str()) {
+        return Err(format!("the Island can't ask for {method}"));
+    }
+    runtime
+        .request(&method, params.unwrap_or(serde_json::Value::Null))
+        .await
 }

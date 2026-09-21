@@ -177,7 +177,8 @@ impl Engine {
                 _ => "My speech recognition isn't installed yet. Open Voice settings to get it."
                     .to_owned(),
             };
-            self.show_error(&message);
+            self.core.flash_error(&message, COLLAPSE_AFTER);
+            self.speaker.cue(Cue::Error);
             return Err(message);
         }
         // The worker starts on demand: give it a moment when this is the first request.

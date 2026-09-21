@@ -1,40 +1,50 @@
 /**
- * The overlay window's content: the Island, driven by the runtime's session state (UX §2). The
- * window itself is transparent, click-through and never takes focus; the app shows it only while
- * the Island has something to show, and hides it (WebView2 invisible, zero frames) otherwise.
+ * The overlay window's content: the Island, driven by the runtime's state and live turn (UX §2).
+ * The window is transparent and never takes focus. It lets clicks through except while the Island
+ * shows buttons, and takes focus only while the user types to KIVO (UX-09, UX-41). The app shows
+ * it only while the Island has something to show and hides it (WebView2 invisible) otherwise.
  */
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { MotionConfig } from "motion/react";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Island } from "../components/island/Island";
-import { islandForMode, islandForSession } from "../components/island/session";
-import type { Link, PermissionMode, SessionState } from "../ipc/generated";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useTranslation } from "react-i18next";
+import { Icon } from "../icons";
+import { Island, IslandKeys, type IslandModel } from "../components/island/Island";
+import { islandForMode } from "../components/island/session";
+import { hasButtons, islandForTurn, type IslandHandlers } from "../components/island/turn";
+import type { Link, PermissionMode, StateSnapshot } from "../ipc/generated";
+import { Method } from "../ipc/generated";
 
 /** Room below the Island for its shadow (0 16px 36px -14px → ~38 px). */
 const SHADOW = 40;
 /** `.k-overlay`'s top padding. */
 const TOP_PADDING = 1;
-
 /** How long the Island shows a mode change (the app hides the window after the same time). */
 const NOTICE_MS = 1600;
 
-function sessionOf(link: Link): SessionState | null {
-  return link.status === "connected" ? (link.snapshot?.session ?? null) : null;
+function snapshotOf(link: Link): StateSnapshot | null {
+  return link.status === "connected" ? (link.snapshot ?? null) : null;
 }
 
-function modeOf(link: Link): PermissionMode | null {
-  return link.status === "connected" ? (link.snapshot?.mode ?? null) : null;
+/** A request from one of the Island's own buttons (the app allows only these). */
+function request(method: string, params?: unknown) {
+  void invoke("island_request", { method, params }).catch((e: unknown) => console.warn(e));
 }
 
 export function Overlay() {
-  const [session, setSession] = useState<SessionState | null>(null);
-  // The live mic level, read by the waveform on each frame (no re-render per level).
+  const { t } = useTranslation();
+  const [snapshot, setSnapshot] = useState<StateSnapshot | null>(null);
+  // The live level (mic while listening, KIVO's voice while speaking), read by the waveform on
+  // each frame, so it never re-renders the page.
   const level = useRef(0);
   const readLevel = useCallback(() => level.current, []);
-  const [mode, setMode] = useState<PermissionMode | null>(null);
   const [notice, setNotice] = useState<PermissionMode | null>(null);
+  const [typing, setTyping] = useState(false);
+  const [draft, setDraft] = useState("");
+
   // A change of mode (not the first one seen) shows a notice for a moment.
+  const mode = snapshot?.mode ?? null;
   const lastMode = useRef<PermissionMode | null>(null);
   useEffect(() => {
     if (mode === null) return;
@@ -52,12 +62,13 @@ export function Overlay() {
     let unlisten: (() => void) | undefined;
     void (async () => {
       const stops = await Promise.all([
-        listen<Link>("runtime://link", (e) => {
-          setSession(sessionOf(e.payload));
-          setMode(modeOf(e.payload));
-        }),
+        listen<Link>("runtime://link", (e) => setSnapshot(snapshotOf(e.payload))),
         listen<number>("runtime://level", (e) => {
           level.current = e.payload;
+        }),
+        listen("island://type", () => {
+          setDraft("");
+          setTyping(true);
         }),
       ]);
       const stop = () => stops.forEach((s) => s());
@@ -67,16 +78,87 @@ export function Overlay() {
       }
       unlisten = stop;
       const boot = await invoke<{ link: Link }>("ui_ready");
-      if (!cancelled) {
-        setSession((current) => current ?? sessionOf(boot.link));
-        setMode((current) => current ?? modeOf(boot.link));
-      }
+      if (!cancelled) setSnapshot((current) => current ?? snapshotOf(boot.link));
     })();
     return () => {
       cancelled = true;
       unlisten?.();
     };
   }, []);
+
+  const handlers = useMemo<IslandHandlers>(
+    () => ({
+      stop: () => request(Method.sessionCancel),
+      answer: (callId, allow, always) => request(Method.permissionsAnswer, { callId, allow, always }),
+      openControlCenter: () => request("island.openControlCenter"),
+    }),
+    [],
+  );
+
+  // The window takes focus only while typing, so the field gets it once it appears.
+  const field = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (typing) field.current?.focus();
+  }, [typing]);
+
+  const closeTyping = useCallback(() => {
+    setTyping(false);
+    setDraft("");
+    void invoke("overlay_typing_done");
+  }, []);
+
+  const send = useCallback(() => {
+    const text = draft.trim();
+    if (!text) return;
+    request(Method.sessionSay, { text });
+    closeTyping();
+  }, [draft, closeTyping]);
+
+  // Keyboard (UX-12): Esc cancels, Enter or Ctrl+Enter sends.
+  const onKey = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      closeTyping();
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      send();
+    }
+  };
+
+  const typingModel: IslandModel | null = typing
+    ? {
+        state: "typing",
+        width: 480,
+        label: t("island.typeTitle"),
+        trail: <IslandKeys keys={["Esc"]} />,
+        body: (
+          <label className="k-island__input">
+            <Icon name="chat" />
+            <input
+              ref={field}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={onKey}
+              placeholder={t("island.typePlaceholder")}
+              aria-label={t("island.typeTitle")}
+            />
+            <button type="button" className="k-island__btn k-island__btn--primary" onClick={send}>
+              {t("island.send")}
+            </button>
+          </label>
+        ),
+      }
+    : null;
+
+  // Typing wins; then what KIVO is doing; then a recent mode change for a moment.
+  const model =
+    typingModel ?? (snapshot ? islandForTurn(snapshot, t, handlers) : null) ?? (notice ? islandForMode(notice) : null);
+
+  // Clicks reach the window only while it has something to click (UX §2).
+  const interactive = typing || hasButtons(model);
+  useEffect(() => {
+    if (isTauri()) void invoke("overlay_interactive", { interactive });
+  }, [interactive]);
 
   // Keep the window as small as the Island (plus its shadow): a large transparent window costs
   // GPU and power every frame. The Island's content box is measured, not its animated outline,
@@ -112,8 +194,6 @@ export function Overlay() {
     };
   }, []);
 
-  // A request in progress wins; otherwise a recent mode change shows briefly.
-  const model = (session ? islandForSession(session) : null) ?? (notice ? islandForMode(notice) : null);
   return (
     // "user" follows Windows' "Animation effects" setting (DESIGN_SYSTEM §5).
     <MotionConfig reducedMotion="user">

@@ -239,6 +239,30 @@ impl Core {
         );
     }
 
+    /// Shows a short message in the Island when there is no turn to attach it to (for example
+    /// "speech isn't installed yet"); it clears itself after `for_how_long`. Must run inside
+    /// the async runtime.
+    pub fn flash_error(self: &std::sync::Arc<Self>, message: &str, for_how_long: Duration) {
+        let id = format!("notice-{}", self.state.borrow().revision);
+        self.state.send_modify(|s| {
+            if s.turn.is_none() {
+                s.turn = Some(TurnView {
+                    id: id.clone(),
+                    error: Some(message.to_owned()),
+                    ..TurnView::default()
+                });
+                s.revision += 1;
+            }
+        });
+        let core = std::sync::Arc::clone(self);
+        tokio::spawn(async move {
+            tokio::time::sleep(for_how_long).await;
+            if core.turn_view().is_some_and(|t| t.id == id) {
+                core.clear_turn();
+            }
+        });
+    }
+
     /// The turn the Island is showing, if any.
     pub fn turn_view(&self) -> Option<TurnView> {
         self.state.borrow().turn.clone()
