@@ -5,8 +5,8 @@
  */
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import type { Link, Method } from "./generated";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import type { Event, Link, Method } from "./generated";
 
 interface Boot {
   link: Link;
@@ -16,8 +16,9 @@ interface Boot {
 export interface RuntimeValue {
   /** null outside the KIVO app. */
   link: Link | null;
-  /** Sends a request; rejects with a message that can be shown as is. */
-  request: (method: Method, params?: unknown) => Promise<unknown>;
+  /** Sends a request; rejects with a message that can be shown as is. `T` is the method's result
+   * type (the runtime's Rust types, generated into `generated.ts`). */
+  request: <T = unknown>(method: Method, params?: unknown) => Promise<T>;
   /** Starts the runtime when it isn't running. */
   start: () => Promise<void>;
 }
@@ -75,9 +76,9 @@ export function RuntimeProvider({
   const value = useMemo<RuntimeValue>(
     () => ({
       link,
-      request: (method, params) =>
+      request: <T,>(method: Method, params?: unknown) =>
         isTauri()
-          ? invoke("runtime_request", { method, params: params ?? null }).catch((e: unknown) => {
+          ? invoke<T>("runtime_request", { method, params: params ?? null }).catch((e: unknown) => {
               throw asError(e);
             })
           : Promise.reject(new Error(NOT_IN_APP)),
@@ -96,4 +97,28 @@ export function RuntimeProvider({
 
 export function useRuntime(): RuntimeValue {
   return useContext(RuntimeContext);
+}
+
+/**
+ * Calls `handler` whenever the runtime reports an event (a turn finished, a setting changed), so
+ * pages refresh when something happens rather than polling (DISC-13).
+ */
+export function useRuntimeEvents(handler: (event: Event) => void) {
+  const latest = useRef(handler);
+  useEffect(() => {
+    latest.current = handler;
+  });
+  useEffect(() => {
+    if (!isTauri()) return;
+    let stop: UnlistenFn | undefined;
+    let cancelled = false;
+    void listen<Event>("runtime://event", (e) => latest.current(e.payload)).then((u) => {
+      if (cancelled) u();
+      else stop = u;
+    });
+    return () => {
+      cancelled = true;
+      stop?.();
+    };
+  }, []);
 }

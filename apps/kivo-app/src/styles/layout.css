@@ -401,3 +401,20 @@
   font-size: 12px;
   margin-block: 22px 0;
 }
+
+/* "Show more" under a long list. */
+.k-page__more {
+  display: flex;
+  justify-content: center;
+  margin-block-start: 12px;
+}
+
+/* Home's Recent list sits under the controls, at reading width. */
+.k-home__lists {
+  inline-size: min(560px, 100%);
+  margin-block-start: 28px;
+  text-align: start;
+}
+.k-home__hint .k-kbd {
+  margin-inline: 2px;
+}

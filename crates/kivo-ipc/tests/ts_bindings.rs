@@ -13,7 +13,10 @@ use kivo_core::event::{
 use kivo_core::tool::{ConfirmSpec, ConfirmedBy, Risk, Strength};
 use kivo_core::{Event, EventMeta, ProfileId, SessionState, TaskId, Timestamp, TraceId, TurnId};
 use kivo_ipc::infer::Residency;
-use kivo_ipc::protocol::{ProtocolVersion, SpeechStatus, StepView, TurnView};
+use kivo_ipc::protocol::{
+    ActivityItem, AuditItem, CapabilityItem, GrantItem, ModelItem, ProtocolVersion, SpeechStatus,
+    StepView, TurnView,
+};
 use kivo_ipc::{Link, LinkStatus, RpcError, StateSnapshot, Welcome, method};
 use std::path::PathBuf;
 use ts_rs::{Config, TS};
@@ -62,6 +65,12 @@ fn render() -> String {
         Capability::decl(&cfg),
         Badge::decl(&cfg),
         StateSnapshot::decl(&cfg),
+        // Control Center lists
+        ActivityItem::decl(&cfg),
+        AuditItem::decl(&cfg),
+        GrantItem::decl(&cfg),
+        ModelItem::decl(&cfg),
+        CapabilityItem::decl(&cfg),
         ProtocolVersion::decl(&cfg),
         Welcome::decl(&cfg),
         RpcError::decl(&cfg),

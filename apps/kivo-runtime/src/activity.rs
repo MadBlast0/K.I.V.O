@@ -6,6 +6,7 @@
 
 use kivo_core::event::TurnSource;
 use kivo_core::tool::{ToolCall, ToolResult, ToolSpec};
+use kivo_ipc::protocol::{ActivityItem, AuditItem, GrantItem};
 use kivo_security::{Decision, Grant};
 use kivo_store::Database;
 use kivo_store::records::{ActivityRecord, AuditRecord, NewActivity, TurnRecord};
@@ -210,8 +211,19 @@ impl Recorder {
     }
 
     /// The grants as the Permissions page shows them (with their ids, so they can be revoked).
-    pub fn grants_in_force(&self) -> Vec<kivo_store::records::StoredGrant> {
-        self.db().grants(now_ms()).unwrap_or_default()
+    pub fn grants_in_force(&self) -> Vec<GrantItem> {
+        self.db()
+            .grants(now_ms())
+            .unwrap_or_default()
+            .into_iter()
+            .map(|g| GrantItem {
+                id: g.id,
+                tool: g.tool,
+                scope: g.scope,
+                created_at: g.created_at,
+                expires_at: g.expires_at,
+            })
+            .collect()
     }
 
     pub fn revoke_grant(&self, id: i64) -> bool {
@@ -324,17 +336,41 @@ impl Recorder {
     }
 
     /// A page of the Activity timeline, newest first (UX-20).
-    pub fn recent(&self, before: Option<i64>, limit: u32) -> Vec<ActivityRecord> {
+    pub fn recent(&self, before: Option<i64>, limit: u32) -> Vec<ActivityItem> {
         self.db()
             .activity(before, limit.clamp(1, 200))
             .unwrap_or_default()
+            .into_iter()
+            .map(|a: ActivityRecord| ActivityItem {
+                id: a.id,
+                ts: a.ts,
+                turn_id: a.turn_id,
+                kind: a.kind,
+                title: a.title,
+                detail: a.detail,
+                status: a.status,
+            })
+            .collect()
     }
 
     /// The newest audit rows (Activity → Audit, SEC-24).
-    pub fn audit_rows(&self, limit: u32) -> Vec<AuditRecord> {
+    pub fn audit_rows(&self, limit: u32) -> Vec<AuditItem> {
         self.db()
             .recent_audit(limit.clamp(1, 500))
             .unwrap_or_default()
+            .into_iter()
+            .map(|a: AuditRecord| AuditItem {
+                ts: a.ts,
+                turn_id: a.turn_id,
+                tool: a.tool,
+                args_summary: a.args_summary,
+                risk: a.risk,
+                decision: a.decision,
+                confirmed_by: a.confirmed_by,
+                result: a.result,
+                error: a.error,
+            })
+            .collect()
     }
 }
 

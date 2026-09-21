@@ -189,6 +189,84 @@ pub enum SpeechStatus {
     },
 }
 
+/// One entry of the Activity timeline (UX-20).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivityItem {
+    pub id: i64,
+    /// Unix milliseconds.
+    pub ts: i64,
+    pub turn_id: Option<String>,
+    /// `transcript`, `tool`, `reply`, `setting`, `stop`.
+    pub kind: String,
+    pub title: String,
+    pub detail: Option<String>,
+    /// `done`, `failed`, `cancelled`, `denied`, `unhandled`.
+    pub status: String,
+}
+
+/// One row of the audit log (SECURITY §7, Activity → Audit).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AuditItem {
+    pub ts: i64,
+    pub turn_id: Option<String>,
+    pub tool: String,
+    pub args_summary: String,
+    pub risk: String,
+    pub decision: String,
+    pub confirmed_by: Option<String>,
+    pub result: Option<String>,
+    pub error: Option<String>,
+}
+
+/// An "always allow" grant (SEC-08).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GrantItem {
+    pub id: i64,
+    pub tool: String,
+    pub scope: Option<String>,
+    pub created_at: i64,
+    pub expires_at: Option<i64>,
+}
+
+/// A speech model KIVO can install (Voice → Models on this PC, DIST-13).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelItem {
+    pub id: String,
+    pub name: String,
+    /// `stt`, `tts`, `vad`, `wake`, `embedding`.
+    pub kind: String,
+    pub license: String,
+    pub attribution: String,
+    pub source: String,
+    pub languages: Vec<String>,
+    /// Download size in bytes.
+    pub size: u64,
+    pub installed: bool,
+    pub disk_bytes: u64,
+    /// 0–100 while downloading.
+    pub downloading: Option<u8>,
+}
+
+/// A capability toggle (CAPABILITIES §1).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CapabilityItem {
+    pub capability: kivo_core::Capability,
+    pub label: String,
+    pub enabled: bool,
+    pub default: bool,
+    pub badges: Vec<kivo_core::capability::Badge>,
+}
+
 /// A JSON-RPC 2.0 request id (numbers only; KIVO's clients never send strings).
 pub type RequestId = u64;
 

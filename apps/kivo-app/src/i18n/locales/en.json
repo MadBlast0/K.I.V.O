@@ -32,5 +32,42 @@
     "stepRunning": "Working",
     "stepDone": "Done",
     "stepFailed": "Failed"
+  },
+  "home": {
+    "talk": "Talk",
+    "pause": "Pause listening",
+    "resume": "Resume listening",
+    "start": "Start KIVO",
+    "mode": "Permission mode",
+    "hint": "Hold {ptt} to talk · {type} to type",
+    "downloading": "Getting speech recognition ready · {percent, number}%",
+    "missing": "Speech recognition isn't installed yet.",
+    "failed": "Speech recognition couldn't be set up: {message}",
+    "retry": "Try again",
+    "hotkeyTaken": "Another app uses {keys}, so push-to-talk can't use it. Change it in Settings → Shortcuts.",
+    "recent": "Recent",
+    "activity": "Activity",
+    "nothingYet": "Nothing yet. Hold {ptt} and say “open Chrome”.",
+    "version": "KIVO {version}",
+    "incompatible": "Quit KIVO from the tray, then open it again."
+  },
+  "activity": {
+    "title": "Activity",
+    "subtitle": "What KIVO did, and why.",
+    "filter": "Show",
+    "all": "All",
+    "voice": "Voice",
+    "tools": "Tools",
+    "audit": "Audit",
+    "empty": "Nothing here yet.",
+    "more": "Show more",
+    "offline": "Activity appears here when KIVO is running.",
+    "outcome": {
+      "done": "Done",
+      "failed": "Failed",
+      "cancelled": "Cancelled",
+      "denied": "Blocked",
+      "unhandled": "Not understood"
+    }
   }
 }

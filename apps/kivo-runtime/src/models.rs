@@ -6,33 +6,12 @@
 use crate::core::Core;
 use crate::infer::{Engines, Infer};
 use kivo_core::KivoConfig;
-use kivo_ipc::protocol::SpeechStatus;
+use kivo_ipc::protocol::{ModelItem, SpeechStatus};
 use kivo_store::models::{HttpFetcher, ModelManifest, ModelStore, Progress, catalog};
-use serde::Serialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tokio_util::sync::CancellationToken;
-
-/// One row of Voice → Models on this PC.
-#[derive(Clone, Debug, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ModelView {
-    pub id: String,
-    pub name: String,
-    pub kind: String,
-    pub license: String,
-    pub attribution: String,
-    pub source: String,
-    pub languages: Vec<String>,
-    /// Download size in bytes.
-    pub size: u64,
-    pub installed: bool,
-    /// Bytes on disk when installed.
-    pub disk_bytes: u64,
-    /// 0–100 while downloading.
-    pub downloading: Option<u8>,
-}
 
 pub struct Models {
     store: ModelStore,
@@ -63,7 +42,7 @@ impl Models {
     }
 
     /// Everything KIVO can install, with what is already here (DIST-13).
-    pub fn list(&self) -> Vec<ModelView> {
+    pub fn list(&self) -> Vec<ModelItem> {
         let downloads = self
             .downloads
             .lock()
@@ -74,7 +53,7 @@ impl Models {
                 let installed = self.store.installed(&m.id);
                 #[allow(clippy::cast_possible_truncation, reason = "0–100")]
                 let downloading = downloads.get(&m.id).map(|(_, p)| percent(*p));
-                ModelView {
+                ModelItem {
                     kind: serde_json::to_value(m.kind)
                         .ok()
                         .and_then(|v| v.as_str().map(str::to_owned))

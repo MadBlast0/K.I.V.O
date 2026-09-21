@@ -12,7 +12,7 @@ use serde_json::Value;
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager, WindowEvent};
 
-const MAIN: &str = "main";
+pub(crate) const MAIN: &str = "main";
 
 /// How this process was started (the runtime passes these when it launches the app).
 #[derive(Debug, Default, PartialEq, Eq)]

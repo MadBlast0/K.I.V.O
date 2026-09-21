@@ -20,6 +20,8 @@ use tokio_util::sync::CancellationToken;
 pub const LINK_EVENT: &str = "runtime://link";
 /// The microphone level (0–1) for the Island's waveform.
 pub const LEVEL_EVENT: &str = "runtime://level";
+/// A runtime event (turns, tools, settings), for the Control Center's live pages.
+pub const EVENT_EVENT: &str = "runtime://event";
 pub const NAVIGATE_EVENT: &str = "runtime://navigate";
 
 /// Where the runtime listens, from the user's run folder.
@@ -219,7 +221,11 @@ pub async fn maintain(app: AppHandle) {
             let Some(note) = note else { break };
             match note.method.as_str() {
                 method::EVENT => match serde_json::from_value::<Event>(note.params) {
-                    Ok(event) => on_event(&app, &event),
+                    Ok(event) => {
+                        on_event(&app, &event);
+                        // Pages refresh when something happens instead of polling (DISC-13).
+                        let _ = app.emit_to(crate::MAIN, EVENT_EVENT, &event);
+                    }
                     Err(e) => eprintln!("KIVO: unreadable event from the runtime: {e}"),
                 },
                 method::SNAPSHOT => match serde_json::from_value::<StateSnapshot>(note.params) {

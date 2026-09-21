@@ -10,6 +10,7 @@ use crate::models::Models;
 use kivo_core::Capability;
 use kivo_core::config::PermissionMode;
 use kivo_core::event::{CancelReason, TurnSource};
+use kivo_ipc::protocol::CapabilityItem;
 use kivo_ipc::{BoxFuture, Handler, RpcError, method};
 use serde::Deserialize;
 use serde_json::Value;
@@ -222,24 +223,13 @@ struct Id {
     id: String,
 }
 
-/// One row of Permissions → Capabilities (CAPABILITIES §1).
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-struct CapabilityView {
-    capability: Capability,
-    label: &'static str,
-    enabled: bool,
-    default: bool,
-    badges: Vec<kivo_core::capability::Badge>,
-}
-
-fn capability_list(core: &Core) -> Vec<CapabilityView> {
+fn capability_list(core: &Core) -> Vec<CapabilityItem> {
     let settings = core.config().capabilities;
     Capability::ALL
         .iter()
-        .map(|&capability| CapabilityView {
+        .map(|&capability| CapabilityItem {
             capability,
-            label: capability.label(),
+            label: capability.label().to_owned(),
             enabled: settings.enabled(capability),
             default: capability.default_enabled(),
             badges: capability.badges().to_vec(),

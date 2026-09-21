@@ -14,6 +14,7 @@ import { Method } from "./ipc/generated";
 import { RuntimeProvider, useRuntime } from "./ipc/runtime";
 import { ThemeProvider } from "./lib/theme";
 import { Gallery } from "./pages/Gallery";
+import { Activity } from "./pages/Activity";
 import { Home } from "./pages/Home";
 
 const TITLES: Record<PageId, string> = {
@@ -118,7 +119,9 @@ function Shell({ page, setPage }: { page: PageId; setPage: (page: PageId) => voi
         {page === "gallery" ? (
           <Gallery />
         ) : page === "home" ? (
-          <Home onOpenPermissions={() => setPage("permissions")} />
+          <Home onOpenPermissions={() => setPage("permissions")} onOpenActivity={() => setPage("activity")} />
+        ) : page === "activity" ? (
+          <Activity />
         ) : (
           <>
             <PageHeader title={TITLES[page]} />

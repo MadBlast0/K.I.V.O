@@ -169,6 +169,40 @@ hotkeyConflict?: string | null,
  */
 revision: number, };
 
+export type ActivityItem = { id: number, 
+/**
+ * Unix milliseconds.
+ */
+ts: number, turnId: string | null, 
+/**
+ * `transcript`, `tool`, `reply`, `setting`, `stop`.
+ */
+kind: string, title: string, detail: string | null, 
+/**
+ * `done`, `failed`, `cancelled`, `denied`, `unhandled`.
+ */
+status: string, };
+
+export type AuditItem = { ts: number, turnId: string | null, tool: string, argsSummary: string, risk: string, decision: string, confirmedBy: string | null, result: string | null, error: string | null, };
+
+export type GrantItem = { id: number, tool: string, scope: string | null, createdAt: number, expiresAt: number | null, };
+
+export type ModelItem = { id: string, name: string, 
+/**
+ * `stt`, `tts`, `vad`, `wake`, `embedding`.
+ */
+kind: string, license: string, attribution: string, source: string, languages: Array<string>, 
+/**
+ * Download size in bytes.
+ */
+size: number, installed: boolean, diskBytes: number, 
+/**
+ * 0–100 while downloading.
+ */
+downloading: number | null, };
+
+export type CapabilityItem = { capability: Capability, label: string, enabled: boolean, default: boolean, badges: Array<Badge>, };
+
 export type ProtocolVersion = { major: number, minor: number, };
 
 export type Welcome = { protocolVersion: ProtocolVersion, runtimeVersion: string, snapshot: StateSnapshot, };
