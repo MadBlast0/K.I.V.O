@@ -135,7 +135,35 @@ WakeWord { id, phrase, phonetic_spelling?, engine: Trained|Kws, model_path?, ena
 | Speaker model | Loaded with the wake stages |
 | GPU models | Unloaded on the `Gaming` profile or when the GPU is busy (plan §91) |
 
-## 9. Budgets (targets to validate in M0/M1)
+## 9. Languages
+
+Design for every language from the start, and ship languages one at a time
+([DECISIONS.md](../DECISIONS.md)): English → Hindi + Punjabi → European → CJK → Arabic/RTL.
+
+- **Engines are chosen per language.** A `LanguagePack { code, stt_engines, tts_voices, kws_model?,
+  grammar, vocabulary, status: Planned|Alpha|Supported }` maps each language to the engines that
+  support it. Engine `EngineInfo.languages` is the source of truth, and the router picks the best
+  engine for the active language.
+- **Choosing the language:** the user sets a primary language plus optional secondary ones. There
+  is automatic language ID only where the engine provides it (Whisper, SenseVoice) and it measures
+  reliable. Otherwise the user's primary language is used.
+- **Code-mixing** (Hindi–English "Hinglish", Punjabi–English): treated as a first-class case. It
+  needs engines that handle mixed-script and mixed-language speech, benchmarked with owner-recorded
+  test sets. Candidates to evaluate: Whisper large-v3/turbo, AI4Bharat IndicConformer-family models,
+  and cloud engines. **To research before the Hindi/Punjabi milestone.**
+- **TTS:** the Kokoro multilingual voices (including Hindi) need espeak-ng (GPL). So non-English
+  local TTS ships as an optional add-on, or uses a permissively licensed alternative identified in
+  that language's research. Cloud and system voices cover the gap.
+- **Wake words:** "Hey Kivo" works for any language, since it's a name. **Custom wake words** in
+  other languages depend on KWS model coverage; sherpa-onnx models exist mainly for English and
+  Chinese. Other scripts may need the trained-model path.
+- **Fast-path grammars:** these are data files per language (`grammar/<lang>/*.toml`), and the
+  intent exemplars are multilingual (the embedding model must be multilingual when a second
+  language ships).
+- **Test sets:** each language needs STT test audio, command utterances, and wake-word
+  positives/negatives before it moves from Alpha to Supported.
+
+## 10. Budgets (targets to validate in M0/M1)
 
 | Metric | Target |
 |---|---|

@@ -16,7 +16,7 @@ Specs: [architecture/](architecture/ARCHITECTURE.md) · Decisions: [DECISIONS.md
 - [x] Architecture, interfaces, state and event model ([ARCHITECTURE.md](architecture/ARCHITECTURE.md))
 - [x] Security model ([SECURITY.md](architecture/SECURITY.md))
 - [x] Benchmark requirements ([BENCHMARKS.md](architecture/BENCHMARKS.md))
-- [ ] Open decisions answered (see "Before M0" below)
+- [x] Owner inputs answered (see "Owner inputs" below)
 
 ## M0: Foundations and measurement
 
@@ -91,8 +91,8 @@ Specs: [architecture/](architecture/ARCHITECTURE.md) · Decisions: [DECISIONS.md
 
 - `BrainProvider` with the Anthropic, OpenAI, Gemini and OpenRouter adapters, plus the
   OpenAI-compatible adapter for Ollama/LM Studio.
-- An **ACP client** with at least one CLI agent (Claude Code via `claude-agent-acp`, or Gemini
-  CLI); permission requests are routed to the KIVO confirmation UI.
+- An **ACP client** with all three CLI agents (Claude Code via `claude-agent-acp`, Gemini CLI via
+  `--acp`, Codex via `codex-acp`); permission requests are routed to the KIVO confirmation UI.
 - Profiles, deterministic routing with a reason, failover within the privacy class, and health
   checks.
 - Streaming LLM → phrase chunker → streaming TTS; the text normalizer.
@@ -160,17 +160,26 @@ Specs: [architecture/](architecture/ARCHITECTURE.md) · Decisions: [DECISIONS.md
 
 ---
 
-## Before M0: remaining inputs from the owner
+## Owner inputs (answered 2026-09-21)
 
-| # | Question | Why it matters |
+All the pre-M0 questions are answered ([DECISIONS.md → Owner answers](DECISIONS.md)):
+
+- open source, with the license type still to choose (no GPL in the core until then);
+- **all four** cloud providers and **all three** CLI agents in M3;
+- design for all languages, shipping English → Hindi + Punjabi → European → CJK → RTL;
+- signing decided later;
+- a low-end VM for benchmarks;
+- Ctrl+Alt+Shift+Esc as the emergency stop.
+
+**Still open (not blocking):** the final license (needed before the first public release) and the
+signing route (needed before the public beta).
+
+## Language milestones (run in parallel with M3+)
+
+| Step | Scope | Exit |
 |---|---|---|
-| 1 | **Open source or closed/commercial?** If open source, which license? | Decides how strict the GPL/CC-BY/OpenRAIL handling must be, and whether contributions and CLA matter |
-| 2 | **Which cloud brain first** for M3 (Anthropic, OpenAI, Gemini, OpenRouter)? And will users bring their own API keys (BYOK)? | Adapter order and onboarding copy |
-| 3 | **Which CLI agent first** (Claude Code, Codex, Gemini CLI)? | The first ACP integration target |
-| 4 | **Language scope for v1:** English only, or English plus others? | Moonshine (EN) vs Parakeet (multilingual) default, Kokoro espeak issue, grammar localization |
-| 5 | **Code signing route:** country/organization for Azure Artifact Signing eligibility, or buy an OV certificate? | Needed before a public beta, not before M0 |
-| 6 | **Low-end test machine:** is one available, or should M0 use a throttled VM profile? | Benchmarks must include the low tier |
-| 7 | **Emergency stop hotkey:** is Ctrl+Alt+Shift+Esc acceptable? | Muscle memory; conflicts |
-
-None of these block starting M0's workspace, CI, IPC and runtime skeleton. Questions 1, 4 and 6 must
-be answered before M0 finishes, because they affect the engine defaults.
+| L1 | English (ships with M1/M2) | Budgets met on the English test sets |
+| L2 | **Hindi + Punjabi**, including Hindi–English code-mixing | Research note + owner-recorded test sets; STT WER and wake-word metrics meet targets; fast-path grammar in Hindi |
+| L3 | Major European languages | Per-language test sets; native-speaker review |
+| L4 | Japanese, Chinese, Korean | CJK engines, IME-safe hotkeys, native-speaker review |
+| L5 | Arabic and other RTL | RTL UI pass, engines, native-speaker review |

@@ -5,6 +5,18 @@ decision changes, update the entry and note the date. Do not silently rewrite it
 
 ---
 
+## 2026-09-21 — Owner answers (pre-M0)
+
+| Topic | Decision |
+|---|---|
+| **License** | KIVO will be **open source**. Permissive (Apache-2.0/MIT) or copyleft (GPL/AGPL) is **undecided**. Until it is decided, the default dependency graph stays **permissive-compatible, with no GPL** (enforced by `cargo deny`), so both paths remain open. GPL components (espeak-ng, Piper) stay separately downloaded add-ons. Model attribution (CC-BY) and use restrictions (OpenRAIL) are shown in the app |
+| **Cloud brains (M3)** | **All four:** Anthropic, OpenAI, Google Gemini, OpenRouter (plus the OpenAI-compatible local adapter) |
+| **CLI agents (M3)** | **All three:** Claude Code (`claude-agent-acp`), Gemini CLI (`--acp`), Codex (`codex-acp`, with the App Server as a later richer adapter) |
+| **Languages** | **Designed for all languages from day one** and implemented one at a time, each with proper testing. Order: **English → Hindi + Punjabi** (the owner can test these, including Hindi–English code-mixing, "Hinglish") → European languages → Japanese/Chinese/Korean → Arabic and other right-to-left languages. Languages the owner doesn't speak need native-speaker testers before they are marked supported |
+| **Code signing** | Decide later. Dev and alpha builds are unsigned |
+| **Low-end benchmark machine** | None available. M0 uses a **VM limited to 4 cores / 8 GB with no GPU**, and its results are labelled approximate. The owner's Windows 11 PC is the mid/high data point |
+| **Emergency stop** | **Ctrl+Alt+Shift+Esc** confirmed |
+
 ## 2026-09-21 — Architecture baseline (Phase 0 specs)
 
 **Decision:** Adopt the draft specs in [architecture/](architecture/ARCHITECTURE.md) as the Phase 0

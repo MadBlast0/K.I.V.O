@@ -126,7 +126,19 @@ Every step has a recommended default and can be skipped.
 | Performance | Profile (auto: Battery / Balanced / Performance / Gaming) · model residency timers |
 | Accessibility | Screen-reader announcements (on) · captions for spoken replies (on) · high contrast (follow Windows) · warn if overlay and sounds are both off |
 
-## 6. Accessibility (plan §118)
+## 6. Internationalization (plan §119)
+
+- **UI strings:** from day one, every UI string goes through i18n (`i18next` / ICU message
+  format). There are no hard-coded strings, and English is the source locale.
+- **Layout:** CSS logical properties (`margin-inline-start`, etc.), so RTL (Arabic) works by
+  switching `dir`. The fonts need Devanagari, Gurmukhi, CJK and Arabic coverage (Noto fallbacks
+  bundled per language pack).
+- **Formatting:** dates, numbers and units use `Intl` in the UI and ICU4X in the runtime (for
+  spoken text normalization).
+- **Language settings:** a primary language plus secondary languages. Each language shows its
+  status (Supported, Alpha or Planned), so users know what is tested.
+
+## 7. Accessibility (plan §118)
 
 - **Screen readers:** the overlay and Control Center expose ARIA roles. State changes and final
   transcripts are announced through UIA notifications.

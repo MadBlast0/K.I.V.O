@@ -36,7 +36,7 @@ be secured before defaults are frozen.
 
 ## 3. Budgets
 
-See [VOICE.md §9](VOICE.md). In addition:
+See [VOICE.md §10](VOICE.md). In addition:
 
 | Metric | Budget |
 |---|---|

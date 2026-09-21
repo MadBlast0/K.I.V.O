@@ -46,8 +46,8 @@ never call Win32 (or any OS API) directly from core logic.
 
 ## Status
 
-Phase 0 (specification) complete except the owner inputs listed at the end of
-[docs/ROADMAP.md](docs/ROADMAP.md). Next: **M0 — foundations and measurement**. No
+Phase 0 (specification) complete; owner inputs answered (see
+[docs/DECISIONS.md](docs/DECISIONS.md)). Next: **M0 — foundations and measurement**. No
 source code yet. Update this section as milestones land.
 
 ## Planned stack
