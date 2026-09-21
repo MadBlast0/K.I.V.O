@@ -300,6 +300,27 @@ code{font-family:var(--mono);font-size:12px;background:var(--fill);padding:1px 5
 .soundset .option{align-items:center}
 .code-edit{font-family:var(--mono);font-size:12px;line-height:1.6;background:var(--group);box-shadow:0 0 0 1px var(--border);border-radius:var(--r-m);padding:12px 14px;white-space:pre-wrap;color:var(--text)}
 .code-edit .c{color:var(--text-3)}
+.ctxbar{display:flex;height:8px;border-radius:6px;overflow:hidden;background:var(--fill-2);gap:1px}
+.ctxbar i{display:block;height:100%}
+.ctxleg{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:11.5px;color:var(--text-2);margin-top:8px}
+.ctxleg span{display:inline-flex;align-items:center;gap:5px}.ctxleg b{width:8px;height:8px;border-radius:2px;display:inline-block}
+.cmeter{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-3);white-space:nowrap}
+.cmeter .m{width:54px;height:4px;border-radius:3px;background:var(--fill-2);overflow:hidden}.cmeter .m span{display:block;height:100%;background:var(--text-3)}
+.threads .new{margin-bottom:6px;justify-content:flex-start}
+.threads .tg{font-size:11px;font-weight:600;color:var(--text-3);padding:10px 10px 4px}
+.xmenu{width:280px;background:var(--group);border-radius:8px;padding:4px;box-shadow:0 0 0 1px var(--border),var(--shadow);font-size:13px}
+.xmenu .mi{display:flex;align-items:center;gap:10px;height:30px;padding:0 10px;border-radius:4px}
+.xmenu .mi.hl{background:var(--fill)}
+.xmenu .mi .i{color:var(--text-2)}
+.xmenu hr{border:0;border-top:1px solid var(--sep);margin:4px 6px}
+.jump{width:260px;background:var(--group);border-radius:8px;padding:8px 4px 4px;box-shadow:0 0 0 1px var(--border),var(--shadow);font-size:13px}
+.jump .jh{font-size:11px;font-weight:600;color:var(--text-3);padding:4px 10px 6px}
+.jump .mi{display:flex;align-items:center;gap:10px;height:30px;padding:0 10px;border-radius:4px}
+.jump .mi .i{color:var(--text-2)}
+.reply{display:flex;gap:6px;margin-top:10px}.reply .field{flex:1;border-radius:4px;height:30px}
+.sheetwin{width:420px;max-width:100%;background:var(--win);border-radius:12px;box-shadow:0 0 0 1px var(--border),var(--shadow);padding:22px}
+.sheetwin h3{font-family:var(--disp);margin:0 0 4px;font-size:18px}
+.sheetwin ul{margin:12px 0 16px;padding-left:18px;color:var(--text-2);font-size:13px;line-height:1.7}
 
 /* computer use layer */
 .cu{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .3s;z-index:5}
@@ -620,7 +641,7 @@ const overlayHTML = () => `
 /* ════════ Control Center ════════ */
 const NAV = [
   [null,[['home','Home','home'],['chat','Chat','chat'],['activity','Activity','activity'],['tasks','Tasks','tasks','2'],['routines','Routines','routine']]],
-  ['Intelligence',[['brains','Brains','brain'],['agents','Agents','term','1'],['voice','Voice','mic'],['connectors','Connectors','plug'],['mcp','MCP servers','server']]],
+  ['Intelligence',[['brains','Brains','brain'],['agents','Agents','term','1'],['skills','Skills','sparkle'],['context','Context','list'],['voice','Voice','mic'],['connectors','Connectors','plug'],['mcp','MCP servers','server']]],
   ['Control',[['permissions','Permissions','shield'],['capabilities','Capabilities','sliders'],['privacy','Privacy','lock'],['memory','Memory','memory'],['usage','Usage','chart']]],
   ['System',[['companion','Companion','sparkle'],['performance','Performance','gauge'],['settings','Settings','gear'],['diagnostics','Diagnostics','diag'],['about','About','info']]]
 ];
@@ -638,9 +659,10 @@ home: () => `<div class="home"><div class="big"><span class="orb"></span></div>
     ${group(li('music','Played Lo-fi Focus on Spotify','Handled on this PC','<span class="meta">16:42</span>'), li('code','Explained a Rust compiler error','Claude Code · $0.004','<span class="meta">16:20</span>'), li('routine','Work mode','Routine · 4 steps','<span class="meta">09:02</span>'))}
   </div>`,
 chat: () => `<div class="chat">
-    <div class="threads"><div class="field" style="margin-bottom:8px">${I('search')}<input placeholder="Search"></div>
-      <a class="on"><b>Why is my build failing?</b><small>Today · Coding</small></a><a><b>Plan Q4 goals</b><small>Yesterday</small></a><a><b>Summarize contract.pdf</b><small>Mon · Private</small></a><a><b>Hindi practice</b><small>Sun · Realtime</small></a></div>
-    <div class="conv"><div class="ch"><b style="flex:1;min-width:0">Why is my build failing?</b>${tag('Coding · Claude Code','a')}<span class="meta">$0.004</span></div>
+    <div class="threads"><button class="btn new">${I('plus')}New conversation</button><div class="field" style="margin-bottom:4px">${I('search')}<input placeholder="Search conversations"></div>
+      <div class="tg">Pinned</div><a><b>Hindi practice</b><small>Sun · Realtime</small></a>
+      <div class="tg">Recent</div><a class="on"><b>Why is my build failing?</b><small>Today · Coding · K.I.V.O</small></a><a><b>Plan Q4 goals</b><small>Yesterday</small></a><a><b>Summarize contract.pdf</b><small>Mon · Private</small></a></div>
+    <div class="conv"><div class="ch"><b style="flex:1;min-width:0">Why is my build failing?</b>${tag('Coding · Claude Code','a')}<span class="cmeter" title="Context used"><span class="m"><span style="width:18%"></span></span>18% of context</span><span class="meta">$0.004</span><button class="btn sm ic plain" aria-label="More">${I('grip')}</button></div>
       <div class="msgs">
         <div class="you">Why is my build failing?</div>
         <div class="kv"><span class="orb"></span><div>
@@ -710,6 +732,32 @@ agents: () => ph('Agents','Other AIs KIVO can run and talk to for you: coding ag
     li('shield','Starting an agent in bypass mode','Always asks first, because the agent can then change anything', pill('High','r')),
     li('check','Review prompts before sending','Show a draft in the Island first', tog(true)),
     li('memory','Share my workspace notes with agents','Read-only, through KIVO’s MCP server', tog(true))),
+skills: () => ph('Skills','Instructions and scripts KIVO can use when a task needs them. Only their names use context until one is needed.', `<button class="btn">${I('folder')}Open skills folder</button><button class="btn pri">${I('plus')}Add skill</button>`) +
+  sect('Enabled') + group(
+    li('sparkle','release-notes','Turns commits into release notes · from a folder', '<span class="meta">~40 tokens</span>'+tog(true)),
+    li('sparkle','meeting-brief','Prepares a brief from your calendar and notes · made from a routine', '<span class="meta">~35 tokens</span>'+tog(true)),
+    li('sparkle','pdf-tools','Fill, merge and split PDFs · includes scripts', pill('Runs scripts','o')+'<span class="meta">~45 tokens</span>'+tog(true))) +
+  sect('Available') + group(
+    li('sparkle','frontend-design','Shared by Claude Code in K.I.V.O', '<button class="btn sm">Review</button>'),
+    li('sparkle','data-cleanup','Imported from a zip · not checked yet', pill('Untrusted','o')+'<button class="btn sm">Review</button>')) +
+  `<p class="note">Skills use the open Agent Skills format (SKILL.md), so skills made for Claude, Codex or Gemini work here too. KIVO shows what a skill contains before you enable it.</p>`,
+context: () => ph('Context','What the AI starts with in each new conversation. The defaults work; change them only if you want to.', `<button class="btn" data-sheet="preview">${I('eye')}Preview what the AI sees</button>`) +
+  `<div class="tile"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap"><b>≈ 1,480 tokens to start a conversation</b><span style="font-size:12px;color:var(--text-2)">≈ $0.004 with Claude Sonnet · about 90% cheaper after the first message (cached)</span></div>
+    <div class="ctxbar" style="margin-top:10px">${[['var(--text)',40],['var(--acc)',27],['#8E8E93',7],['#32D74B',18],['#FF9F0A',8]].map(([c,w]) => `<i style="width:${w}%;background:${c}"></i>`).join('')}</div>
+    <div class="ctxleg">${[['var(--text)','System 600'],['var(--acc)','About me 400'],['#8E8E93','Live context 100'],['#32D74B','Memory up to 260'],['#FF9F0A','Skills 120']].map(([c,t]) => `<span><b style="background:${c}"></b>${t}</span>`).join('')}</div></div>` +
+  sect('Always included') + group(
+    li('shield','System prompt','KIVO’s core rules and voice style', '<span class="meta">600</span><button class="btn sm plain">View</button>'),
+    li('user','About me','Your instructions from Memory', '<span class="meta">400</span><button class="btn sm plain" data-go="memory">Edit</button>'+tog(true)),
+    li('window','Live context','Active app, time, permission mode', '<span class="meta">100</span><button class="btn sm plain">Choose</button>'+tog(true))) +
+  sect('Only when relevant') + group(
+    li('folder','Workspace notes','Your notes and the project’s CLAUDE.md / AGENTS.md', '<span class="meta">up to 800</span>'+tog(true)),
+    li('memory','Memories','The most relevant items only', '<span class="meta">up to 600</span>'+seg(['3','5','10'],'5')),
+    li('sparkle','Skills','Names only; the full skill loads when used', '<span class="meta">~40 each</span><button class="btn sm plain" data-go="skills">Manage</button>'),
+    li('plug','Tools, connectors, MCP','Only the tools a request needs', '<span class="meta">0–2,000</span><button class="btn sm plain" data-go="capabilities">Manage</button>')) +
+  sect('Conversation') + group(
+    li('chat','Conversation budget','How much recent conversation to send', seg(['Small','Balanced','Large'],'Balanced')),
+    li('refresh','Summarize older messages automatically','Keeps long conversations fast and cheap', tog(true)),
+    li('clock','New conversation after','', seg(['30 min','2 hours','Never'],'30 min'))),
 voice: () => ph('Voice','Wake words, how KIVO hears you, and how it sounds.') +
   sect('Wake words', `<button class="btn sm" data-modal="wake">${I('plus')}Add</button>`) + group(
     li('mic','Hey Kivo','Built in · trained model', tag('Good','g')+tog(true,'Hey Kivo')),
@@ -845,6 +893,10 @@ const ONB = [
     <label class="chk on" style="margin-top:14px;font-size:12.5px;color:var(--text-2)"><i></i>I agree to store a voiceprint on this PC</label>`],
   [2,'Brain', () => `<div class="eb">Brain · optional</div><h2>Connect a brain</h2><p class="sub">For questions and bigger tasks. Commands like “mute” never need one. Sign in; no keys.</p>
     ${group(li(mono('CC','#C96442'),'Claude Code','Found on this PC','<button class="btn sm pri">Connect</button>'), li(mono('CX','#10A37F'),'Codex','Sign in with ChatGPT','<button class="btn sm">Connect</button>'), li(mono('GC','#4285F4'),'Gemini','Sign in with Google · free daily allowance', pill('Free','g')+'<button class="btn sm">Connect</button>'), li(mono('OR','#4B4BD6'),'OpenRouter','Many models, one sign-in','<button class="btn sm">Connect</button>'), li(mono('OL','#1D1D1F'),'Ollama','Found on this PC · works offline', tag('Detected','g')+'<button class="btn sm">Use</button>'))}`],
+  [2,'Apps & tools', () => `<div class="eb">Brain · optional</div><h2>Connect your apps and tools</h2><p class="sub">Let KIVO work with the apps you use. Skip this and add them anytime in Connectors.</p>
+    ${sect('Works right away')}${group(li('music','Media controls','Spotify, YouTube Music and other players', tag('On','g')), li('term','Developer tools','git, VS Code, Terminal · found on this PC', tag('On','g')))}
+    ${sect('Connect with one sign-in')}${group(li(mono('GC','#1A73E8'),'Google Calendar','“What’s next today?”','<button class="btn sm">Connect</button>'), li(mono('GH','#24292F'),'GitHub','Issues and pull requests','<button class="btn sm">Connect</button>'), li(mono('NO','#191919'),'Notion','Pages and notes','<button class="btn sm">Connect</button>'), li('globe','Browser extension','Read and act on your open tabs','<button class="btn sm">Install</button>'))}
+    ${sect('Advanced')}${group(li('server','MCP server','Add tools from any MCP server','<button class="btn sm plain">Add</button>'), li('sparkle','Skills','Import skills made for Claude, Codex or Gemini','<button class="btn sm plain">Import</button>'))}`],
   [3,'Permissions', () => `<div class="eb">Control · 1 of 3</div><h2>How much can KIVO do on its own?</h2><p class="sub">Switch anytime from the Island or the tray.</p>
     <div style="display:flex;flex-direction:column;gap:8px">${MODES.filter(m=>m[0]!=='bypass').map(([k,n,d,x]) => option(n, d, S.mode===k, x==='Recommended'?pill('Recommended','a'):'', `data-set="mode" data-val="${k}"`)).join('')}</div>
     <p class="note">Deleting, sending, paying and security changes always ask. Bypass mode, which skips even that, can be turned on later in Settings.</p>`],
@@ -860,11 +912,11 @@ const ONB = [
 ];
 const onbHTML = () => {
   const cur = ONB[S.onb], ph0 = cur[0];
-  const intro = `<div class="intro"><div class="eb">ONBOARDING · FIRST LAUNCH</div><h1>Setup</h1><p>Ten short screens in five phases, with the recommended answer preselected. <b>Finish</b> opens the Control Center.</p></div>`;
+  const intro = `<div class="intro"><div class="eb">ONBOARDING · FIRST LAUNCH</div><h1>Setup</h1><p>Eleven short screens in five phases, with the recommended answer preselected. <b>Finish</b> opens the Control Center.</p></div>`;
   if (S.onb === 0) return intro + `<div class="ob"><div class="welcome"><div class="island static" data-isl="welcome"></div><h2>Talk to your PC.</h2><p>KIVO opens apps, finds files, answers questions and handles tasks, and asks before anything risky.</p><button class="btn pri" data-onbnav="1">Get started</button>
     <div class="fine"><span>${I('globe')}English (US)</span><span>About 2 minutes</span><span>Private by default</span></div></div></div>`;
   const prog = `<span class="obprog"><span class="pd">${PH.map((_,i) => `<i class="${i<ph0?'done':i===ph0?'on':''}"></i>`).join('')}</span>${PH[ph0]}</span>`;
-  const optional = ['Your voice','Brain'].includes(cur[1]), last = S.onb === ONB.length - 1;
+  const optional = ['Your voice','Brain','Apps & tools'].includes(cur[1]), last = S.onb === ONB.length - 1;
   return intro + `<div class="ob"><div class="obbar">${prog}<span class="t">Set up KIVO</span></div>
     <div class="obody"><div class="col">${cur[2]()}</div></div>
     <div class="foot"><button class="btn plain" data-onbnav="-1">Back</button><span class="sp"></span>${optional?'<button class="btn plain" data-onbnav="1">Skip</button>':''}<button class="btn pri" ${last?'data-finish':'data-onbnav="1"'}>${last?'Finish':'Continue'}</button></div></div>`;
@@ -893,6 +945,12 @@ const sysHTML = () => `<div class="intro"><div class="eb">SYSTEM SURFACES</div><
     <div class="cell"><span class="cap">Bypass mode is on (Island)</span><div class="island static tall" style="width:400px;max-width:100%;height:auto;border-radius:24px"><div class="row">${DOT('#FF5147')}<span class="lab">Bypass permissions is on</span><span class="mchip r">58 MIN</span></div><div class="body">KIVO won’t ask before acting, including high-risk actions.<div class="btns"><span>Keep on</span><span class="p">Turn off</span></div></div></div></div>
     <div class="cell"><span class="cap">Capability is off (Island)</span><div class="island static tall" style="width:400px;max-width:100%;height:auto;border-radius:24px"><div class="row"><span class="orb"></span><span class="lab">Screen awareness is off</span></div><div class="body">To answer that, KIVO needs to see your screen.<div class="btns"><span class="p">Turn on</span><span>Not now</span></div></div></div></div>
     <div class="cell"><span class="cap">Microphone used by a call (Island)</span><div class="island static" style="width:330px"><div class="row">${DOT('#555')}<span class="lab">In a call<small>listening quietly</small></span></div></div></div>
+    <div class="cell"><span class="cap">File Explorer right-click menu</span><div class="xmenu"><div class="mi">${I('folder')}Open</div><div class="mi">${I('link')}Copy as path</div><hr><div class="mi hl"><span class="mark" style="width:16px;height:16px"></span>Ask KIVO about this</div><div class="mi">${I('sparkle')}Summarize with KIVO</div><hr><div class="mi">${I('edit')}Rename</div></div></div>
+    <div class="cell"><span class="cap">Taskbar jump list (right-click the KIVO icon)</span><div class="jump"><div class="jh">Routines</div><div class="mi">${I('routine')}Work mode</div><div class="mi">${I('routine')}Morning brief</div><div class="jh">Tasks</div><div class="mi">${I('chat')}New conversation</div><div class="mi">${I('pause')}Pause listening</div><div class="mi">${I('stop')}Stop everything</div></div></div>
+    <div class="cell"><span class="cap">Notification with a reply box</span><div class="wtoast"><div class="th"><span class="mark"></span>KIVO<span class="x">✕</span></div><b>Claude finished in K.I.V.O</b><span class="s">All 48 tests pass. Want me to commit?</span><div class="reply"><div class="field"><input placeholder="Reply to KIVO…"></div><button class="btn pri" style="border-radius:4px">Send</button></div></div></div>
+    <div class="cell"><span class="cap">Microphone blocked by Windows privacy settings</span><div class="wtoast"><div class="th"><span class="mark"></span>KIVO<span class="x">✕</span></div><b>KIVO can’t use the microphone</b><span class="s">Windows is blocking microphone access for desktop apps.</span><div class="ta"><button class="btn">Open Windows settings</button><button class="btn">Type instead</button></div></div></div>
+    <div class="cell"><span class="cap">Offline (Island)</span><div class="island static" style="width:340px"><div class="row">${DOT('#8E8E93')}<span class="lab">Offline<small>local commands still work</small></span></div></div></div>
+    <div class="cell"><span class="cap">What’s new, after an update</span><div class="sheetwin"><h3>What’s new in KIVO 0.2</h3><span style="font-size:12.5px;color:var(--text-3)">Installed just now</span><ul><li>Say “approve” or “cancel” when KIVO asks</li><li>New sound sets in Companion</li><li>Faster wake word, fewer false wakes</li></ul><div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn">Full release notes</button><button class="btn pri">Got it</button></div></div></div>
     <div class="cell"><span class="cap">In-app toast</span><div style="position:relative;height:44px;width:100%"><div class="ktoast on" style="position:absolute;left:0;bottom:0;transform:none">${I('check')}Routine saved<button class="btn">Undo</button></div></div></div>
   </div>`;
 
@@ -949,6 +1007,8 @@ const compHTML = () => {
     ${c('Confirmation', `<div style="width:100%">${alertB('warn','Needs your OK','Edit <b>src/main.rs</b><div style="font-size:12px;color:var(--text-3);margin:8px 0 4px">Allow for</div>'+seg(['Once','Session','24 h','Always here'],'Once')+'<div style="display:flex;gap:6px;margin-top:10px"><button class="btn sm pri">Allow</button><button class="btn sm destr">Deny</button></div>')}</div>`, 'custom · never auto-dismisses')}
     ${c('Plan approval', `<div style="width:100%;display:flex;justify-content:center"><div class="island static" data-isl="plan"></div></div>`, 'custom · Plan-first mode')}
     ${c('Task steps', `<div style="width:100%">${[['ok','Inspect project'],['run','Analyze failure'],['','Change code']].map(([s,x]) => `<div class="step-row" style="${s?'':'opacity:.5'}">${s==='ok'?`<span class="ok">${I('check')}</span>`:s==='run'?'<span class="spin"></span>':'<span class="rad"></span>'}${x}</div>`).join('')}</div>`, 'custom · task graph')}
+    ${c('Context meter', `<div style="width:100%"><div class="ctxbar">${[['var(--text)',40],['var(--acc)',27],['#8E8E93',7],['#32D74B',18],['#FF9F0A',8]].map(([col,w]) => `<i style="width:${w}%;background:${col}"></i>`).join('')}</div><div style="margin-top:10px"><span class="cmeter"><span class="m"><span style="width:18%"></span></span>18% of context</span></div></div>`, 'custom · Context page and chat header')}
+    ${c('Skill row', group(li('sparkle','pdf-tools','Fill, merge and split PDFs', pill('Runs scripts','o')+tog(true))), 'custom · Agent Skills (SKILL.md)')}
     ${c('Provider row', group(li(mono('CC','#C96442'),'Claude Code','Ready', tag('Ready','g')), li(mono('CX','#10A37F'),'Codex','Signing in…','<span class="spin"></span>'), li(mono('GC','#4285F4'),'Gemini CLI','Signed out','<button class="btn sm pri">Sign in</button>')), 'custom')}
   </div>
   ${gs('Overlays')}
@@ -993,6 +1053,19 @@ const SHEETS = {
     ${sect('Limits')}${group(li('list','Max steps per task','', `<div class="field" style="width:70px"><input value="25"></div>`), li('chart','Max cost per task','', `<div class="field" style="width:80px">$<input value="0.50"></div>`), li('clock','Time limit','', seg(['1 min','2 min','5 min'],'2 min')))}
     ${sect('Apps')}${group(li('check','Allowed apps','Notes, Photoshop, Figma', chev,'click'), li('lock','Never touch','Password managers, banking, Windows Security', chev,'click'))}
     <p class="note">Screenshots stay in memory and are never saved.</p></div>`,
+  preview: () => `<div class="sh"><h3>What the AI sees</h3><button class="btn sm ic plain" data-closesheet aria-label="Close">${I('x')}</button></div><div class="sb">
+    <p style="color:var(--text-2);margin:0 0 12px">The exact start of the next conversation with <b>Claude Sonnet</b>. Secrets are hidden.</p>
+    <div class="code-edit"><span class="c"># System · 600 tokens · cached</span>
+You are KIVO, a voice-first assistant on Windows. Keep spoken answers short…
+<span class="c"># About me · 400 · cached</span>
+Call me Sam. Windows 11, VS Code, PowerShell. Reply in the language I speak.
+<span class="c"># Live context · 100</span>
+Active app: VS Code (K.I.V.O) · 16:42 · Mode: Auto
+<span class="c"># Memory · 3 items</span>
+- Tests use cargo nextest (kivo-runtime)
+<span class="c"># Skills · names only</span>
+release-notes, meeting-brief, pdf-tools</div>
+    <p class="note">Tools are added only when a request needs them.</p></div>`,
   mode: () => `<div class="sh"><h3>Permission mode</h3><button class="btn sm ic plain" data-closesheet aria-label="Close">${I('x')}</button></div><div class="sb">
     <div style="display:flex;flex-direction:column;gap:8px">${MODES.map(([k,n,d,x]) => option(n, d, S.mode===k, x==='Recommended'?pill('Recommended','a'):k==='bypass'?pill('Use with care','r'):'', k==='bypass'&&S.mode!=='bypass'?'data-modal="bypass"':`data-set="mode" data-val="${k}"`)).join('')}</div>
     <p class="note">${keys('Ctrl','Shift','M')} cycles modes. The Island shows the current mode while KIVO acts.</p></div>`

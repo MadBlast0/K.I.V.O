@@ -15,6 +15,22 @@ Related specs: [BRAINS.md](BRAINS.md), [MEMORY.md](MEMORY.md), [VOICE.md](VOICE.
 
 ---
 
+## 0. What the user experiences: no session management required
+
+**Answer to "sessions or no sessions?"** KIVO **uses sessions internally, and the user never has
+to manage them.**
+
+- **Talk anytime:** KIVO continues the current conversation automatically, or starts a fresh one
+  when enough time has passed or the topic clearly changed.
+- **Context is automatic:** the right context (§8) is loaded without the user doing anything.
+- **Old conversations are never lost:** they're summarized, and searchable in Chat.
+- **Power users get full control:** they can open Chat to rename, pin, continue, branch, export or
+  delete conversations; see the context meter; press "Compact now"; and edit exactly what context
+  the AI starts with (Settings → Context).
+
+Commands like "mute" or "open Chrome" **don't use a session or any AI at all**; they cost nothing.
+A session only matters when a brain is involved.
+
 ## 1. Sessions and threads
 
 | Unit | What it is | Lifetime |
@@ -215,6 +231,63 @@ conversations and tasks KIVO took part in.
 
 **External memory services** (Mem0 hosted, a self-hosted Graphiti, Basic Memory) can be added as
 **Connectors** by users who want them. They are not bundled.
+
+## 8. Context layers: what the AI starts with, and what it costs
+
+Every AI app gives the model some starting context (like Claude Code reading `CLAUDE.md`). KIVO
+makes each layer **explicit, small, cached and user-controllable**:
+
+| # | Layer | Default size | Loaded when | Setting |
+|---|---|---|---|---|
+| 1 | **System prompt**: KIVO core, safety rules, output style for voice | ~600 tokens | Always (brain turns) | View only; the style is editable via Persona |
+| 2 | **Personal instructions** ("About me") | ≤ 400 | Always | Edit, turn off |
+| 3 | **Workspace instructions** + the project's `CLAUDE.md`/`AGENTS.md` summary | ≤ 800 | Only when in a workspace | Per workspace |
+| 4 | **Live context** (active app, time, permission mode), sent as deltas | ~100 | Always | Choose fields |
+| 5 | **Memory**: top relevant items | ≤ 600 | Retrieved per request | Capture mode, max items |
+| 6 | **Skills index**: name and one-line description per enabled skill | ~40 each | Always, but the **full skill loads only when used** | Enable/disable per skill |
+| 7 | **Tools**: only the tools relevant to the request | 0–2k | Per request (BRAINS §6) | Enable/disable tools, MCP servers, connectors |
+| 8 | **Conversation**: running summary + recent turns | Rest of budget | Brain turns | Budget per profile |
+
+**How start-up context stays cheap:**
+
+1. **Tiny by default.** A new session costs roughly **1.5k tokens** before the user's message,
+   without a workspace or skills. Heavy items (tools, full skills, files) are **lazy-loaded**,
+   only when the request needs them. This follows the Agent Skills "progressive disclosure"
+   pattern.
+2. **Prompt caching.** Layers 1, 2, 3 and 6 form a stable prefix that is marked cacheable.
+   Cached reads cost about **10% of normal input** at Anthropic, OpenAI (GPT-5.x) and Gemini 2.5+.
+   So after the first message, the start-up context is almost free.
+   ([Eden AI](https://www.edenai.co/post/prompt-caching-claude-vs-gpt-vs-gemini-cost-playbook),
+   [LeanLM](https://leanlm.ai/blog/prompt-caching))
+3. **Zero tokens for the fast path**, and local models cost nothing anyway.
+4. **CLI agents** (Claude Code, Codex, Gemini CLI) load their *own* project files. KIVO adds only
+   a short handoff (the request + ≤ 300 tokens of relevant memory), so context isn't duplicated.
+5. **Transparency.** Settings → Context shows each layer's size, an estimated cost per new
+   session for the current brain, and a **"Preview what the AI sees"** button that renders the
+   exact assembled prompt, with secrets redacted.
+
+**Settings → Context** (advanced; defaults just work):
+
+- toggles and edit links per layer;
+- the per-profile budget;
+- auto-compaction on/off and its threshold;
+- "Start each conversation fresh" (no summary carry-over);
+- the Preview.
+
+## 9. Skills
+
+- **Format:** KIVO supports the **Agent Skills open standard** (`SKILL.md` folders), adopted by
+  Claude, Codex, Gemini CLI, Copilot, Cursor and more.
+  ([agentskills overview](https://inference.sh/blog/skills/agent-skills-overview),
+  [cross-tool guide](https://codex.danielvaughan.com/2026/05/05/agent-skills-open-standard-portable-skills-codex-cli-cross-agent/))
+- **Where skills come from:** `%APPDATA%\KIVO\skills\`, imported from a folder or zip, created
+  from a routine, or shared by the agents KIVO launches (with permission).
+- **Loading:** only the name and description stay in context; the body loads when the brain
+  decides to use the skill.
+- **Scripts:** scripts inside skills run through KIVO's shell tool, under the permission engine.
+  Skills from the internet are untrusted, so KIVO shows what they contain before enabling them.
+- **UI:** the Skills page lists, enables/disables, views and deletes skills, with a source badge
+  for each.
 
 ## 7. Conversational confirmations (voice)
 

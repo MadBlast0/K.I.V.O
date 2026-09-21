@@ -188,6 +188,10 @@ Specs: [architecture/](architecture/ARCHITECTURE.md) · Decisions: [DECISIONS.md
 | Instructions + workspaces | same §4 | M5 |
 | Memory v2 (graph, Markdown mirror, capture modes, MCP sharing) | same §6 | M7 (explicit + Suggest), M8 (workspace notes, graph view) |
 | Driving other AIs (ACP sessions, terminal agents, desktop AI apps, prompt drafts) | same §5 | M3 (ACP), M5 (terminal + draft), M8 (desktop apps) |
+| CI (`ci.yml`, PR title check) + release-please | [RELEASE.md](architecture/RELEASE.md) | **M0** |
+| Release matrix (NSIS/MSI/DMG/AppImage/deb/rpm) + nightly | same | Draft in M1 (Windows), full matrix by M9 |
+| Context page, preview, session management UI | [CONVERSATION.md §0, §8](architecture/CONVERSATION.md) | M3 (budgets), M7 (UI) |
+| Skills (Agent Skills standard) | same §9 | M6 (with MCP) |
 | Model manager (download/delete) | [DISTRIBUTION.md §4](architecture/DISTRIBUTION.md) | M1 |
 | KIVO Remote (phone) | same §4 | Post-M9 track |
 

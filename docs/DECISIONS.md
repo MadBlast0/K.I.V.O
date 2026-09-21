@@ -42,6 +42,11 @@ decision changes, update the entry and note the date. Do not silently rewrite it
 | **Driving other AIs** | ACP sessions (preferred), visible terminal agents (Windows Terminal + UIA typing), desktop AI apps (Claude Desktop, ChatGPT) via UIA, all with a voice-editable prompt draft before sending. Launching an agent in bypass/yolo mode is High risk |
 | **Free options** | Local models, Gemini CLI (free Google sign-in, about 1,000/day), Codex with ChatGPT Free (small), OpenRouter free models. Labelled "Free" in the UI; KIVO never pays for users' AI |
 | **Local model manager** | Download and delete speech-to-text, text-to-speech and embedding models in-app (Voice → Models on this PC) |
+| **Sessions** | KIVO uses sessions internally and users never have to manage them: automatic continue/new, with summaries. Chat offers power users session management (new, pin, rename, search, context meter, compact) ([CONVERSATION.md §0](architecture/CONVERSATION.md)) |
+| **Context layers** | System prompt → About me → Workspace → Live context → Memory → Skills index → Tools (lazy) → Conversation. About 1.5k tokens to start, cached after the first message (~90% cheaper), zero for the fast path. Settings → Context shows sizes and cost and previews what the AI sees ([CONVERSATION.md §8](architecture/CONVERSATION.md)) |
+| **Skills** | Support the open Agent Skills standard (`SKILL.md`), with progressive loading. Skills from outside are reviewed before they're enabled ([CONVERSATION.md §9](architecture/CONVERSATION.md)) |
+| **Onboarding** | Adds an optional "Connect your apps and tools" step (connectors, browser extension, MCP, skills), for 11 steps in total |
+| **Releases** | GitHub Actions: release-please + Conventional Commits → tags → `tauri-action` matrix producing a Windows NSIS `.exe` + `.msi` (x64 and ARM64), a macOS universal `.dmg`, and Linux `.AppImage`/`.deb`/`.rpm`. Stable/Beta/Experimental channels, SBOM, smoke-install tests. Mac/Linux ship as previews until the ports land ([RELEASE.md](architecture/RELEASE.md)) |
 | **GitHub repo** | Applied: private vulnerability reporting, Dependabot alerts + security updates, secret scanning + push protection, description/topics, wiki off, squash-only merges + delete branch on merge, Discussions on, a ruleset on `main` (no force-push, no deletion) |
 
 ## 2026-09-21 — Owner answers (pre-M0)

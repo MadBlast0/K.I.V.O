@@ -35,6 +35,7 @@ Engineering specs (read the relevant one before implementing a subsystem):
 | [docs/architecture/UX.md](docs/architecture/UX.md) | Lifecycle, overlay states, Control Center, onboarding, settings |
 | [docs/architecture/MEMORY.md](docs/architecture/MEMORY.md) | Conversation, task, preference, long-term memory |
 | [docs/architecture/DISTRIBUTION.md](docs/architecture/DISTRIBUTION.md) | Installers, updates, signing, model downloads, licensing |
+| [docs/architecture/RELEASE.md](docs/architecture/RELEASE.md) | Versioning, CI workflows, installer build matrix, channels, signing |
 | [docs/architecture/BENCHMARKS.md](docs/architecture/BENCHMARKS.md) | `kivo-bench`, reference hardware, budgets |
 | [docs/architecture/CONVERSATION.md](docs/architecture/CONVERSATION.md) | Threads, context budgets, instructions, memory v2, driving other AIs, voice confirmations |
 | [docs/architecture/CAPABILITIES.md](docs/architecture/CAPABILITIES.md) | Capability toggles, screen awareness, computer use |
