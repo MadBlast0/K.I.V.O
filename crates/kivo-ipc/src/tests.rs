@@ -9,32 +9,16 @@ use futures_util::{SinkExt, StreamExt};
 use kivo_core::event::{EventKind, UiEvent};
 use kivo_core::{Event, EventBus, SessionState};
 use serde_json::{Value, json};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::watch;
 use tokio::task::JoinHandle;
 use tokio_util::codec::Framed;
 use tokio_util::sync::CancellationToken;
 
-struct TestHandler {
-    state: Mutex<StateSnapshot>,
-}
-
-impl TestHandler {
-    fn new() -> Arc<Self> {
-        Arc::new(Self {
-            state: Mutex::new(StateSnapshot {
-                session: SessionState::Idle,
-                revision: 1,
-            }),
-        })
-    }
-}
+struct TestHandler;
 
 impl Handler for TestHandler {
-    fn snapshot(&self) -> StateSnapshot {
-        self.state.lock().unwrap().clone()
-    }
-
     fn call(&self, method: String, params: Value) -> BoxFuture<Result<Value, RpcError>> {
         Box::pin(async move {
             match method.as_str() {
@@ -54,7 +38,8 @@ struct Running {
     endpoint: String,
     token: String,
     bus: EventBus,
-    handler: Arc<TestHandler>,
+    state: watch::Sender<StateSnapshot>,
+    clients: watch::Receiver<usize>,
     shutdown: CancellationToken,
     task: JoinHandle<std::io::Result<()>>,
 }
@@ -65,17 +50,24 @@ fn start_on(endpoint: String, hello_timeout: Duration) -> Running {
     let mut config = ServerConfig::new(endpoint.clone(), token, "test 1.0".into());
     config.hello_timeout = hello_timeout;
     let server = Server::bind(config).unwrap();
-    let (bus, handler, shutdown) = (
-        EventBus::new(),
-        TestHandler::new(),
-        CancellationToken::new(),
-    );
-    let task = tokio::spawn(server.run(handler.clone(), bus.clone(), shutdown.clone()));
+    let clients = server.connected_clients();
+    let (bus, shutdown) = (EventBus::new(), CancellationToken::new());
+    let (state, state_rx) = watch::channel(StateSnapshot {
+        session: SessionState::Idle,
+        revision: 1,
+    });
+    let task = tokio::spawn(server.run(
+        Arc::new(TestHandler),
+        bus.clone(),
+        state_rx,
+        shutdown.clone(),
+    ));
     Running {
         endpoint,
         token: presented,
         bus,
-        handler,
+        state,
+        clients,
         shutdown,
         task,
     }
@@ -265,10 +257,14 @@ async fn oversized_frames_close_the_connection() {
 async fn a_client_that_falls_behind_gets_a_snapshot() {
     let rt = start();
     let mut conn = connect(&rt.endpoint, &rt.token, "tests").await.unwrap();
-    *rt.handler.state.lock().unwrap() = StateSnapshot {
-        session: SessionState::Listening,
-        revision: 42,
-    };
+    // Change the state without announcing it, so any snapshot must come from lag detection.
+    rt.state.send_if_modified(|s| {
+        *s = StateSnapshot {
+            session: SessionState::Listening,
+            revision: 42,
+        };
+        false
+    });
     // Don't read notifications while the bus overflows the channel, the pipe and the server.
     for _ in 0..20_000 {
         rt.bus
@@ -354,4 +350,46 @@ async fn backoff_stops_when_cancelled() {
     let endpoint = unique_endpoint();
     let result = connect_with_backoff(&endpoint, || Ok(String::new()), "tests", &cancel).await;
     assert!(matches!(result, Err(ClientError::Cancelled)));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn state_changes_are_pushed_to_every_client() {
+    let rt = start();
+    let mut a = connect(&rt.endpoint, &rt.token, "a").await.unwrap();
+    let mut b = connect(&rt.endpoint, &rt.token, "b").await.unwrap();
+    rt.state.send_replace(StateSnapshot {
+        session: SessionState::Paused,
+        revision: 2,
+    });
+    for conn in [&mut a, &mut b] {
+        let n = tokio::time::timeout(Duration::from_secs(2), conn.notifications.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(n.method, method::SNAPSHOT);
+        let snap: StateSnapshot = serde_json::from_value(n.params).unwrap();
+        assert_eq!((snap.session, snap.revision), (SessionState::Paused, 2));
+    }
+    assert_eq!(
+        a.client.request(method::STATE, Value::Null).await.unwrap(),
+        json!({"session":"paused","revision":2})
+    );
+    rt.shutdown.cancel();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_server_counts_connected_clients() {
+    let mut rt = start();
+    assert_eq!(*rt.clients.borrow(), 0);
+    let a = connect(&rt.endpoint, &rt.token, "a").await.unwrap();
+    let b = connect(&rt.endpoint, &rt.token, "b").await.unwrap();
+    rt.clients.wait_for(|n| *n == 2).await.unwrap();
+    drop(a);
+    rt.clients.wait_for(|n| *n == 1).await.unwrap();
+    drop(b);
+    rt.clients.wait_for(|n| *n == 0).await.unwrap();
+    // A refused client is never counted.
+    let _ = connect(&rt.endpoint, &"0".repeat(64), "intruder").await;
+    assert_eq!(*rt.clients.borrow(), 0);
+    rt.shutdown.cancel();
 }

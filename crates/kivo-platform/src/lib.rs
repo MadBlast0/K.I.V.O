@@ -11,6 +11,7 @@ mod audio;
 mod automation;
 mod capabilities;
 mod error;
+mod paths;
 mod screen;
 mod secrets;
 mod shell;
@@ -24,6 +25,7 @@ pub use audio::{
 pub use automation::{ElementQuery, ElementRef, Input, MouseButton, UiAutomation, UiNode};
 pub use capabilities::{Capabilities, OsFamily};
 pub use error::{PlatformError, PlatformResult};
+pub use paths::Paths;
 pub use screen::{CaptureTarget, Image, Ocr, Screen, TextLine};
 pub use secrets::{SecretHandle, Secrets};
 pub use shell::{

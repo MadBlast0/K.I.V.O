@@ -45,13 +45,13 @@ export type TaskEvent = { "type": "created", name: string, } | { "type": "stepCh
 
 export type StepStatus = "pending" | "running" | "done" | "failed" | "skipped";
 
-export type SystemEvent = { "type": "windowChanged", app: string, title: string, } | { "type": "fullscreenChanged", fullscreen: boolean, } | { "type": "focusModeChanged", on: boolean, } | { "type": "powerChanged", onBattery: boolean, percent: number | null, } | { "type": "deviceChanged", kind: DeviceKind, name: string, } | { "type": "networkChanged", online: boolean, } | { "type": "fileChanged", path: string, } | { "type": "browserChanged", url: string, title: string, };
+export type SystemEvent = { "type": "windowChanged", app: string, title: string, } | { "type": "fullscreenChanged", fullscreen: boolean, } | { "type": "focusModeChanged", on: boolean, } | { "type": "powerChanged", onBattery: boolean, percent: number | null, } | { "type": "deviceChanged", kind: DeviceKind, name: string, } | { "type": "networkChanged", online: boolean, } | { "type": "fileChanged", path: string, } | { "type": "browserChanged", url: string, title: string, } | { "type": "shuttingDown" };
 
 export type DeviceKind = "microphone" | "speaker";
 
 export type ProviderEvent = { "type": "healthChanged", provider: string, healthy: boolean, } | { "type": "rateLimited", provider: string, retryAfterMs: number | null, } | { "type": "authFailed", provider: string, };
 
-export type UiEvent = { "type": "overlayShown" } | { "type": "overlayHidden" } | { "type": "userConfirmed", callId: string, } | { "type": "userCancelled" };
+export type UiEvent = { "type": "controlCenterRequested", page: string | null, } | { "type": "overlayShown" } | { "type": "overlayHidden" } | { "type": "userConfirmed", callId: string, } | { "type": "userCancelled" };
 
 export type SessionState = "idle" | "listening" | "thinking" | "acting" | "speaking" | "followUp" | "interrupted" | "paused" | "awaitingConfirmation" | "error";
 

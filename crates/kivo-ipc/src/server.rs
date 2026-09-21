@@ -1,7 +1,8 @@
 //! The runtime side of the IPC channel. Each connection must open with a valid `hello` (session
 //! token + compatible protocol) within a few seconds, or it is dropped. After that it receives
-//! every bus event as a notification, a full snapshot if it ever falls behind, and answers to its
-//! requests (handled concurrently, so a slow call doesn't block the others).
+//! every bus event as a notification, a `snapshot` notification whenever the state changes (and
+//! whenever it fell behind on events), and answers to its requests (handled concurrently, so a
+//! slow call doesn't block the others).
 
 use crate::frame::{Frames, frames};
 use crate::protocol::{
@@ -20,15 +21,13 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncWrite};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 use tokio_util::sync::CancellationToken;
 
 pub type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;
 
-/// What the runtime exposes over IPC.
+/// The runtime's request handler.
 pub trait Handler: Send + Sync + 'static {
-    /// The current state, sent on connect and whenever a client may have missed events.
-    fn snapshot(&self) -> StateSnapshot;
     /// Handles a request. `ping`, `state.get` and `hello` never reach here.
     fn call(&self, method: String, params: Value) -> BoxFuture<Result<Value, RpcError>>;
 }
@@ -56,6 +55,14 @@ struct Shared {
     config: ServerConfig,
     handler: Arc<dyn Handler>,
     bus: EventBus,
+    state: watch::Receiver<StateSnapshot>,
+    clients: watch::Sender<usize>,
+}
+
+impl Shared {
+    fn snapshot(&self) -> StateSnapshot {
+        self.state.borrow().clone()
+    }
 }
 
 /// A bound endpoint, ready to serve. Binding first means a second runtime (or a squatter)
@@ -66,6 +73,7 @@ pub struct Server {
     #[cfg(unix)]
     listener: tokio::net::UnixListener,
     config: ServerConfig,
+    clients: watch::Sender<usize>,
 }
 
 impl Server {
@@ -80,14 +88,22 @@ impl Server {
             #[cfg(unix)]
             listener,
             config,
+            clients: watch::Sender::new(0),
         })
     }
 
-    /// Accepts connections until `shutdown` is cancelled.
+    /// How many clients are connected (past `hello`), updated live.
+    pub fn connected_clients(&self) -> watch::Receiver<usize> {
+        self.clients.subscribe()
+    }
+
+    /// Accepts connections until `shutdown` is cancelled. `state` is the runtime's current state;
+    /// every change is pushed to connected clients.
     pub async fn run(
         self,
         handler: Arc<dyn Handler>,
         bus: EventBus,
+        state: watch::Receiver<StateSnapshot>,
         shutdown: CancellationToken,
     ) -> io::Result<()> {
         let endpoint = self.config.endpoint.clone();
@@ -95,6 +111,8 @@ impl Server {
             config: self.config,
             handler,
             bus,
+            state,
+            clients: self.clients,
         });
 
         #[cfg(windows)]
@@ -136,6 +154,19 @@ async fn send<S: AsyncRead + AsyncWrite + Unpin>(
     sink.send(Bytes::from(bytes)).await
 }
 
+fn snapshot_note(snapshot: StateSnapshot) -> Result<Notification, serde_json::Error> {
+    serde_json::to_value(snapshot).map(|s| Notification::new(method::SNAPSHOT, s))
+}
+
+/// Decrements the connected-client count when a connection ends, however it ends.
+struct ClientCount<'a>(&'a watch::Sender<usize>);
+
+impl Drop for ClientCount<'_> {
+    fn drop(&mut self) {
+        self.0.send_modify(|n| *n = n.saturating_sub(1));
+    }
+}
+
 /// Runs one connection to completion. Any protocol violation closes it.
 async fn serve<S>(stream: S, shared: Arc<Shared>, shutdown: CancellationToken)
 where
@@ -146,14 +177,17 @@ where
         return;
     };
     tracing::info!(%client, "IPC client connected");
+    shared.clients.send_modify(|n| *n += 1);
+    let _counted = ClientCount(&shared.clients);
 
-    // Subscribed before the welcome is sent, so nothing between the snapshot and the first
+    // Subscribed before the welcome is built, so nothing between the snapshot and the first
     // notification can be lost.
     let mut events = shared.bus.subscribe();
+    let mut state = shared.state.clone();
     let welcome = Welcome {
         protocol_version: PROTOCOL_VERSION,
         runtime_version: shared.config.runtime_version.clone(),
-        snapshot: shared.handler.snapshot(),
+        snapshot: state.borrow_and_update().clone(),
     };
     let reply = serde_json::to_value(welcome).map_or_else(
         |e| Response::err(hello_id, RpcError::new(RpcError::INTERNAL, e.to_string())),
@@ -165,7 +199,7 @@ where
 
     let (replies_tx, mut replies) = mpsc::channel::<Response>(64);
     loop {
-        tokio::select! {
+        let note = tokio::select! {
             frame = io.next() => {
                 let Some(Ok(frame)) = frame else { break }; // closed, I/O error or oversized frame
                 let Ok(Message::Request(request)) = serde_json::from_slice::<Message>(&frame) else {
@@ -176,25 +210,33 @@ where
                 tokio::spawn(async move {
                     let _ = replies_tx.send(dispatch(&shared, request).await).await;
                 });
+                continue;
             }
             Some(reply) = replies.recv() => {
                 if send(&mut io, &Message::Response(reply)).await.is_err() { break }
+                continue;
             }
-            received = events.recv() => {
-                let note = match received {
-                    Received::Event(event) => Notification::event(&event),
-                    Received::Missed(n) => {
-                        tracing::debug!(%client, missed = n, "client fell behind; sending a snapshot");
-                        serde_json::to_value(shared.handler.snapshot()).map(|s| Notification::new(method::SNAPSHOT, s))
-                    }
-                    Received::Closed => break,
-                };
-                match note {
-                    Ok(note) => if send(&mut io, &Message::Notification(note)).await.is_err() { break },
-                    Err(e) => tracing::error!(%e, "couldn't serialize a notification"),
+            received = events.recv() => match received {
+                Received::Event(event) => Notification::event(&event),
+                Received::Missed(n) => {
+                    tracing::debug!(%client, missed = n, "client fell behind; sending a snapshot");
+                    snapshot_note(shared.snapshot())
                 }
+                Received::Closed => break,
+            },
+            changed = state.changed() => {
+                if changed.is_err() { break } // the runtime is shutting down
+                snapshot_note(state.borrow_and_update().clone())
             }
             () = shutdown.cancelled() => break,
+        };
+        match note {
+            Ok(note) => {
+                if send(&mut io, &Message::Notification(note)).await.is_err() {
+                    break;
+                }
+            }
+            Err(e) => tracing::error!(%e, "couldn't serialize a notification"),
         }
     }
     tracing::info!(%client, "IPC client disconnected");
@@ -264,7 +306,7 @@ async fn dispatch(shared: &Shared, request: Request) -> Response {
     } = request;
     let outcome = match name.as_str() {
         method::PING => Ok(Value::from("pong")),
-        method::STATE => serde_json::to_value(shared.handler.snapshot())
+        method::STATE => serde_json::to_value(shared.snapshot())
             .map_err(|e| RpcError::new(RpcError::INTERNAL, e.to_string())),
         method::HELLO => Err(RpcError::new(
             RpcError::INVALID_REQUEST,

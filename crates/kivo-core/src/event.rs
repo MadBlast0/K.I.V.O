@@ -291,6 +291,8 @@ pub enum SystemEvent {
         url: String,
         title: String,
     },
+    /// The runtime is quitting (tray or Control Center "Quit KIVO"); UIs close too (UX §1).
+    ShuttingDown,
 }
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
@@ -330,9 +332,16 @@ pub enum ProviderEvent {
     rename_all_fields = "camelCase"
 )]
 pub enum UiEvent {
+    /// Show the Control Center, optionally on a page ("settings", "activity", …): tray clicks,
+    /// "Open KIVO", or a second launch.
+    ControlCenterRequested {
+        page: Option<String>,
+    },
     OverlayShown,
     OverlayHidden,
-    UserConfirmed { call_id: String },
+    UserConfirmed {
+        call_id: String,
+    },
     UserCancelled,
 }
 

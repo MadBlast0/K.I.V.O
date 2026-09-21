@@ -9,7 +9,7 @@ publish = false
 
 [dependencies]
 kivo-core.workspace = true
-dirs.workspace = true
+kivo-platform.workspace = true
 regex.workspace = true
 rusqlite.workspace = true
 rusqlite_migration.workspace = true

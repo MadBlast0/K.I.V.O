@@ -8,9 +8,12 @@ license.workspace = true
 publish = false
 
 [dependencies]
+dirs.workspace = true
 kivo-core.workspace = true
 serde.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
 
 [lints]
 workspace = true

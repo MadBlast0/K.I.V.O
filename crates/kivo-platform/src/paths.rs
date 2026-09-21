@@ -1,4 +1,5 @@
-//! Where KIVO keeps its files (ARCHITECTURE §5).
+//! Where KIVO keeps its files (ARCHITECTURE §5). Here rather than in `kivo-store` so the UI can find
+//! the IPC token without linking the storage layer (ARCHITECTURE §8: the UI has no store access).
 
 use std::path::{Path, PathBuf};
 
