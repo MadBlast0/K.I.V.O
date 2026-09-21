@@ -123,4 +123,4 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 
 - [ ] **DIST-15** · M1 · No telemetry by default; crash dumps stay local; the diagnostics bundle is generated on request and reviewed before sharing (§5)
 - [ ] **DIST-16** · M9 · Generated `THIRD_PARTY_NOTICES` (`cargo about` + npm license checker) in the installer and in About (§6)
-- [ ] **DIST-17** · M0 · `cargo deny` denies GPL/AGPL in the default graph; GPL components only as separately downloaded add-ons after legal review (§6, ARCH-35)
+- [x] **DIST-17** · M0 · `cargo deny` denies GPL/AGPL in the default graph; GPL components only as separately downloaded add-ons after legal review (§6, ARCH-35) → done: `deny.toml` denies GPL/AGPL by allow-list · verified: `cargo deny check licenses` in CI

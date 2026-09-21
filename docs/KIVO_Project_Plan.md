@@ -3849,7 +3849,7 @@ that state philosophy or examples are covered by the rules and acceptance items 
 - [ ] **PLAN-10** · M3 · Predictive prewarming after wake: prepare STT, the likely tool subsystem and optionally the likely provider connection, never with side effects (§94)
 - [ ] **PLAN-11** · M1 · Fast acknowledgement: long operations show immediate visual feedback in the Island, with no spoken filler (§36, §95)
 - [ ] **PLAN-12** · M8 · Crash recovery: a crashed worker is isolated and restarted where safe, task state is preserved, the problem is reported, failures do not cascade (§114)
-- [ ] **PLAN-13** · M0 · Test layers in place: unit tests (routing, permissions, state, config, adapters, task graph) from M0; integration tests as each subsystem lands; end-to-end tests for voice → command, voice → agent, cancellation, provider fallback, offline and privacy mode by M8 (§115)
+- [~] **PLAN-13** · M0 · Test layers in place: unit tests (routing, permissions, state, config, adapters, task graph) from M0; integration tests as each subsystem lands; end-to-end tests for voice → partial: unit tests in kivo-core (22) and the UI (21) run in CI · missing: integration and end-to-end layers as subsystems land
 - [ ] **PLAN-14** · M1 · Startup sequence: runtime → lightweight config → event bus → audio → wake/VAD → OS event registration, with heavy models loaded only by policy (§126)
 - [ ] **PLAN-15** · M1 · Shutdown sequence: stop new tasks, notify and cancel active work, stop audio and providers, persist state, close the database, exit workers, then the runtime (§127)
 - [ ] **PLAN-16** · M1 · The ten resource rules are reviewed at each milestone exit, with any exception logged in DECISIONS.md (§128)

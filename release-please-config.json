@@ -7,11 +7,28 @@
       "package-name": "kivo",
       "changelog-path": "CHANGELOG.md",
       "extra-files": [
-        { "type": "toml", "path": "Cargo.toml", "jsonpath": "$.workspace.package.version" },
-        { "type": "json", "path": "apps/kivo-app/src-tauri/tauri.conf.json", "jsonpath": "$.version" },
-        { "type": "json", "path": "apps/kivo-app/package.json", "jsonpath": "$.version" },
-        { "type": "json", "path": "package.json", "jsonpath": "$.version" }
+        {
+          "type": "toml",
+          "path": "Cargo.toml",
+          "jsonpath": "$.workspace.package.version"
+        },
+        {
+          "type": "json",
+          "path": "apps/kivo-app/src-tauri/tauri.conf.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "apps/kivo-app/package.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "package.json",
+          "jsonpath": "$.version"
+        }
       ]
     }
-  }
+  },
+  "include-component-in-tag": false
 }

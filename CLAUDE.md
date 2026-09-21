@@ -53,11 +53,10 @@ never call Win32 (or any OS API) directly from core logic.
 
 ## Status
 
-Phase 0 (specification) complete; owner inputs answered (see
-[docs/DECISIONS.md](docs/DECISIONS.md)). **M0 — foundations and measurement** in progress:
-the Cargo/pnpm workspaces, crate stubs, Tauri shell, and the UI component library
-(`apps/kivo-app/src/components`, shown on the in-app gallery page) exist. Update this
-section as milestones land.
+Phase 0 (specification) and **D0 (design foundation)** complete. **M0 — foundations and
+measurement** in progress: CI (Windows + Linux/macOS portable crates, cargo-deny, UI checks),
+`kivo-core` (events, session state machine, turns, `Secret`). Progress per milestone is in the
+table at the top of [docs/ROADMAP.md](docs/ROADMAP.md). Update this section as milestones land.
 
 ## Build, run, check
 
@@ -67,7 +66,9 @@ section as milestones land.
 | UI only, in a browser (port 1420) | `pnpm ui` |
 | Typecheck UI | `pnpm typecheck` |
 | Build UI | `pnpm --filter kivo-app build` |
-| Check / lint Rust | `cargo check --workspace` · `cargo clippy --workspace --all-targets` |
+| Check / lint Rust | `cargo clippy --workspace --all-targets` · `cargo fmt --all --check` · `cargo deny check` |
+| Test Rust | `cargo test --workspace` |
+| Check UI | `pnpm typecheck` · `pnpm lint` (Oxlint, type-aware) · `pnpm format:check` · `pnpm test` (Vitest) |
 | Installer build | `pnpm build` |
 | Sync ROADMAP from the spec checklists | `pnpm docs:sync` |
 
@@ -141,4 +142,7 @@ The docs are the build plan, and progress is recorded in them. Full rules:
 ## Conventions
 
 - Windows is the primary platform; line endings are normalized via `.gitattributes`.
+- **Commit subjects are Conventional Commits** (`feat(core): …`, `fix(ui): …`, `ci: …`, `docs: …`).
+  release-please builds versions and the changelog from them, and CI rejects other subjects on
+  pushes to `main` (RELEASE.md §1).
 - Keep this file current as the build, test, and lint commands come into existence.

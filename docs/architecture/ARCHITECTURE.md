@@ -310,10 +310,10 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 
 **Core model (§4)**
 
-- [ ] **ARCH-22** · M0 · `enum Event` in `kivo-core` with every group in §4.1 (Voice, Turn, Tool, Task, System incl. `FileChanged`/`BrowserChanged` from plan §66, Provider, Ui), each carrying `ts` (monotonic + wall), `turn_id`/`task_id` where relevant, and `trace_id`; delivered over `tokio::sync::broadcast` (§4.1)
+- [x] **ARCH-22** · M0 · `enum Event` in `kivo-core` with every group in §4.1 (Voice, Turn, Tool, Task, System incl. `FileChanged`/`BrowserChanged` from plan §66, Provider, Ui), each carrying `ts` (monotonic + wall), `turn_id`/`task_id` where relevant, and `trace_id`; delivered over `tokio::sync::broadcast` (§4.1) → done: `crates/kivo-core/src/event.rs` (all §4.1 groups + FileChanged/BrowserChanged), `bus.rs` (tokio broadcast, lag reported) · verified: 6 unit tests incl. JSON shape and round-trip of every group
 - [ ] **ARCH-23** · M1 · A subscriber persists the Activity subset to SQLite (§4.1)
-- [ ] **ARCH-24** · M0 · The session state machine (Idle, Listening, Thinking, Acting, Speaking, FollowUp, Interrupted, Paused, AwaitingConfirmation, Error) with every transition in the §4.2 diagram, unit-tested; an invalid transition logs at `error` (§4.2)
-- [ ] **ARCH-25** · M0 · A Turn has a root `CancellationToken`; child tokens go to STT, the brain request, each tool call and TTS (§4.2)
+- [x] **ARCH-24** · M0 · The session state machine (Idle, Listening, Thinking, Acting, Speaking, FollowUp, Interrupted, Paused, AwaitingConfirmation, Error) with every transition in the §4.2 diagram, unit-tested; an invalid transition logs at `error` (§4.2) → done: `crates/kivo-core/src/session.rs` · verified: table test of all 170 state/input pairs, invalid transitions leave state unchanged and log at error
+- [x] **ARCH-25** · M0 · A Turn has a root `CancellationToken`; child tokens go to STT, the brain request, each tool call and TTS (§4.2) → done: `crates/kivo-core/src/turn.rs` (root token, child per stage) · verified: 4 tests (turn cancels stages, stage cancel is local, late stages start cancelled, waiting stage wakes)
 - [ ] **ARCH-26** · M1 · Stop, Esc, the overlay X, the emergency stop and barge-in cancel the turn token, and cancellation reaches every layer within 100 ms, enforced by a test (§4.2)
 - [ ] **ARCH-27** · M5 · A Task holds a graph of steps with dependencies and its own token, outlives turns, is persisted, and after a crash is reported as interrupted without auto-resuming side effects (§4.2)
 - [ ] **ARCH-28** · M1 · `tracing` spans T0 wake … T10 completion carry `turn_id`; a metrics subscriber stores per-turn timings in `turn_metrics` (§4.3)
@@ -328,9 +328,9 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 **Repository and toolchain (§7)**
 
 - [x] **ARCH-33** · M0 · Cargo workspace + pnpm workspace with every crate and app in the §7 layout → done: `Cargo.toml`, `crates/*`, `apps/*`, `pnpm-workspace.yaml` · verified: `cargo check --workspace`, `pnpm typecheck` (2026-09-21)
-- [~] **ARCH-34** · M0 · Rust stable with MSRV pinned in `rust-toolchain.toml`; `cargo fmt`; `clippy -D warnings` → partial: toolchain file, `rustfmt.toml`, clippy runs with zero warnings locally · missing: `-D warnings` enforced in CI (REL-03)
-- [ ] **ARCH-35** · M0 · `cargo deny` configured: licenses (GPL/AGPL denied in the default graph), advisories, bans (§7)
-- [~] **ARCH-36** · M0 · UI toolchain: Node LTS + pnpm, TypeScript strict, ESLint, Prettier, Vitest (§7) → partial: pnpm, TypeScript strict · missing: ESLint, Prettier, Vitest
+- [x] **ARCH-34** · M0 · Rust stable with MSRV pinned in `rust-toolchain.toml`; `cargo fmt`; `clippy -D warnings` → done: `rust-toolchain.toml` pins 1.97.0 (MSRV stays `rust-version` 1.90), `rustfmt.toml`, CI runs `cargo fmt --check` and clippy with `RUSTFLAGS=-D warnings` · verified: CI green on Windows, Ubuntu, macOS (2026-09-21)
+- [x] **ARCH-35** · M0 · `cargo deny` configured: licenses (GPL/AGPL denied in the default graph), advisories, bans (§7) → done: `deny.toml` (permissive allow-list, no GPL/AGPL, advisories, crates.io only, unmaintained checked for direct deps) · verified: `cargo deny check` clean locally with 0 warnings and in CI
+- [x] **ARCH-36** · M0 · UI toolchain: Node LTS + pnpm, TypeScript strict, Oxlint (type-aware; ESLint cannot run on TypeScript 7), Prettier, Vitest (§7) → done: pnpm 11.27.1, TypeScript strict, Oxlint type-aware (`.oxlintrc.json`), Prettier (`.prettierrc.json`), Vitest on jsdom (21 tests) · verified: all run clean in CI
 - [ ] **ARCH-37** · M7 · Playwright UI tests against the Tauri dev build where practical (§7)
 
 **Invariant enforcement (§8)**

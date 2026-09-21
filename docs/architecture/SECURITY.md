@@ -212,7 +212,7 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 **Secrets (§5)**
 
 - [ ] **SEC-17** · M3 · Secrets in Credential Manager (`keyring`) referenced as `secret://kivo/<provider>/<name>`; loaded only inside the adapter or tool executor (§5)
-- [ ] **SEC-18** · M0 · `Secret<String>` newtype: no `Display`, `Debug` prints `***`, no `Serialize`, zeroized on drop (§5)
+- [x] **SEC-18** · M0 · `Secret<String>` newtype: no `Display`, `Debug` prints `***`, no `Serialize`, zeroized on drop (§5) → done: `crates/kivo-core/src/secret.rs` · verified: tests for Debug `***`, expose, zeroize; no Display/Serialize impls
 - [ ] **SEC-19** · M3 · Secrets never reach prompts, logs, activity, diagnostics or IPC to the UI; the UI can only set (write-only) and ask the runtime to test (§5)
 
 **Privacy (§6)**
@@ -237,5 +237,5 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 - [~] **SEC-28** · M0 · Tauri: strict CSP, no remote content, `withGlobalTauri: false`, no `shell` plugin, minimal `capabilities/*.json` per window (the overlay window gets almost nothing) (§9) → partial: CSP set, `withGlobalTauri` off (default), no shell plugin, main-window capability limited to core + window controls · missing: overlay window and its capability file
 - [ ] **SEC-29** · M0 · IPC hardening: user-only DACL, reject remote clients, session token, schema validation, message size limit (§9, ARCH-14–16)
 - [ ] **SEC-30** · M4 · Native messaging host manifest allows only KIVO's extension ID; payload limits (§9)
-- [~] **SEC-31** · M0 · Dependencies: `cargo deny`, `pnpm audit`, lockfiles committed, Dependabot (§9) → partial: `Cargo.lock` and `pnpm-lock.yaml` committed, Dependabot alerts on · missing: `cargo deny`, `pnpm audit` in CI
+- [x] **SEC-31** · M0 · Dependencies: `cargo deny`, `pnpm audit`, lockfiles committed, Dependabot (§9) → done: `cargo deny` and `pnpm audit --audit-level high` in CI, `Cargo.lock` + `pnpm-lock.yaml` committed and used with --locked/--frozen-lockfile, Dependabot alerts + updates · verified: CI green
 - [ ] **SEC-32** · M9 · Updates: minisign-signed manifests + Authenticode binaries, both verified before running the installer (§9)

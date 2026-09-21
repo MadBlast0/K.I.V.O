@@ -92,9 +92,9 @@ draft release and generates the updater JSON:
 
 Status marks and the build protocol: [docs/README.md](../README.md).
 
-- [ ] **REL-01** · M0 · Conventional Commits, enforced by `pr-title.yml` (§1, §2)
-- [ ] **REL-02** · M0 · `release-please` Release PR bumping `Cargo.toml` (workspace), `tauri.conf.json` and `package.json`, writing `CHANGELOG.md`; merging tags `vX.Y.Z` (§1)
-- [ ] **REL-03** · M0 · `ci.yml` on every PR and push to `main`: Rust fmt, clippy `-D warnings`, tests and `cargo deny` on windows-latest, plus ubuntu-latest and macos-latest for the portable crates; UI install, typecheck, lint, Vitest; generated IPC types up to date; smoke benchmarks (§2, §3)
+- [~] **REL-01** · M0 · Conventional Commits, enforced by `pr-title.yml` (§1, §2) → partial: Conventional Commits enforced on pushed commits by the `commit-messages` job in `ci.yml` and on PR titles by `pr-title.yml` · missing: the PR-title check has not run yet (no PR opened)
+- [~] **REL-02** · M0 · `release-please` Release PR bumping `Cargo.toml` (workspace), `tauri.conf.json` and `package.json`, writing `CHANGELOG.md`; merging tags `vX.Y.Z` (§1) → partial: `release-please.yml` + config (vX.Y.Z tags, bumps Cargo.toml / tauri.conf.json / both package.json, refreshes Cargo.lock on the release branch); first run succeeded · missing: a Release PR (needs the first feat/fix commit; earlier commits were not Conventional)
+- [~] **REL-03** · M0 · `ci.yml` on every PR and push to `main`: Rust fmt, clippy `-D warnings`, tests and `cargo deny` on windows-latest, plus ubuntu-latest and macos-latest for the portable crates; UI install, typecheck, lint, Vitest; generated IPC types up to date; smoke benchmarks (§2, §3) → partial: `ci.yml` jobs green: Rust fmt/clippy -D warnings/test on Windows, portable crates on Ubuntu + macOS, cargo-deny, UI typecheck/lint/format/test/build/audit, ROADMAP sync check · missing: generated-IPC-types check (ARCH-18) and smoke benchmarks (BENCH-13), added with those items
 - [ ] **REL-04** · M0 · Required status checks added to the `main` ruleset once CI exists; Actions pinned by commit SHA (§4)
 - [ ] **REL-05** · M1 · `release.yml` on `v*` tags, Windows x64 first: sidecars built and copied to `src-tauri/binaries/<name>-<target-triple>`, `tauri-action` → draft GitHub Release with NSIS `.exe`, `.msi` and `latest.json` (§2)
 - [ ] **REL-06** · M1 · Install/launch smoke test on a clean Windows runner (silent install, start the runtime, IPC health, uninstall) and checksums before publishing a draft (§2)
@@ -103,4 +103,4 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 - [ ] **REL-09** · M9 · Platform signing steps (Authenticode `signCommand`; later Apple notarization; Linux `SHA256SUMS`/GPG) (§2)
 - [ ] **REL-10** · M9 · SBOM (`cargo cyclonedx` + npm) and `THIRD_PARTY_NOTICES` uploaded with each release (§2)
 - [ ] **REL-11** · M9 · `release` environment secrets (`TAURI_SIGNING_PRIVATE_KEY` + password, signing credentials), release jobs only on tags from `main`, a `production` approval for Stable (§2, §4)
-- [ ] **REL-12** · M0 · `codeql.yml` and Dependabot version updates (§2)
+- [x] **REL-12** · M0 · `codeql.yml` and Dependabot version updates (§2) → done: `codeql.yml` (JS/TS, Rust, Actions), `.github/dependabot.yml` (cargo, npm, actions; grouped) · verified: CodeQL run succeeded, Dependabot update runs started
