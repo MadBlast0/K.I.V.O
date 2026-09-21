@@ -234,11 +234,11 @@ real runtime data over IPC, not mockup data.
 
 **Lifecycle (§1)**
 
-- [ ] **UX-01** · M1 · First launch opens the Control Center on onboarding; a manual launch starts the runtime and shows the Control Center; a relaunch shows, unminimizes and focuses the main window (§1)
-- [ ] **UX-02** · M1 · Close (X, Alt+F4, taskbar) hides the window and KIVO keeps running ("On close, keep KIVO running", on); the first close shows a one-time toast with Settings and Quit (§1)
-- [ ] **UX-03** · M1 · Tray: left-click opens the Control Center; right-click menu Open KIVO · Pause/Resume listening · Hide overlay for 1 hour · Stop everything · Settings · Quit KIVO (§1)
-- [ ] **UX-04** · M1 · Tray icon states: normal, listening, paused (slashed mic), error (badge), updating (§1)
-- [ ] **UX-56** · M1 · Tray tooltip: "KIVO · <state>" plus the permission mode and running-task count (mockup → System surfaces)
+- [~] **UX-01** · M1 · First launch opens the Control Center on onboarding; a manual launch starts the runtime and shows the Control Center; a relaunch shows, unminimizes and focuses the main window (§1) → partial: a manual launch starts the runtime and shows the Control Center; a relaunch shows, unminimizes and focuses it; `--page` opens a page · verified: live run on Windows 11 (2026-09-21) · missing: first launch on onboarding (UX-33)
+- [~] **UX-02** · M1 · Close (X, Alt+F4, taskbar) hides the window and KIVO keeps running ("On close, keep KIVO running", on); the first close shows a one-time toast with Settings and Quit (§1) → partial: closing hides the window while KIVO runs (and really closes when the runtime is gone, since there is no tray then) · verified: live run on Windows 11 (2026-09-21) · missing: the one-time first-close toast (UX-57) and honoring the "keep running" setting
+- [~] **UX-03** · M1 · Tray: left-click opens the Control Center; right-click menu Open KIVO · Pause/Resume listening · Hide overlay for 1 hour · Stop everything · Settings · Quit KIVO (§1) → partial: left-click opens the Control Center; menu Open KIVO · Pause/Resume listening (enabled by state) · Settings · Quit KIVO, all working · verified: tray unit tests, live · missing: Hide overlay for 1 hour (UX-06), Stop everything (SEC-25), the permission-mode submenu (SEC-04)
+- [~] **UX-04** · M1 · Tray icon states: normal, listening, paused (slashed mic), error (badge), updating (§1) → partial: the icon follows the state (normal, listening, paused greyed, error and updating with a status dot) · missing: distinct listening art and the slashed-mic paused icon
+- [~] **UX-56** · M1 · Tray tooltip: "KIVO · <state>" plus the permission mode and running-task count (mockup → partial: tooltip "KIVO · Ready" + "Auto mode · 0 tasks running", updated live · missing: the live mode (SEC-04) and the real task count (M5)
 - [ ] **UX-57** · M1 · Actionable Windows notifications with buttons routed back to the runtime: first close (Settings / Quit KIVO), microphone blocked (Open Windows settings / Type instead); later sources reuse the same template (§1, §7)
 - [ ] **UX-58** · M5 · Notification reply field ("Task finished … Want me to commit?" → Reply to KIVO / Send) and a taskbar jump list (Routines, New conversation, Pause listening, Stop everything) (mockup → System surfaces)
 - [ ] **UX-59** · M9 · "What's new in KIVO x.y" dialog shown once after an update, with Release notes / Got it (mockup → System surfaces, DIST-08)
@@ -262,7 +262,7 @@ real runtime data over IPC, not mockup data.
 **Control Center (§3)**
 
 - [~] **UX-18** · M7 · Navigation: 13 items in the §3 groups with in-page tabs, plus Settings (§3) → partial: sidebar with all items and page tabs component (`components/layout/Shell.tsx`, `PageTabs`) · missing: the pages
-- [ ] **UX-19** · M1 · Home: status orb and "Listening for Hey Kivo", Talk / Pause listening / mode picker, Running and Recent lists (mockup → Home) (§3, plan §81)
+- [~] **UX-19** · M1 · Home: status orb and "Listening for Hey Kivo", Talk / Pause listening / mode picker, Running and Recent lists (mockup → partial: `pages/Home.tsx` with the status orb (animated only while listening/speaking), the state title and detail, Pause/Resume listening, Start KIVO when disconnected, version; all from the runtime · verified: live run on Windows 11 (2026-09-21) · missing: Talk (VOICE-41), mode picker (SEC-04), Running and Recent lists (ARCH-23, M5)
 - [ ] **UX-20** · M1 · Activity: timeline of turns, tool calls and results from the Activity table (mockup → Activity) (§3, plan §83)
 - [ ] **UX-21** · M3 · Chat: threads list, conversation with brain switcher, attachments, tool activity, cancel, context meter, Compact now (mockup → Chat; CONVERSATION §0–1)
 - [ ] **UX-22** · M3 · Brains page (Brains / Context tabs): providers with found-on-this-PC, add/test/remove, profiles, free options labelled (mockup → Brains)

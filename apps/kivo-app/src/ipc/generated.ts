@@ -66,3 +66,28 @@ export type ProtocolVersion = { major: number, minor: number, };
 export type Welcome = { protocolVersion: ProtocolVersion, runtimeVersion: string, snapshot: StateSnapshot, };
 
 export type RpcError = { code: number, message: string, };
+
+export type LinkStatus = "connecting" | "connected" | "reconnecting" | "incompatible";
+
+export type Link = { status: LinkStatus, 
+/**
+ * The connected runtime's version.
+ */
+runtimeVersion: string | null, 
+/**
+ * The last state received; kept while reconnecting so the UI can show what it last knew.
+ */
+snapshot: StateSnapshot | null, 
+/**
+ * Why the link is not connected, when there is something to say.
+ */
+message: string | null, };
+
+/** IPC methods the UI can call. */
+export const Method = {
+  sessionPause: "session.pause",
+  sessionResume: "session.resume",
+  runtimeQuit: "runtime.quit",
+} as const;
+
+export type Method = (typeof Method)[keyof typeof Method];

@@ -10,7 +10,7 @@ use kivo_core::event::{
 };
 use kivo_core::{Event, EventMeta, ProfileId, SessionState, TaskId, Timestamp, TraceId, TurnId};
 use kivo_ipc::protocol::ProtocolVersion;
-use kivo_ipc::{RpcError, StateSnapshot, Welcome};
+use kivo_ipc::{Link, LinkStatus, RpcError, StateSnapshot, Welcome, method};
 use std::path::PathBuf;
 use ts_rs::{Config, TS};
 
@@ -48,6 +48,9 @@ fn render() -> String {
         ProtocolVersion::decl(&cfg),
         Welcome::decl(&cfg),
         RpcError::decl(&cfg),
+        // the app's connection to the runtime
+        LinkStatus::decl(&cfg),
+        Link::decl(&cfg),
     ];
     let mut out = String::from(
         "// Generated from the Rust IPC types by crates/kivo-ipc/tests/ts_bindings.rs. Do not edit.\n\
@@ -58,6 +61,17 @@ fn render() -> String {
         out.push_str(&decl);
         out.push('\n');
     }
+    // The requests the UI sends through the app (`runtime_request`).
+    let methods = [
+        ("sessionPause", method::SESSION_PAUSE),
+        ("sessionResume", method::SESSION_RESUME),
+        ("runtimeQuit", method::RUNTIME_QUIT),
+    ];
+    out.push_str("\n/** IPC methods the UI can call. */\nexport const Method = {\n");
+    for (name, value) in methods {
+        out.push_str(&format!("  {name}: \"{value}\",\n"));
+    }
+    out.push_str("} as const;\n\nexport type Method = (typeof Method)[keyof typeof Method];\n");
     out
 }
 

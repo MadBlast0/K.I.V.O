@@ -16,9 +16,16 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+# The app's only link to KIVO is IPC (ARCHITECTURE §8): no store, secrets or tools crates here.
+kivo-core.workspace = true
+kivo-ipc.workspace = true
+kivo-platform.workspace = true
 tauri = { version = "2", features = [] }
+tauri-plugin-single-instance = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+tokio = { workspace = true, features = ["sync", "time", "macros"] }
+tokio-util.workspace = true
 
 [lints]
 workspace = true

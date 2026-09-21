@@ -54,15 +54,18 @@ never call Win32 (or any OS API) directly from core logic.
 ## Status
 
 Phase 0 (specification) and **D0 (design foundation)** complete. **M0 — foundations and
-measurement** in progress: CI (Windows + Linux/macOS portable crates, cargo-deny, UI checks),
-`kivo-core` (events, session state machine, turns, `Secret`). Progress per milestone is in the
+measurement** in progress: core types, platform traits, store, secured IPC, and the two
+processes working together (`kivo-runtime` with tray, single instance and app supervision;
+the app connecting, starting the runtime and showing its live state). Remaining in M0: the
+spikes and benchmarks. Progress per milestone is in the
 table at the top of [docs/ROADMAP.md](docs/ROADMAP.md). Update this section as milestones land.
 
 ## Build, run, check
 
 | Task | Command |
 |---|---|
-| Run the desktop app with hot reload | `preview.bat` (or `pnpm dev`) |
+| Run the desktop app with hot reload | `preview.bat` (or `pnpm dev`; it builds `kivo-runtime` first, and the app starts it). Quit KIVO from the tray or Ctrl+K to stop the runtime too |
+| Run the runtime, which launches and supervises the app | `cargo run -p kivo-runtime` (`-- --no-app` for the runtime alone) |
 | UI only, in a browser (port 1420) | `pnpm ui` |
 | Typecheck UI | `pnpm typecheck` |
 | Build UI | `pnpm --filter kivo-app build` |

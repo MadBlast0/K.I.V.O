@@ -23,6 +23,7 @@ use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::{mpsc, watch};
 use tokio_util::sync::CancellationToken;
+use tokio_util::task::TaskTracker;
 
 pub type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;
 
@@ -56,7 +57,7 @@ struct Shared {
     handler: Arc<dyn Handler>,
     bus: EventBus,
     state: watch::Receiver<StateSnapshot>,
-    clients: watch::Sender<usize>,
+    clients: watch::Sender<Vec<String>>,
 }
 
 impl Shared {
@@ -73,7 +74,7 @@ pub struct Server {
     #[cfg(unix)]
     listener: tokio::net::UnixListener,
     config: ServerConfig,
-    clients: watch::Sender<usize>,
+    clients: watch::Sender<Vec<String>>,
 }
 
 impl Server {
@@ -88,17 +89,20 @@ impl Server {
             #[cfg(unix)]
             listener,
             config,
-            clients: watch::Sender::new(0),
+            clients: watch::Sender::new(Vec::new()),
         })
     }
 
-    /// How many clients are connected (past `hello`), updated live.
-    pub fn connected_clients(&self) -> watch::Receiver<usize> {
+    /// The names of the connected clients (past `hello`), updated live. The runtime uses it to
+    /// see whether the app is up (`APP_CLIENT`). Names are self-declared, so they only inform
+    /// supervision, never security.
+    pub fn connected_clients(&self) -> watch::Receiver<Vec<String>> {
         self.clients.subscribe()
     }
 
-    /// Accepts connections until `shutdown` is cancelled. `state` is the runtime's current state;
-    /// every change is pushed to connected clients.
+    /// Accepts connections until `shutdown` is cancelled, then waits (up to a second) for every
+    /// connection to deliver what was already published, such as `ShuttingDown`. `state` is the
+    /// runtime's current state; every change is pushed to connected clients.
     pub async fn run(
         self,
         handler: Arc<dyn Handler>,
@@ -115,34 +119,41 @@ impl Server {
             clients: self.clients,
         });
 
-        #[cfg(windows)]
-        {
-            let mut pending = self.first;
-            loop {
-                tokio::select! {
-                    connected = pending.connect() => {
-                        connected?;
-                        let next = transport::create_server(&endpoint, false)?;
-                        let stream = std::mem::replace(&mut pending, next);
-                        tokio::spawn(serve(stream, Arc::clone(&shared), shutdown.child_token()));
+        let connections = TaskTracker::new();
+        let accepted: io::Result<()> = async {
+            #[cfg(windows)]
+            {
+                let mut pending = self.first;
+                loop {
+                    tokio::select! {
+                        connected = pending.connect() => {
+                            connected?;
+                            let next = transport::create_server(&endpoint, false)?;
+                            let stream = std::mem::replace(&mut pending, next);
+                            connections.spawn(serve(stream, Arc::clone(&shared), shutdown.child_token()));
+                        }
+                        () = shutdown.cancelled() => return Ok(()),
                     }
-                    () = shutdown.cancelled() => return Ok(()),
+                }
+            }
+            #[cfg(unix)]
+            {
+                let _ = endpoint;
+                loop {
+                    tokio::select! {
+                        accepted = self.listener.accept() => {
+                            let (stream, _) = accepted?;
+                            connections.spawn(serve(stream, Arc::clone(&shared), shutdown.child_token()));
+                        }
+                        () = shutdown.cancelled() => return Ok(()),
+                    }
                 }
             }
         }
-        #[cfg(unix)]
-        {
-            let _ = endpoint;
-            loop {
-                tokio::select! {
-                    accepted = self.listener.accept() => {
-                        let (stream, _) = accepted?;
-                        tokio::spawn(serve(stream, Arc::clone(&shared), shutdown.child_token()));
-                    }
-                    () = shutdown.cancelled() => return Ok(()),
-                }
-            }
-        }
+        .await;
+        connections.close();
+        let _ = tokio::time::timeout(Duration::from_secs(1), connections.wait()).await;
+        accepted
     }
 }
 
@@ -158,12 +169,29 @@ fn snapshot_note(snapshot: StateSnapshot) -> Result<Notification, serde_json::Er
     serde_json::to_value(snapshot).map(|s| Notification::new(method::SNAPSHOT, s))
 }
 
-/// Decrements the connected-client count when a connection ends, however it ends.
-struct ClientCount<'a>(&'a watch::Sender<usize>);
+/// Lists a client as connected until its connection ends, however it ends.
+struct Listed<'a> {
+    clients: &'a watch::Sender<Vec<String>>,
+    name: String,
+}
 
-impl Drop for ClientCount<'_> {
+impl<'a> Listed<'a> {
+    fn new(clients: &'a watch::Sender<Vec<String>>, name: &str) -> Self {
+        clients.send_modify(|c| c.push(name.to_owned()));
+        Self {
+            clients,
+            name: name.to_owned(),
+        }
+    }
+}
+
+impl Drop for Listed<'_> {
     fn drop(&mut self) {
-        self.0.send_modify(|n| *n = n.saturating_sub(1));
+        self.clients.send_modify(|c| {
+            if let Some(i) = c.iter().position(|n| *n == self.name) {
+                c.swap_remove(i);
+            }
+        });
     }
 }
 
@@ -177,8 +205,7 @@ where
         return;
     };
     tracing::info!(%client, "IPC client connected");
-    shared.clients.send_modify(|n| *n += 1);
-    let _counted = ClientCount(&shared.clients);
+    let _listed = Listed::new(&shared.clients, &client);
 
     // Subscribed before the welcome is built, so nothing between the snapshot and the first
     // notification can be lost.
@@ -199,7 +226,10 @@ where
 
     let (replies_tx, mut replies) = mpsc::channel::<Response>(64);
     loop {
+        // Biased, with shutdown last: an event published just before shutdown (`ShuttingDown`)
+        // still goes out.
         let note = tokio::select! {
+            biased;
             frame = io.next() => {
                 let Some(Ok(frame)) = frame else { break }; // closed, I/O error or oversized frame
                 let Ok(Message::Request(request)) = serde_json::from_slice::<Message>(&frame) else {

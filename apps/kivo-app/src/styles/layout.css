@@ -286,3 +286,101 @@
   font-size: 12px;
   color: var(--text-2);
 }
+
+/* Sidebar status line (the runtime connection and state). */
+.k-side__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  margin-top: 6px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--text-2);
+  font-size: 12px;
+  text-align: start;
+}
+.k-side__status:hover {
+  background: var(--fill);
+}
+.k-side__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--text-3);
+}
+.k-side__dot.is-ok {
+  background: var(--green);
+}
+.k-side__dot.is-busy {
+  background: var(--orange);
+}
+
+/* Home: the status orb, what KIVO is doing, and the controls for it. */
+.k-home {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding-block: 38px 10px;
+}
+.k-home__orb {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  background: #000;
+  display: grid;
+  place-items: center;
+  margin-block-end: 18px;
+  box-shadow: 0 18px 40px -18px rgba(0, 0, 0, 0.6);
+}
+.k-home__orb > span {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff 0 12%, #9ad3ff 32%, #3a6dff 72%, #1b1f6b);
+  box-shadow: 0 0 24px rgba(120, 170, 255, 0.7);
+  transition:
+    opacity 200ms var(--ease-out),
+    filter 200ms var(--ease-out);
+}
+/* Animated only while KIVO listens or speaks: nothing runs at idle (UX §3). */
+.k-home__orb.is-live > span {
+  animation: k-breathe 4.5s ease-in-out infinite;
+}
+.k-home__orb.is-dim > span {
+  filter: grayscale(1);
+  opacity: 0.45;
+  box-shadow: none;
+}
+.k-home__title {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  margin: 0;
+}
+.k-home__detail {
+  color: var(--text-2);
+  margin-block: 6px 0;
+  max-inline-size: 42ch;
+}
+.k-home__actions {
+  display: flex;
+  gap: 8px;
+  margin-block-start: 18px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.k-home__note {
+  margin-block-start: 18px;
+  max-inline-size: 460px;
+  text-align: start;
+}
+.k-home__meta {
+  color: var(--text-3);
+  font-size: 12px;
+  margin-block: 22px 0;
+}

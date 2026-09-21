@@ -5,6 +5,7 @@
 
 pub mod client;
 mod frame;
+pub mod link;
 pub mod protocol;
 pub mod server;
 pub mod token;
@@ -12,7 +13,10 @@ pub mod transport;
 
 pub use client::{Client, ClientError, Connection, connect, connect_with_backoff};
 pub use frame::MAX_FRAME;
-pub use protocol::{Notification, PROTOCOL_VERSION, RpcError, StateSnapshot, Welcome};
+pub use link::{Link, LinkStatus};
+pub use protocol::{
+    APP_CLIENT, Notification, PROTOCOL_VERSION, RpcError, StateSnapshot, Welcome, method,
+};
 pub use server::{BoxFuture, Handler, Server, ServerConfig};
 pub use token::SessionToken;
 

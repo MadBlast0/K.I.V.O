@@ -6,7 +6,7 @@ use crate::transport::{self, unique_endpoint};
 use crate::*;
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
-use kivo_core::event::{EventKind, UiEvent};
+use kivo_core::event::{EventKind, SystemEvent, UiEvent};
 use kivo_core::{Event, EventBus, SessionState};
 use serde_json::{Value, json};
 use std::sync::Arc;
@@ -39,7 +39,7 @@ struct Running {
     token: String,
     bus: EventBus,
     state: watch::Sender<StateSnapshot>,
-    clients: watch::Receiver<usize>,
+    clients: watch::Receiver<Vec<String>>,
     shutdown: CancellationToken,
     task: JoinHandle<std::io::Result<()>>,
 }
@@ -378,18 +378,36 @@ async fn state_changes_are_pushed_to_every_client() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn the_server_counts_connected_clients() {
+async fn the_server_lists_connected_clients_by_name() {
     let mut rt = start();
-    assert_eq!(*rt.clients.borrow(), 0);
-    let a = connect(&rt.endpoint, &rt.token, "a").await.unwrap();
-    let b = connect(&rt.endpoint, &rt.token, "b").await.unwrap();
-    rt.clients.wait_for(|n| *n == 2).await.unwrap();
+    assert!(rt.clients.borrow().is_empty());
+    let a = connect(&rt.endpoint, &rt.token, APP_CLIENT).await.unwrap();
+    let b = connect(&rt.endpoint, &rt.token, APP_CLIENT).await.unwrap();
+    rt.clients.wait_for(|c| c.len() == 2).await.unwrap();
     drop(a);
-    rt.clients.wait_for(|n| *n == 1).await.unwrap();
+    rt.clients.wait_for(|c| *c == [APP_CLIENT]).await.unwrap();
     drop(b);
-    rt.clients.wait_for(|n| *n == 0).await.unwrap();
-    // A refused client is never counted.
+    rt.clients.wait_for(Vec::is_empty).await.unwrap();
+    // A refused client is never listed.
     let _ = connect(&rt.endpoint, &"0".repeat(64), "intruder").await;
-    assert_eq!(*rt.clients.borrow(), 0);
+    assert!(rt.clients.borrow().is_empty());
     rt.shutdown.cancel();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_event_published_just_before_shutdown_is_still_delivered() {
+    for _ in 0..20 {
+        let rt = start();
+        let mut conn = connect(&rt.endpoint, &rt.token, "t").await.unwrap();
+        rt.bus
+            .publish(Event::new(EventKind::System(SystemEvent::ShuttingDown)));
+        rt.shutdown.cancel();
+        let note = tokio::time::timeout(Duration::from_secs(2), conn.notifications.recv())
+            .await
+            .unwrap()
+            .expect("the event arrives before the connection closes");
+        assert_eq!(note.method, method::EVENT);
+        assert_eq!(note.params["event"]["type"], "shuttingDown");
+        rt.task.await.unwrap().unwrap();
+    }
 }

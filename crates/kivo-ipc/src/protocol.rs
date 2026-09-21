@@ -28,9 +28,19 @@ pub mod method {
     pub const STATE: &str = "state.get";
     /// Runtime → client notification: one event from the bus.
     pub const EVENT: &str = "event";
-    /// Runtime → client notification: a full snapshot (after events were missed).
+    /// Runtime → client notification: a full snapshot (on every state change, and after events
+    /// were missed).
     pub const SNAPSHOT: &str = "snapshot";
+    /// Client → runtime: stop listening (the mic is released); only from Ready or a follow-up.
+    pub const SESSION_PAUSE: &str = "session.pause";
+    /// Client → runtime: listen again after a pause.
+    pub const SESSION_RESUME: &str = "session.resume";
+    /// Client → runtime: quit KIVO (UX §1). The runtime announces `ShuttingDown`, then stops.
+    pub const RUNTIME_QUIT: &str = "runtime.quit";
 }
+
+/// The name the desktop app gives in `hello`; the runtime supervises the client with this name.
+pub const APP_CLIENT: &str = "kivo-app";
 
 /// `hello` parameters.
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
@@ -151,6 +161,8 @@ impl RpcError {
     pub const UNAUTHORIZED: i32 = -32001;
     /// Different protocol major version.
     pub const INCOMPATIBLE: i32 = -32002;
+    /// The request is valid but does not fit the current state; the message says why.
+    pub const REFUSED: i32 = -32010;
 
     pub fn new(code: i32, message: impl Into<String>) -> Self {
         Self {

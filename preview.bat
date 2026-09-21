@@ -1,7 +1,7 @@
 @echo off
 rem Opens the KIVO desktop app with hot reload.
 rem   UI changes (apps\kivo-app\src) apply instantly; Rust changes rebuild and restart the app.
-rem   Close the KIVO window or press Ctrl+C here to stop.
+rem   Ctrl+C here stops the app; quit KIVO from the tray (or Ctrl+K > Quit KIVO) to stop it all.
 setlocal
 cd /d "%~dp0"
 
