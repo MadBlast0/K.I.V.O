@@ -10,6 +10,8 @@ mod args;
 mod core;
 #[cfg(windows)]
 mod hotkeys;
+#[cfg(windows)]
+mod mic;
 mod rpc;
 #[cfg(windows)]
 mod tray;
@@ -162,6 +164,9 @@ async fn run(args: Args, paths: &Paths, config: kivo_core::KivoConfig, writable:
         writable.then(|| paths.config_file()),
     ));
     let clients = server.connected_clients();
+    // The mic level for the Island's waveform (ARCH-20), published only while listening.
+    let (levels, levels_rx) = tokio::sync::watch::channel(0.0_f32);
+    let server = server.with_levels(levels_rx);
     let ipc = tokio::spawn(server.run(
         Arc::new(rpc::Rpc::new(Arc::clone(&core))),
         core.bus.clone(),
@@ -171,6 +176,11 @@ async fn run(args: Args, paths: &Paths, config: kivo_core::KivoConfig, writable:
 
     #[cfg(windows)]
     let tray = show_tray.then(|| tokio::spawn(tray::run(Arc::clone(&core))));
+
+    #[cfg(windows)]
+    let microphone = tokio::spawn(mic::run(Arc::clone(&core), levels));
+    #[cfg(not(windows))]
+    drop(levels);
 
     #[cfg(windows)]
     let push_to_talk = tokio::spawn(hotkeys::run(
@@ -227,6 +237,7 @@ async fn run(args: Args, paths: &Paths, config: kivo_core::KivoConfig, writable:
             let _ = tray.await;
         }
         let _ = push_to_talk.await;
+        let _ = microphone.await;
     }
     if let Some(supervisor) = supervisor {
         let _ = supervisor.await;

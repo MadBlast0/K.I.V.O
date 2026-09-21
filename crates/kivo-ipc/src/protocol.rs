@@ -39,6 +39,9 @@ pub mod method {
     pub const SESSION_RESUME: &str = "session.resume";
     /// Client → runtime: quit KIVO (UX §1). The runtime announces `ShuttingDown`, then stops.
     pub const RUNTIME_QUIT: &str = "runtime.quit";
+    /// Runtime → client notification: the microphone level, `{ "level": 0.0–1.0 }`, about 30 times
+    /// a second while listening (ARCHITECTURE §3).
+    pub const LEVELS: &str = "levels";
     /// Client → runtime: switch the permission mode (`{ "mode": "plan" }`). Only the user does
     /// this, from the UI or the hotkey, never a tool or voice alone (SECURITY §1.1).
     pub const PERMISSIONS_SET_MODE: &str = "permissions.setMode";

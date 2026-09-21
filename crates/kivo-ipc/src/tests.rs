@@ -418,3 +418,37 @@ async fn an_event_published_just_before_shutdown_is_still_delivered() {
         rt.task.await.unwrap().unwrap();
     }
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn microphone_levels_stream_while_they_change() {
+    let endpoint = unique_endpoint();
+    let token = SessionToken::generate().unwrap();
+    let presented = token.as_str().to_owned();
+    let (levels, levels_rx) = watch::channel(0.0_f32);
+    let server = Server::bind(ServerConfig::new(endpoint.clone(), token, "test".into()))
+        .unwrap()
+        .with_levels(levels_rx);
+    let (_state, state_rx) = watch::channel(StateSnapshot {
+        session: SessionState::Listening,
+        mode: PermissionMode::Auto,
+        island_hidden: false,
+        revision: 0,
+    });
+    let shutdown = CancellationToken::new();
+    let task = tokio::spawn(server.run(
+        Arc::new(TestHandler),
+        EventBus::new(),
+        state_rx,
+        shutdown.clone(),
+    ));
+    let mut conn = connect(&endpoint, &presented, "t").await.unwrap();
+    levels.send_replace(0.42);
+    let note = tokio::time::timeout(Duration::from_secs(2), conn.notifications.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(note.method, method::LEVELS);
+    assert!((note.params["level"].as_f64().unwrap() - 0.42).abs() < 1e-6);
+    shutdown.cancel();
+    task.await.unwrap().unwrap();
+}

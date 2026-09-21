@@ -57,6 +57,7 @@ struct Shared {
     handler: Arc<dyn Handler>,
     bus: EventBus,
     state: watch::Receiver<StateSnapshot>,
+    levels: Option<watch::Receiver<f32>>,
     clients: watch::Sender<Vec<String>>,
 }
 
@@ -75,6 +76,7 @@ pub struct Server {
     listener: tokio::net::UnixListener,
     config: ServerConfig,
     clients: watch::Sender<Vec<String>>,
+    levels: Option<watch::Receiver<f32>>,
 }
 
 impl Server {
@@ -90,7 +92,17 @@ impl Server {
             listener,
             config,
             clients: watch::Sender::new(Vec::new()),
+            levels: None,
         })
+    }
+
+    /// Streams the microphone level (0–1) to clients as `levels` notifications while it changes
+    /// (ARCHITECTURE §3: 30–60 Hz, only while the Island animates). The runtime updates it only
+    /// while listening, so nothing is sent otherwise.
+    #[must_use]
+    pub fn with_levels(mut self, levels: watch::Receiver<f32>) -> Self {
+        self.levels = Some(levels);
+        self
     }
 
     /// The names of the connected clients (past `hello`), updated live. The runtime uses it to
@@ -116,6 +128,7 @@ impl Server {
             handler,
             bus,
             state,
+            levels: self.levels,
             clients: self.clients,
         });
 
@@ -211,6 +224,7 @@ where
     // notification can be lost.
     let mut events = shared.bus.subscribe();
     let mut state = shared.state.clone();
+    let mut levels = shared.levels.clone();
     let welcome = Welcome {
         protocol_version: PROTOCOL_VERSION,
         runtime_version: shared.config.runtime_version.clone(),
@@ -258,6 +272,9 @@ where
                 if changed.is_err() { break } // the runtime is shutting down
                 snapshot_note(state.borrow_and_update().clone())
             }
+            Some(level) = level_changed(&mut levels) => {
+                Ok(Notification::new(method::LEVELS, serde_json::json!({ "level": level })))
+            }
             () = shutdown.cancelled() => break,
         };
         match note {
@@ -270,6 +287,18 @@ where
         }
     }
     tracing::info!(%client, "IPC client disconnected");
+}
+
+/// The next microphone level, or never when there is no level stream (or it has ended).
+async fn level_changed(levels: &mut Option<watch::Receiver<f32>>) -> Option<f32> {
+    let Some(rx) = levels else {
+        return std::future::pending().await;
+    };
+    if rx.changed().await.is_err() {
+        *levels = None;
+        return None;
+    }
+    Some(*rx.borrow_and_update())
 }
 
 /// Reads and checks `hello`. Returns the client's name and the request id to answer, or `None`

@@ -31,10 +31,14 @@ export interface IslandModel {
 
 export function Island({
   model,
+  level,
   className,
   "aria-label": ariaLabel,
 }: {
   model: IslandModel | null;
+  /** The live audio level (0–1) for the waveform; without it the waveform shows a sample envelope
+   * (the component gallery). */
+  level?: () => number;
   className?: string;
   "aria-label"?: string;
 }) {
@@ -87,7 +91,7 @@ export function Island({
                     {model.sub && <small>{model.sub}</small>}
                   </span>
                   {model.trail}
-                  {model.wave && <Waveform active voice={model.voice ?? "user"} />}
+                  {model.wave && <Waveform active voice={model.voice ?? "user"} level={level} />}
                 </div>
                 {model.body && <div className="k-island__body">{model.body}</div>}
               </motion.div>

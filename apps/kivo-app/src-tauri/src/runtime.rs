@@ -18,6 +18,8 @@ use tokio_util::sync::CancellationToken;
 
 /// Webview events.
 pub const LINK_EVENT: &str = "runtime://link";
+/// The microphone level (0–1) for the Island's waveform.
+pub const LEVEL_EVENT: &str = "runtime://level";
 pub const NAVIGATE_EVENT: &str = "runtime://navigate";
 
 /// Where the runtime listens, from the user's run folder.
@@ -220,6 +222,12 @@ pub async fn maintain(app: AppHandle) {
                     Ok(snapshot) => runtime.set_link(&app, |l| l.snapshot = Some(snapshot)),
                     Err(e) => eprintln!("KIVO: unreadable state from the runtime: {e}"),
                 },
+                // The mic level goes to the Island only (its waveform), ~30 times a second.
+                method::LEVELS => {
+                    if let Some(level) = note.params.get("level").and_then(Value::as_f64) {
+                        let _ = app.emit_to(crate::overlay::LABEL, LEVEL_EVENT, level);
+                    }
+                }
                 _ => {}
             }
         }

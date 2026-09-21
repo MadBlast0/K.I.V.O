@@ -6,7 +6,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { MotionConfig } from "motion/react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Island } from "../components/island/Island";
 import { islandForMode, islandForSession } from "../components/island/session";
 import type { Link, PermissionMode, SessionState } from "../ipc/generated";
@@ -29,6 +29,9 @@ function modeOf(link: Link): PermissionMode | null {
 
 export function Overlay() {
   const [session, setSession] = useState<SessionState | null>(null);
+  // The live mic level, read by the waveform on each frame (no re-render per level).
+  const level = useRef(0);
+  const readLevel = useCallback(() => level.current, []);
   const [mode, setMode] = useState<PermissionMode | null>(null);
   const [notice, setNotice] = useState<PermissionMode | null>(null);
   // A change of mode (not the first one seen) shows a notice for a moment.
@@ -48,10 +51,16 @@ export function Overlay() {
     let cancelled = false;
     let unlisten: (() => void) | undefined;
     void (async () => {
-      const stop = await listen<Link>("runtime://link", (e) => {
-        setSession(sessionOf(e.payload));
-        setMode(modeOf(e.payload));
-      });
+      const stops = await Promise.all([
+        listen<Link>("runtime://link", (e) => {
+          setSession(sessionOf(e.payload));
+          setMode(modeOf(e.payload));
+        }),
+        listen<number>("runtime://level", (e) => {
+          level.current = e.payload;
+        }),
+      ]);
+      const stop = () => stops.forEach((s) => s());
       if (cancelled) {
         stop();
         return;
@@ -109,7 +118,11 @@ export function Overlay() {
     // "user" follows Windows' "Animation effects" setting (DESIGN_SYSTEM §5).
     <MotionConfig reducedMotion="user">
       <div className="k-overlay" ref={root}>
-        <Island model={model} aria-label={typeof model?.label === "string" ? model.label : undefined} />
+        <Island
+          model={model}
+          level={readLevel}
+          aria-label={typeof model?.label === "string" ? model.label : undefined}
+        />
       </div>
     </MotionConfig>
   );
