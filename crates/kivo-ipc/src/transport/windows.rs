@@ -178,6 +178,27 @@ pub(crate) mod tests {
         }
     }
 
+    /// `D:P(A;;FA;;;<sid>)` as Windows prints it: well-known SIDs become aliases (the built-in
+    /// Administrator's SID prints as `LA`, as on CI runners).
+    fn expected_user_only_dacl() -> String {
+        let sd = UserOnly::new().unwrap();
+        // SAFETY: converting a valid descriptor to text; the buffer is freed with LocalFree.
+        unsafe {
+            let mut text = PWSTR::null();
+            ConvertSecurityDescriptorToStringSecurityDescriptorW(
+                sd.descriptor,
+                SDDL_REVISION_1,
+                DACL_SECURITY_INFORMATION,
+                &raw mut text,
+                None,
+            )
+            .unwrap();
+            let s = text.to_string().unwrap();
+            let _ = LocalFree(Some(HLOCAL(text.0.cast())));
+            s.replace(";GA;", ";FA;") // generic all is stored as file-all on pipes and files
+        }
+    }
+
     pub(crate) fn unique_endpoint() -> String {
         format!(r"\\.\pipe\kivo-test-{}", kivo_core::TraceId::new())
     }
@@ -194,10 +215,7 @@ pub(crate) mod tests {
         let pipe = create_server(&unique_endpoint(), true).unwrap();
         let sddl = dacl_of(HANDLE(pipe.as_raw_handle()), SE_KERNEL_OBJECT);
         // Protected DACL with exactly one allow entry (full access) for this user.
-        assert_eq!(
-            sddl,
-            format!("D:P(A;;FA;;;{})", current_user_sid().unwrap())
-        );
+        assert_eq!(sddl, expected_user_only_dacl());
     }
 
     #[tokio::test]
@@ -222,9 +240,6 @@ pub(crate) mod tests {
         restrict_file_to_user(&path).unwrap();
         let file = std::fs::File::open(&path).unwrap();
         let sddl = dacl_of(HANDLE(file.as_raw_handle()), SE_FILE_OBJECT);
-        assert_eq!(
-            sddl,
-            format!("D:P(A;;FA;;;{})", current_user_sid().unwrap())
-        );
+        assert_eq!(sddl, expected_user_only_dacl());
     }
 }
