@@ -32,6 +32,35 @@ Windows 11 desktop: [mockups/kivo-wake-concepts.html](mockups/kivo-wake-concepts
 - **Type:** system font; white text on black, with secondary text at 60% opacity.
 - **Next:** Control Center, onboarding and live-activity mockups in this language (D0).
 
+## 0.1 Full app mockup (v1, for finalization)
+
+[mockups/kivo-app.html](mockups/kivo-app.html) is one file with five sections:
+
+- **Island overlay:** 9 states and 4 live activities, top or bottom position, wake glow, and the
+  computer-use frame.
+- **Control Center:** 19 screens.
+- **Onboarding:** 12 steps.
+- **System surfaces:** tray menu, toasts, Windows Hello, capability-off prompt.
+- **Component library:** tokens, type and every control, with its implementation source.
+
+**Options to decide**, all switchable at the top of the mockup:
+
+| Option | Choices |
+|---|---|
+| Navigation | A · sidebar with groups / B · icon rail / C · top tabs |
+| Home | A · overview dashboard / B · minimal |
+| Accent | Blue / Green / Coral / Mono |
+| Density | Comfortable / Compact |
+| Default theme | Follow system (both themes are designed) |
+
+**Proposed structure changes from the plan** (all reflected in the mockup):
+
+- **Tools merged into Capabilities**, so there is one place for "what KIVO may do".
+- **Integrations renamed "Connectors"**, with "Works without connecting" shown first.
+- **Usage and Routines** added to the navigation.
+- **Primary buttons use "ink"** (black in light mode, white in dark mode), echoing the Island. The
+  accent color is reserved for status, focus and selection.
+
 ## 1. Round 1 directions (rejected)
 
 | Direction | Feel | Palette (dark) | Type candidates | GPU cost | Risk |
