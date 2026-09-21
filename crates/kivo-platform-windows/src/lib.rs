@@ -5,13 +5,16 @@
 
 mod audio;
 mod capabilities;
+mod com;
 pub mod hotkeys;
 pub mod instance;
+mod speech;
 mod system;
 pub mod tray;
 
 pub use audio::WindowsAudio;
 pub use capabilities::detect as detect_capabilities;
 pub use hotkeys::WindowsHotkeys;
+pub use speech::WindowsSpeech;
 pub use system::WindowsSystemInfo;
 pub use tray::{TrayEvent, WindowsTray};

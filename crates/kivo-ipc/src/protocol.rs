@@ -175,6 +175,8 @@ impl RpcError {
     pub const INCOMPATIBLE: i32 = -32002;
     /// The request is valid but does not fit the current state; the message says why.
     pub const REFUSED: i32 = -32010;
+    /// A speech engine in `kivo-infer` failed; the message is safe to show and speak.
+    pub const ENGINE: i32 = -32020;
 
     pub fn new(code: i32, message: impl Into<String>) -> Self {
         Self {

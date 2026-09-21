@@ -32,6 +32,13 @@ bytes = "1.12.1"
 getrandom = "0.4.3"
 ts-rs = { version = "12.0.1", features = ["uuid-impl", "serde-json-impl"] }
 windows = "0.62.2"
+# ONNX Runtime (MIT) for the speech models: Silero VAD in the runtime, STT/TTS in kivo-infer.
+ort = { version = "=2.0.0-rc.13", default-features = false, features = ["std", "download-binaries", "tls-native", "api-22"] }
+base64 = "0.22"
+rubato = "5.0"
+ringbuf = "0.5"
+sha2 = "0.10"
+ureq = { version = "3.4", default-features = false, features = ["native-tls", "gzip"] }
 kivo-core = { path = "crates/kivo-core" }
 kivo-platform = { path = "crates/kivo-platform" }
 kivo-ipc = { path = "crates/kivo-ipc" }

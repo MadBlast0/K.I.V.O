@@ -3,6 +3,7 @@
 //! 32-bit float at the device's own rate and channel count (Windows converts if it must); KIVO
 //! resamples to 16 kHz mono itself. Stream threads run under MMCSS "Audio" for steady timing.
 
+use crate::com::{Com, os_error};
 use kivo_platform::{
     AudioDevice, AudioIo, AudioStream, DeviceId, FrameSink, FrameSource, PlatformError,
     PlatformResult, StreamFormat,
@@ -19,10 +20,7 @@ use windows::Win32::Media::Audio::{
 };
 use windows::Win32::Media::Multimedia::WAVE_FORMAT_IEEE_FLOAT;
 use windows::Win32::System::Com::StructuredStorage::PropVariantToStringAlloc;
-use windows::Win32::System::Com::{
-    CLSCTX_ALL, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx, CoTaskMemFree,
-    CoUninitialize, STGM_READ,
-};
+use windows::Win32::System::Com::{CLSCTX_ALL, CoCreateInstance, CoTaskMemFree, STGM_READ};
 use windows::Win32::System::Threading::{
     AvRevertMmThreadCharacteristics, AvSetMmThreadCharacteristicsW, CreateEventW, INFINITE,
     SetEvent, WaitForMultipleObjects,
@@ -31,34 +29,6 @@ use windows::core::{HSTRING, PWSTR, w};
 
 /// The shared-mode buffer asked for: 100 ms (the engine picks its own period inside it).
 const BUFFER_100NS: i64 = 1_000_000;
-
-fn os_error(e: &windows::core::Error) -> PlatformError {
-    PlatformError::Os {
-        code: i64::from(e.code().0),
-        message: e.message(),
-    }
-}
-
-/// COM for the calling thread, released when dropped.
-struct Com;
-
-impl Com {
-    fn init() -> PlatformResult<Self> {
-        // SAFETY: initializing COM on this thread; balanced by `CoUninitialize` in Drop. An
-        // already-initialized thread (S_FALSE) still needs the matching uninitialize.
-        unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) }
-            .ok()
-            .map_err(|e| os_error(&e))?;
-        Ok(Self)
-    }
-}
-
-impl Drop for Com {
-    fn drop(&mut self) {
-        // SAFETY: balances the successful `CoInitializeEx` in `init` on this thread.
-        unsafe { CoUninitialize() };
-    }
-}
 
 fn enumerator() -> PlatformResult<IMMDeviceEnumerator> {
     // SAFETY: creating the system device enumerator on a COM-initialized thread.

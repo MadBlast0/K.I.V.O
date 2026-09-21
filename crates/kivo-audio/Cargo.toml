@@ -8,6 +8,8 @@ license.workspace = true
 publish = false
 
 [dependencies]
+rubato.workspace = true
+ringbuf.workspace = true
 
 [lints]
 workspace = true

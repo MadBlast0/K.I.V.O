@@ -15,6 +15,7 @@ mod paths;
 mod screen;
 mod secrets;
 mod shell;
+mod speech;
 mod system;
 mod types;
 
@@ -32,5 +33,6 @@ pub use shell::{
     Chord, HotkeyEvent, HotkeyId, Hotkeys, Notification, NotificationAction, Notifications, Tray,
     TrayIcon, TrayMenuItem,
 };
+pub use speech::{SpeechSynth, SynthAudio, SystemVoice};
 pub use system::{GpuInfo, SystemInfo, SystemSnapshot};
 pub use types::{DeviceId, Point, Rect, WindowId};
