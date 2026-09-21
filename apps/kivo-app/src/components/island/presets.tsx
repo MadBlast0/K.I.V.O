@@ -278,7 +278,7 @@ export function islandPreset(
                 { label: t("demo.cancel"), kind: "danger" },
               ]}
             />
-            <div className="k-island__hint" style={{ marginTop: 4, paddingLeft: 25 }}>
+            <div className="k-island__hint" style={{ marginTop: 4, paddingInlineStart: 25 }}>
               {t("demo.orAddReadItBack")}
             </div>
           </>
@@ -319,7 +319,7 @@ export function islandPreset(
           <div className="k-island__input">
             <Icon name="chat" />
             <span>{t("demo.summarizeThisPageIn3")}</span>
-            <span style={{ marginLeft: "auto", opacity: 0.5 }}>↵</span>
+            <span style={{ marginInlineStart: "auto", opacity: 0.5 }}>↵</span>
           </div>
         ),
       };
@@ -349,7 +349,7 @@ export function islandPreset(
         state,
         width: 300,
         label: t("demo.datasetZip"),
-        sub: t("demo.n1219Gb"),
+        sub: t("demo.downloadSize", { done: 1.2, total: 1.9 }),
         lead: <IslandApp text="↓" bg="#3B82F6" />,
         trail: <IslandProgress value={62} />,
       };

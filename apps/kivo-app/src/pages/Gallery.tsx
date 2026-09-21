@@ -428,9 +428,9 @@ export function Gallery() {
       <div
         style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginTop: 12 }}
       >
-        <Stat value="1.4 s" label={t("gallery.medianResponse")} />
-        <Stat value="$3.20" label={t("gallery.thisMonth")} />
-        <Stat value="128" label={t("gallery.actionsToday")} />
+        <Stat value={t("gallery.statSeconds", { value: 1.4 })} label={t("gallery.medianResponse")} />
+        <Stat value={t("gallery.statMoney", { value: 3.2 })} label={t("gallery.thisMonth")} />
+        <Stat value={t("gallery.statCount", { value: 128 })} label={t("gallery.actionsToday")} />
       </div>
 
       <Section title={t("gallery.alertsAndEmptyStates")} />
@@ -440,7 +440,7 @@ export function Gallery() {
         </Alert>
         <Alert kind="success" title={t("gallery.voiceProfileTrained")} />
         <Alert kind="warning" title={t("gallery.bypassIsOn")}>
-          {t("gallery.itTurnsOffIn52")}
+          {t("gallery.itTurnsOffIn52", { minutes: 52 })}
         </Alert>
         <Alert kind="danger" title={t("gallery.microphoneUnavailable")}>
           {t("gallery.anotherAppIsUsingIt")}

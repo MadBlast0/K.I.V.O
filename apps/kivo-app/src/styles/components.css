@@ -107,7 +107,7 @@
 .k-switch__thumb {
   position: absolute;
   top: 2px;
-  left: 2px;
+  inset-inline-start: 2px;
   width: 18px;
   height: 18px;
   border-radius: 50%;
@@ -117,6 +117,10 @@
 }
 .k-switch[data-checked] .k-switch__thumb {
   transform: translateX(16px);
+}
+/* Right-to-left layouts: the thumb travels the other way (UX-50). */
+.k-switch[data-checked] .k-switch__thumb:dir(rtl) {
+  transform: translateX(-16px);
 }
 
 /* ───────── Segmented control ───────── */
@@ -381,7 +385,7 @@
   height: 6px;
   border-radius: 50%;
   background: var(--acc);
-  margin-left: 6px;
+  margin-inline-start: 6px;
   vertical-align: middle;
 }
 
@@ -430,7 +434,8 @@
 }
 .k-budget > span {
   position: absolute;
-  inset: 0 auto 0 0;
+  inset-block: 0;
+  inset-inline-start: 0;
   border-radius: 6px;
   background: var(--acc);
 }
@@ -537,13 +542,13 @@
   content: "";
   position: absolute;
   top: 0;
-  right: 0;
-  left: 14px;
+  inset-inline-end: 0;
+  inset-inline-start: 14px;
   border-top: 1px solid var(--sep);
 }
 .k-row--icon + .k-row::before,
 .k-row + .k-row--icon::before {
-  left: 42px;
+  inset-inline-start: 42px;
 }
 .k-row--clickable {
   cursor: pointer;
@@ -626,7 +631,7 @@
   display: flex;
   gap: 12px;
   align-items: flex-start;
-  text-align: left;
+  text-align: start;
   border: 0;
   background: var(--group);
   box-shadow: 0 0 0 1px var(--border);
@@ -755,7 +760,7 @@
   box-shadow:
     0 0 0 1px var(--acc) inset,
     0 0 0 3px var(--acc-soft);
-  padding-right: 8px;
+  padding-inline-end: 8px;
   color: var(--acc);
   font-size: 12.5px;
 }
@@ -872,13 +877,13 @@
   color: var(--red);
 }
 .k-menu__shortcut {
-  margin-left: auto;
+  margin-inline-start: auto;
   font-size: 11.5px;
   color: var(--text-3);
-  padding-left: 16px;
+  padding-inline-start: 16px;
 }
 .k-menu__chevron {
-  margin-left: auto;
+  margin-inline-start: auto;
   width: 12px !important;
   height: 12px !important;
 }
@@ -980,7 +985,7 @@
 .k-sheet {
   position: fixed;
   top: 0;
-  right: 0;
+  inset-inline-end: 0;
   bottom: 0;
   width: min(420px, 100vw);
   background: var(--win);
@@ -993,6 +998,10 @@
 .k-sheet[data-starting-style],
 .k-sheet[data-ending-style] {
   transform: translateX(105%);
+}
+.k-sheet[data-starting-style]:dir(rtl),
+.k-sheet[data-ending-style]:dir(rtl) {
+  transform: translateX(-105%);
 }
 .k-sheet__head {
   display: flex;
@@ -1083,7 +1092,7 @@
   background: rgba(255, 255, 255, 0.1);
 }
 .k-palette__hint {
-  margin-left: auto;
+  margin-inline-start: auto;
   font-size: 11.5px;
   color: rgba(255, 255, 255, 0.4);
 }
@@ -1153,7 +1162,7 @@
   color: var(--isl-fg);
   overflow: hidden;
   font-size: 13px;
-  text-align: left;
+  text-align: start;
   box-shadow:
     0 0 0 0.5px rgba(255, 255, 255, 0.08) inset,
     0 16px 36px -14px rgba(0, 0, 0, 0.7);
@@ -1186,7 +1195,7 @@
 .k-island__label small {
   font-weight: 400;
   color: var(--isl-2);
-  margin-left: 6px;
+  margin-inline-start: 6px;
   font-size: 12.5px;
 }
 .k-island__body {
@@ -1543,7 +1552,7 @@
   color: var(--acc);
 }
 .k-win-toast__x {
-  margin-left: auto;
+  margin-inline-start: auto;
   font-size: 11px;
   color: var(--text-3);
 }

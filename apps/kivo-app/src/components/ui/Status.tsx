@@ -88,7 +88,7 @@ export function BudgetMeter({
     >
       <span style={{ width: `${Math.min(100, value)}%` }} />
       {thresholds.map((t) => (
-        <em key={t} style={{ left: `${t}%` }} />
+        <em key={t} style={{ insetInlineStart: `${t}%` }} />
       ))}
     </div>
   );

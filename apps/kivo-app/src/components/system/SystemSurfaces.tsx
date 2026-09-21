@@ -119,7 +119,7 @@ export function NativeMenuPreview({
                 className="k-native-menu"
                 role="menu"
                 tabIndex={-1}
-                style={{ position: "absolute", left: "100%", top: -4, width: 200, zIndex: 2 }}
+                style={{ position: "absolute", insetInlineStart: "100%", top: -4, width: 200, zIndex: 2 }}
               >
                 {e.sub.map((s) => (
                   <div

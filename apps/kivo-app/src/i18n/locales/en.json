@@ -43,7 +43,7 @@
     "start": "Start KIVO",
     "mode": "Permission mode",
     "hint": "Hold {ptt} to talk · {type} to type",
-    "downloading": "Getting speech recognition ready · {percent, number}%",
+    "downloading": "Getting speech recognition ready · {percent, number, ::percent scale/0.01}",
     "missing": "Speech recognition isn't installed yet.",
     "failed": "Speech recognition couldn't be set up: {message}",
     "retry": "Try again",
@@ -52,7 +52,8 @@
     "activity": "Activity",
     "nothingYet": "Nothing yet. Hold {ptt} and say “open Chrome”.",
     "version": "KIVO {version}",
-    "incompatible": "Quit KIVO from the tray, then open it again."
+    "incompatible": "Quit KIVO from the tray, then open it again.",
+    "downloadingSub": "{percent, number, ::percent scale/0.01}"
   },
   "activity": {
     "title": "Activity",
@@ -345,7 +346,7 @@
     "new": "New",
     "local": "Local",
     "youCanChangeThisIn": "You can change this in Settings.",
-    "itTurnsOffIn52": "It turns off in 52 minutes.",
+    "itTurnsOffIn52": "It turns off in {minutes, plural, one {# minute} other {# minutes}}.",
     "anotherAppIsUsingIt": "Another app is using it.",
     "notesExplainASettingIn": "Notes explain a setting in one or two lines, under its group.",
     "updated2MinutesAgo": "Updated 2 minutes ago",
@@ -372,7 +373,10 @@
     "whenIdle": "When idle",
     "openWindowsSettings": "Open Windows settings",
     "typeInstead": "Type instead",
-    "partial": "Play something calm on Spotify and"
+    "partial": "Play something calm on Spotify and",
+    "statSeconds": "{value, number, ::unit/second unit-width-narrow .0}",
+    "statMoney": "{value, number, ::currency/USD}",
+    "statCount": "{value, number}"
   },
   "demo": {
     "chip": {
@@ -445,7 +449,6 @@
     "spotify": "Spotify",
     "focus": "Focus",
     "datasetZip": "dataset.zip",
-    "n1219Gb": "1.2 / 1.9 GB",
     "fixingTests": "Fixing tests",
     "codex35": "Codex · 3/5",
     "controllingNotes": "Controlling Notes",
@@ -486,7 +489,8 @@
     "stepReminder": "{app} Call Maya · 5:00 PM",
     "confirmEdit": "Edit {file} (1 line) and run {command} in D:\\work\\kivo",
     "confirmEmail": "Send email to {to}: “Design review moved to Thursday”",
-    "draft": "Why are the runtime tests failing? Fix the cause, then re-run {command}."
+    "draft": "Why are the runtime tests failing? Fix the cause, then re-run {command}.",
+    "downloadSize": "{done, number, ::.0} / {total, number, ::unit/gigabyte .0}"
   },
   "surfaces": {
     "menu": {
