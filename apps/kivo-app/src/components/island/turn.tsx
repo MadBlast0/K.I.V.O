@@ -4,7 +4,7 @@
  * for the user. Only what the runtime reports is shown.
  */
 import type { TFunction } from "i18next";
-import type { ConfirmSpec, StateSnapshot, StepView, TurnView } from "../../ipc/generated";
+import type { Capability, ConfirmSpec, StateSnapshot, StepView, TurnView } from "../../ipc/generated";
 import {
   IslandActions,
   IslandApp,
@@ -21,6 +21,10 @@ export interface IslandHandlers {
   stop: () => void;
   answer: (callId: string, allow: boolean, always: boolean) => void;
   openControlCenter: () => void;
+  /** Runs the same request again (PLAN-18). */
+  retry: (text: string) => void;
+  /** Turns on the capability a request needed (CAP-02): only the one it needed, only on. */
+  enable: (capability: Capability) => void;
 }
 
 /** The card width for text content (UX §2: up to 520 px). */
@@ -123,7 +127,23 @@ export function islandForTurn(snapshot: StateSnapshot, t: TFunction, on: IslandH
 
   if (turn?.confirm) return confirmCard(turn.confirm, turn, t, on);
 
+  // Over a fullscreen app or during Focus, a dot is all that shows (UX-11; "hidden" never
+  // reaches here: the window stays hidden).
+  if (turn?.quiet === "tiny") return { state: "quiet", width: 36, label: "" };
+
   if (turn?.error) {
+    const offer = turn.capabilityOff;
+    const actions = offer
+      ? [
+          { label: t("island.turnOn"), kind: "primary" as const, onClick: () => on.enable(offer) },
+          { label: t("island.notNow"), onClick: on.stop },
+        ]
+      : [
+          ...(turn.transcript
+            ? [{ label: t("island.retry"), kind: "primary" as const, onClick: () => on.retry(turn.transcript) }]
+            : []),
+          { label: t("island.openControlCenter"), onClick: on.openControlCenter },
+        ];
     return {
       state: `error-${turn.id}`,
       width: CARD,
@@ -134,8 +154,28 @@ export function islandForTurn(snapshot: StateSnapshot, t: TFunction, on: IslandH
           <Heard turn={turn} />
           {turn.steps.length > 0 && <Steps steps={turn.steps} />}
           <div className="k-island__answer">{turn.error}</div>
-          <Footer t={t} on={on} stop={false} />
+          <IslandActions actions={actions} hint={false} />
         </>
+      ),
+    };
+  }
+
+  // A request that needed a capability that is off (CAP-02): its answer offers to turn it on.
+  if (turn?.capabilityOff && turn.answer) {
+    const offer = turn.capabilityOff;
+    return {
+      state: `capability-${turn.id}`,
+      width: CARD,
+      label: turn.answer,
+      lead: <IslandDot color="#FFC857" />,
+      body: (
+        <IslandActions
+          hint={false}
+          actions={[
+            { label: t("island.turnOn"), kind: "primary", onClick: () => on.enable(offer) },
+            { label: t("island.notNow"), onClick: on.stop },
+          ]}
+        />
       ),
     };
   }

@@ -74,8 +74,13 @@ impl Runtime {
             .snapshot
             .as_ref()
             .filter(|_| link.status == LinkStatus::Connected);
-        // While the Island is hidden for an hour, it shows nothing at all.
-        let island_hidden = snapshot.is_some_and(|s| s.island_hidden);
+        // While the Island is hidden for an hour, or a fullscreen app / Focus asks it to stay out
+        // of the way (UX-11), it shows nothing at all.
+        let island_hidden = snapshot.is_some_and(|s| {
+            s.island_hidden
+                || s.turn.as_ref().and_then(|t| t.quiet)
+                    == Some(kivo_ipc::protocol::QuietIsland::Hidden)
+        });
         crate::overlay::apply(
             app,
             snapshot.map(|s| s.session).filter(|_| !island_hidden),

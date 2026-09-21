@@ -85,7 +85,16 @@ confirm: ConfirmSpec | null,
 /**
  * The app the action is aimed at, for the Island's leading icon (UX §8.1).
  */
-targetApp: string | null, };
+targetApp: string | null, 
+/**
+ * A capability this request needed that is off (CAP-02): the Island offers to turn it on.
+ */
+capabilityOff: Capability | null, 
+/**
+ * A fullscreen app or Focus is on: the Island hides or shrinks to a dot, and KIVO only
+ * uses sounds (UX §2, UX-11).
+ */
+quiet: QuietIsland | null, };
 
 export type StepView = { 
 /**
@@ -102,6 +111,8 @@ title: string, status: StepStatus,
 detail: string | null, };
 
 export type SpeechStatus = { "state": "ready" } | { "state": "downloading", percent: number, } | { "state": "missing" } | { "state": "failed", message: string, };
+
+export type QuietIsland = "hidden" | "tiny";
 
 export type Residency = "unloaded" | "warming" | "warm" | "active" | "idle" | "unloading";
 

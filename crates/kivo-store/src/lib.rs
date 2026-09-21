@@ -3,6 +3,7 @@
 //! `kivo-platform::Secrets`. Speech models are downloaded and verified by `models`.
 
 pub mod config;
+pub mod crashes;
 pub mod db;
 pub mod logging;
 pub mod models;

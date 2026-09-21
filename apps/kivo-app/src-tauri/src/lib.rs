@@ -138,6 +138,18 @@ pub fn run() {
                         let _ = webview.as_ref().hide();
                     }
                     let _ = window.hide();
+                    // The runtime decides what closing means: keep running (and, the first time,
+                    // say so in a notification), or quit when "keep running" is off (UX-02).
+                    let app = window.app_handle().clone();
+                    tauri::async_runtime::spawn(async move {
+                        let runtime = app.state::<Runtime>();
+                        if let Err(e) = runtime
+                            .request(kivo_ipc::method::UI_WINDOW_CLOSED, Value::Null)
+                            .await
+                        {
+                            eprintln!("KIVO: couldn't report the closed window: {e}");
+                        }
+                    });
                 }
             }
         })

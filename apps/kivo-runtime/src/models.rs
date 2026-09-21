@@ -18,6 +18,8 @@ pub struct Models {
     core: Arc<Core>,
     infer: Infer,
     downloads: Mutex<HashMap<String, (CancellationToken, Progress)>>,
+    /// Threads the hardware recommendation allows (PLAN-01).
+    recommended_threads: std::sync::atomic::AtomicUsize,
 }
 
 impl Models {
@@ -27,7 +29,14 @@ impl Models {
             core,
             infer,
             downloads: Mutex::default(),
+            recommended_threads: std::sync::atomic::AtomicUsize::new(4),
         }
+    }
+
+    /// The hardware recommendation's thread count (PLAN-01); speech models never use more.
+    pub fn recommend_threads(&self, threads: usize) {
+        self.recommended_threads
+            .store(threads.max(1), std::sync::atomic::Ordering::Relaxed);
     }
 
     /// The model the settings ask for, or the language's default (VOICE-36).
@@ -210,7 +219,10 @@ impl Models {
             Engines {
                 stt,
                 tts,
-                threads: threads_for(config),
+                threads: threads_for(config).min(
+                    self.recommended_threads
+                        .load(std::sync::atomic::Ordering::Relaxed),
+                ),
             },
             std::time::Duration::from_secs(warm_minutes.max(1) * 60),
         );

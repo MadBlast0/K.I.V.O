@@ -17,6 +17,10 @@ pub struct SystemSnapshot {
     pub cpu_name: String,
     pub logical_cpus: u32,
     pub ram_mb: u64,
+    /// Memory free right now.
+    pub ram_free_mb: u64,
+    /// How busy the CPU is right now, 0–100 (over a short sample).
+    pub cpu_load_percent: u8,
     pub gpus: Vec<GpuInfo>,
     pub on_battery: bool,
     pub battery_percent: Option<u8>,
@@ -26,8 +30,19 @@ pub struct SystemSnapshot {
     pub focus_mode: bool,
 }
 
+/// Whether the user is presenting, gaming or in Focus right now (UX §2, §7).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Attention {
+    pub fullscreen_app: bool,
+    pub focus_mode: bool,
+}
+
 pub trait SystemInfo: Send + Sync {
+    /// Everything, including a short CPU-load sample (~100 ms).
     fn snapshot(&self) -> PlatformResult<SystemSnapshot>;
+    /// Only fullscreen and Focus: cheap enough for every request.
+    fn attention(&self) -> PlatformResult<Attention>;
 }
 
 /// The speaker or microphone level (TOOLS_AND_CONTROL §3, "Audio").
@@ -80,4 +95,17 @@ pub trait SystemControl: Send + Sync {
     fn power(&self, action: PowerAction) -> PlatformResult<()>;
     /// Opens `url` (http or https only) in the default browser.
     fn open_url(&self, url: &str) -> PlatformResult<()>;
+    /// Opens a page of the system's own settings (`privacy-microphone`, `sound`), for the
+    /// "Open Windows settings" buttons KIVO offers when something is blocked (UX-57).
+    fn open_system_settings(&self, page: &str) -> PlatformResult<()>;
+    /// Shows a folder in the file manager ("Open folder" for crash reports, screenshots).
+    fn reveal(&self, folder: &std::path::Path) -> PlatformResult<()>;
+}
+
+/// Starting KIVO when the user signs in (ARCH-06, "Open KIVO when Windows starts").
+pub trait Autostart: Send + Sync {
+    /// Registers `command` to run at sign-in, or removes it.
+    fn set(&self, enabled: bool, command: &str) -> PlatformResult<()>;
+    /// The command registered now, if any.
+    fn current(&self) -> PlatformResult<Option<String>>;
 }

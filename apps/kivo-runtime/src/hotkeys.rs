@@ -15,6 +15,8 @@ const PUSH_TO_TALK: HotkeyId = HotkeyId(1);
 const SWITCH_MODE: HotkeyId = HotkeyId(2);
 const EMERGENCY_STOP: HotkeyId = HotkeyId(3);
 const TYPE_TO_KIVO: HotkeyId = HotkeyId(4);
+/// Esc, registered only while KIVO is busy so it never takes Esc from other apps otherwise.
+const CANCEL: HotkeyId = HotkeyId(5);
 
 /// What a hotkey means. Kept separate from the async work so it can be tested without a desktop.
 #[derive(Debug, PartialEq, Eq)]
@@ -24,6 +26,7 @@ pub enum Action {
     CycleMode,
     StopEverything,
     OpenTextBox,
+    Cancel,
     Ignore,
 }
 
@@ -37,6 +40,7 @@ pub fn action(event: HotkeyEvent, toggle_mode: bool, listening: bool) -> Action 
         HotkeyEvent::Pressed(SWITCH_MODE) => Action::CycleMode,
         HotkeyEvent::Pressed(EMERGENCY_STOP) => Action::StopEverything,
         HotkeyEvent::Pressed(TYPE_TO_KIVO) => Action::OpenTextBox,
+        HotkeyEvent::Pressed(CANCEL) => Action::Cancel,
         HotkeyEvent::Pressed(_) | HotkeyEvent::Released(_) => Action::Ignore,
     }
 }
@@ -62,6 +66,8 @@ async fn handle(core: &Core, engine: &Arc<Engine>, event: HotkeyEvent) {
         }
         // Type to KIVO opens the Island's text box in the app (UX-41).
         Action::OpenTextBox => core.open_control_center(Some("type")),
+        // Esc cancels what KIVO is doing (UX-12).
+        Action::Cancel => engine.cancel(CancelReason::Hotkey),
         Action::Ignore => {}
     }
 }
@@ -106,9 +112,29 @@ pub async fn run(
         tracing::error!(%e, chord = %stop_keys, "couldn't register the emergency stop");
     }
     let shutdown = core.shutdown();
+    let mut state = core.state();
+    let esc = Chord(vec!["Esc".into()]);
+    let mut esc_registered = false;
     loop {
+        // Esc belongs to KIVO only while a request is in progress.
+        let busy = state.borrow_and_update().session.is_active();
+        if busy != esc_registered {
+            let result = if busy {
+                hotkeys.register(CANCEL, &esc)
+            } else {
+                hotkeys.unregister(CANCEL)
+            };
+            match result {
+                Ok(()) => esc_registered = busy,
+                Err(e) => {
+                    tracing::debug!(%e, busy, "Esc couldn't be (un)registered");
+                    esc_registered = busy;
+                }
+            }
+        }
         tokio::select! {
             Some(event) = events.recv() => handle(&core, &engine, event).await,
+            changed = state.changed() => if changed.is_err() { break },
             () = shutdown.cancelled() => break,
         }
     }

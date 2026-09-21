@@ -82,6 +82,10 @@ pub mod method {
     pub const PERMISSIONS_REVOKE: &str = "permissions.revoke";
     /// Client → runtime: the audit log, newest first (`{ "limit": n }`, SECURITY §7).
     pub const AUDIT_LIST: &str = "audit.list";
+    /// Client → runtime: the Control Center window was closed (`{}`). The reply says whether KIVO
+    /// keeps running (`{ "keepRunning": true }`); the first time, the runtime shows the one-time
+    /// notice (UX §1).
+    pub const UI_WINDOW_CLOSED: &str = "ui.windowClosed";
     /// Runtime → client notification: a model download's progress.
     pub const MODEL_PROGRESS: &str = "models.progress";
 }
@@ -155,6 +159,20 @@ pub struct TurnView {
     pub confirm: Option<ConfirmSpec>,
     /// The app the action is aimed at, for the Island's leading icon (UX §8.1).
     pub target_app: Option<String>,
+    /// A capability this request needed that is off (CAP-02): the Island offers to turn it on.
+    pub capability_off: Option<kivo_core::Capability>,
+    /// A fullscreen app or Focus is on: the Island hides or shrinks to a dot, and KIVO only
+    /// uses sounds (UX §2, UX-11).
+    pub quiet: Option<QuietIsland>,
+}
+
+/// How the Island behaves over a fullscreen app or during Focus (Settings → Island).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum QuietIsland {
+    Hidden,
+    Tiny,
 }
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]

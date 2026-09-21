@@ -36,6 +36,10 @@ fn main() -> ExitCode {
         );
         return ExitCode::from(2);
     }
+    #[cfg(windows)]
+    if let Some(paths) = kivo_platform::Paths::user() {
+        kivo_platform_windows::crash::install(&paths.crashes(), "kivo-infer");
+    }
     tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
         .with_ansi(false)

@@ -6,6 +6,7 @@
 use crate::activity::Recorder;
 use crate::core::Core;
 use crate::engine::Engine;
+use crate::lifecycle::Lifecycle;
 use crate::models::Models;
 use kivo_core::Capability;
 use kivo_core::config::PermissionMode;
@@ -21,6 +22,7 @@ pub struct Rpc {
     engine: Arc<Engine>,
     models: Arc<Models>,
     recorder: Recorder,
+    lifecycle: Arc<Lifecycle>,
 }
 
 impl Rpc {
@@ -29,12 +31,14 @@ impl Rpc {
         engine: Arc<Engine>,
         models: Arc<Models>,
         recorder: Recorder,
+        lifecycle: Arc<Lifecycle>,
     ) -> Self {
         Self {
             core,
             engine,
             models,
             recorder,
+            lifecycle,
         }
     }
 }
@@ -57,6 +61,7 @@ impl Handler for Rpc {
         let engine = Arc::clone(&self.engine);
         let models = Arc::clone(&self.models);
         let recorder = self.recorder.clone();
+        let lifecycle = Arc::clone(&self.lifecycle);
         Box::pin(async move {
             let refused = |e: crate::core::Refused| RpcError::new(RpcError::REFUSED, e.0);
             let refuse = |message: String| RpcError::new(RpcError::REFUSED, message);
@@ -185,6 +190,9 @@ impl Handler for Rpc {
                     let Id { id } = parse(params)?;
                     models.remove(&id).map(|()| Value::Null).map_err(refuse)
                 }
+                method::UI_WINDOW_CLOSED => Ok(serde_json::json!({
+                    "keepRunning": lifecycle.window_closed()
+                })),
                 method::SETTINGS_GET => ok(&core.config()),
                 method::SETTINGS_SET => {
                     // A partial settings object, merged into the current one.
@@ -205,6 +213,7 @@ impl Handler for Rpc {
                     let saved = core.update_config(|c| *c = config);
                     models.apply_engines(&saved);
                     engine.settings_changed(&saved);
+                    lifecycle.apply_autostart(&saved);
                     ok(&saved)
                 }
                 _ => Err(RpcError::method_not_found(&name)),
@@ -283,13 +292,25 @@ mod tests {
             windows: Arc::new(kivo_testkit::FakeWindows::default()),
             app_catalog: catalog,
             router: IntentRouter::new(Grammar::bundled("en").unwrap()),
+            system: Arc::new(kivo_testkit::FakeSystemInfo::default()),
         }));
+        let lifecycle = Arc::new(Lifecycle::new(
+            Arc::clone(&core),
+            Arc::new(kivo_testkit::FakeNotifications::default()),
+            Arc::new(kivo_testkit::FakeSystemControl::default()),
+            Arc::new(kivo_testkit::FakeAutostart::default()),
+            recorder.clone(),
+            std::env::temp_dir().join("kivo-test-crashes"),
+        ));
         let models = Arc::new(Models::new(
             std::env::temp_dir().join("kivo-test-models"),
             Arc::clone(&core),
             infer,
         ));
-        (Rpc::new(Arc::clone(&core), engine, models, recorder), core)
+        (
+            Rpc::new(Arc::clone(&core), engine, models, recorder, lifecycle),
+            core,
+        )
     }
 
     async fn call(rpc: &Rpc, name: &str, params: Value) -> Result<Value, RpcError> {

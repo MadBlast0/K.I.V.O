@@ -172,6 +172,30 @@ impl SystemControl for FakeSystemControl {
         lock(&self.opened).push(url.to_owned());
         Ok(())
     }
+    fn open_system_settings(&self, page: &str) -> PlatformResult<()> {
+        lock(&self.opened).push(format!("settings:{page}"));
+        Ok(())
+    }
+    fn reveal(&self, folder: &std::path::Path) -> PlatformResult<()> {
+        lock(&self.opened).push(format!("folder:{}", folder.display()));
+        Ok(())
+    }
+}
+
+/// Autostart: remembers the registered command.
+#[derive(Default)]
+pub struct FakeAutostart {
+    pub command: Mutex<Option<String>>,
+}
+
+impl kivo_platform::Autostart for FakeAutostart {
+    fn set(&self, enabled: bool, command: &str) -> PlatformResult<()> {
+        *lock(&self.command) = enabled.then(|| command.to_owned());
+        Ok(())
+    }
+    fn current(&self) -> PlatformResult<Option<String>> {
+        Ok(lock(&self.command).clone())
+    }
 }
 
 /// What a fake window was last told to do.
@@ -272,6 +296,8 @@ impl Default for FakeSystemInfo {
                 cpu_name: "Fake 8-core".into(),
                 logical_cpus: 16,
                 ram_mb: 16 * 1024,
+                ram_free_mb: 8 * 1024,
+                cpu_load_percent: 10,
                 gpus: Vec::new(),
                 on_battery: false,
                 battery_percent: None,
@@ -285,6 +311,13 @@ impl Default for FakeSystemInfo {
 impl SystemInfo for FakeSystemInfo {
     fn snapshot(&self) -> PlatformResult<SystemSnapshot> {
         Ok(lock(&self.snapshot).clone())
+    }
+    fn attention(&self) -> PlatformResult<kivo_platform::Attention> {
+        let s = lock(&self.snapshot);
+        Ok(kivo_platform::Attention {
+            fullscreen_app: s.fullscreen_app,
+            focus_mode: s.focus_mode,
+        })
     }
 }
 

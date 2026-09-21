@@ -118,6 +118,31 @@ fn enable_shutdown_privilege() -> PlatformResult<()> {
     }
 }
 
+/// Opens a document, folder or URI with its default handler.
+fn shell_open(target: &str) -> PlatformResult<()> {
+    let _com = Com::init()?;
+    let target = HSTRING::from(target);
+    // SAFETY: plain shell call; results above 32 mean success.
+    let result = unsafe {
+        ShellExecuteW(
+            None,
+            w!("open"),
+            &target,
+            PCWSTR::null(),
+            PCWSTR::null(),
+            SW_SHOWNORMAL,
+        )
+    };
+    if result.0 as isize > 32 {
+        Ok(())
+    } else {
+        Err(PlatformError::Os {
+            code: result.0 as i64,
+            message: "ShellExecuteW".into(),
+        })
+    }
+}
+
 /// Only web addresses open in the browser; anything else could launch a program.
 fn is_web_url(url: &str) -> bool {
     let lower = url.to_ascii_lowercase();
@@ -237,37 +262,49 @@ impl SystemControl for WindowsControl {
         }
     }
 
+    fn open_system_settings(&self, page: &str) -> PlatformResult<()> {
+        // Only settings pages: a page name is letters, digits and dashes.
+        if page.is_empty() || !page.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+            return Err(PlatformError::Unsupported);
+        }
+        shell_open(&format!("ms-settings:{page}"))
+    }
+
+    fn reveal(&self, folder: &std::path::Path) -> PlatformResult<()> {
+        if !folder.is_dir() {
+            return Err(PlatformError::NotFound("that folder".into()));
+        }
+        shell_open(&folder.to_string_lossy())
+    }
+
     fn open_url(&self, url: &str) -> PlatformResult<()> {
         if !is_web_url(url) {
             return Err(PlatformError::Unsupported);
         }
-        let _com = Com::init()?;
-        let target = HSTRING::from(url);
-        // SAFETY: plain shell call; results above 32 mean success.
-        let result = unsafe {
-            ShellExecuteW(
-                None,
-                w!("open"),
-                &target,
-                PCWSTR::null(),
-                PCWSTR::null(),
-                SW_SHOWNORMAL,
-            )
-        };
-        if result.0 as isize > 32 {
-            Ok(())
-        } else {
-            Err(PlatformError::Os {
-                code: result.0 as i64,
-                message: "ShellExecuteW".into(),
-            })
-        }
+        shell_open(url)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn settings_pages_and_folders_are_checked_before_opening() {
+        let control = WindowsControl;
+        assert_eq!(
+            control.open_system_settings("privacy mic&calc"),
+            Err(PlatformError::Unsupported)
+        );
+        assert_eq!(
+            control.open_system_settings(""),
+            Err(PlatformError::Unsupported)
+        );
+        assert!(matches!(
+            control.reveal(std::path::Path::new(r"Z:\no\such\folder")),
+            Err(PlatformError::NotFound(_))
+        ));
+    }
 
     #[test]
     fn only_web_addresses_are_opened() {

@@ -65,6 +65,8 @@ pub struct General {
     pub language: String,
     pub languages: Vec<String>,
     pub low_memory_mode: bool,
+    /// The one-time "KIVO is still running" notice after the first close has been shown (UX §1).
+    pub first_close_seen: bool,
 }
 
 impl Default for General {
@@ -76,6 +78,7 @@ impl Default for General {
             language: "en".into(),
             languages: Vec::new(),
             low_memory_mode: false,
+            first_close_seen: false,
         }
     }
 }
@@ -218,6 +221,8 @@ pub enum SoundSet {
 pub struct Permissions {
     pub mode: PermissionMode,
     pub emergency_stop: Vec<String>,
+    /// Apps KIVO must never act on, by app id or name (SECURITY §1.1 hard limit).
+    pub blocked_apps: Vec<String>,
 }
 
 impl Default for Permissions {
@@ -225,6 +230,7 @@ impl Default for Permissions {
         Self {
             mode: PermissionMode::Auto,
             emergency_stop: vec!["Ctrl".into(), "Alt".into(), "Shift".into(), "Esc".into()],
+            blocked_apps: Vec::new(),
         }
     }
 }

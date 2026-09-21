@@ -309,6 +309,20 @@ impl Recorder {
         });
     }
 
+    /// A KIVO process crashed last time (ARCH-10). The report stays on this PC.
+    pub fn crash_reported(&self, report: &kivo_store::crashes::CrashReport) {
+        self.add(NewActivity {
+            ts: i64::try_from(report.at.saturating_mul(1000)).unwrap_or(i64::MAX),
+            turn_id: None,
+            task_id: None,
+            kind: "crash".into(),
+            title: format!("{} stopped unexpectedly", report.process),
+            detail: report.summary.clone(),
+            status: "failed".into(),
+            data: None,
+        });
+    }
+
     /// The emergency stop was used (SECURITY §8).
     pub fn emergency_stop(&self) {
         self.audit(&AuditRecord {

@@ -31,7 +31,10 @@
     "planTitle": "Plan: {action}",
     "stepRunning": "Working",
     "stepDone": "Done",
-    "stepFailed": "Failed"
+    "stepFailed": "Failed",
+    "turnOn": "Turn it on",
+    "notNow": "Not now",
+    "retry": "Try again"
   },
   "home": {
     "talk": "Talk",

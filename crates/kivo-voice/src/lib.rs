@@ -6,6 +6,7 @@ pub mod engine;
 pub mod error;
 pub mod language;
 pub mod moonshine;
+pub mod recommend;
 pub mod silero;
 pub mod system_tts;
 pub mod traits;

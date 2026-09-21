@@ -3,13 +3,16 @@
 //! proactive-speech rules.
 
 use kivo_platform::{GpuInfo, PlatformError, PlatformResult, SystemInfo, SystemSnapshot};
+use windows::Win32::Foundation::FILETIME;
 use windows::Win32::Graphics::Dxgi::{
     CreateDXGIFactory1, DXGI_ADAPTER_DESC1, DXGI_ADAPTER_FLAG_SOFTWARE, IDXGIFactory1,
 };
 use windows::Win32::System::Power::{GetSystemPowerStatus, SYSTEM_POWER_STATUS};
 use windows::Win32::System::Registry::{HKEY_LOCAL_MACHINE, RRF_RT_REG_SZ, RegGetValueW};
 use windows::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
-use windows::Win32::System::Threading::{ALL_PROCESSOR_GROUPS, GetActiveProcessorCount};
+use windows::Win32::System::Threading::{
+    ALL_PROCESSOR_GROUPS, GetActiveProcessorCount, GetSystemTimes,
+};
 use windows::Win32::UI::Shell::{
     QUNS_BUSY, QUNS_PRESENTATION_MODE, QUNS_QUIET_TIME, QUNS_RUNNING_D3D_FULL_SCREEN,
     SHQueryUserNotificationState,
@@ -19,6 +22,14 @@ use windows::core::w;
 pub struct WindowsSystemInfo;
 
 impl SystemInfo for WindowsSystemInfo {
+    fn attention(&self) -> PlatformResult<kivo_platform::Attention> {
+        let (fullscreen_app, focus_mode) = notification_state();
+        Ok(kivo_platform::Attention {
+            fullscreen_app,
+            focus_mode,
+        })
+    }
+
     fn snapshot(&self) -> PlatformResult<SystemSnapshot> {
         let (on_battery, battery_percent) = power();
         let (fullscreen_app, focus_mode) = notification_state();
@@ -27,6 +38,8 @@ impl SystemInfo for WindowsSystemInfo {
             // SAFETY: a plain query with no pointers.
             logical_cpus: unsafe { GetActiveProcessorCount(ALL_PROCESSOR_GROUPS) },
             ram_mb: ram_mb()?,
+            ram_free_mb: ram_free_mb(),
+            cpu_load_percent: cpu_load(),
             gpus: gpus(),
             on_battery,
             battery_percent,
@@ -74,6 +87,51 @@ fn ram_mb() -> PlatformResult<u64> {
     // SAFETY: `status` is writable with its length field set, as documented.
     unsafe { GlobalMemoryStatusEx(&raw mut status) }.map_err(|e| os_error(&e))?;
     Ok(status.ullTotalPhys / (1024 * 1024))
+}
+
+fn ram_free_mb() -> u64 {
+    let mut status = MEMORYSTATUSEX {
+        dwLength: u32::try_from(size_of::<MEMORYSTATUSEX>()).unwrap_or(0),
+        ..Default::default()
+    };
+    // SAFETY: `status` is writable with its length field set, as documented.
+    unsafe { GlobalMemoryStatusEx(&raw mut status) }
+        .map_or(0, |()| status.ullAvailPhys / (1024 * 1024))
+}
+
+/// CPU busy share over 100 ms, from the system's idle/kernel/user times.
+fn cpu_load() -> u8 {
+    fn times() -> Option<(u64, u64)> {
+        let (mut idle, mut kernel, mut user) = (
+            FILETIME::default(),
+            FILETIME::default(),
+            FILETIME::default(),
+        );
+        // SAFETY: three writable FILETIMEs.
+        unsafe {
+            GetSystemTimes(
+                Some(&raw mut idle),
+                Some(&raw mut kernel),
+                Some(&raw mut user),
+            )
+        }
+        .ok()?;
+        let n = |t: FILETIME| (u64::from(t.dwHighDateTime) << 32) | u64::from(t.dwLowDateTime);
+        // Kernel time includes idle time.
+        Some((n(idle), n(kernel) + n(user)))
+    }
+    let Some((idle1, total1)) = times() else {
+        return 0;
+    };
+    std::thread::sleep(std::time::Duration::from_millis(100));
+    let Some((idle2, total2)) = times() else {
+        return 0;
+    };
+    let total = total2.saturating_sub(total1);
+    let busy = total.saturating_sub(idle2.saturating_sub(idle1));
+    #[allow(clippy::cast_possible_truncation, reason = "0–100")]
+    let percent = (busy * 100).checked_div(total).unwrap_or(0).min(100) as u8;
+    percent
 }
 
 /// Hardware adapters with their dedicated memory; the software (WARP) adapter is skipped.

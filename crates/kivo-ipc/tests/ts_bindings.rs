@@ -14,8 +14,8 @@ use kivo_core::tool::{ConfirmSpec, ConfirmedBy, Risk, Strength};
 use kivo_core::{Event, EventMeta, ProfileId, SessionState, TaskId, Timestamp, TraceId, TurnId};
 use kivo_ipc::infer::Residency;
 use kivo_ipc::protocol::{
-    ActivityItem, AuditItem, CapabilityItem, GrantItem, ModelItem, ProtocolVersion, SpeechStatus,
-    StepView, TurnView,
+    ActivityItem, AuditItem, CapabilityItem, GrantItem, ModelItem, ProtocolVersion, QuietIsland,
+    SpeechStatus, StepView, TurnView,
 };
 use kivo_ipc::{Link, LinkStatus, RpcError, StateSnapshot, Welcome, method};
 use std::path::PathBuf;
@@ -56,6 +56,7 @@ fn render() -> String {
         TurnView::decl(&cfg),
         StepView::decl(&cfg),
         SpeechStatus::decl(&cfg),
+        QuietIsland::decl(&cfg),
         Residency::decl(&cfg),
         // permissions and capabilities
         Risk::decl(&cfg),

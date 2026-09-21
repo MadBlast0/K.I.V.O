@@ -107,6 +107,7 @@ fn rig(
         windows,
         app_catalog: catalog,
         router: kivo_intent::IntentRouter::new(kivo_intent::Grammar::bundled("en").unwrap()),
+        system: Arc::new(kivo_testkit::FakeSystemInfo::default()),
     }));
     engine.refresh_apps();
     let (signals, mut voice_signals) = tokio::sync::mpsc::unbounded_channel();

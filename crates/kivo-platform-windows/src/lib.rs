@@ -4,10 +4,12 @@
 #![cfg(windows)]
 
 mod audio;
+mod autostart;
 mod capabilities;
 mod capture;
 mod com;
 mod control;
+pub mod crash;
 mod desktop;
 pub mod hotkeys;
 pub mod instance;
@@ -17,6 +19,7 @@ pub mod toast;
 pub mod tray;
 
 pub use audio::WindowsAudio;
+pub use autostart::WindowsAutostart;
 pub use capabilities::detect as detect_capabilities;
 pub use capture::WindowsScreen;
 pub use control::WindowsControl;

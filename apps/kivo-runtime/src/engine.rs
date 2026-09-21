@@ -15,7 +15,7 @@ use kivo_core::event::{CancelReason, EventKind, IntentPath, TurnEvent, TurnSourc
 use kivo_core::tool::{ConfirmSpec, ConfirmedBy, Initiator, ToolCall, ToolError, ToolErrorCode};
 use kivo_core::{Event, SessionInput, SessionState};
 use kivo_intent::{Context as GrammarContext, Index, IndexEntry, IntentRouter, Route};
-use kivo_ipc::protocol::{SpeechStatus, StepView};
+use kivo_ipc::protocol::{QuietIsland, SpeechStatus, StepView};
 use kivo_platform::{Apps, Windows};
 use kivo_security::{
     Answer, Context as SecurityContext, Decision, Grant, HardLimits, SessionKind, Taint,
@@ -66,6 +66,8 @@ pub struct Parts {
     /// The installed apps, shared with the tools.
     pub app_catalog: Arc<RwLock<Vec<kivo_platform::AppEntry>>>,
     pub router: IntentRouter,
+    /// Whether a fullscreen app or Focus is on (UX-11).
+    pub system: Arc<dyn kivo_platform::SystemInfo>,
 }
 
 pub struct Engine {
@@ -77,6 +79,7 @@ pub struct Engine {
     apps: Arc<dyn Apps>,
     windows: Arc<dyn Windows>,
     app_catalog: Arc<RwLock<Vec<kivo_platform::AppEntry>>>,
+    system: Arc<dyn kivo_platform::SystemInfo>,
     app_index: RwLock<(Index, Instant)>,
     router: Mutex<IntentRouter>,
     turn: Mutex<Option<Running>>,
@@ -95,6 +98,7 @@ impl Engine {
             apps: parts.apps,
             windows: parts.windows,
             app_catalog: parts.app_catalog,
+            system: parts.system,
             app_index: RwLock::new((Index::default(), Instant::now() - APPS_TTL * 2)),
             router: Mutex::new(parts.router),
             turn: Mutex::new(None),
@@ -188,6 +192,7 @@ impl Engine {
         self.infer.warm();
         let id = self.turn_id();
         self.core.begin_turn(&id, source, "").map_err(|e| e.0)?;
+        self.quiet_if_busy();
         let config = self.core.config();
         let utterance = self.infer.next_utterance();
         let (started, started_rx) = tokio::sync::watch::channel(false);
@@ -254,6 +259,20 @@ impl Engine {
         Ok(())
     }
 
+    /// Over a fullscreen app or during Focus the Island hides or shrinks to a dot (the setting);
+    /// KIVO still answers (UX-11).
+    fn quiet_if_busy(&self) {
+        let attention = self.system.attention().unwrap_or_default();
+        if !(attention.fullscreen_app || attention.focus_mode) {
+            return;
+        }
+        let quiet = match self.core.config().overlay.in_fullscreen {
+            kivo_core::config::FullscreenBehavior::Hide => QuietIsland::Hidden,
+            kivo_core::config::FullscreenBehavior::TinyPill => QuietIsland::Tiny,
+        };
+        self.core.update_turn(|view| view.quiet = Some(quiet));
+    }
+
     /// Stops the microphone without a result (the speech engine failed to start).
     fn cancel_listening(&self) {
         if let Some(listener) = self.listener() {
@@ -297,6 +316,7 @@ impl Engine {
         self.core
             .begin_turn(&id, TurnSource::Typed, text)
             .map_err(|e| e.0)?;
+        self.quiet_if_busy();
         *lock(&self.turn) = Some(Running {
             id: id.clone(),
             utterance: 0,
@@ -467,6 +487,9 @@ impl Engine {
                 |spec| format!("{} is off. Turn it on?", spec.capability.label()),
             );
             self.recorder.tool_denied(&self.turn_key(), &call, &message);
+            let capability = self.registry.known(&call.tool).map(|spec| spec.capability);
+            self.core
+                .update_turn(|view| view.capability_off = capability);
             self.speak_and_finish(&message).await;
             return;
         };
@@ -475,7 +498,7 @@ impl Engine {
             stopped: lock(&self.turn)
                 .as_ref()
                 .is_some_and(|t| t.cancel.is_cancelled()),
-            blocked_apps: Vec::new(),
+            blocked_apps: self.core.config().permissions.blocked_apps,
         };
         let grants: Vec<Grant> = self.recorder.grants();
         let decision = kivo_security::authorize(
@@ -512,6 +535,10 @@ impl Engine {
                 self.speak(&question).await;
             }
             Decision::Deny(denial) => {
+                if let kivo_security::DenyCode::CapabilityOff(capability) = denial.code {
+                    self.core
+                        .update_turn(|view| view.capability_off = Some(capability));
+                }
                 self.recorder
                     .answer(&self.turn_key(), &denial.message, "denied");
                 self.speak_and_finish(&denial.message).await;
@@ -820,7 +847,10 @@ impl Engine {
     /// voice all stop, and the Island clears (ARCH-26).
     pub fn cancel(&self, reason: CancelReason) {
         let Some(running) = lock(&self.turn).take() else {
+            // Nothing running: stop whatever the session is doing and clear what the Island shows
+            // ("Not now" on a finished request's card).
             let _ = self.core.cancel_turn();
+            self.core.clear_turn();
             return;
         };
         running.cancel.cancel();

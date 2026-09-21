@@ -44,7 +44,7 @@ pub struct Grant {
 pub struct HardLimits {
     /// The emergency stop fired for this turn.
     pub stopped: bool,
-    /// App ids KIVO must never act on.
+    /// Apps KIVO must never act on, by id or name.
     pub blocked_apps: Vec<String>,
 }
 
@@ -156,7 +156,13 @@ pub fn authorize(spec: &ToolSpec, call: &ToolCall, cx: &Context<'_>) -> Decision
     }
     for target in &call.targets {
         match target {
-            Target::App { id, name } if cx.limits.blocked_apps.iter().any(|b| b == id) => {
+            Target::App { id, name }
+                if cx
+                    .limits
+                    .blocked_apps
+                    .iter()
+                    .any(|b| b == id || b.eq_ignore_ascii_case(name)) =>
+            {
                 return deny(
                     DenyCode::BlockedApp,
                     format!("KIVO isn't allowed to act on {name}."),

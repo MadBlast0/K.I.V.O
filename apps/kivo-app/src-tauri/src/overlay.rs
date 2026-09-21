@@ -67,8 +67,8 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
-/// The session changed (`None`: not connected): show the Island while it is active or has a turn
-/// to show.
+/// The session changed (`None`: not connected, or the Island is set to hide right now): show the
+/// Island while it is active or has a turn to show.
 pub fn apply(app: &AppHandle, session: Option<SessionState>, turn: bool) {
     let state = app.state::<Overlay>();
     let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
@@ -246,6 +246,23 @@ const ISLAND_METHODS: [&str; 5] = [
     kivo_ipc::method::SESSION_STOP_ALL,
 ];
 
+/// "Turn it on" (CAP-02) may only switch on the capability the current request needed, and only
+/// on: the Island can never switch a capability off or turn on anything else.
+fn allowed_capability_change(
+    runtime: &crate::runtime::Runtime,
+    params: &serde_json::Value,
+) -> bool {
+    let needed = runtime
+        .link()
+        .snapshot
+        .and_then(|s| s.turn)
+        .and_then(|t| t.capability_off)
+        .and_then(|c| serde_json::to_value(c).ok());
+    params.get("on") == Some(&serde_json::Value::Bool(true))
+        && needed.is_some()
+        && params.get("capability") == needed.as_ref()
+}
+
 /// A request from one of the Island's buttons.
 #[tauri::command]
 pub async fn island_request(
@@ -261,10 +278,11 @@ pub async fn island_request(
         crate::show_main_window(window.app_handle(), Some("activity"));
         return Ok(serde_json::Value::Null);
     }
-    if !ISLAND_METHODS.contains(&method.as_str()) {
+    let params = params.unwrap_or(serde_json::Value::Null);
+    let capability = method == kivo_ipc::method::CAPABILITIES_SET
+        && allowed_capability_change(&runtime, &params);
+    if !capability && !ISLAND_METHODS.contains(&method.as_str()) {
         return Err(format!("the Island can't ask for {method}"));
     }
-    runtime
-        .request(&method, params.unwrap_or(serde_json::Value::Null))
-        .await
+    runtime.request(&method, params).await
 }

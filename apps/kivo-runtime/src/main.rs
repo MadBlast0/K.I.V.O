@@ -14,6 +14,7 @@ use kivo_runtime::args::Args;
 use kivo_runtime::core::Core;
 use kivo_runtime::engine::{self, Engine};
 use kivo_runtime::infer::{self, Infer};
+use kivo_runtime::lifecycle::Lifecycle;
 use kivo_runtime::models::Models;
 use kivo_runtime::speaker::Speaker;
 #[cfg(windows)]
@@ -37,7 +38,13 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     };
 
-    // Startup order (plan §126): single instance, lightweight config, logging, then the rest.
+    // Crashes of this process are written to the crashes folder from here on (ARCH-10).
+    #[cfg(windows)]
+    kivo_platform_windows::crash::install(&paths.crashes(), "kivo-runtime");
+
+    // Startup order (plan §126): single instance, lightweight config, logging, the event bus and
+    // state (`Core`), audio and voice detection, then OS registrations (tray, hotkeys). Speech
+    // models load only when a request needs them (VOICE-34).
     #[cfg(windows)]
     let _instance = match claim_instance() {
         Ok(Some(guard)) => guard,
@@ -180,7 +187,7 @@ async fn run(args: Args, paths: &Paths, config: kivo_core::KivoConfig, writable:
     let (signals, mut voice_signals) = tokio::sync::mpsc::unbounded_channel();
 
     #[cfg(windows)]
-    let platform = windows_platform(paths);
+    let (platform, toast_answers) = windows_platform(paths);
     #[cfg(not(windows))]
     let platform = return ExitCode::FAILURE;
 
@@ -221,6 +228,7 @@ async fn run(args: Args, paths: &Paths, config: kivo_core::KivoConfig, writable:
         windows: Arc::clone(&platform.windows),
         app_catalog: Arc::clone(&app_catalog),
         router: IntentRouter::new(grammar),
+        system: Arc::clone(&platform.system),
     }));
     {
         // The app index is read once at startup, off the startup path.
@@ -241,7 +249,52 @@ async fn run(args: Args, paths: &Paths, config: kivo_core::KivoConfig, writable:
         signals,
     }));
     engine.set_listener(Arc::clone(&listener));
+
+    // What this PC can do, for the speech engines' threads (PLAN-01).
+    match platform.system.snapshot() {
+        Ok(machine) => {
+            let available = [kivo_voice::moonshine::info()];
+            let advice =
+                kivo_voice::recommend::recommend(&machine, &config.general.language, &available);
+            tracing::info!(
+                cpu = machine.cpu_name,
+                threads = machine.logical_cpus,
+                ram_mb = machine.ram_mb,
+                load = machine.cpu_load_percent,
+                on_battery = machine.on_battery,
+                tier = ?advice.tier,
+                model_threads = advice.threads,
+                "hardware"
+            );
+            models.recommend_threads(advice.threads);
+        }
+        Err(e) => tracing::warn!(%e, "couldn't read the hardware"),
+    }
     models.ensure_speech(&config);
+
+    // Startup entry, crash reports and notification buttons (UX §1, ARCH-06, ARCH-10, UX-57).
+    let lifecycle = Arc::new(Lifecycle::new(
+        Arc::clone(&core),
+        Arc::clone(&platform.notifications),
+        Arc::clone(&platform.control),
+        Arc::clone(&platform.autostart),
+        recorder.clone(),
+        paths.crashes(),
+    ));
+    lifecycle.apply_autostart(&config);
+    lifecycle.report_crashes();
+    #[cfg(windows)]
+    {
+        let lifecycle = Arc::clone(&lifecycle);
+        std::thread::Builder::new()
+            .name("kivo-toasts".into())
+            .spawn(move || {
+                while let Ok(answer) = toast_answers.recv() {
+                    lifecycle.answered(&answer.action);
+                }
+            })
+            .ok();
+    }
 
     let ipc = tokio::spawn(server.run(
         Arc::new(rpc::Rpc::new(
@@ -249,6 +302,7 @@ async fn run(args: Args, paths: &Paths, config: kivo_core::KivoConfig, writable:
             Arc::clone(&engine),
             Arc::clone(&models),
             recorder.clone(),
+            Arc::clone(&lifecycle),
         )),
         core.bus.clone(),
         core.state(),
@@ -266,12 +320,18 @@ async fn run(args: Args, paths: &Paths, config: kivo_core::KivoConfig, writable:
     // The voice pipeline and the speech worker drive the turn.
     let turns = {
         let engine = Arc::clone(&engine);
+        let lifecycle = Arc::clone(&lifecycle);
         let shutdown = core.shutdown();
         tokio::spawn(async move {
             loop {
                 tokio::select! {
                     signal = voice_signals.recv() => match signal {
-                        Some(signal) => engine::handle_signal(&engine, signal).await,
+                        Some(signal) => {
+                            if signal == voice::VoiceSignal::MicrophoneUnavailable {
+                                lifecycle.microphone_blocked();
+                            }
+                            engine::handle_signal(&engine, signal).await;
+                        }
                         None => break,
                     },
                     event = infer_events.recv() => match event {
@@ -370,12 +430,20 @@ struct Platform {
     control: Arc<dyn kivo_platform::SystemControl>,
     screen: Arc<dyn kivo_platform::Screen>,
     notifications: Arc<dyn kivo_platform::Notifications>,
+    system: Arc<dyn kivo_platform::SystemInfo>,
+    autostart: Arc<dyn kivo_platform::Autostart>,
 }
 
 #[cfg(windows)]
-fn windows_platform(paths: &Paths) -> Platform {
+fn windows_platform(
+    paths: &Paths,
+) -> (
+    Platform,
+    std::sync::mpsc::Receiver<kivo_platform_windows::ToastAnswer>,
+) {
     use kivo_platform_windows::{
-        WindowsApps, WindowsAudio, WindowsControl, WindowsScreen, WindowsWindows,
+        WindowsApps, WindowsAudio, WindowsAutostart, WindowsControl, WindowsScreen,
+        WindowsSystemInfo, WindowsWindows,
     };
     let (answers, answered) = std::sync::mpsc::channel();
     let icon = paths.local.join("icon.png");
@@ -390,23 +458,19 @@ fn windows_platform(paths: &Paths) -> Platform {
                 Arc::new(NoNotifications)
             }
         };
-    // Toast buttons come back on their own thread; they are handled in `app`/`core` (UX-57).
-    std::thread::Builder::new()
-        .name("kivo-toasts".into())
-        .spawn(move || {
-            while let Ok(answer) = answered.recv() {
-                tracing::info!(action = answer.action, "notification answered");
-            }
-        })
-        .ok();
-    Platform {
-        audio: Arc::new(WindowsAudio),
-        apps: Arc::new(WindowsApps),
-        windows: Arc::new(WindowsWindows),
-        control: Arc::new(WindowsControl),
-        screen: Arc::new(WindowsScreen),
-        notifications,
-    }
+    (
+        Platform {
+            audio: Arc::new(WindowsAudio),
+            apps: Arc::new(WindowsApps),
+            windows: Arc::new(WindowsWindows),
+            control: Arc::new(WindowsControl),
+            screen: Arc::new(WindowsScreen),
+            notifications,
+            system: Arc::new(WindowsSystemInfo),
+            autostart: Arc::new(WindowsAutostart::default()),
+        },
+        answered,
+    )
 }
 
 /// Used when Windows won't give KIVO notifications.

@@ -335,26 +335,29 @@ fn run(pipeline: Pipeline, commands: &Receiver<Command>, listening: &Arc<Mutex<O
             });
         }
 
-        // 4. Has the utterance ended?
-        if let Some(u) = current.as_ref() {
+        // 4. Has the utterance ended? The microphone is released before anyone hears so.
+        let ended = current.as_ref().and_then(|u| {
             let silent_long_enough = u.auto_end
                 && u.last_speech
                     .is_some_and(|since| since.elapsed() > END_SILENCE);
             let too_long = u.started.elapsed() > MAX_UTTERANCE;
             let nothing_said = !u.heard_speech && u.started.elapsed() > NO_SPEECH_TIMEOUT;
             if u.ending || silent_long_enough || too_long {
-                let signal = if u.heard_speech || u.ending {
+                Some(if u.heard_speech || u.ending {
                     VoiceSignal::EndOfSpeech { utterance: u.id }
                 } else {
                     VoiceSignal::NoSpeech { utterance: u.id }
-                };
-                let _ = signals.send(signal);
-                finish(&mut current, &mut mic, listening, &levels);
+                })
             } else if nothing_said {
-                let _ = signals.send(VoiceSignal::NoSpeech { utterance: u.id });
                 let _ = infer.cancel_stt(u.id);
-                finish(&mut current, &mut mic, listening, &levels);
+                Some(VoiceSignal::NoSpeech { utterance: u.id })
+            } else {
+                None
             }
+        });
+        if let Some(signal) = ended {
+            finish(&mut current, &mut mic, listening, &levels);
+            let _ = signals.send(signal);
         }
 
         // 5. Sleep until audio arrives (or briefly, when idle).

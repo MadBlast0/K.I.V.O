@@ -10,6 +10,7 @@ pub mod engine;
 #[cfg(windows)]
 pub mod hotkeys;
 pub mod infer;
+pub mod lifecycle;
 pub mod models;
 pub mod rpc;
 pub mod speaker;
