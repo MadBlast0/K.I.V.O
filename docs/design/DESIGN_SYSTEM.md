@@ -32,6 +32,22 @@ Windows 11 desktop: [mockups/kivo-wake-concepts.html](mockups/kivo-wake-concepts
 - **Type:** system font; white text on black, with secondary text at 60% opacity.
 - **Next:** Control Center, onboarding and live-activity mockups in this language (D0).
 
+## 0.0 Current reference: mockup v3.4
+
+[mockups/kivo-app.html](mockups/kivo-app.html) is the reference for implementation. It covers:
+
+- **Theme:** the Island theme, with the system font, macOS-style grouped lists, ink primary
+  buttons, black Island surfaces (palette, toasts, onboarding welcome), and the accent used only
+  for selection and status.
+- **Control Center:** 13-item navigation with page tabs.
+- **Onboarding:** 11 steps.
+- **System surfaces:** grouped into Tray and taskbar, Windows notifications, Island notices, and
+  Prompts and windows. Each is shown in context with a "when it appears" note.
+- **Component library:** covers every feature, and each component names its implementation
+  source.
+
+The sections below record how the design got here.
+
 ## 0.1 Full app mockup (v1, for finalization)
 
 [mockups/kivo-app.html](mockups/kivo-app.html) is one file with five sections:

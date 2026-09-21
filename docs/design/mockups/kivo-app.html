@@ -431,7 +431,7 @@ code{font-family:var(--mono);font-size:12px;background:var(--fill);padding:1px 5
 .side-sheet .sb{flex:1;overflow:auto;padding:16px 18px 30px}
 
 /* ════════ System surfaces ════════ */
-.surf{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:26px 22px}
+.surf-legacy{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:26px 22px}
 .surf .cell{display:flex;flex-direction:column;gap:10px;align-items:flex-start;min-width:0}
 .surf .cap{font-size:12px;font-weight:600;color:var(--text-2)}
 .wmenu{width:250px;background:var(--group);border-radius:9px;padding:4px;box-shadow:0 0 0 1px var(--border),var(--shadow);font-size:13px;position:relative}
@@ -463,6 +463,27 @@ code{font-family:var(--mono);font-size:12px;background:var(--fill);padding:1px 5
 .gc .gb{padding:12px 14px 14px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;flex:1;min-width:0}
 .gc .gf{padding:8px 14px;font-size:11px;color:var(--text-3);border-top:1px solid var(--sep)}
 .gc .gb .group{width:100%}
+.gc .gb{align-items:flex-start;align-content:flex-start}
+.gc .gb .island.static{max-width:100%}
+.gc .gb .stack{width:100%;display:flex;flex-direction:column;gap:8px;align-items:center}
+.sgroup{margin-top:30px}
+.sgroup:first-of-type{margin-top:6px}
+.sgroup > h3{font-family:var(--disp);font-size:16px;font-weight:600;margin:0 0 4px}
+.sgroup > p{margin:0 0 14px;color:var(--text-2);font-size:12.5px}
+.sgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(400px,1fr));gap:14px}
+.sf{margin:0;display:flex;flex-direction:column;border-radius:var(--r-m);overflow:hidden;box-shadow:0 0 0 1px var(--border);background:var(--group)}
+.sf .box{position:relative;min-height:200px;padding:26px 20px;display:flex;align-items:center;justify-content:center;isolation:isolate;overflow:hidden}
+.sf .box .wallp{z-index:-1}
+.sf .box.top{align-items:flex-start}
+.sf figcaption{padding:10px 14px 12px;border-top:1px solid var(--sep);display:flex;flex-direction:column;gap:1px}
+.sf figcaption b{font-size:13px;font-weight:600}
+.sf figcaption span{font-size:12px;color:var(--text-2)}
+.sf .island.static{max-width:100%}
+.sf.wide{grid-column:span 2}.sf.wide .box{min-height:330px;padding-bottom:48px}
+@media (max-width:980px){.sf.wide{grid-column:auto}}
+.taskbar-mini{position:absolute;left:0;right:0;bottom:0;height:30px;background:color-mix(in srgb,var(--group) 82%,transparent);backdrop-filter:blur(14px);border-top:1px solid var(--sep);display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:0 12px;font-size:11px;color:var(--text-2)}
+.taskbar-mini .mark{width:14px;height:14px}
+@media (max-width:980px){.sgrid{grid-template-columns:1fr}}
 .tokens{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
 .tok{border-radius:var(--r-m);overflow:hidden;box-shadow:0 0 0 1px var(--border);background:var(--group);font-size:12px}
 .tok i{display:block;height:38px}
@@ -972,29 +993,41 @@ const playMini = () => {
 };
 
 /* ════════ System surfaces ════════ */
-const sysHTML = () => `<div class="intro"><div class="eb">SYSTEM SURFACES</div><h1>Outside KIVO’s window</h1><p>The tray, Windows notifications and prompts, and KIVO’s own lightweight surfaces.</p></div>
-  <div class="surf">
-    <div class="cell"><span class="cap">Tray menu · permission mode submenu</span><div class="wmenu" style="margin-right:210px">
+const sf = (title, when, inner, opts='') => `<figure class="sf ${opts.includes('wide')?'wide':''}"><div class="box ${opts.includes('top')?'top':''}">${opts.includes('wall')?'<div class="wallp"></div>':''}${inner}${opts.includes('bar')?'<div class="taskbar-mini"><span class="mark"></span>16:42</div>':''}</div><figcaption><b>${title}</b><span>${when}</span></figcaption></figure>`;
+const wt = (title, text, a1, a2, head='KIVO') => `<div class="wtoast"><div class="th"><span class="mark"></span>${head}<span class="x">✕</span></div><b>${title}</b><span class="s">${text}</span>${a1?`<div class="ta"><button class="btn">${a1}</button><button class="btn">${a2}</button></div>`:''}</div>`;
+const islNote = (dot, lab, body, btns='', chip='') => `<div class="island static tall" style="width:400px;height:auto;border-radius:24px"><div class="row">${dot}<span class="lab">${lab}</span>${chip}</div><div class="body">${body}${btns?`<div class="btns">${btns}</div>`:''}</div></div>`;
+const sysHTML = () => `<div class="intro"><div class="eb">SYSTEM SURFACES</div><h1>Outside KIVO’s window</h1><p>Everything KIVO shows around Windows, grouped by where it appears. Each one says when you’ll see it.</p></div>
+
+  <section class="sgroup"><h3>Tray and taskbar</h3><p>Always-available controls, even when the window is closed.</p><div class="sgrid">
+    ${sf('Tray menu','Right-click the KIVO icon next to the clock.', `<div class="wmenu" style="margin-right:210px">
       <div class="mi"><b>Open KIVO</b></div><div class="mi">${I('pause')}Pause listening<span class="k">Ctrl Alt P</span></div><div class="mi hl">${I('shield')}Permission mode<span class="k">›</span></div><div class="mi">${I('eye')}Hide Island for 1 hour</div><hr>
       <div class="mi" style="color:var(--red)">${I('stop')}Stop everything</div><hr><div class="mi">${I('gear')}Settings</div><div class="mi">${I('power')}Quit KIVO</div>
-      <div class="wmenu subm">${MODES.map(([k,n]) => `<div class="mi">${k===S.mode?I('check'):'<span style="width:16px;flex:none"></span>'}${n}</div>`).join('')}</div></div></div>
-    <div class="cell"><span class="cap">Tray tooltip</span><div class="ttip"><b>KIVO</b> · Listening<br><span style="color:var(--text-2)">${modeName(S.mode)} mode · 1 task running</span></div></div>
-    <div class="cell"><span class="cap">First time you close the window</span><div class="wtoast"><div class="th"><span class="mark"></span>KIVO<span class="x">✕</span></div><b>KIVO is still running</b><span class="s">Say “Hey Kivo” or press Ctrl + Space anytime. Quit from the tray icon.</span><div class="ta"><button class="btn">Settings</button><button class="btn">Quit KIVO</button></div></div></div>
-    <div class="cell"><span class="cap">Task finished during a call (no speech)</span><div class="wtoast"><div class="th"><span class="mark"></span>KIVO · 2 min ago<span class="x">✕</span></div><b>Tests fixed</b><span class="s">Codex changed 2 files. All 48 tests pass.</span><div class="ta"><button class="btn">View changes</button><button class="btn">Dismiss</button></div></div></div>
-    <div class="cell"><span class="cap">Budget warning</span><div class="wtoast"><div class="th"><span class="mark"></span>KIVO<span class="x">✕</span></div><b>80% of your monthly budget used</b><span class="s">$8.02 of $10.00. At the limit, KIVO will ask before using cloud AI.</span><div class="ta"><button class="btn">Open Usage</button><button class="btn">OK</button></div></div></div>
-    <div class="cell"><span class="cap">Update ready</span><div class="wtoast"><div class="th"><span class="mark"></span>KIVO<span class="x">✕</span></div><b>KIVO 0.2 is ready</b><span class="s">Takes about 20 seconds. Anything running is saved first.</span><div class="ta"><button class="btn">Install now</button><button class="btn">When idle</button></div></div></div>
-    <div class="cell"><span class="cap">High-risk confirmation · Windows Hello</span><div class="hello"><b>KIVO wants to send an email</b><div class="face">${I('user')}</div><div style="font-size:12.5px;color:var(--text-2)">To maya@studio.com: “Design review moved to Thursday”</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px"><button class="btn" style="border-radius:5px">Cancel</button><button class="btn pri" style="border-radius:5px">Use PIN</button></div></div></div>
-    <div class="cell"><span class="cap">Bypass mode is on (Island)</span><div class="island static tall" style="width:400px;max-width:100%;height:auto;border-radius:24px"><div class="row">${DOT('#FF5147')}<span class="lab">Bypass permissions is on</span><span class="mchip r">58 MIN</span></div><div class="body">KIVO won’t ask before acting, including high-risk actions.<div class="btns"><span>Keep on</span><span class="p">Turn off</span></div></div></div></div>
-    <div class="cell"><span class="cap">Capability is off (Island)</span><div class="island static tall" style="width:400px;max-width:100%;height:auto;border-radius:24px"><div class="row"><span class="orb"></span><span class="lab">Screen awareness is off</span></div><div class="body">To answer that, KIVO needs to see your screen.<div class="btns"><span class="p">Turn on</span><span>Not now</span></div></div></div></div>
-    <div class="cell"><span class="cap">Microphone used by a call (Island)</span><div class="island static" style="width:330px"><div class="row">${DOT('#555')}<span class="lab">In a call<small>listening quietly</small></span></div></div></div>
-    <div class="cell"><span class="cap">File Explorer right-click menu</span><div class="xmenu"><div class="mi">${I('folder')}Open</div><div class="mi">${I('link')}Copy as path</div><hr><div class="mi hl"><span class="mark" style="width:16px;height:16px"></span>Ask KIVO about this</div><div class="mi">${I('sparkle')}Summarize with KIVO</div><hr><div class="mi">${I('edit')}Rename</div></div></div>
-    <div class="cell"><span class="cap">Taskbar jump list (right-click the KIVO icon)</span><div class="jump"><div class="jh">Routines</div><div class="mi">${I('routine')}Work mode</div><div class="mi">${I('routine')}Morning brief</div><div class="jh">Tasks</div><div class="mi">${I('chat')}New conversation</div><div class="mi">${I('pause')}Pause listening</div><div class="mi">${I('stop')}Stop everything</div></div></div>
-    <div class="cell"><span class="cap">Notification with a reply box</span><div class="wtoast"><div class="th"><span class="mark"></span>KIVO<span class="x">✕</span></div><b>Claude finished in K.I.V.O</b><span class="s">All 48 tests pass. Want me to commit?</span><div class="reply"><div class="field"><input placeholder="Reply to KIVO…"></div><button class="btn pri" style="border-radius:4px">Send</button></div></div></div>
-    <div class="cell"><span class="cap">Microphone blocked by Windows privacy settings</span><div class="wtoast"><div class="th"><span class="mark"></span>KIVO<span class="x">✕</span></div><b>KIVO can’t use the microphone</b><span class="s">Windows is blocking microphone access for desktop apps.</span><div class="ta"><button class="btn">Open Windows settings</button><button class="btn">Type instead</button></div></div></div>
-    <div class="cell"><span class="cap">Offline (Island)</span><div class="island static" style="width:340px"><div class="row">${DOT('#8E8E93')}<span class="lab">Offline<small>local commands still work</small></span></div></div></div>
-    <div class="cell"><span class="cap">What’s new, after an update</span><div class="sheetwin"><h3>What’s new in KIVO 0.2</h3><span style="font-size:12.5px;color:var(--text-3)">Installed just now</span><ul><li>Say “approve” or “cancel” when KIVO asks</li><li>New sound sets in Companion</li><li>Faster wake word, fewer false wakes</li></ul><div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn">Full release notes</button><button class="btn pri">Got it</button></div></div></div>
-    <div class="cell"><span class="cap">In-app toast</span><div style="position:relative;height:44px;width:100%"><div class="ktoast on" style="position:absolute;left:0;bottom:0;transform:none">${I('check')}Routine saved<button class="btn">Undo</button></div></div></div>
-  </div>`;
+      <div class="wmenu subm">${MODES.map(([k,n]) => `<div class="mi">${k===S.mode?I('check'):'<span style="width:16px;flex:none"></span>'}${n}</div>`).join('')}</div></div>`, 'wall bar wide')}
+    ${sf('Tray tooltip','Hover the KIVO icon.', `<div class="ttip" style="margin-bottom:24px"><b>KIVO</b> · Listening<br><span style="color:var(--text-2)">${modeName(S.mode)} mode · 1 task running</span></div>`, 'wall bar')}
+    ${sf('Jump list','Right-click KIVO on the taskbar.', `<div class="jump"><div class="jh">Routines</div><div class="mi">${I('routine')}Work mode</div><div class="mi">${I('routine')}Morning brief</div><div class="jh">Tasks</div><div class="mi">${I('chat')}New conversation</div><div class="mi">${I('pause')}Pause listening</div><div class="mi">${I('stop')}Stop everything</div></div>`, 'wall')}
+  </div></section>
+
+  <section class="sgroup"><h3>Windows notifications</h3><p>Standard Windows notifications. Quiet during calls, fullscreen and Focus.</p><div class="sgrid">
+    ${sf('First close','The first time you close the window.', wt('KIVO is still running','Say “Hey Kivo” or press Ctrl + Space anytime. Quit from the tray icon.','Settings','Quit KIVO'), 'wall')}
+    ${sf('Task finished','A background task is done. You can reply right here.', `<div class="wtoast"><div class="th"><span class="mark"></span>KIVO<span class="x">✕</span></div><b>Claude finished in K.I.V.O</b><span class="s">All 48 tests pass. Want me to commit?</span><div class="reply"><div class="field"><input placeholder="Reply to KIVO…"></div><button class="btn pri" style="border-radius:4px">Send</button></div></div>`, 'wall')}
+    ${sf('Budget warning','At the warning level you chose in Usage.', wt('80% of your monthly budget used','$8.02 of $10.00. At the limit, KIVO will ask before using cloud AI.','Open Usage','OK'), 'wall')}
+    ${sf('Update ready','A new version has downloaded.', wt('KIVO 0.2 is ready','Takes about 20 seconds. Anything running is saved first.','Install now','When idle'), 'wall')}
+    ${sf('Microphone blocked','Windows privacy settings block desktop apps from the mic.', wt('KIVO can’t use the microphone','Windows is blocking microphone access for desktop apps.','Open Windows settings','Type instead'), 'wall')}
+  </div></section>
+
+  <section class="sgroup"><h3>Island notices</h3><p>Short messages from the Island at the top of your screen.</p><div class="sgrid">
+    ${sf('Bypass is on','Shown while Bypass permissions is active.', islNote(DOT('#FF5147'),'Bypass permissions is on','KIVO won’t ask before acting, including high-risk actions.','<span>Keep on</span><span class="p">Turn off</span>','<span class="mchip r">58 MIN</span>'), 'wall top')}
+    ${sf('Capability is off','You asked for something that’s switched off.', islNote('<span class="orb"></span>','Screen awareness is off','To answer that, KIVO needs to see your screen.','<span class="p">Turn on</span><span>Not now</span>'), 'wall top')}
+    ${sf('In a call','Another app is using the mic. KIVO stays quiet.', `<div class="island static" style="width:330px;max-width:100%"><div class="row">${DOT('#555')}<span class="lab">In a call<small>listening quietly</small></span></div></div>`, 'wall top')}
+    ${sf('Offline','No internet. Local commands still work.', `<div class="island static" style="width:340px;max-width:100%"><div class="row">${DOT('#8E8E93')}<span class="lab">Offline<small>local commands still work</small></span></div></div>`, 'wall top')}
+  </div></section>
+
+  <section class="sgroup"><h3>Prompts and windows</h3><p>Moments that need your attention, and entry points from Windows.</p><div class="sgrid">
+    ${sf('Windows Hello','High-risk actions: say “confirm”, then look at the camera.', `<div class="hello"><b>KIVO wants to send an email</b><div class="face">${I('user')}</div><div style="font-size:12.5px;color:var(--text-2)">To maya@studio.com: “Design review moved to Thursday”</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px"><button class="btn" style="border-radius:5px">Cancel</button><button class="btn pri" style="border-radius:5px">Use PIN</button></div></div>`, 'wall')}
+    ${sf('What’s new','Once, after an update.', `<div class="sheetwin"><h3>What’s new in KIVO 0.2</h3><span style="font-size:12.5px;color:var(--text-3)">Installed just now</span><ul><li>Say “approve” or “cancel” when KIVO asks</li><li>New sound sets</li><li>Faster wake word, fewer false wakes</li></ul><div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn">Release notes</button><button class="btn pri">Got it</button></div></div>`, 'wall')}
+    ${sf('File Explorer menu','Right-click any file or folder.', `<div class="xmenu"><div class="mi">${I('folder')}Open</div><div class="mi">${I('link')}Copy as path</div><hr><div class="mi hl"><span class="mark" style="width:16px;height:16px"></span>Ask KIVO about this</div><div class="mi">${I('sparkle')}Summarize with KIVO</div><hr><div class="mi">${I('edit')}Rename</div></div>`, 'wall')}
+    ${sf('In-app toast','After a change in the Control Center, with Undo.', `<div class="ktoast on" style="position:static;transform:none">${I('check')}Routine saved<button class="btn">Undo</button></div>`, 'wall')}
+  </div></section>`;
 
 /* ════════ Components ════════ */
 const compHTML = () => {
@@ -1031,8 +1064,8 @@ const compHTML = () => {
   </div>
   ${gs('Island','the signature surface')}
   <div class="gal">
-    ${c('Core states', `<div style="width:100%;display:flex;flex-direction:column;gap:8px;align-items:center">${['listening','followup','thinking','undo'].map(k=>`<div class="island static" data-isl="${k}"></div>`).join('')}</div>`, 'custom · waveform adapted from ElevenLabs bar-visualizer')}
-    ${c('Live activities', `<div style="width:100%;display:flex;flex-direction:column;gap:8px;align-items:center">${['media','download','agent','cu'].map(k=>`<div class="island static" data-isl="${k}"></div>`).join('')}</div>`, 'custom · shows the target app’s icon')}
+    ${c('Core states', `<div class="stack">${['listening','followup','thinking','undo'].map(k=>`<div class="island static" data-isl="${k}"></div>`).join('')}</div>`, 'custom · waveform adapted from ElevenLabs bar-visualizer')}
+    ${c('Live activities', `<div class="stack">${['media','download','agent','cu'].map(k=>`<div class="island static" data-isl="${k}"></div>`).join('')}</div>`, 'custom · shows the target app’s icon')}
     ${c('Status orb', `<div style="display:flex;gap:16px;flex-wrap:wrap">${[['Idle','#8AB8FF'],['Listening','#fff'],['Speaking','#9AD3FF'],['Paused','#666'],['Error','#FF5147']].map(([n,col]) => `<div style="display:flex;flex-direction:column;align-items:center;gap:6px;font-size:11.5px;color:var(--text-2)"><span style="width:26px;height:26px;border-radius:50%;background:#000;display:grid;place-items:center"><span style="width:10px;height:10px;border-radius:50%;background:${col}"></span></span>${n}</div>`).join('')}</div>`, 'custom · sidebar, tray, Home')}
   </div>
   ${gs('Voice')}
@@ -1047,7 +1080,7 @@ const compHTML = () => {
     ${c('Messages', `<div style="width:100%;display:flex;flex-direction:column;gap:8px"><div class="you" style="max-width:85%">Why is my build failing?</div><div class="step-row"><span class="ok">${I('check')}</span>Ran <b>cargo check</b></div><div class="kv"><span class="orb"></span><div>Line 3 returns a Result. Add <code>?</code>.<div class="why">Coding profile · 2.1 s</div></div></div></div>`, 'adapted from ElevenLabs message / conversation')}
     ${c('Permission mode picker', `${modePicker()}<span style="font-size:12px;color:var(--text-3)">Opens the mode sheet</span>`, 'custom · in the Island, chat, Home and tray')}
     ${c('Confirmation', `<div style="width:100%">${alertB('warn','Needs your OK','Edit <b>src/main.rs</b><div style="font-size:12px;color:var(--text-3);margin:8px 0 4px">Allow for</div>'+seg(['Once','Session','24 h','Always here'],'Once')+'<div style="display:flex;gap:6px;margin-top:10px"><button class="btn sm pri">Allow</button><button class="btn sm destr">Deny</button></div>')}</div>`, 'custom · never auto-dismisses')}
-    ${c('Plan approval', `<div style="width:100%;display:flex;justify-content:center"><div class="island static" data-isl="plan"></div></div>`, 'custom · Plan-first mode')}
+    ${c('Plan approval', `<div class="stack"><div class="island static" data-isl="plan"></div></div>`, 'custom · Plan-first mode')}
     ${c('Task steps', `<div style="width:100%">${[['ok','Inspect project'],['run','Analyze failure'],['','Change code']].map(([s,x]) => `<div class="step-row" style="${s?'':'opacity:.5'}">${s==='ok'?`<span class="ok">${I('check')}</span>`:s==='run'?'<span class="spin"></span>':'<span class="rad"></span>'}${x}</div>`).join('')}</div>`, 'custom · task graph')}
     ${c('Context meter', `<div style="width:100%"><div class="ctxbar">${[['var(--text)',40],['var(--acc)',27],['#8E8E93',7],['#32D74B',18],['#FF9F0A',8]].map(([col,w]) => `<i style="width:${w}%;background:${col}"></i>`).join('')}</div><div style="margin-top:10px"><span class="cmeter"><span class="m"><span style="width:18%"></span></span>18% of context</span></div></div>`, 'custom · Context page and chat header')}
     ${c('Skill row', group(li('sparkle','pdf-tools','Fill, merge and split PDFs', pill('Runs scripts','o')+tog(true))), 'custom · Agent Skills (SKILL.md)')}
