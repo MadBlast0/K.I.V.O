@@ -10,7 +10,7 @@
 >
 > **Implementation rule:** This document intentionally contains architecture and implementation instructions, but no production source code. The document defines *what to build, why to build it, how the parts interact, and how the finished system should behave.*
 >
-> **Companion documents (added 2026-09-21):** engineering specs in [architecture/](architecture/ARCHITECTURE.md), milestones in [ROADMAP.md](ROADMAP.md), decisions in [DECISIONS.md](DECISIONS.md), research in [research/](research/). Where they refine or change this blueprint, §167 lists the amendments.
+> **Companion documents (added 2026-09-21):** engineering specs in [architecture/](architecture/ARCHITECTURE.md), milestones in [ROADMAP.md](ROADMAP.md), decisions in [DECISIONS.md](DECISIONS.md), research in [research/](research/). Where they refine or change this blueprint, §167 lists the amendments. §168 maps every section to the build-checklist items that implement it; how items are tracked is in [README.md](README.md).
 
 ---
 
@@ -3752,3 +3752,119 @@ Phase 0 research changed or refined these parts of the blueprint. The detailed s
 | §121, §151–152 | Integration strategy, WASM plugins, KIVO Remote | [INTEGRATIONS_AND_PLUGINS.md](architecture/INTEGRATIONS_AND_PLUGINS.md) |
 | §22 | No bundled local LLM; users connect their own local servers | [DECISIONS.md](DECISIONS.md) |
 | §2 | The name **KIVO is kept** (owner decision), despite existing "KIVO" AI products; check the registries before public release | [research §8](research/features-and-extensions/REPORT.md) |
+| §79, §134–135 | **Look:** the Island theme, **light by default** (Light / Dark / System), ink primary buttons, accent for status only, system font, custom title bar. Supersedes "dark-first" | [DESIGN_SYSTEM.md](design/DESIGN_SYSTEM.md) |
+| §80 | **Navigation:** 13 items with in-page tabs (Home, Chat, Tasks, Activity, Routines · Brains, Agents, Voice, Extensions · Permissions, Memory, Usage · Settings). Tools merged into Capabilities; MCP and Integrations became Extensions tabs; Companion, Performance, Diagnostics and About became Settings tabs | [UX.md §3](architecture/UX.md) |
+| §58 | **Permission modes** (Ask / Accept edits / Plan / Auto / Bypass) replace the Maximum Safety / Balanced / Power User profiles | [SECURITY.md §1.1](architecture/SECURITY.md) |
+| §62–65, §82 | **Conversation, context and memory v2:** automatic sessions and threads, per-model context budgets with compaction and prompt caching, instructions and workspaces, an Obsidian-compatible memory vault with Suggest + Workspace notes, skills, context layers | [CONVERSATION.md](architecture/CONVERSATION.md) |
+| §18–20 | **Discovery:** CLIs, local servers, desktop AI apps, MCP configs and skills are detected and suggested; in-app installs with consent; data-freshness rules | [DISCOVERY.md](architecture/DISCOVERY.md) |
+| §112–113 | **Release pipeline:** GitHub Actions, release-please, `tauri-action` matrix, Stable/Beta/Experimental | [RELEASE.md](architecture/RELEASE.md) |
+| §129–133 | **Onboarding:** 11 steps in 5 phases (Welcome · Voice · Brain · Control · Ready), replacing the 8 steps | [UX.md §4](architecture/UX.md) |
+| §74 | Companion "modes" (hidden/ambient/compact/full/presentation) are replaced by companion **styles** (§74–78 row above) plus the Island's own states; "Presentation" survives as a product mode (PLAN-06) | [UX.md §2, §6](architecture/UX.md) |
+| §155 | **Build tracking:** every requirement has an ID and a status mark in its spec's build checklist; §168 maps each plan section to those IDs | [docs/README.md](README.md) |
+
+---
+
+# 168. Coverage map and plan-only requirements (2026-09-21)
+
+This section ties every part of the plan to the checklist items that build it, so nothing in the
+plan is lost. Item IDs and status marks are explained in [docs/README.md](README.md). Sections
+that state philosophy or examples are covered by the rules and acceptance items listed.
+
+## 168.1 Coverage map
+
+| Plan § | Topic | Built by | Milestone |
+|---|---|---|---|
+| 1–6 | Summary, name, philosophy, goals, non-goals, target UX | Principles enforced through ARCH §8 invariants and the items below; PLAN-19–23 acceptance journeys | All |
+| 7–10 | System architecture, processes, technology, Rust | ARCH-01–13, ARCH-33–36 | M0 |
+| 11–16 | Brain architecture, provider types, contract, profiles, routing | BRAIN-08–23 | M3 |
+| 17 | API configuration UX | UX-22, BRAIN-17–18 | M3 |
+| 18–20 | CLI discovery and installation, dependency manager | DISC-04, DISC-07, DIST-14 | M3, M8 |
+| 21 | Base installer philosophy | DIST-01–05 | M1, M9 |
+| 22 | Local AI | BRAIN-12, DISC-05 | M3 |
+| 23–26 | STT architecture, selection UX, hardware detection, residency | VOICE-06, VOICE-08, VOICE-10, VOICE-34, UX-23, PLAN-01, PLAN-02 | M1, M8 |
+| 27–31 | Wake word, push-to-talk, VAD, endpointing, streaming STT | VOICE-04–05, VOICE-13–19, VOICE-33, UX-41 | M1, M2 |
+| 32–35 | TTS architecture, selection, streaming, barge-in | VOICE-09, VOICE-11, BRAIN-28, VOICE-31 | M1–M3, M8 |
+| 36 | Voice personality | BRAIN-29, BRAIN-38, PLAN-11 | M1, M3 |
+| 37–38 | Fast intent router, deterministic fast path | BRAIN-01–05, TOOL-06–18 | M1, M4 |
+| 39–42 | Agent path, planner, task graph, validation | BRAIN-30–32, ARCH-27 | M5 |
+| 43 | Cancellation | ARCH-25–26, PLAN-03 | M1, M5 |
+| 44–46 | Tool router, capability ladder, native tools | TOOL-04–18 | M1, M4 |
+| 47–48 | UI Automation and events | TOOL-19–22 | M4 |
+| 49–50 | Browser control and context | TOOL-23–27 | M1, M4 |
+| 51–52 | Vision, mouse/keyboard | TOOL-32–33, CAP-08–13 | M4, M8 |
+| 53–55 | MCP, manager, dynamic exposure | TOOL-34–37, UX-27, BRAIN-27 | M6 |
+| 56–58 | Risk classification, permission engine, profiles → modes | TOOL-01–02, SEC-01–12 | M1, M4, M5 |
+| 59 | Shell access | TOOL-30–31 | M4 |
+| 60 | Prompt-injection defense | SEC-13–16 | M4, Post |
+| 61 | Credential security | SEC-17–19 | M0, M3 |
+| 62–65 | Memory, rules, context, deltas | MEM-01–11, CONV-01–07, CONV-17–25, CONV-30–31 | M3, M7, M8 |
+| 66 | Event bus | ARCH-22–23 | M0, M1 |
+| 67–68 | Background automation, scheduler | TOOL-28–29, ROUT-11 | M5, M8 |
+| 69–70 | Privacy modes, data classification | SEC-20–21 | M7 |
+| 71 | Offline mode | PLAN-04 | M7 |
+| 72–73 | Network resilience, failover | PLAN-05, BRAIN-22 | M3 |
+| 74–78 | Companion, states, visuals, targeting, rendering | UX-05–17, UX-38–39, DS-09 | M0–M2, M8 |
+| 79 | UI/UX philosophy | DS-01–16 | D0, M7 |
+| 80–88 | Control Center pages | UX-18–32, CAP-04 | M1–M7 |
+| 89 | Performance dashboard | PLAN-07 | M8 |
+| 90–92 | Hardware profiles, GPU policy, NPU | PLAN-08, PLAN-09, VOICE-35, VOICE-12 | M8, Post |
+| 93–95 | Model residency, prewarming, fast acknowledgement | PLAN-02, VOICE-34, PLAN-10, PLAN-11 | M1, M3 |
+| 96–103 | Performance philosophy, instrumentation, benchmarks, targets | ARCH-28, BENCH-01–14, VOICE-40 | M0, M1 |
+| 104–106 | Security architecture, emergency stop, audit | SEC-22–27 | M1, M2, M4 |
+| 107–108 | Configuration, database | ARCH-29–31 | M0 |
+| 109 | Diagnostics | ARCH-40, SEC-23 | M8 |
+| 110–113 | Installer, dependency installer, updates, channels | DIST-01–14, REL-01–12 | M0, M1, M8, M9 |
+| 114 | Crash recovery | ARCH-03, ARCH-09, ARCH-27, PLAN-12 | M0–M8 |
+| 115 | Testing strategy | PLAN-13, TOOL-38–41, BENCH-13 | M0 onward |
+| 116–117 | Test environment, security testing | TOOL-38–41 | M4, M6 |
+| 118–119 | Accessibility, internationalization | UX-49–55, VOICE-36–39, DS-16 | M1, M7, L1–L5 |
+| 120 | Application capability registry | TOOL-05 | M4 |
+| 121 | Plugin architecture | INT-09–10 | M4, Post |
+| 122–123 | Tool schema, dynamic tool selection | TOOL-01, BRAIN-27 | M1, M3 |
+| 124–125 | State synchronization, IPC | ARCH-14–21, ARCH-39 | M0, M1 |
+| 126–127 | Startup and shutdown sequences | PLAN-14, PLAN-15 | M1 |
+| 128 | Resource rules | PLAN-16 | M1 onward |
+| 129–133 | Onboarding and recommendations | UX-33–36 | M2, M3, M7 |
+| 134–136 | Design system, motion, surfaces | DS-01–16 | D0, M7 |
+| 137–141 | Example interactions | PLAN-19–23 | M1–M8 |
+| 142–143 | Product modes, user preferences | PLAN-06, UX-37 | M7, M8 |
+| 144–146 | Conversational style, explainability, error UX | BRAIN-29, PLAN-17, PLAN-18, TOOL-03 | M1, M3 |
+| 147–153 | Future: multi-agent, workflow builder, marketplaces, cross-device, IoT, distributed | ROUT-*, INT-10–14, PLAN-24–26 | M5, M8, Post |
+| 154–155 | Methodology, development order | ROADMAP.md, docs/README.md | — |
+| 156–159 | MVP, beta, production definitions, quality gates | PLAN-27–30 | M7, M8, M9 |
+| 160 | Architecture invariants | ARCH §8, PLAN-31 | M9 |
+| 161–166 | Final diagrams and definitions | Reference only | — |
+
+## 168.2 Plan-only requirements
+
+- [ ] **PLAN-01** · M1 · Hardware detection through `SystemInfo`: CPU, RAM, GPU, VRAM, NPU where supported, battery state and current load; feeds the voice recommendation (§25, §90)
+- [ ] **PLAN-02** · M1 · Model residency states Unloaded → Warming → Warm → Active → Idle → Unloading, tracked per model and reported over IPC (§26, §93)
+- [ ] **PLAN-03** · M5 · Cancellation also propagates from task timeouts, provider failures and application shutdown (§43)
+- [ ] **PLAN-04** · M7 · Offline mode verified end to end: wake, STT, TTS, native commands, files, UIA, local tools, local brain and local automation all work with the network off (§71)
+- [ ] **PLAN-05** · M3 · Network resilience: offline, timeout, provider failure, rate limit, auth failure and degraded connection each produce a useful fallback and a plain message (§72)
+- [ ] **PLAN-06** · M8 · Product modes Normal, Private, Offline, Battery, Performance, Gaming, Presentation, each mapped onto privacy mode, performance profile and Island behaviour (§142)
+- [ ] **PLAN-07** · M8 · Performance dashboard: CPU, RAM, GPU, VRAM, NPU, model residency, and STT / brain / tool / TTS / total latency (§89)
+- [ ] **PLAN-08** · M8 · Performance profiles Low Resource, Balanced, Performance, Battery, Gaming, Custom, chosen automatically with manual override (§90)
+- [ ] **PLAN-09** · M8 · GPU policy: consider GPU load, VRAM, active apps, battery, gaming and model needs; never compete with GPU-heavy work (§91)
+- [ ] **PLAN-10** · M3 · Predictive prewarming after wake: prepare STT, the likely tool subsystem and optionally the likely provider connection, never with side effects (§94)
+- [ ] **PLAN-11** · M1 · Fast acknowledgement: long operations show immediate visual feedback in the Island, with no spoken filler (§36, §95)
+- [ ] **PLAN-12** · M8 · Crash recovery: a crashed worker is isolated and restarted where safe, task state is preserved, the problem is reported, failures do not cascade (§114)
+- [ ] **PLAN-13** · M0 · Test layers in place: unit tests (routing, permissions, state, config, adapters, task graph) from M0; integration tests as each subsystem lands; end-to-end tests for voice → command, voice → agent, cancellation, provider fallback, offline and privacy mode by M8 (§115)
+- [ ] **PLAN-14** · M1 · Startup sequence: runtime → lightweight config → event bus → audio → wake/VAD → OS event registration, with heavy models loaded only by policy (§126)
+- [ ] **PLAN-15** · M1 · Shutdown sequence: stop new tasks, notify and cancel active work, stop audio and providers, persist state, close the database, exit workers, then the runtime (§127)
+- [ ] **PLAN-16** · M1 · The ten resource rules are reviewed at each milestone exit, with any exception logged in DECISIONS.md (§128)
+- [ ] **PLAN-17** · M3 · Explainability: the card and Activity show the selected provider, tool, permission decision and result, never hidden chain-of-thought (§145)
+- [ ] **PLAN-18** · M1 · Error UX: plain-language cause plus Retry / Open settings actions, never raw codes (§146)
+- [ ] **PLAN-19** · M1 · Acceptance journey §138 "Kivo, mute": no external AI request, brief confirmation
+- [ ] **PLAN-20** · M5 · Acceptance journey §137 (coding project: open, find failing test, fix, validate, summarize, speak)
+- [ ] **PLAN-21** · M7 · Acceptance journey §139 (confidential document summarized with a local model, cloud blocked)
+- [ ] **PLAN-22** · M5 · Acceptance journey §140 (build watcher: no LLM while waiting, notify on completion)
+- [ ] **PLAN-23** · M8 · Acceptance journey §141 (where is the Export button: UIA bounds, companion points, voice explains)
+- [ ] **PLAN-24** · Post · Multi-agent coordination with KIVO as the coordinator (§147)
+- [ ] **PLAN-25** · Post · Voice marketplace: voices, languages, styles, pronunciation packs, legally permitted only (§150)
+- [ ] **PLAN-26** · Post · Home/IoT tools under the same permission model (§152)
+- [ ] **PLAN-27** · M7 · MVP definition (§156) fully met → internal alpha
+- [ ] **PLAN-28** · M8 · Beta definition (§157) fully met
+- [ ] **PLAN-29** · M9 · Production definition (§158) fully met
+- [ ] **PLAN-30** · M9 · Quality gates (§159) pass for the release
+- [ ] **PLAN-31** · M9 · Architecture invariants checklist (§160, ARCHITECTURE §8) all green

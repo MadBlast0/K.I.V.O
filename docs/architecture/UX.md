@@ -19,8 +19,8 @@ It implements plan §74–90, §118 and §129–135, and records the decisions i
 
 ## 2. Voice overlay
 
-**Chosen concept: "Island"** (owner decision, 2026-09-21; the mockup is
-[kivo-wake-concepts.html](../design/mockups/kivo-wake-concepts.html), tab 03). Throughout the
+**Chosen concept: "Island"** (owner decision, 2026-09-21; see the Island section of
+[kivo-app.html](../design/mockups/kivo-app.html)). Throughout the
 specs, "pill" means the Island capsule.
 
 **Surfaces:**
@@ -90,7 +90,8 @@ Navigation (updated 2026-09-21; 13 items, with tabs inside pages):
 
 **Design system (plan §134–135):**
 
-- **Stack:** React + TypeScript, Tailwind v4, shadcn/ui on Base UI, and Motion (`LazyMotion`).
+- **Stack:** React + TypeScript, Tailwind v4, **Base UI** primitives styled by KIVO's own `k-`
+  component CSS (no shadcn; see [DESIGN_SYSTEM.md](../design/DESIGN_SYSTEM.md)), Motion, and Lucide icons.
 - **Fonts:** the system font (Segoe UI Variable on Windows; nothing bundled, and SF Pro is never used), with Noto fallbacks for other scripts.
 - **Tokens:**
   - an 8 px spacing scale;
@@ -127,12 +128,12 @@ Onboarding.
 
 | Group | Controls (default) |
 |---|---|
-| General | Start at sign-in (off) · On close keep running (on) · Tray icon (on) · Language (EN) · Low-memory mode (off) |
+| General | Open KIVO when Windows starts (off) · On close keep running (on) · Tray icon (on) · Language (EN) · Low-memory mode (off) |
 | Voice | Wake words list with Add/Edit (Hey Kivo) · Push-to-talk hotkey (Ctrl+Space) · Toggle mode (off) · Auto-end on silence (on) · Mic · Speaker profile mode (Prefer owner, after enrollment) · STT engine · TTS engine + voice · User vocabulary |
-| Overlay | Style: Pill + card / Pill only / Card only / Off · Position (bottom-center, remember drag) · Monitor (active) · Wake glow (off) · Reduce motion (follow Windows) · In fullscreen & Focus: hide / tiny pill (hide) |
+| Overlay | Style: Pill + card / Pill only / Card only / Off · Position (top center; bottom center or remember drag) · Monitor (active) · Wake glow (off) · Reduce motion (follow Windows) · In fullscreen & Focus: hide / tiny pill (hide) |
 | Sounds | Master (on) · start/stop/error/done (on) · thinking (off) · volume · sound set |
 | Brains | Providers, profiles, routing rules, fallbacks |
-| Permissions | Profile (Balanced) · grants list · per-tool overrides · emergency stop hotkey |
+| Permissions | Mode (Auto) · grants list · per-tool overrides · emergency stop hotkey |
 | Privacy | Mode (Cloud) · data classes · conversation retention (30 days) · debug transcripts (off) |
 | Memory | On (explicit only) · list/edit/delete · export |
 | Performance | Profile (auto: Battery / Balanced / Performance / Gaming) · model residency timers |
@@ -223,3 +224,92 @@ or a budget warning. Rules:
 - **Color and contrast:** no information is conveyed by color alone. Contrast is at least 4.5:1,
   and the Windows high-contrast theme is respected.
 - **Voice-only use:** every action in the overlay can be triggered by voice.
+
+## Build checklist
+
+Status marks and the build protocol: [docs/README.md](../README.md). Visuals come from
+[the mockup](../design/mockups/kivo-app.html) and the components in `apps/kivo-app/src/components`
+([DESIGN_SYSTEM.md](../design/DESIGN_SYSTEM.md)). Screen items are "done" only when they show
+real runtime data over IPC, not mockup data.
+
+**Lifecycle (§1)**
+
+- [ ] **UX-01** · M1 · First launch opens the Control Center on onboarding; a manual launch starts the runtime and shows the Control Center; a relaunch shows, unminimizes and focuses the main window (§1)
+- [ ] **UX-02** · M1 · Close (X, Alt+F4, taskbar) hides the window and KIVO keeps running ("On close, keep KIVO running", on); the first close shows a one-time toast with Settings and Quit (§1)
+- [ ] **UX-03** · M1 · Tray: left-click opens the Control Center; right-click menu Open KIVO · Pause/Resume listening · Hide overlay for 1 hour · Stop everything · Settings · Quit KIVO (§1)
+- [ ] **UX-04** · M1 · Tray icon states: normal, listening, paused (slashed mic), error (badge), updating (§1)
+
+**Overlay: the Island (§2)**
+
+- [ ] **UX-05** · M0 · Overlay spike: a transparent, borderless, non-focusable (`WS_EX_NOACTIVATE`), always-on-top, click-through window with no taskbar entry; white-flash and show latency measured (§2, BENCH-07)
+- [ ] **UX-06** · M1 · The Island window: top center of the monitor with the foreground window, ~8 px from the top, never takes focus, draws nothing when hidden; hidden windows set WebView2 `IsVisible=false` (§2, §3)
+- [ ] **UX-07** · M1 · Island states driven by the runtime's `SessionState`: listening (live transcript), thinking, acting (target-app icon, steps), speaking, awaiting confirmation, error, paused (§2)
+- [ ] **UX-08** · M2 · Island states guest, follow-up (ring countdown) and waiting-for-you (§2, §8.1, CONVERSATION §7)
+- [ ] **UX-09** · M1 · Card: ≤ 520 px wide and ≤ 50% of screen height, scrolls, focusable only while typing; header brain/profile chip (routing reason on hover, M3); body with the editable transcript (click to fix and resend), answer and step rows; footer text field, mic toggle, Stop and "Open in Control Center" (§2)
+- [ ] **UX-10** · M1 · End: collapses 4 s after the answer, not while hovered, typing or confirming; confirmations never auto-dismiss (§2)
+- [ ] **UX-11** · M1 · Fullscreen app / Focus mode: suppressed or tiny pill (setting), sounds only (§2)
+- [ ] **UX-12** · M1 · Keyboard: Esc cancels, Ctrl+Enter sends, Tab moves between confirmation buttons (§2)
+- [ ] **UX-13** · M4 · Draggable, position remembered per monitor; setting Top center (default) / Bottom center / Remember drag (§2)
+- [ ] **UX-14** · M4 · Title-bar overlap: shifts down by the title-bar height while only listening (§2)
+- [ ] **UX-15** · M5 · Live activities (media, timer, download, agent progress), each source configurable, off in fullscreen (§2)
+- [ ] **UX-16** · M8 · Optional edge glow (2–4 px, ~400 ms on wake, off by default), only if the M0 power measurement is acceptable (§2)
+- [ ] **UX-17** · M8 · Overlay style setting: Pill + card / Pill only / Card only / Off (§5)
+
+**Control Center (§3)**
+
+- [~] **UX-18** · M7 · Navigation: 13 items in the §3 groups with in-page tabs, plus Settings (§3) → partial: sidebar with all items and page tabs component (`components/layout/Shell.tsx`, `PageTabs`) · missing: the pages
+- [ ] **UX-19** · M1 · Home: status orb and "Listening for Hey Kivo", Talk / Pause listening / mode picker, Running and Recent lists (mockup → Home) (§3, plan §81)
+- [ ] **UX-20** · M1 · Activity: timeline of turns, tool calls and results from the Activity table (mockup → Activity) (§3, plan §83)
+- [ ] **UX-21** · M3 · Chat: threads list, conversation with brain switcher, attachments, tool activity, cancel, context meter, Compact now (mockup → Chat; CONVERSATION §0–1)
+- [ ] **UX-22** · M3 · Brains page (Brains / Context tabs): providers with found-on-this-PC, add/test/remove, profiles, free options labelled (mockup → Brains)
+- [ ] **UX-23** · M3 · Voice page: mic, speaker, wake words (add/edit), STT/TTS engine and voice, personality, models on this PC (download/delete) (mockup → Voice; plan §86)
+- [ ] **UX-24** · M5 · Tasks: running and past tasks with status, current step, elapsed time, tool activity, cancel, result (mockup → Tasks; plan §84)
+- [ ] **UX-25** · M5 · Agents page: CLI agents, desktop AI apps, sessions (mockup → Agents)
+- [ ] **UX-26** · M5 · Routines page and builder (mockup → Routines; ROUTINES §4)
+- [ ] **UX-27** · M6 · Extensions page tabs Connectors · MCP servers · Plugins · Skills, each: one-line description + actions, grouped lists with counts, found-on-this-PC sections with Refresh (mockup → Extensions; DISCOVERY)
+- [ ] **UX-28** · M4 · Permissions page tabs Mode · Capabilities · Privacy (mockup → Permissions)
+- [ ] **UX-29** · M7 · Memory page: vault by tags and folders, suggestions, instructions, Open folder / Open in Obsidian (mockup → Memory; CONVERSATION §6)
+- [ ] **UX-30** · M7 · Usage page (BRAIN-37) (mockup → Usage)
+- [ ] **UX-31** · M7 · Settings tabs General · Appearance · Island · Sounds · Notifications · Accessibility · Shortcuts · Performance · Diagnostics · About, with the §5 defaults (mockup → Settings)
+- [ ] **UX-32** · M7 · Mica on the Control Center (Windows 11), solid on Windows 10 (§3)
+
+**Onboarding (§4)**
+
+- [ ] **UX-33** · M2 · Steps 1–5: Welcome (black, Island demo), Microphone check, How you call KIVO, Hearing & speaking (engine + voice, background download), Your voice (optional enrollment with consent) (§4)
+- [ ] **UX-34** · M3 · Step 6: Connect a brain (optional; sign-in; free options marked) (§4)
+- [ ] **UX-35** · M7 · Steps 7–11: Connect your apps and tools, Permission mode, Look & feel, Startup, Try it → Finish opens the Control Center; recommended choices preselected, optional steps skippable (§4)
+- [ ] **UX-36** · M7 · Recommendation engine: defaults chosen from hardware, installed software, GPU, RAM, network and providers; the user can override (§4, plan §130)
+
+**Settings defaults (§5)**
+
+- [ ] **UX-37** · M7 · Every §5 control exists with its listed default, persisted in `kivo.toml` through the runtime (§5)
+
+**Companion styles (§6)**
+
+- [ ] **UX-38** · M8 · Companion style setting Pill (default) / Orb (WebGL or Rive) / Character (Rive) / Hidden; all render the same `SessionState`, zero frames at idle (§6)
+- [ ] **UX-39** · M8 · Pointing: the companion moves to UIA bounds on the target monitor without covering the target (§6, plan §141)
+
+**Proactive speech (§7)**
+
+- [ ] **UX-40** · M5 · Proactive rules: speech/toast/queue by situation (active, call, fullscreen, away, quiet hours, urgent), grouped to ≤ 1 spoken interruption per 10 min, "what did I miss?", per-source speak/toast/silent (§7)
+
+**Text input and conveniences (§8–8.1)**
+
+- [ ] **UX-41** · M1 · Ctrl+Shift+Space opens the card in text mode with focus in the field; behaves like a spoken request; no speech reply unless enabled (§8)
+- [ ] **UX-42** · M5 · Selection shortcut: with text selected, Explain / Rewrite / Translate (clipboard or UIA TextPattern) (§8)
+- [ ] **UX-43** · M4 · Undo in the Island with an ~8 s ring, "Kivo, undo that" and the Control Center toast; irreversible actions never offer Undo (§8.1)
+- [ ] **UX-44** · M5 · "What can I say?" / "help" / F1: 3–5 examples for the foreground app from the App Capability Registry (§8.1)
+- [ ] **UX-45** · M2 · Follow-up without the wake word for N s (Off / 5 / 8 default / 15), ring countdown, VAD-gated (§8.1)
+- [ ] **UX-46** · M4 · Target-app icon as the Island's leading icon while acting (§8.1)
+- [~] **UX-47** · M7 · Ctrl+K command palette: search every setting, run routines, trigger actions, ask KIVO; black Island material, top center (§8.1) → partial: `components/ui/CommandPalette.tsx` with keyboard navigation and "Ask KIVO" fallback · missing: real commands, settings index, routines
+- [ ] **UX-48** · Post · People profiles (voiceprint, memory, preferences, routines, sign-ins, mode, usage per person) (§8.2)
+
+**Internationalization and accessibility (§9–10)**
+
+- [ ] **UX-49** · M1 · Every UI string goes through i18n (`i18next`, ICU messages), English source locale; no hard-coded strings (§9) — note: the current component gallery has hard-coded English, to be moved to i18n in M1
+- [ ] **UX-50** · M1 · CSS logical properties so RTL works by switching `dir`; dates and numbers via `Intl` (§9)
+- [ ] **UX-51** · L1 · Language settings show each language's status (Supported / Alpha / Planned) (§9)
+- [~] **UX-52** · M1 · ARIA roles, full keyboard navigation and visible focus rings in the overlay and Control Center (§10) → partial: components use Base UI (ARIA, keyboard) and a focus ring · missing: overlay window, audit
+- [ ] **UX-53** · M2 · State changes and final transcripts announced through UIA notifications (§10)
+- [ ] **UX-54** · M7 · Contrast ≥ 4.5:1, never color alone, Windows high-contrast respected; warn if overlay and sounds are both off (§5, §10)
+- [ ] **UX-55** · M5 · Voice-only use: every overlay action can be triggered by voice (§10)

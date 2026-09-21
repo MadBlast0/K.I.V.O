@@ -73,3 +73,22 @@ Step    = { id, tool_id, args (may reference ${vars}), when?: Condition, delay_m
 - **M5 (Agents & tasks):** the routine engine, phrase and hotkey triggers, and the builder MVP.
 - **M8:** schedule and event triggers, creating routines by voice or from history, and
   import/export.
+
+## Build checklist
+
+Status marks and the build protocol: [docs/README.md](../README.md).
+
+- [ ] **ROUT-01** · M5 · `Routine`, `Trigger` and `Step` data model (§5) in a versioned `routines` table with a JSON body
+- [ ] **ROUT-02** · M5 · A routine compiles to a Task graph (sequential, optional parallel groups); every step goes through `authorize()`; cancellation like any task (§3)
+- [ ] **ROUT-03** · M5 · Routine grants: the full permission list is shown on save and granted scoped to the routine and its exact arguments (§3)
+- [ ] **ROUT-04** · M5 · Error policy per step: stop (default), continue, retry(n), ask (§3)
+- [ ] **ROUT-05** · M5 · Phrase triggers (with variants and `{variables}`) resolved in the intent router's grammar stage; hotkey triggers; manual run (§1, §2)
+- [ ] **ROUT-06** · M5 · Custom commands: a phrase that runs one fast-path action without AI ("Kivo, cinema") (§1)
+- [ ] **ROUT-07** · M5 · Phrase collision check against the fast-path grammar, other routines and wake words, using the wake-word confusability checker (§5)
+- [ ] **ROUT-08** · M5 · AI steps (`brain.ask`, `brain.decide`) with a chosen profile, counted toward cost limits; routines containing AI are badged (§3)
+- [ ] **ROUT-09** · M5 · Builder UI: trigger picker → drag-to-reorder steps → tool picker with forms generated from JSON Schema → test run → save (§4)
+- [ ] **ROUT-10** · M5 · Built-in starter routines, all disabled: Work mode, Break, Meeting, Goodnight, Focus for {minutes} (§6)
+- [ ] **ROUT-11** · M8 · Schedule (cron-like, time zone) and event triggers (app launched, USB device, Wi-Fi network, time of day, idle/return, battery low, routine-from-routine) (§1)
+- [ ] **ROUT-12** · M8 · Unattended triggers never run High-risk steps without an on-screen confirmation (§3)
+- [ ] **ROUT-13** · M8 · Create by voice or chat (brain drafts, builder reviews, save after confirm) and "Save what you just did as a routine" (§4)
+- [ ] **ROUT-14** · M8 · Import/export `.kivo-routine.json`, treated as untrusted, permissions shown before import (§4)

@@ -137,3 +137,75 @@ ToolResult { status: Ok | Err(kind, user_message), data, provenance, duration }
   VM. CI runs the UIA tests on `windows-latest` against the dummy app.
 - Security tests (plan §117) include: injection pages, malicious documents, a hostile MCP server
   fixture, shell injection strings, path traversal, and attempts to bypass permissions.
+
+## Build checklist
+
+Status marks and the build protocol: [docs/README.md](../README.md).
+
+**Tool schema and router (§1–2)**
+
+- [ ] **TOOL-01** · M1 · `ToolSpec` and `ToolResult` exactly as in §1 (namespaced id, JSON Schema params/result, risk, side effects, data egress, timeout, cancellable, capability tier, platforms), plus `undo` handler or `irreversible: true` (§1, UX §8.1)
+- [ ] **TOOL-02** · M1 · The executor API requires the `Decision` from `authorize()`; nothing executes without one (type-level) (§1, SECURITY §2)
+- [ ] **TOOL-03** · M1 · Errors carry a user-readable message and a machine code; raw HRESULTs are logged, never spoken (§1)
+- [ ] **TOOL-04** · M4 · Tool router with the capability ladder (Native/OS API → App CLI → UIA → Browser DOM → A11y → Vision → Input) and per-app overrides (§2)
+- [ ] **TOOL-05** · M4 · App Capability Registry as data files (`apps/*.toml`: exe/AUMID match, launch method, CLI verbs, UIA hints, quirks) for the core apps; users and plugins can add entries (§2)
+
+**Native Windows tools (§3)**
+
+- [ ] **TOOL-06** · M1 · Apps: launch, close, focus, restart, list installed (Start-menu `.lnk` + `shell:AppsFolder`, UWP via AUMID, fuzzy match with aliases) (§3)
+- [ ] **TOOL-07** · M1 · Windows: list, focus (foreground-lock rules), minimize, maximize, close; DWM cloaking check (§3)
+- [ ] **TOOL-08** · M4 · Windows: move to monitor, snap (§3)
+- [ ] **TOOL-09** · M1 · Audio: volume get/set, mute, mic mute (§3)
+- [ ] **TOOL-10** · M4 · Audio: output device switch via documented APIs (§3)
+- [ ] **TOOL-11** · M1 · Media: play/pause/next/previous and now-playing via `GlobalSystemMediaTransportControlsSessionManager` (§3)
+- [ ] **TOOL-12** · M1 · System: lock and sleep; restart and shutdown as High risk with confirmation (§3)
+- [ ] **TOOL-13** · M4 · System: brightness where supported, battery, Focus/DND state (§3)
+- [ ] **TOOL-14** · M1 · Screen: screenshot of screen, window or region (Windows.Graphics.Capture) (§3)
+- [ ] **TOOL-15** · M4 · OCR via Windows.Media.Ocr (offline) (§3)
+- [ ] **TOOL-16** · M4 · Files: search (Windows Search `SystemIndex` + fallback walk), open, reveal, create, rename, move, copy; delete always to the Recycle Bin; path-traversal and protected-path guard (§3)
+- [ ] **TOOL-17** · M4 · Clipboard read/write; reads are tagged `Untrusted` (§3)
+- [ ] **TOOL-18** · M1 · Notifications: show a Windows toast (§3)
+
+**UI Automation (§4)**
+
+- [ ] **TOOL-19** · M4 · A dedicated UIA thread (COM MTA) using the `uiautomation` crate (license verified in M0) with `windows-rs` for gaps (§4)
+- [ ] **TOOL-20** · M4 · UIA tools `uia.find`, `uia.get_tree` (depth-limited, pruned), `uia.invoke`, `uia.set_value`, `uia.toggle`, `uia.select`, `uia.expand`, `uia.scroll_into_view`, `uia.get_bounds` (§4)
+- [ ] **TOOL-21** · M4 · UIA events (FocusChanged, scoped StructureChanged, WindowOpened/Closed, PropertyChanged) subscribed on demand into the event bus; no polling (§4)
+- [ ] **TOOL-22** · M4 · Elevated windows (UIPI) are reported clearly; KIVO never auto-elevates; custom-drawn apps fall back to Vision/Input (§4)
+
+**Browser (§5)**
+
+- [ ] **TOOL-23** · M1 · Open URL and web search via the default browser (§5)
+- [ ] **TOOL-24** · M4 · KIVO Chromium MV3 extension (Chrome, Edge, Brave) + native messaging host (`kivo-runtime --native-messaging`): tabs, URL/title, selection, readable DOM excerpt (~4k tokens), click/type on elements (§5)
+- [ ] **TOOL-25** · M4 · CDP automation (`chromiumoxide`) only in a KIVO-managed profile (§5)
+- [ ] **TOOL-26** · M4 · UIA on the browser window as the fallback when the extension is absent; all page content is `Untrusted` (§5)
+- [ ] **TOOL-27** · Post · Firefox extension (§5)
+
+**Watchers (§6)**
+
+- [ ] **TOOL-28** · M5 · Event-driven watchers: download finished, folder changed (`notify`), process exited / build finished, window/app state (UIA/WinEvent), time/reminders (persisted scheduler; missed runs reported on start) (§6)
+- [ ] **TOOL-29** · M5 · Every task has an owner, permissions granted at creation, history, status and cancellation; watchers use no LLM while waiting (§6)
+
+**Shell (§7)**
+
+- [ ] **TOOL-30** · M4 · `shell.run { command, shell: pwsh|cmd, cwd, timeout }` inside a Job Object (kill-on-close, memory/CPU limits), output captured, cancellable, logged (§7, ARCHITECTURE §1)
+- [ ] **TOOL-31** · M4 · Shell risk parser: read-only commands Low; writes, deletes, network, registry, `Invoke-Expression`, encoded commands or elevation Medium/High; unparseable High; never elevated; secrets only as per-call env vars (§7)
+
+**Vision and input (§8)**
+
+- [ ] **TOOL-32** · M4 · Vision on request only: capture region/window → local OCR or a vision brain within the privacy class; no continuous capture (§8)
+- [ ] **TOOL-33** · M4 · Input (SendInput) last tier: re-validate foreground window and bounds before clicking; block typing into password fields (UIA `IsPassword`); at least Medium unless user-initiated (§8)
+
+**MCP (§9)**
+
+- [ ] **TOOL-34** · M6 · `rmcp` client with stdio and Streamable HTTP transports (§9)
+- [ ] **TOOL-35** · M6 · MCP tools become `mcp.<server>.<tool>` ToolSpecs, default Medium risk (user can lower per tool), `data_egress` for remote servers (§9)
+- [ ] **TOOL-36** · M6 · Tool descriptions treated as untrusted: shown on install, description hashes compared and changes flagged (§9)
+- [ ] **TOOL-37** · M6 · KIVO MCP server exposing selected KIVO tools to CLI agents, all calls through the permission engine (§9)
+
+**Test environment (§10)**
+
+- [ ] **TOOL-38** · M4 · `testenv/` dummy Win32/WinUI app with known AutomationIds (buttons, fields, lists, dialogs, fake Export), local HTML pages (forms, injection pages, fake login), synthetic file tree, sandboxed shell dir (§10)
+- [ ] **TOOL-39** · M4 · CI runs the UIA journey against the dummy app on `windows-latest`; destructive tests run only in Windows Sandbox or a VM (§10)
+- [ ] **TOOL-40** · M4 · Security test suite v1: injection pages, malicious documents, shell injection strings, path traversal, permission-bypass attempts (§10, SECURITY)
+- [ ] **TOOL-41** · M6 · Hostile MCP server fixture tests (§10)

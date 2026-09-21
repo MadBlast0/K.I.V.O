@@ -5,6 +5,17 @@ decision changes, update the entry and note the date. Do not silently rewrite it
 
 ---
 
+## 2026-09-21 — Implementation start
+
+| Topic | Decision |
+|---|---|
+| **UI implementation** | React 19 + TypeScript + Vite + Tauri v2. Interactive primitives are **Base UI** used directly, styled by KIVO's own `k-` component CSS on design tokens (no shadcn layer; it added nothing the tokens don't cover). Tailwind v4 is installed for utilities. Motion for springs, Lucide icons behind semantic names ([DESIGN_SYSTEM.md](design/DESIGN_SYSTEM.md)) |
+| **Title bar** | The native title bar is off. KIVO draws one bar: the sidebar brand row plus a drag strip with Windows-style caption buttons (owner request) |
+| **Zero warnings** | tsc, Vite, rustc and clippy must stay free of warnings (owner request) |
+| **Build tracking** | Every buildable requirement has an ID and a status mark in its spec's `## Build checklist`; the plan's §168 maps every plan section to those IDs; ROADMAP lists each milestone's docs and items, regenerated with `pnpm docs:sync`. Rules in [README.md](README.md) (owner request) |
+| **Onboarding by milestone** | Steps 1–5 (voice) in M2, step 6 (brain) in M3, steps 7–11 in M7 |
+| **Mockup files** | The round-1 and wake-concept mockups were removed by the owner (kept in git history); the reference is [kivo-app.html](design/mockups/kivo-app.html) |
+
 ## 2026-09-21 — Feature additions (round 2)
 
 | Topic | Decision |
@@ -17,17 +28,17 @@ decision changes, update the entry and note the date. Do not silently rewrite it
 | **Companion** | Every style is available and switchable: Pill (default), Orb, Character (Rive), Hidden |
 | **Personas** | Calm (default), Friendly, Witty, Custom. They never change safety wording |
 | **Local LLM** | **Not bundled.** Users connect their own local servers (Ollama, LM Studio, llama.cpp) |
-| **Integrations** | All major apps, planned in order: Google, Microsoft, Spotify/media, dev tools, then others. Local means first, then vendor MCP servers, then native OAuth connectors with **bring-your-own client ID** where the platform restricts it (Gmail/Drive restricted scopes need CASA; Spotify dev mode allows 5 users) |
+| **Integrations** | All major apps, planned in order: Google, Microsoft, Spotify/media, dev tools, then others. Local means first, then vendor MCP servers, then native OAuth connectors with **bring-your-own client ID** where the platform restricts it (Gmail/Drive restricted scopes need CASA; Spotify dev mode allows 5 users). *Superseded 2026-09-21 by **No user keys** below: no bring-your-own client IDs* |
 | **Plugins** | WASM Component Model (wasmtime + WIT), with capabilities granted by linked imports. Post-MVP |
 | **Remote access** | Phone pairing with QR, an E2E-encrypted channel, an untrusted relay, and a separate permission principal. Post-MVP |
-| **Design** | Three directions are mocked up ([mockups](design/mockups/kivo-mockups.html)). **Owner choice pending** |
+| **Design** | Three directions are mocked up (mockup since removed; in git history). **Owner choice pending**. *Superseded 2026-09-21: round 1 rejected; Island chosen (see Overlay concept and Mockup v3)* |
 | **Name** | **Keep "KIVO"** (owner decision). The owner accepts the risk from existing "KIVO"/Kivo.ai/kivo.io uses ([research §8](research/features-and-extensions/REPORT.md)). A registry check (USPTO/EUIPO/WIPO/India) is recommended before the first public release |
 | **No user keys** | Users never paste API keys or register developer apps. Connectors work like Claude Desktop's "Connect" flow: remote MCP with DCR/CIMD, KIVO-owned OAuth apps, or local means ([INTEGRATIONS_AND_PLUGINS.md §0](architecture/INTEGRATIONS_AND_PLUGINS.md)). Brains prefer CLI-agent logins, OpenRouter OAuth and local models; direct API keys are optional (advanced) |
-| **Design round 1** | Rejected by the owner (too generic). Round 2 focuses on the **wake-up moment**, with four interaction concepts ([kivo-wake-concepts.html](design/mockups/kivo-wake-concepts.html)): Native, Line, Island, Halo |
+| **Design round 1** | Rejected by the owner (too generic). Round 2 focuses on the **wake-up moment**, with four interaction concepts (kivo-wake-concepts.html, since removed; in git history): Native, Line, Island, Halo |
 | **Overlay concept** | **Island (03)**: a black capsule at the top center that morphs into a card, then a compact live activity. It supersedes the bottom-center pill placement; bottom center stays available as a setting. The Control Center, onboarding and brand are designed next in the same language ([UX.md §2](architecture/UX.md)) |
 | **Control Center layout** | **Sidebar with groups (A)**, **minimal Home (B)**, one comfortable density (no density option), **Blue** accent, with **ink primary buttons** (black in light mode, white in dark mode). The accent is for status, selection and focus only ([kivo-app.html](design/mockups/kivo-app.html)) |
 | **Appearance settings** | Settings → Appearance lets users change the theme, the accent color (7 presets + custom), text size, transparency effects and motion. Settings → Island covers position, size, live transcript, live activities, wake glow and auto-hide |
-| **Onboarding v2** | 10 screens in 5 phases (Welcome · Voice · Brain · Control · Ready), one decision per screen, recommended choices preselected, optional steps skippable, and an interactive "Try it" finish |
+| **Onboarding v2** | 10 screens in 5 phases (Welcome · Voice · Brain · Control · Ready) *(superseded: 11 steps, see **Onboarding** below)*, one decision per screen, recommended choices preselected, optional steps skippable, and an interactive "Try it" finish |
 | **Permission modes** | Ask every time / Accept edits / Plan first / **Auto (default)** / Bypass permissions (explicit, time-limited, audited, BYPASS chip). Hard limits apply in every mode ([SECURITY.md §1.1](architecture/SECURITY.md)) |
 | **Computer use UX** | Island controller (Pause/Stop, step and cost), target highlight, action callout with Allow/Skip in watch mode, optional KIVO cursor, and a configurable frame (Off/Subtle/Full) and limits ([CAPABILITIES.md §4.1](architecture/CAPABILITIES.md)) |
 | **Conversation conveniences** | Undo in the Island, "What can I say?", follow-up without the wake word, target-app icon, Ctrl+K palette ([UX.md §8.1](architecture/UX.md)) |
@@ -49,7 +60,7 @@ decision changes, update the entry and note the date. Do not silently rewrite it
 | **Releases** | GitHub Actions: release-please + Conventional Commits → tags → `tauri-action` matrix producing a Windows NSIS `.exe` + `.msi` (x64 and ARM64), a macOS universal `.dmg`, and Linux `.AppImage`/`.deb`/`.rpm`. Stable/Beta/Experimental channels, SBOM, smoke-install tests. Mac/Linux ship as previews until the ports land ([RELEASE.md](architecture/RELEASE.md)) |
 | **Memory defaults** | **Suggest + Workspace notes both on** (each can be switched off). An Obsidian-compatible Markdown vault (front-matter tags, wikilinks, folders per type), a note detail level (Brief/Standard/Detailed), and an automatic tidy job (merge, condense, cap). A built-in memory MCP serves the vault to agents ([CONVERSATION.md §6](architecture/CONVERSATION.md)) |
 | **Mac/Linux releases** | Built in CI, not published until the ports are done |
-| **Navigation** | Grouped into 13 items with in-page tabs: Home, Chat, Tasks, Activity, Routines · Brains (Brains/Context), Agents, Voice, Extensions (Connectors/MCP/Skills) · Permissions (Mode/Capabilities/Privacy), Memory, Usage · Settings (General/Island & sounds/Performance/Diagnostics/About) |
+| **Navigation** | Grouped into 13 items with in-page tabs: Home, Chat, Tasks, Activity, Routines · Brains (Brains/Context), Agents, Voice, Extensions (Connectors/MCP/Skills) · Permissions (Mode/Capabilities/Privacy), Memory, Usage · Settings (General/Island & sounds/Performance/Diagnostics/About). *Tab lists superseded by **Settings structure** and **Extensions page** below* |
 | **Settings structure** | Settings tabs: General (startup, language, profiles-later, export/import/reset) · Appearance (theme, accent, text size, animations, transparency) · Island (style, placement, what it shows, behavior) · Sounds · Notifications (speak out loud, quiet hours, sources) · Accessibility · Shortcuts · Performance · Diagnostics · About (updates, licenses). Personality moved to Voice |
 | **Theme** | **Light by default**, with Light / Dark / System (follows Windows) |
 | **Extensions page** | The Installed/Browse redesign was **reverted** at the owner's request. It keeps the tabbed layout (the explainer cards were removed later on 2026-09-21), now with four tabs: **Connectors · MCP servers · Plugins · Skills** (Plugins added). Every tab follows one pattern: a one-line description with actions, then grouped lists with counts (Connected / Built in / Available, Servers / Tools, Installed / Waiting for review) |
@@ -183,7 +194,8 @@ Research: [voice-ui-and-app-presence/REPORT.md](research/voice-ui-and-app-presen
 **Decision:** A pill that expands into a card, plus an optional edge glow.
 
 - The pill sits at bottom center of the active monitor, is draggable, never takes
-  focus, and draws zero frames while idle.
+  focus, and draws zero frames while idle. *(Superseded 2026-09-21: the Island at top center;
+  bottom center remains a setting. See "Overlay concept".)*
 - The card grows out of the pill. It shows the live transcript, the streamed answer,
   action steps and confirmations, and accepts typed input.
 - Edge glow: a short accent (about 400 ms) on wake, **off by default**, active
@@ -210,6 +222,7 @@ hold-to-talk (push-to-talk).
 ## 2026-09-21 — UI stack
 
 **Decision:** React + shadcn/ui (Base UI) + Tailwind v4 + Motion, with the Inter or
-Geist font. Voice visuals are adapted from ElevenLabs UI (MIT) and optionally the
+Geist font. *(Superseded 2026-09-21: the system font, and Base UI styled by KIVO's own CSS
+instead of shadcn. See "Implementation start".)* Voice visuals are adapted from ElevenLabs UI (MIT) and optionally the
 LiveKit aura shader (Apache-2.0). The overlay shell, state machine and audio-level
 bridge are custom.

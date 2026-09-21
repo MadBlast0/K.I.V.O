@@ -371,3 +371,67 @@ When the Island asks for a decision (confirmation, plan approval, prompt draft, 
 - after a denial or cancel: a "cancelled" tone;
 - after Defer: no sound;
 - all belong to the chosen sound set (VOICE.md §6).
+
+## Build checklist
+
+Status marks and the build protocol: [docs/README.md](../README.md).
+
+**Sessions and threads (§0–1)**
+
+- [ ] **CONV-01** · M3 · Voice sessions end after 2 min of silence (setting); threads join voice sessions within 30 min on the same topic; "Kivo, new topic" starts a new thread; typed chats choose a thread (§1)
+- [ ] **CONV-02** · M3 · Agent sessions: the CLI agent's session id is stored so KIVO can resume it (§1)
+- [ ] **CONV-03** · M7 · Chat power features: rename, pin, continue, branch, export, delete, context meter, Compact now (§0)
+
+**Context budgets and compaction (§2)**
+
+- [ ] **CONV-04** · M3 · Per-request budget by model class (small local, large local, cloud chat 32k / voice 12k, CLI handoff, realtime), user-adjustable per profile (§2)
+- [ ] **CONV-05** · M3 · Assembly order 1–8 with guaranteed space for the first items and at least the last 4 turns verbatim (§2)
+- [ ] **CONV-06** · M3 · Compaction into a stored running summary by the cheapest suitable model; full history kept in SQLite and recallable by semantic search (§2)
+- [ ] **CONV-07** · M3 · Prompt caching: the stable prefix (layers 1, 2, 3, 6) marked cacheable for Anthropic, OpenAI and Gemini (§2, §8)
+
+**Free options (§3)**
+
+- [ ] **CONV-08** · M3 · Free and low-cost options labelled "Free" in onboarding and Brains (local models, Gemini CLI, Codex with ChatGPT, OpenRouter free models) (§3)
+
+**Instructions and workspaces (§4)**
+
+- [ ] **CONV-09** · M5 · Global instructions ("About me") and per-workspace instructions in SQLite, mirrored as Markdown (`instructions\global.md`, `workspaces\<name>\instructions.md`), watched and re-imported on edit (§4)
+- [ ] **CONV-10** · M5 · Workspaces detected (VS Code folder, terminal cwd, git repo acted in), with a one-time "Remember … as a workspace?" (§4)
+- [ ] **CONV-11** · M5 · Project `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` read when working in that folder, never written unless asked; "Export as AGENTS.md to project" on request (§4)
+
+**Driving other AIs (§5)**
+
+- [ ] **CONV-12** · M3 · KIVO-run ACP sessions: "Tell Claude …" follow-ups into the same session, progress in the Island, Tasks and Chat (§5.1)
+- [ ] **CONV-13** · M5 · "Open in terminal": hand the session to a visible terminal where the agent supports resuming (§5.1)
+- [ ] **CONV-14** · M5 · Visible terminal agents: launch Windows Terminal with cwd + agent command (mode flags from the app registry; bypass/yolo launch is High risk), track the session, paste prompts via UIA/clipboard, wait for "send", read replies via TextPattern (§5.2)
+- [ ] **CONV-15** · M5 · Prompt Draft card: target, text, Send · Edit · Cancel, voice edits live ("add …", "remove the last sentence", "read it back") (§5.4)
+- [ ] **CONV-16** · M8 · Desktop AI apps (Claude Desktop, ChatGPT, Copilot) through versioned app-registry UIA entries, with the "press Enter when ready" fallback (§5.3)
+
+**Memory v2 (§6)**
+
+- [ ] **CONV-17** · M7 · Knowledge graph tables `entities`, `relations`, `observations` with `valid_from` / `valid_to` (§6)
+- [ ] **CONV-18** · M7 · Obsidian-compatible Markdown vault in `%APPDATA%\KIVO\memory\` (front-matter, wikilinks, `people/`, `workspaces/`, `topics/`, `.kivo/` index); SQLite is the index rebuilt from the files, and user edits win (§6)
+- [ ] **CONV-19** · M7 · Capture modes Only when I ask / Suggest (on) / Workspace notes (on), each switchable; memory only from conversations and tasks KIVO took part in (§6)
+- [ ] **CONV-20** · M7 · Suggest: memory candidates at compaction or after tasks, accepted, edited or dismissed by the user (§2, §6)
+- [ ] **CONV-21** · M8 · Workspace notes (automatic) with detail level Brief / Standard / Detailed (§6)
+- [ ] **CONV-22** · M8 · Tidy job: merge duplicates, condense logs older than 14 days, mark superseded facts, 50 KB per-workspace cap, never keep secrets, ask before new workspace/person notes (§6)
+- [ ] **CONV-23** · M8 · Hybrid search FTS5 + `sqlite-vec` (§6, MEMORY §3)
+- [ ] **CONV-24** · M6 · Memory MCP tools `memory.search`, `memory.read`/`memory.get`, `memory.write_note`/`memory.add` (permission-gated), `memory.tags`; each agent allowed first; sensitive memories never shared with cloud agents unless allowed (§6)
+- [ ] **CONV-25** · M8 · Memory page graph view (tags, backlinks) (§6)
+
+**Conversational confirmations (§7)**
+
+- [ ] **CONV-26** · M2 · Decisions play the `question` earcon, listen without the wake word for 10 s (extended while the user talks), show a mic ring and voice hints matching the buttons (§7, DESIGN_SYSTEM voice-hint rule)
+- [ ] **CONV-27** · M2 · Local confirmation grammar (EN + HI): approve, approve with scope, deny, defer ("Waiting for you", no timeout), edit (to the brain), explain ("why?") (§7)
+- [ ] **CONV-28** · M2 · Voice approval rules: Medium needs the owner's voice (or signed-in device with recognition off); guests can't approve; speech heard during KIVO's own TTS is ignored (§7)
+- [ ] **CONV-29** · M4 · High risk: voice "approve" triggers Windows Hello; a click also works; voice alone never suffices (§7)
+
+**Context layers (§8)**
+
+- [ ] **CONV-30** · M3 · Context layers 1–8 with the default sizes, lazy-loading tools and skills (~1.5k tokens at start), CLI handoff = request + ≤ 300 tokens of memory (§8)
+- [ ] **CONV-31** · M7 · Settings → Context: per-layer toggles and edit links, per-profile budget, auto-compaction threshold, "Start each conversation fresh", estimated cost per session, "Preview what the AI sees" with secrets redacted (§8)
+
+**Skills (§9)**
+
+- [ ] **CONV-32** · M6 · Agent Skills (`SKILL.md` folders) from `%APPDATA%\KIVO\skills\`, import from folder/zip; only name + description in context, body loaded on use; scripts run through the shell tool under the permission engine; external skills reviewed before enabling (§9)
+- [ ] **CONV-33** · M8 · Skills created from a routine, or shared by agents KIVO launches (with permission) (§9)

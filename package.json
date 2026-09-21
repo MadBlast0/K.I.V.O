@@ -6,6 +6,7 @@
     "dev": "pnpm --filter kivo-app tauri dev",
     "ui": "pnpm --filter kivo-app dev",
     "build": "pnpm --filter kivo-app tauri build",
-    "typecheck": "pnpm --filter kivo-app typecheck"
+    "typecheck": "pnpm --filter kivo-app typecheck",
+    "docs:sync": "node scripts/sync-roadmap.mjs"
   }
 }

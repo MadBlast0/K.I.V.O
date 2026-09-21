@@ -18,7 +18,7 @@ achieved:
 | **Local means, no account at all** | Media (Spotify playback through Windows media controls), desktop apps (UIA), web apps (browser extension on the user's logged-in session), CLIs (`gh`, `code`) | Nothing to connect. These work out of the box |
 | **Services that can't be offered publicly** | Spotify Web API (5-user dev mode, extended quota only for organizations with 250k MAU) | Use local means only (media controls, `spotify:` URIs, UIA). There is no Web API connector until the platform allows it |
 
-**Connectors page** (Control Center → Integrations → Connectors), same idea as Claude's:
+**Connectors page** (Control Center → Extensions → Connectors), same idea as Claude's:
 
 - **Directory:** a curated list with each connector's logo, a description, the tools it provides,
   the data it can access, and badges (Local / Cloud / Sensitive).
@@ -51,9 +51,9 @@ auth flow, health checks, and a scope list shown to the user. It is covered by
 
 | Integration | Local path (M4) | Web API connector (M8+) | Constraints |
 |---|---|---|---|
-| **Google** (Gmail, Calendar, Drive) | Browser extension on the web apps | OAuth (PKCE, loopback redirect per RFC 8252), minimal scopes first (Calendar events, Drive file-level `drive.file`) | Gmail read and full Drive are **restricted scopes**: a public client ID needs verification plus an annual **CASA** assessment. Plan: **bring-your-own client ID** (a guided setup), and pursue verification only if funded |
+| **Google** (Gmail, Calendar, Drive) | Browser extension on the web apps | OAuth (PKCE, loopback redirect per RFC 8252), minimal scopes first (Calendar events, Drive file-level `drive.file`) | Gmail read and full Drive are **restricted scopes**: a public client ID needs verification plus an annual **CASA** assessment. Per §0 users never register their own apps: KIVO's own OAuth client ships non-restricted scopes first, and restricted scopes wait for verification funding |
 | **Microsoft** (Outlook, Calendar, Teams, OneDrive) | UIA on desktop Outlook/Teams; web via extension | Microsoft Graph with MSAL-style PKCE for personal and work accounts | Admin consent may be required for work tenants; verify scopes per feature |
-| **Spotify / media** | **Windows media transport controls** (play/pause/next, now playing) | Spotify Web API for search and "play X" | Dev mode allows **5 users**, and the owner needs Premium; extended quota is only for organizations with 250k MAU. So **BYO client ID**, and use the Spotify URI protocol (`spotify:search:…`) + UIA for "play X" without the API |
+| **Spotify / media** | **Windows media transport controls** (play/pause/next, now playing) | None until Spotify allows public apps (§0) | Dev mode allows **5 users**, and the owner needs Premium; extended quota is only for organizations with 250k MAU. So per §0 there is no Web API connector for now: use the Spotify URI protocol (`spotify:search:…`) + UIA for "play X" without the API |
 | **Dev tools** | `gh` CLI, `code` CLI, `git`, Windows Terminal (`wt`), project detection | GitHub REST/GraphQL via the user's `gh` auth; a VS Code extension later | — |
 | Other major apps (Notion, Slack, Discord, WhatsApp Desktop, Zoom, Office) | UIA + browser extension + app CLIs + URI protocols | Official MCP servers where available; native connectors on demand | Each one gets a short research note before its implementation |
 
@@ -125,3 +125,30 @@ Phone app (PWA first; native later) ⇄ E2E-encrypted channel ⇄ [relay (cipher
 
 **Milestone:** post-MVP (after M9), in a "Remote" track. Nothing in M0–M9 may assume that the UI is
 local-only. The IPC is already versioned and clients are already untrusted.
+
+## Build checklist
+
+Status marks and the build protocol: [docs/README.md](../README.md).
+
+**Connectors (§0–2)**
+
+- [ ] **INT-01** · M4 · Local integration paths that need no account: Windows media controls for any player, app CLIs (`gh`, `code`, `git`, `wt`), UIA on desktop apps, the browser extension on web apps, URI protocols such as `spotify:` (§1, §2)
+- [ ] **INT-02** · M6 · `Connector` shape: namespaced ToolSpecs, auth flow, health checks and a scope list shown to the user; covered by capability toggles and the permission engine (§1)
+- [ ] **INT-03** · M6 · Extensions → Connectors page: directory (logo, description, tools, data access, badges), Connect → system-browser sign-in, connected account, per-tool toggles and risk, Disconnect, last used (§0)
+- [ ] **INT-04** · M6 · Remote MCP connectors with MCP authorization (OAuth 2.1 + PKCE, DCR or a KIVO Client ID Metadata Document) and "Custom connector": paste a remote MCP URL (§0)
+- [ ] **INT-05** · M8 · KIVO-owned OAuth apps (public PKCE clients, loopback redirect per RFC 8252, never an embedded webview): Google Calendar + `drive.file` first, then Microsoft Graph (§0, §2)
+- [ ] **INT-06** · M8 · GitHub via the user's `gh` auth (REST/GraphQL) (§2)
+- [ ] **INT-07** · M8 · Tokens in Credential Manager, narrowest scopes requested incrementally, consumer session cookies never extracted (§2)
+- [ ] **INT-08** · Post · Restricted Google scopes (Gmail read, full Drive) once verification/CASA is funded; each other major app gets a research note before implementation (§0, §2)
+
+**Plugins (§3)**
+
+- [ ] **INT-09** · M4 · ToolSpec and WIT interfaces drafted so built-in tools already fit the plugin shape (§3)
+- [ ] **INT-10** · Post · WASM plugins (wasmtime Component Model): `kivo-plugin.toml` manifest, capabilities granted by linking only approved imports, consent at install and on capability-adding updates, fuel/time/memory limits, tools through `authorize()` (§3)
+
+**KIVO Remote (§4)**
+
+- [ ] **INT-11** · M0 · Nothing assumes the UI is local-only: IPC is versioned and clients are untrusted (§4)
+- [ ] **INT-12** · Post · Pairing by single-use QR (Ed25519 key, one-time secret, 2 min expiry), Noise/X25519 handshake, AEAD channel with replay counters (§4)
+- [ ] **INT-13** · Post · Transports LAN (mDNS), WebRTC P2P, self-hostable ciphertext-only relay (§4)
+- [ ] **INT-14** · Post · Remote principal with the Remote Balanced profile (no shell, no computer use, Medium confirmed), High confirmed on the phone with biometrics, paired devices listed and revocable, remote actions audited with device id (§4)

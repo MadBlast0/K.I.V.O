@@ -194,3 +194,79 @@ Design for every language from the start, and ship languages one at a time
 | Cancel → silence | ≤ 100 ms |
 | Wake false accepts | ≤ 0.5 / hour on the negative corpus |
 | Wake false rejects | ≤ 5% on the positive corpus |
+
+## Build checklist
+
+Status marks and the build protocol: [docs/README.md](../README.md). Engine choices marked
+"default" are confirmed or changed by the M0 benchmarks (BENCH items).
+
+**Pipeline (§1)**
+
+- [ ] **VOICE-01** · M0 · Capture through `AudioIo` (WASAPI via windows-rs, cpal fallback) and playback, measured for idle CPU in the audio spike (§1)
+- [ ] **VOICE-02** · M1 · Resample to 16 kHz mono (`rubato`); 10 ms internal frames batched to 80 ms for models (§1)
+- [ ] **VOICE-03** · M1 · Capture on an MMCSS "Audio" thread writing a lock-free ring buffer of ≥ 3 s; detection on one worker thread with EcoQoS while idle (§1)
+- [ ] **VOICE-04** · M1 · Energy gate → Silero v6 VAD (`ort`) (§1, §3)
+- [ ] **VOICE-05** · M2 · Pre-roll: STT starts from the buffer 300 ms before the wake word ends, and the wake phrase is stripped by alignment ("Hey Kivo, open Chrome" in one breath works) (§1)
+
+**Provider traits and engines (§2–3)**
+
+- [ ] **VOICE-06** · M1 · Traits `VadEngine`, `WakeDetector`, `WakeVerifier`, `SpeakerVerifier`, `SttEngine` (partial/stable/final events), `TtsEngine` (streaming) and `TurnDetector`; every engine declares `EngineInfo` (id, kind, license, languages, streaming, accel, resource estimate) (§2)
+- [ ] **VOICE-07** · M1 · Cloud engines pass the privacy check before any audio leaves the device (§2, SECURITY §6)
+- [ ] **VOICE-08** · M1 · Default streaming STT engine (the M0 winner among Moonshine v2, Parakeet TDT v3 and Whisper-turbo) running in `kivo-infer`, with partial transcripts shown live (§3)
+- [ ] **VOICE-09** · M1 · TTS: system voices (WinRT SpeechSynthesizer / SAPI 5) and Kokoro-82M (EN via misaki, no espeak), streaming from `kivo-infer` (§3)
+- [ ] **VOICE-10** · M8 · More STT tiers: Parakeet (Balanced, DirectML/CUDA), Whisper large-v3-turbo (Accurate), Deepgram Flux, AssemblyAI and OpenAI (Cloud) (§3)
+- [ ] **VOICE-11** · M8 · More TTS tiers: Supertonic-2 (Instant), Chatterbox (Expressive), Cartesia, ElevenLabs, Azure, OpenAI and Deepgram (Cloud) (§3)
+- [ ] **VOICE-12** · Post · Windows AI Speech STT (needs package identity, DIST-06) and GPL add-ons (Piper, espeak-ng) as separately downloaded components (§3)
+
+**Activation**
+
+- [ ] **VOICE-41** · M1 · Push-to-talk: hold Ctrl+Space to talk (`Hotkeys` trait: RegisterHotKey with a low-level-hook fallback), optional toggle mode, auto-end on silence; registration conflicts (e.g. IME switching on CJK layouts) detected with a rebind prompt (DECISIONS "Activation", UX §5)
+
+**Wake words (§4)**
+
+- [ ] **VOICE-13** · M2 · Built-in "Hey Kivo" model trained with the openWakeWord pipeline (KIVO-owned); it can be disabled but not deleted (§3, §4)
+- [ ] **VOICE-14** · M2 · Two-stage detection: per-word detectors, then the verifier and speaker check (§1, §3)
+- [ ] **VOICE-15** · M2 · `WakeWord` data model as in §4, stored in the `wake_words` table (§4)
+- [ ] **VOICE-16** · M2 · Custom wake words via sherpa-onnx KWS: validate (Good / Fair / Risky) → hear it (TTS) → try it → record 3–5 samples → tune sensitivity → false-alarm test (§4)
+- [ ] **VOICE-17** · M8 · Optional "Enhance" background training job for a custom word (§4)
+- [ ] **VOICE-18** · M2 · Up to 5 enabled wake words; collisions are checked against the other words and the fast-path vocabulary (§4)
+- [ ] **VOICE-19** · M2 · Command spotter (sherpa KWS) runs while KIVO speaks or acts, on the AEC-cleaned signal; "Kivo stop", "stop" and "cancel" cancel the turn without the wake word (§4)
+
+**Enrollment and speaker profile (§5)**
+
+- [ ] **VOICE-20** · M2 · Enrollment: consent, then 8 prompts; clips DPAPI-encrypted in `%LOCALAPPDATA%\KIVO\data\voice\`; one-click deletion (§5, SECURITY §5)
+- [ ] **VOICE-21** · M2 · `SpeakerProfile` (≤ 40 embeddings, CAM++) that grows from high-confidence turns and is rebuilt from clips when the model changes (§5)
+- [ ] **VOICE-22** · M2 · Speaker modes Off / Prefer owner (default after enrollment; unknown voices get a guest session) / Owner only (§5)
+- [ ] **VOICE-23** · M3 · STT personalization: the enrollment WER picks the recommended engine; `user_vocabulary` feeds hotwords or the Whisper prompt, and the brain receives it for transcript repair (§5)
+
+**Earcons and sound sets (§6)**
+
+- [ ] **VOICE-24** · M1 · Earcons `listen_start`, `listen_stop`, `error`, `done`, `thinking` (off; after 1 s) and `hangup`, each < 300 ms, pre-decoded into the playback mixer; wake → audio ≤ 150 ms; Kenney CC0 placeholders (§6)
+- [ ] **VOICE-25** · M1 · Capture continues during earcons; AEC removes them and VAD/STT input is gated for the earcon plus 50 ms (§6)
+- [ ] **VOICE-26** · M2 · Conversational cues `question`, `approved` and `cancelled` (§6, CONVERSATION §7)
+- [ ] **VOICE-27** · M2 · Sound set "Soft" (default) covering every cue plus a notification sound; Settings → Sounds offers the set picker with preview, per-cue toggles and volume relative to the system (§6)
+- [ ] **VOICE-28** · M8 · Sound sets Glass, Pulse, Wood, Minimal and Custom (user `.wav`/`.ogg` per cue); a separately chosen notification sound (§6)
+- [ ] **VOICE-29** · M8 · A custom KIVO earcon motif replaces the placeholders before beta (§6)
+
+**AEC, barge-in and endpointing (§3, §7)**
+
+- [ ] **VOICE-30** · M2 · AEC in production: the OS AEC on Windows 11 22621+ where the device exposes it, else WebRTC AEC3 (`sonora`), with KIVO's output mix as the reference (§1, §3)
+- [ ] **VOICE-31** · M2 · Barge-in: stricter VAD during TTS; duck TTS −12 dB within 50 ms; after ≥ 300 ms of speech or one STT word, cancel the turn (30 ms fade, brain and tools cancelled) and start listening from the buffer; otherwise restore the volume (§7)
+- [ ] **VOICE-32** · M2 · The wake threshold rises while KIVO plays audio (§7)
+- [ ] **VOICE-33** · M2 · Endpointing: Silero pause 250 ms + Smart Turn v3 (§3)
+
+**Residency (§8)**
+
+- [ ] **VOICE-34** · M1 · Residency: capture, VAD, wake and spotter always resident while listening; STT and TTS warm for 10 min after use (setting); STT prewarm on the wake-stage-1 hit and TTS prewarm on turn start (§8)
+- [ ] **VOICE-35** · M8 · GPU models unload on the Gaming profile or when the GPU is busy (§8)
+
+**Languages (§9)**
+
+- [ ] **VOICE-36** · M1 · `LanguagePack { code, stt_engines, tts_voices, kws_model?, grammar, vocabulary, status }` with English first; the router picks the engine for the active language (§9)
+- [ ] **VOICE-37** · M1 · Primary + secondary language settings; automatic language ID only where the engine provides it and it measures reliable (§9)
+- [ ] **VOICE-38** · L2 · Hindi + Punjabi, including Hindi–English and Punjabi–English code-mixing, benchmarked on owner-recorded test sets (§9)
+- [ ] **VOICE-39** · L1 · Each language has STT test audio, command utterances and wake positives/negatives before it moves from Alpha to Supported (§9)
+
+**Budgets (§10)**
+
+- [ ] **VOICE-40** · M1 · Every §10 budget is measured by `kivo-bench` on the reference tiers and met, or the miss is logged in DECISIONS.md (§10)

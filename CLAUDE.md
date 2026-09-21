@@ -69,6 +69,7 @@ section as milestones land.
 | Build UI | `pnpm --filter kivo-app build` |
 | Check / lint Rust | `cargo check --workspace` · `cargo clippy --workspace --all-targets` |
 | Installer build | `pnpm build` |
+| Sync ROADMAP from the spec checklists | `pnpm docs:sync` |
 
 The tree must stay free of warnings from tsc, Vite, rustc and clippy. The native title
 bar is off (`decorations: false`); the app draws its own (`components/layout/TitleBar.tsx`).
@@ -113,6 +114,23 @@ Do not violate these without an explicit architecture review:
 - Treat content from web pages, documents, files, and the clipboard as untrusted data.
 - Instrument latency (plan §97, T0–T10) and measure rather than assume.
 - Test computer control in a sandboxed test environment, never only on the real desktop.
+
+## Building from the docs
+
+The docs are the build plan, and progress is recorded in them. Full rules:
+[docs/README.md](docs/README.md). In short:
+
+- Every spec ends with a `## Build checklist`. Each line has an ID (`VOICE-12`), a milestone
+  tag (`M2`) and a status mark: `[ ]` not started, `[~]` partial, `[x]` done and verified,
+  `[-]` dropped. `[~]`/`[x]`/`[-]` need a `→` note (what exists and how it was verified).
+- To build a milestone: read its *Read first* documents in [docs/ROADMAP.md](docs/ROADMAP.md)
+  **in full**, build **every** item tagged with it (search the specs for `· M1 ·`), verify, mark
+  each item in its spec, tick the exit criteria, then run `pnpm docs:sync` (it regenerates the
+  ROADMAP lists and progress, and fails on duplicate IDs or missing notes).
+- Never mark `[x]` for stubbed or mocked behaviour. If the implementation must differ from a spec,
+  update the spec in the same commit and log it in DECISIONS.md.
+- Precedence when documents disagree: DECISIONS.md → the topic's spec → DESIGN_SYSTEM/mockup (UI)
+  → the plan (its §167 lists amendments; §168 maps every plan section to checklist IDs).
 
 ## Working rules for Claude
 

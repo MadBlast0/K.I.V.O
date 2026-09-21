@@ -88,3 +88,39 @@ Nothing is installed silently.
 - **`cargo deny` rules:** GPL/AGPL are denied in the default dependency graph. The optional GPL
   components (espeak-ng, Piper) ship only as separately downloaded, dynamically loaded
   add-ons, after legal review.
+
+## Build checklist
+
+Status marks and the build protocol: [docs/README.md](../README.md).
+
+**Installers (§1)**
+
+- [ ] **DIST-01** · M1 · NSIS per-user installer (no admin, `%LOCALAPPDATA%\Programs\KIVO`) built from the Tauri bundle, with `kivo-runtime.exe` and `kivo-infer.exe` as `externalBin` sidecars (§1)
+- [ ] **DIST-02** · M1 · Bundle contents: WebView2 bootstrapper (Windows 10), sounds, icons, default intent grammar, "Hey Kivo" model (from M2), Silero VAD; no STT, TTS or LLM models (§1)
+- [ ] **DIST-03** · M9 · Installer size under 40 MB, checked in the release pipeline (§1, BENCHMARKS §3)
+- [ ] **DIST-04** · M9 · MSI per-machine for IT, updater-aware (§1)
+- [ ] **DIST-05** · M1 · Installer registers the startup option, Start-menu shortcut and uninstaller; supports in-place upgrades (§1, plan §110)
+- [ ] **DIST-06** · Post · MSIX / sparse package spike for package identity (Windows AI Speech, richer notifications, Store) (§1)
+
+**Updates (§2)**
+
+- [ ] **DIST-07** · M9 · `tauri-plugin-updater` with a minisign-signed `latest.json` per channel (Stable, Beta, Experimental), channel chosen in Settings (§2)
+- [ ] **DIST-08** · M9 · Update flow: download + verify → ask (or install at idle if opted in) → runtime finishes/cancels turns and persists state → exits → installer `/UPDATE` → relaunch → health check (§2)
+- [ ] **DIST-09** · M9 · Rollback: if the runtime fails to start twice after an update, reinstall the previous version (kept for one version) (§2)
+- [ ] **DIST-10** · M0 · Config and database migrations run forward only, with a backup first (§2, ARCH-29)
+
+**Signing (§3)**
+
+- [ ] **DIST-11** · M9 · Authenticode signing (Azure Artifact Signing or OV certificate) of all three executables, the installers and the native-messaging host; betas published signed (§3)
+
+**Models and dependencies (§4)**
+
+- [ ] **DIST-12** · M1 · Model manager (`kivo-store::models`): per-model manifest, resumable HTTP-range downloads, sha256 verification, atomic install into `%LOCALAPPDATA%\KIVO\models`, sources Hugging Face or KIVO's release mirror (§4)
+- [ ] **DIST-13** · M1 · Licenses and attribution (CC-BY, OpenRAIL) shown before download and in About; Voice → Models on this PC shows disk usage and Remove (§4)
+- [ ] **DIST-14** · M8 · Dependency manager (Node.js, Git, Ollama, …): detect → explain → consent → install via winget or vendor link → verify, configure, test; version and health checked; nothing installed silently (§4, plan §20)
+
+**Telemetry and compliance (§5–6)**
+
+- [ ] **DIST-15** · M1 · No telemetry by default; crash dumps stay local; the diagnostics bundle is generated on request and reviewed before sharing (§5)
+- [ ] **DIST-16** · M9 · Generated `THIRD_PARTY_NOTICES` (`cargo about` + npm license checker) in the installer and in About (§6)
+- [ ] **DIST-17** · M0 · `cargo deny` denies GPL/AGPL in the default graph; GPL components only as separately downloaded add-ons after legal review (§6, ARCH-35)

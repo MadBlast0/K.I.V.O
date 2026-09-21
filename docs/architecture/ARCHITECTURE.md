@@ -10,6 +10,9 @@ Companion specs:
 - [TOOLS_AND_CONTROL.md](TOOLS_AND_CONTROL.md): tools and computer control
 - [SECURITY.md](SECURITY.md): permissions, secrets, prompt injection, audit
 - [UX.md](UX.md): lifecycle, overlay, Control Center, settings
+- [CONVERSATION.md](CONVERSATION.md), [MEMORY.md](MEMORY.md): threads, context, memory
+- [CAPABILITIES.md](CAPABILITIES.md), [ROUTINES.md](ROUTINES.md), [DISCOVERY.md](DISCOVERY.md), [INTEGRATIONS_AND_PLUGINS.md](INTEGRATIONS_AND_PLUGINS.md)
+- [RELEASE.md](RELEASE.md), [BENCHMARKS.md](BENCHMARKS.md), [../design/DESIGN_SYSTEM.md](../design/DESIGN_SYSTEM.md)
 - [DISTRIBUTION.md](DISTRIBUTION.md): packaging, updates, models, signing
 - [../ROADMAP.md](../ROADMAP.md): milestones
 
@@ -122,7 +125,7 @@ startup (the `Capabilities` struct). They are never scattered through core code.
 - **Versioning:** `hello { protocol_version, client, capabilities }`. The runtime rejects
   incompatible major versions with a clear error (for example after a partial update).
 - **Schema source of truth:** Rust types in `kivo-ipc`. TypeScript types are generated with
-  **`specta`** (or `ts-rs`) into `apps/kivo-app/ui/src/ipc/generated.ts`, and CI fails if the
+  **`specta`** (or `ts-rs`) into `apps/kivo-app/src/ipc/generated.ts`, and CI fails if the
   generated types are stale.
 - **Reconnect:** the UI reconnects with backoff and re-subscribes. On reconnect the runtime sends a
   full `StateSnapshot`, then deltas.
@@ -140,7 +143,7 @@ startup (the `Capabilities` struct). They are never scattered through core code.
   - `Turn(Started | IntentDetected | BrainSelected | Completed | Cancelled | Failed)`
   - `Tool(Requested | PermissionDecided | Started | Progress | Completed | Failed)`
   - `Task(Created | StepChanged | Waiting | Completed | Cancelled | Failed)`
-  - `System(WindowChanged | FullscreenChanged | FocusModeChanged | PowerChanged | DeviceChanged | NetworkChanged)`
+  - `System(WindowChanged | FullscreenChanged | FocusModeChanged | PowerChanged | DeviceChanged | NetworkChanged | FileChanged | BrowserChanged)`
   - `Provider(HealthChanged | RateLimited | AuthFailed)`
   - `Ui(OverlayShown | OverlayHidden | UserConfirmed | UserCancelled)`
 - **Metadata:** every event carries `ts` (monotonic plus wall clock), `turn_id` / `task_id`
@@ -236,7 +239,7 @@ K.I.V.O/
 ├─ apps/
 │  ├─ kivo-runtime/           # bin: the runtime
 │  ├─ kivo-infer/             # bin: inference worker
-│  ├─ kivo-app/               # Tauri app (src-tauri/ + ui/ React)
+│  ├─ kivo-app/               # Tauri app: src-tauri/ (Rust shell) + src/ (React UI)
 │  └─ kivo-bench/             # bin: benchmark harness
 ├─ extensions/browser/        # Chromium/Firefox extension (native messaging)
 ├─ testenv/                   # safe computer-control test apps + pages (plan §116)
@@ -269,3 +272,68 @@ K.I.V.O/
 | Secrets isolated | The `Secret<T>` type is non-Display and non-Serialize; secrets are resolved only inside tool executors |
 | Cloud can be disabled | Privacy mode is checked in the router and in network egress for tools |
 | Useful offline | M1 exit criteria include offline fast path + local STT/TTS |
+
+## Build checklist
+
+Status marks and the build protocol: [docs/README.md](../README.md).
+
+**Processes and lifecycle (§1)**
+
+- [~] **ARCH-01** · M0 · `kivo-runtime` binary: starts, holds the `Local\KIVO.Runtime.<user-sid>` mutex (a second runtime exits), serves IPC (§1) → partial: `apps/kivo-runtime` stub prints its version · missing: mutex, IPC, everything else
+- [ ] **ARCH-02** · M0 · The runtime owns the tray (`tray-icon` on a runtime thread with a Win32 message loop) and it survives a UI crash (§1)
+- [ ] **ARCH-03** · M0 · The runtime launches `kivo-app` and relaunches it with backoff if it crashes (§1)
+- [~] **ARCH-04** · M0 · `KIVO.exe` (Tauri) connects to the runtime pipe; if absent it spawns `kivo-runtime.exe` (sidecar, `externalBin`) detached, then connects; it shows the runtime state and can restart without stopping KIVO (§1) → partial: `apps/kivo-app/src-tauri` shell builds and runs with the UI · missing: sidecar, pipe connection, runtime state
+- [ ] **ARCH-05** · M0 · `tauri-plugin-single-instance`: a second `KIVO.exe` forwards "show main window" and exits (§1)
+- [ ] **ARCH-06** · M1 · Autostart registers `kivo-runtime.exe --autostart`; the runtime then launches `KIVO.exe --background`, which preloads the overlay without showing a window (§1)
+- [ ] **ARCH-07** · M1 · Quit (tray or Control Center) stops the runtime, closes the UI and releases the mic; closing a window never quits (§1)
+- [ ] **ARCH-08** · M8 · Low-memory mode: the runtime does not launch `kivo-app` until the overlay is first needed; M0 measures the memory difference (§1)
+- [ ] **ARCH-09** · M1 · `kivo-infer` runs as a supervised worker (same binary, subcommand), started on demand, restarted on crash; the current turn fails gracefully with a spoken message (§1)
+- [ ] **ARCH-10** · M1 · Crash dumps are written locally to `%LOCALAPPDATA%\KIVO\crashes\` and reported on the next start; never uploaded without consent (§1, §5)
+
+**Platform abstraction (§2)**
+
+- [ ] **ARCH-11** · M0 · `kivo-platform` defines every trait in the §2 table (`AudioIo`, `EchoCancel`, `Hotkeys`, `Tray`, `Apps`, `Windows`, `UiAutomation`, `Input`, `Screen`, `Ocr`, `Secrets`, `SystemInfo`, `Notifications`); core crates depend only on the traits (§2)
+- [ ] **ARCH-12** · M0 · A `Capabilities` struct is filled at startup (Windows build, OS AEC, Mica, NPU, …); Windows 10 differences are handled only inside `kivo-platform-windows` (§2)
+- [ ] **ARCH-13** · M0 · `kivo-testkit` provides fake platform, fake audio and fake brain implementations for tests (§7)
+
+**IPC (§3)**
+
+- [ ] **ARCH-14** · M0 · Named-pipe transport (`interprocess`), `\.\pipe\kivo-<user-sid>`, security descriptor granting only the current user's SID, `PIPE_REJECT_REMOTE_CLIENTS` (§3)
+- [ ] **ARCH-15** · M0 · Random 256-bit session token in `%LOCALAPPDATA%\KIVO\run\session.token` (user-only ACL); clients must present it in `hello` (§3)
+- [ ] **ARCH-16** · M0 · Length-prefixed frames carrying JSON-RPC 2.0: request/response, notifications (events), and a message size limit (§3, SECURITY §9)
+- [ ] **ARCH-17** · M0 · `hello { protocol_version, client, capabilities }`; incompatible major versions are rejected with a clear error (§3)
+- [ ] **ARCH-18** · M0 · Rust types in `kivo-ipc` are the source of truth; TypeScript types are generated (`specta` or `ts-rs`) into `apps/kivo-app/src/ipc/generated.ts`, and CI fails when they are stale (§3)
+- [ ] **ARCH-19** · M0 · The UI reconnects with backoff and re-subscribes; on reconnect the runtime sends a full `StateSnapshot`, then deltas (§3)
+- [ ] **ARCH-20** · M1 · A separate high-rate `levels` notification (30–60 Hz) carries audio levels, only while the overlay is animating (§3)
+- [ ] **ARCH-21** · M1 · The same protocol runs between the runtime and `kivo-infer`, with methods for streaming audio frames and results (§3)
+
+**Core model (§4)**
+
+- [ ] **ARCH-22** · M0 · `enum Event` in `kivo-core` with every group in §4.1 (Voice, Turn, Tool, Task, System incl. `FileChanged`/`BrowserChanged` from plan §66, Provider, Ui), each carrying `ts` (monotonic + wall), `turn_id`/`task_id` where relevant, and `trace_id`; delivered over `tokio::sync::broadcast` (§4.1)
+- [ ] **ARCH-23** · M1 · A subscriber persists the Activity subset to SQLite (§4.1)
+- [ ] **ARCH-24** · M0 · The session state machine (Idle, Listening, Thinking, Acting, Speaking, FollowUp, Interrupted, Paused, AwaitingConfirmation, Error) with every transition in the §4.2 diagram, unit-tested; an invalid transition logs at `error` (§4.2)
+- [ ] **ARCH-25** · M0 · A Turn has a root `CancellationToken`; child tokens go to STT, the brain request, each tool call and TTS (§4.2)
+- [ ] **ARCH-26** · M1 · Stop, Esc, the overlay X, the emergency stop and barge-in cancel the turn token, and cancellation reaches every layer within 100 ms, enforced by a test (§4.2)
+- [ ] **ARCH-27** · M5 · A Task holds a graph of steps with dependencies and its own token, outlives turns, is persisted, and after a crash is reported as interrupted without auto-resuming side effects (§4.2)
+- [ ] **ARCH-28** · M1 · `tracing` spans T0 wake … T10 completion carry `turn_id`; a metrics subscriber stores per-turn timings in `turn_metrics` (§4.3)
+
+**Storage (§5)**
+
+- [ ] **ARCH-29** · M0 · Config: `%APPDATA%\KIVO\config\kivo.toml` (+ `profiles/*.toml`) with `schema_version`; validated on load, migrated forward, previous version backed up; all §5 config sections exist (§5)
+- [ ] **ARCH-30** · M0 · Database: `%LOCALAPPDATA%\KIVO\data\kivo.db`, rusqlite (bundled), WAL, embedded migrations (§5)
+- [ ] **ARCH-31** · M0 · Every user-owned record carries `profile_id` from the first migration, so people profiles need no later migration (§5, UX §8.2)
+- [ ] **ARCH-32** · M0 · Logs: `tracing` rolling JSON in `%LOCALAPPDATA%\KIVO\logs\`, 7-day retention, a redaction layer for keys, tokens and `sensitive` fields; transcripts logged only with the "debug transcripts" setting (§5, §6)
+
+**Repository and toolchain (§7)**
+
+- [x] **ARCH-33** · M0 · Cargo workspace + pnpm workspace with every crate and app in the §7 layout → done: `Cargo.toml`, `crates/*`, `apps/*`, `pnpm-workspace.yaml` · verified: `cargo check --workspace`, `pnpm typecheck` (2026-09-21)
+- [~] **ARCH-34** · M0 · Rust stable with MSRV pinned in `rust-toolchain.toml`; `cargo fmt`; `clippy -D warnings` → partial: toolchain file, `rustfmt.toml`, clippy runs with zero warnings locally · missing: `-D warnings` enforced in CI (REL-03)
+- [ ] **ARCH-35** · M0 · `cargo deny` configured: licenses (GPL/AGPL denied in the default graph), advisories, bans (§7)
+- [~] **ARCH-36** · M0 · UI toolchain: Node LTS + pnpm, TypeScript strict, ESLint, Prettier, Vitest (§7) → partial: pnpm, TypeScript strict · missing: ESLint, Prettier, Vitest
+- [ ] **ARCH-37** · M7 · Playwright UI tests against the Tauri dev build where practical (§7)
+
+**Invariant enforcement (§8)**
+
+- [ ] **ARCH-38** · M3 · A CI check fails if `kivo-core` gains a provider dependency (§8)
+- [ ] **ARCH-39** · M0 · `kivo-app` has no access to the store, secrets or tools; its only API is IPC (reviewed in every milestone) (§8)
+- [ ] **ARCH-40** · M8 · Diagnostics bundle: versions, OS, hardware, capabilities, provider health, recent errors and metrics; generated locally, shown to the user for review, no secrets or content (§6, plan §109)

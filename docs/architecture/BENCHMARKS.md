@@ -52,3 +52,22 @@ See [VOICE.md §10](VOICE.md). In addition:
   state-machine and cancellation tests.
 - The full suites run before each release, on the reference machines.
 - A regression of more than 10% on a budgeted metric blocks the release (plan §159).
+
+## Build checklist
+
+Status marks and the build protocol: [docs/README.md](../README.md).
+
+- [~] **BENCH-01** · M0 · `kivo-bench` CLI with the harness: machine fingerprint (CPU, GPU, RAM, OS build, power source), ≥ 5 runs with p50/p95, warmup excluded from cold metrics, JSON into the `benchmarks` table and `bench-results/<date>-<machine>.json`, Markdown summary into `docs/benchmarks/` (§1) → partial: `apps/kivo-bench` stub · missing: everything
+- [ ] **BENCH-02** · M0 · `stt` suite: cold load, first partial, final latency, RTF, WER (overall + accented), peak RAM/VRAM, CPU% on LibriSpeech subset, accented English and 50 KIVO commands (§1)
+- [ ] **BENCH-03** · M0 · `tts` suite: first audio (short/medium/long), RTF, RAM, cancel-to-silence (§1)
+- [ ] **BENCH-04** · M0 · `wake` suite: false accepts/hour on ≥ 10 h negative audio, false rejects % on the recorded "Hey Kivo" set, CPU% (§1)
+- [ ] **BENCH-05** · M0 · `vad` / `aec` suite: detection latency, false triggers with TTS playing, echo leakage into STT (§1)
+- [ ] **BENCH-06** · M0 · `idle` suite: CPU%, RAM, wakeups/s and package power over 30 min with listening on (§1)
+- [ ] **BENCH-07** · M0 · `overlay` suite: hotkey → first frame, white-flash check, GPU utilization and power idle vs animating (PresentMon) (§1)
+- [ ] **BENCH-08** · M1 · `e2e` suite: T0–T10 spans for the three plan §102 journeys with scripted audio via a virtual mic (§1)
+- [ ] **BENCH-09** · M3 · `brain` suite: TTFT, tokens/s, tool-call latency, structured-output validity, cancellation latency, error rate (§1)
+- [ ] **BENCH-10** · M0 · Reference machines recorded: the owner's PC (mid/high) and the 4-core / 8 GB / no-GPU VM (low, labelled approximate) (§2, DECISIONS)
+- [ ] **BENCH-11** · M0 · The first benchmark report is committed to `docs/benchmarks/` and the engine defaults in DECISIONS.md are updated with measured numbers (§1)
+- [ ] **BENCH-12** · M1 · Budgets met: runtime idle RAM ≤ 150 MB, UI idle RAM ≤ 120 MB (overlay preloaded, CC closed), runtime cold start ≤ 1.5 s, Control Center open (warm) ≤ 300 ms (§3)
+- [ ] **BENCH-13** · M0 · CI smoke subset on every PR: intent-router latency, IPC round trip, state-machine and cancellation tests (§4)
+- [ ] **BENCH-14** · M9 · Full suites before each release on the reference machines; a > 10% regression on a budgeted metric blocks the release (§4)

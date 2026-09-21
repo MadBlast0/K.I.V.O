@@ -7,7 +7,7 @@ tools are **not registered** for any brain, routine, agent or remote client.
 
 ## 1. Capability catalogue
 
-Control Center → **Capabilities**. Each row has an on/off toggle, a short description, a status
+Control Center → Permissions → **Capabilities**. Each row has an on/off toggle, a short description, a status
 ("used 3 min ago"), and a **cost/privacy badge**: Local, Cloud, Costly, Sensitive.
 
 | Capability | Default | Badge | Controls when on |
@@ -107,3 +107,21 @@ Control Center → **Capabilities**. Each row has an on/off toggle, a short desc
 | Control | Approve each step: Always / First 10 tasks (default) / Never · Pause when I use the mouse (default on) · Speed: Careful / Normal / Fast |
 | Limits | Max steps per task (25) · Max cost per task ($0.50) · Time limit (2 min) |
 | Apps | Allowed apps list · Never-touch list (password managers, banking, Windows Security by default) |
+
+## Build checklist
+
+Status marks and the build protocol: [docs/README.md](../README.md).
+
+- [ ] **CAP-01** · M1 · Capability model in the runtime: every §1 capability with its default; a disabled capability's tools are **not registered** for any brain, routine, agent, MCP exposure or remote client (§1, §2)
+- [ ] **CAP-02** · M1 · A request that needs a disabled capability gets a plain answer ("Screen awareness is off. Turn it on?") with a one-tap link; toggles never turn on automatically (§2)
+- [ ] **CAP-03** · M1 · Every toggle change is written to the audit log (§2)
+- [ ] **CAP-04** · M4 · Permissions → Capabilities page: each row with toggle, description, "used … ago" and Local / Cloud / Costly / Sensitive badges, plus the per-capability controls from §1 (§1)
+- [ ] **CAP-05** · M4 · Presets Minimal / Balanced (default) / Power user / Custom (§2)
+- [ ] **CAP-06** · M4 · Active-use indicators in the tray and the Island: screen (eye), input control (hand), shell (terminal) (§2)
+- [ ] **CAP-07** · M4 · Per-app allow and block lists for UIA, screen awareness and computer use; the default block list covers password managers, banking apps and Windows Security (§2)
+- [ ] **CAP-08** · M4 · Screen awareness on request: capture once → UIA excerpt + local OCR first → vision brain only if needed and allowed, with "Sent a screenshot of … to …"; screenshots held in memory only (§3)
+- [ ] **CAP-09** · M8 · Computer use: `ComputerUseProvider` trait (Anthropic, OpenAI, Gemini); used only when no semantic method exists, the capability is on and the app is allowed; estimated cost shown before starting (§4)
+- [ ] **CAP-10** · M8 · Computer-use loop screenshot → proposed action → `authorize()` → execute → verify, with max 25 steps, max $0.50, 2-minute timeout (all configurable) (§4)
+- [ ] **CAP-11** · M8 · Watch mode (default for the first 10 tasks): overlay marker at the target, approval by click, Enter, or voice for Low risk (§4)
+- [ ] **CAP-12** · M8 · Computer-use experience: Island controller live activity (step, cost, Pause, Stop), pulsing target highlight, black callout with Allow / Skip in watch mode, optional KIVO cursor, persistent "KIVO is controlling your screen — Stop (Ctrl+Alt+Shift+Esc)" banner and screen frame Off / Subtle / Full (§2, §4.1)
+- [ ] **CAP-13** · M8 · Computer-use options page (Visibility, Control incl. "Pause when I use the mouse" and speed, Limits, Apps) (§4.1)

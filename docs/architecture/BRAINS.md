@@ -217,3 +217,63 @@ Research: [features-and-extensions/REPORT.md §1](../research/features-and-exten
 - The system prompt for voice turns asks for short, speakable answers. There is no markdown in
   speech; the card shows the rich text while TTS gets a speakable version.
 - The TTS chunker strips code blocks and says "I've put the details on screen".
+
+## Build checklist
+
+Status marks and the build protocol: [docs/README.md](../README.md).
+
+**Intent router (§1–2)**
+
+- [ ] **BRAIN-01** · M1 · Grammar stage: slot-based commands (`open {app}`, volume, `mute`, media, screenshot, window commands, `lock`) resolved against live app and window indexes, with phrasing loaded from per-language data files (§2)
+- [ ] **BRAIN-02** · M1 · Destructive commands (shutdown, restart) still go through the permission engine (§2)
+- [ ] **BRAIN-03** · M3 · Semantic stage: a local embedding model + kNN over command exemplars, accepted only above a high threshold and with resolvable slots (§2)
+- [ ] **BRAIN-04** · M3 · Hybrid requests go to the brain, with the fast-path tools exposed as tools (§2)
+- [ ] **BRAIN-05** · M1 · Metrics `fast_path_ratio` and per-stage p95 latency (§2)
+- [ ] **BRAIN-06** · M3 · A "That's not what I meant" misroute report in the card (§2)
+- [ ] **BRAIN-07** · M5 · Event tasks ("tell me when…", "watch…", "remind me…") classified by grammar first and by the brain when ambiguous, then turned into Tasks with watchers (§2)
+
+**Provider contract and adapters (§3–4)**
+
+- [ ] **BRAIN-08** · M3 · `BrainProvider` trait (`info`, `health`, `models`, `chat` with cancellation), `BrainEvent` stream and `NormalizedError`, exactly as in §3
+- [ ] **BRAIN-09** · M3 · Reasoning content is never shown or spoken; it is kept in the turn log only if the user enables that (§3)
+- [ ] **BRAIN-10** · M3 · API adapters for Anthropic, OpenAI, Gemini and OpenRouter (native adapters where prompt caching, realtime or reasoning controls need them; `genai` for breadth) (§4)
+- [ ] **BRAIN-11** · M8 · More API adapters: Groq, Mistral, DeepSeek, xAI and custom OpenAI-compatible endpoints (§4)
+- [ ] **BRAIN-12** · M3 · Local adapter: OpenAI-compatible (Ollama, LM Studio, llama.cpp server, any localhost URL) (§4)
+- [ ] **BRAIN-13** · M3 · `AgentSession` trait (prompt, cancel, streamed `AgentEvent`, `set_mode`) and an ACP client (JSON-RPC over stdio) (§3, §4)
+- [ ] **BRAIN-14** · M3 · CLI agents over ACP: Claude Code (`claude-agent-acp`), Gemini CLI (`--acp`) and Codex (`codex-acp`) (§4)
+- [ ] **BRAIN-15** · M3 · ACP `session/request_permission` is routed into KIVO's permission engine and confirmation UI; the agent's file and terminal operations show as activity (§4)
+- [ ] **BRAIN-16** · M6 · The KIVO MCP server is passed in each ACP session's MCP server list (§4)
+- [ ] **BRAIN-17** · M3 · No-key sign-in first: CLI login flows launched from KIVO, OpenRouter OAuth PKCE ("Connect with OpenRouter"), local auto-detect; direct API keys only under "Advanced: use your own API key" (§4)
+- [ ] **BRAIN-18** · M3 · API keys are write-only from the UI, stored in Credential Manager and tested by the runtime (§4, SECURITY §5)
+- [ ] **BRAIN-19** · Post · Codex App Server adapter; GitHub Copilot CLI, OpenCode and Goose over ACP (§4)
+
+**Profiles and routing (§5)**
+
+- [ ] **BRAIN-20** · M3 · `Profile` model and the built-in profiles Default, Fast, Smart, Coding, Private, Offline and Cheap; users can create more (§5)
+- [ ] **BRAIN-21** · M3 · Deterministic routing in the §5 rule order; each decision records a one-line reason that the card shows (§5)
+- [ ] **BRAIN-22** · M3 · Failover on RateLimited / ProviderDown / Network only to a fallback in the same privacy class; otherwise ask the user (§5)
+- [ ] **BRAIN-23** · M3 · Health checks per provider, refreshed as in DISCOVERY §3 (§3)
+
+**Context and streaming (§6, §11)**
+
+- [ ] **BRAIN-24** · M3 · Always-on context block ≤ 300 tokens, updated with deltas (§6, MEMORY §4)
+- [ ] **BRAIN-25** · M4 · On-demand context exposed as tools (`get_active_tab`, `read_selection`, `get_ui_tree`, `capture_screen`), not pushed (§6)
+- [ ] **BRAIN-26** · M3 · Every context item carries `Provenance { source, trust }` (§6)
+- [ ] **BRAIN-27** · M3 · Tool exposure by task class and capability tags, at most 20 tools per request (§6)
+- [ ] **BRAIN-28** · M3 · Streaming LLM → phrase chunker → streaming TTS, so speech starts before the full answer (§1, §11)
+- [ ] **BRAIN-29** · M3 · Voice style: short, speakable answers; the card shows rich text while TTS gets a speakable version; code blocks are replaced with "I've put the details on screen"; a text normalizer for numbers, URLs and units (§11)
+
+**Agent path (§7)**
+
+- [ ] **BRAIN-30** · M5 · Planner: multi-step requests produce `propose_plan`, which becomes a Task graph; independent steps run concurrently (§7)
+- [ ] **BRAIN-31** · M5 · Validation: tasks declare `success_criteria`, and "done" is reported only after a verification step passes (§7)
+- [ ] **BRAIN-32** · M5 · Coding tasks are delegated to the Coding profile's ACP agent, with progress, relayed permission prompts and a summary (§7)
+
+**Realtime, usage and personas (§8–10)**
+
+- [ ] **BRAIN-33** · M8 · `RealtimeProvider` (OpenAI realtime, Gemini Live): the fast path runs first; tool calls go through `authorize()`; audio is held while a confirmation is pending; session resumption hides provider limits; closes after 15 s of silence, "that's all" or the budget (§8)
+- [ ] **BRAIN-34** · M3 · Usage metering into a `usage` table for every brain, STT, TTS, realtime and computer-use call, with turn, task and routine ids (§9)
+- [ ] **BRAIN-35** · M3 · Cost = usage × a bundled price table (LiteLLM-derived, weekly refresh that can be turned off, per-model overrides, local = $0), always labelled as an estimate (§9)
+- [ ] **BRAIN-36** · M3 · Limits with scope, period, amount, warning thresholds, at-limit action and per-task caps; the default is "track only" (§9)
+- [ ] **BRAIN-37** · M7 · Usage page: charts by day, provider, feature and routine; top expensive tasks; CSV export; a live "≈ $0.12" in the card when enabled (§9)
+- [ ] **BRAIN-38** · M3 · Personas Calm (default), Friendly, Witty and Custom; guardrails keep confirmations, errors and status reports neutral; set per user profile and overridable per brain profile (§10)

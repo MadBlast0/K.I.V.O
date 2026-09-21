@@ -86,3 +86,38 @@ needs anyway.
   Adding support for a new CLI or app is a catalog entry plus a detector, not UI work.
 - **Privacy:** detection reads file *existence* and config *structure* only. It never uploads what
   it finds, and it never reads credential contents.
+
+## Build checklist
+
+Status marks and the build protocol: [docs/README.md](../README.md).
+
+**Framework (§3 implementation notes)**
+
+- [ ] **DISC-01** · M3 · `Detector { id, scope, run() → Vec<Found> }` trait; discovery runs in the runtime on a low-priority EcoQoS task, never in the UI (§3)
+- [ ] **DISC-02** · M3 · Results cached in a `discovery` table with `checked_at`, shown instantly and then updated (§3)
+- [ ] **DISC-03** · M3 · Detection suggests, the user enables: nothing is switched on automatically, nothing is sent anywhere, credential contents are never read (§1, §3)
+
+**Brains and agents (§1.1)**
+
+- [ ] **DISC-04** · M3 · CLI agent detector: PATH and known install dirs, `--version`, sign-in state where exposed, cross-checked with the ACP registry → "Found on this PC · signed in / needs sign-in" + Use (§1.1)
+- [ ] **DISC-05** · M3 · Local model server detector: ports 11434, 1234, 8080 with model lists → "Running on this PC · N models" + Use (§1.1)
+- [ ] **DISC-06** · M5 · Desktop AI apps detector (Claude Desktop, ChatGPT, Copilot) from the installed-apps index (§1.1)
+- [ ] **DISC-07** · M8 · In-app CLI install: explain + exact command from the catalog, dependency check (Node via winget with consent), visible progress sheet, verify, start sign-in, test prompt (§1.1)
+
+**Extensions (§1.2)**
+
+- [ ] **DISC-08** · M6 · Connectors detector: signed-in CLIs (`gh auth status`), installed apps with built-in connectors, browsers and whether the KIVO extension is installed (§1.2)
+- [ ] **DISC-09** · M6 · MCP config import from Claude Desktop (incl. the Store path), Claude Code, Cursor, VS Code, Codex and Gemini CLI: copied into KIVO's config, originals never modified, env-var secrets moved to Credential Manager (§1.2)
+- [ ] **DISC-10** · M6 · Skills detector for `~/.claude/skills/`, project `.claude/skills/` and KIVO's `skills\`; referenced in place unless the user chooses Copy; review before enabling (§1.2)
+- [ ] **DISC-11** · Post · Plugins folder watcher: a dropped plugin shows "New plugin found" + Review (§1.2)
+
+**Refresh and freshness (§2–3)**
+
+- [ ] **DISC-12** · M3 · Every discovery section shows "Checked … · Refresh"; Refresh re-runs only that section's detectors; new items get a New label until viewed (§2)
+- [ ] **DISC-13** · M1 · Live state (Island, Tasks, Activity, agent progress, usage) is pushed over IPC; nothing polls it (§3)
+- [ ] **DISC-14** · M3 · Brain health: on page open if older than 5 min, every 5 min while visible, immediately after errors, lazily before use (§3)
+- [ ] **DISC-15** · M3 · CLI/local-server re-detection: app start (after 30 s, low priority), `WM_SETTINGCHANGE` PATH changes, page open if older than 10 min (§3)
+- [ ] **DISC-16** · M6 · File watchers on other apps' MCP configs and skills folders; MCP `tools/list_changed` handling with description-hash comparison (§3)
+- [ ] **DISC-17** · M8 · Signed catalogs (connector directory, plugin index, model catalog, CLI install catalog) fetched daily with an offline cache (§3)
+- [ ] **DISC-18** · M8 · Performance metrics sampled every 2 s only while the Performance page is open (§3)
+- [ ] **DISC-19** · M1 · Zero background work while the Control Center is closed beyond what the runtime needs (§3)

@@ -179,3 +179,63 @@ Context = { session: owner|guest, speaker_confidence, profile: MaxSafety|Balance
   Dependabot.
 - Updates: minisign-signed update manifests plus Authenticode-signed binaries; the updater verifies
   both before running the installer.
+
+## Build checklist
+
+Status marks and the build protocol: [docs/README.md](../README.md).
+
+**Permission modes (§1.1)**
+
+- [ ] **SEC-01** · M1 · Permission modes Ask every time and Auto (default) in the engine (§1.1)
+- [ ] **SEC-02** · M4 · Permission modes Accept edits and Plan first (Plan: read-only, plan shown, approval grants exactly the planned steps) (§1.1)
+- [ ] **SEC-03** · M5 · Bypass permissions: explicit opt-in dialog (optional Windows Hello), auto-expiry (15 min / 1 h default / until off), red BYPASS chip in the Island and tray, every action audited, unavailable to guests and remote clients (§1.1)
+- [ ] **SEC-04** · M1 · Switching mode only through UI or hotkey (Ctrl+Shift+M), from the Island, tray, chat and Home; never through a tool call or voice alone; the Island shows the mode while acting (hidden for Auto) (§1.1)
+- [ ] **SEC-05** · M1 · Hard limits enforced in every mode: emergency stop, disabled capabilities, blocked apps, no typing into password fields, destination binding, per-task cost caps (§1.1)
+
+**Permission engine (§2–3)**
+
+- [ ] **SEC-06** · M1 · `authorize(ToolCall, Context) -> Decision { Allow | Confirm(ConfirmSpec) | Deny(reason) }` with the §2 `Context`, in `kivo-security` (§2)
+- [ ] **SEC-07** · M1 · Default policy table (risk × clean/tainted/guest) implemented and unit-tested; High always confirms except in Bypass (§2)
+- [ ] **SEC-08** · M4 · Grants scoped by tool, argument pattern and duration (once / session / 24 h / always) in `permissions_grants`; the user can view and revoke them (§2)
+- [ ] **SEC-09** · M5 · Task grants: a background task cannot exceed the permissions granted at creation (§2)
+- [ ] **SEC-10** · M1 · Confirmation card: exact action in plain words, target, why, provenance; Allow once / Always for… / Deny; never auto-dismisses (§2)
+- [ ] **SEC-11** · M4 · Windows Hello confirmation for High risk (§2, CONVERSATION §7)
+- [ ] **SEC-12** · M4 · Risk escalation by arguments: protected paths and bulk (> 20 files) become High; egress of personal/sensitive data becomes High (blocked in Strict Private); untrusted-origin destinations become Deny unless the user restates them (§3)
+
+**Prompt injection (§4)**
+
+- [ ] **SEC-13** · M4 · Provenance on every value (User / System / Untrusted) and turn taint when untrusted content enters the context (§4)
+- [ ] **SEC-14** · M4 · Destination binding: outbound actions only to destinations present in `User`-provenance text for the task (§4)
+- [ ] **SEC-15** · M4 · Untrusted content wrapped in delimited, labelled blocks; tainted turns get the minimal tool set (§4)
+- [ ] **SEC-16** · Post · Full CaMeL plan-then-execute mode with a quarantined extractor (§4)
+
+**Secrets (§5)**
+
+- [ ] **SEC-17** · M3 · Secrets in Credential Manager (`keyring`) referenced as `secret://kivo/<provider>/<name>`; loaded only inside the adapter or tool executor (§5)
+- [ ] **SEC-18** · M0 · `Secret<String>` newtype: no `Display`, `Debug` prints `***`, no `Serialize`, zeroized on drop (§5)
+- [ ] **SEC-19** · M3 · Secrets never reach prompts, logs, activity, diagnostics or IPC to the UI; the UI can only set (write-only) and ask the runtime to test (§5)
+
+**Privacy (§6)**
+
+- [ ] **SEC-20** · M7 · Data classes `public … highly_sensitive`, classified by source, local detectors (keys, card numbers, ID patterns) and user labels (§6)
+- [ ] **SEC-21** · M7 · Privacy modes Cloud / Local / Strict Private / Custom enforced in the router and egress checks (cloud STT/TTS included); privacy overrides failover (§6)
+
+**Audit (§7)**
+
+- [ ] **SEC-22** · M1 · Append-only `audit` table with the §7 fields and `hash = sha256(prev_hash || row)` (§7)
+- [ ] **SEC-23** · M8 · Chain verification in diagnostics (§7)
+- [ ] **SEC-24** · M7 · Activity → Audit view in the Control Center (§7)
+
+**Emergency stop (§8)**
+
+- [ ] **SEC-25** · M1 · Emergency stop from the Ctrl+Alt+Shift+Esc hotkey (low-level hook fallback), tray "Stop everything" and the overlay/Control Center Stop button (§8)
+- [ ] **SEC-26** · M2 · Voice trigger via the command spotter (§8, VOICE-19)
+- [ ] **SEC-27** · M4 · Full effect: cancel all turns and tasks, stop TTS, kill tool Job Objects, `session/cancel` to ACP agents, stop input injection, pause background tasks, audit entry (§8)
+
+**Hardening (§9)**
+
+- [~] **SEC-28** · M0 · Tauri: strict CSP, no remote content, `withGlobalTauri: false`, no `shell` plugin, minimal `capabilities/*.json` per window (the overlay window gets almost nothing) (§9) → partial: CSP set, `withGlobalTauri` off (default), no shell plugin, main-window capability limited to core + window controls · missing: overlay window and its capability file
+- [ ] **SEC-29** · M0 · IPC hardening: user-only DACL, reject remote clients, session token, schema validation, message size limit (§9, ARCH-14–16)
+- [ ] **SEC-30** · M4 · Native messaging host manifest allows only KIVO's extension ID; payload limits (§9)
+- [~] **SEC-31** · M0 · Dependencies: `cargo deny`, `pnpm audit`, lockfiles committed, Dependabot (§9) → partial: `Cargo.lock` and `pnpm-lock.yaml` committed, Dependabot alerts on · missing: `cargo deny`, `pnpm audit` in CI
+- [ ] **SEC-32** · M9 · Updates: minisign-signed manifests + Authenticode binaries, both verified before running the installer (§9)
