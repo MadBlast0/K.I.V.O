@@ -41,12 +41,11 @@ pub fn restrict_file_to_user(path: &Path) -> io::Result<()> {
 pub(crate) mod tests {
     use super::*;
 
+    /// Socket paths are limited to about 100 bytes and macOS's temp folder is long, so tests use
+    /// short paths directly under /tmp.
     pub(crate) fn unique_endpoint() -> String {
-        std::env::temp_dir()
-            .join(format!("kivo-test-{}", kivo_core::TraceId::new()))
-            .join("kivo.sock")
-            .display()
-            .to_string()
+        let id = kivo_core::TraceId::new().to_string();
+        format!("/tmp/kivo-{}/kivo.sock", &id[id.len() - 12..])
     }
 
     #[tokio::test]

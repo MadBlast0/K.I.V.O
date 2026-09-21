@@ -244,10 +244,11 @@ async fn oversized_frames_close_the_connection() {
     .unwrap();
     let _welcome = io.next().await.unwrap().unwrap();
     let _ = io.send(Bytes::from(vec![b' '; 2 * MAX_FRAME])).await;
+    // The server just closes: nothing comes back (a clean end on Windows, a reset on Linux).
     let rest: Vec<_> = io.collect().await;
     assert!(
-        rest.iter().all(|f| f.is_ok()),
-        "the server just closes; nothing malformed comes back"
+        !rest.iter().any(Result::is_ok),
+        "no reply to an oversized frame"
     );
     assert_eq!(
         conn.client

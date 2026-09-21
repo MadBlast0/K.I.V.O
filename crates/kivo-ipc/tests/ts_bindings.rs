@@ -5,8 +5,8 @@
 #![cfg(feature = "ts")]
 
 use kivo_core::event::{
-    CancelReason, DeviceKind, EventKind, IntentPath, PermissionDecision, ProviderEvent, StepStatus, SystemEvent,
-    TaskEvent, ToolEvent, TtsStopReason, TurnEvent, TurnSource, UiEvent, VoiceEvent,
+    CancelReason, DeviceKind, EventKind, IntentPath, PermissionDecision, ProviderEvent, StepStatus,
+    SystemEvent, TaskEvent, ToolEvent, TtsStopReason, TurnEvent, TurnSource, UiEvent, VoiceEvent,
 };
 use kivo_core::{Event, EventMeta, ProfileId, SessionState, TaskId, Timestamp, TraceId, TurnId};
 use kivo_ipc::protocol::ProtocolVersion;
@@ -63,14 +63,17 @@ fn render() -> String {
 
 #[test]
 fn generated_typescript_is_up_to_date() {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../apps/kivo-app/src/ipc/generated.ts");
+    let path =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../apps/kivo-app/src/ipc/generated.ts");
     let fresh = render();
     if std::env::var_os("KIVO_WRITE_TS").is_some() {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(&path, &fresh).unwrap();
         return;
     }
-    let current = std::fs::read_to_string(&path).unwrap_or_default().replace("\r\n", "\n");
+    let current = std::fs::read_to_string(&path)
+        .unwrap_or_default()
+        .replace("\r\n", "\n");
     assert!(
         current == fresh,
         "apps/kivo-app/src/ipc/generated.ts is stale; regenerate with:\n  \
