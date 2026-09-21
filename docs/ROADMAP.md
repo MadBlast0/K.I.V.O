@@ -1,0 +1,176 @@
+# KIVO roadmap
+
+Status: v1, 2026-09-21. This refines the master plan's §155 phases into **vertical milestones**,
+per plan §154 ("user speaks → KIVO understands → performs one useful action → speaks back").
+Each milestone has exit criteria, and a milestone is done only when all its criteria pass on the
+reference hardware.
+
+Specs: [architecture/](architecture/ARCHITECTURE.md) · Decisions: [DECISIONS.md](DECISIONS.md)
+
+---
+
+## Phase 0: Specification ✅ (this document set)
+
+- [x] Product blueprint ([KIVO_Project_Plan.md](KIVO_Project_Plan.md))
+- [x] Research: UI/lifecycle, voice pipeline, architecture/platform ([research/](research/))
+- [x] Architecture, interfaces, state and event model ([ARCHITECTURE.md](architecture/ARCHITECTURE.md))
+- [x] Security model ([SECURITY.md](architecture/SECURITY.md))
+- [x] Benchmark requirements ([BENCHMARKS.md](architecture/BENCHMARKS.md))
+- [ ] Open decisions answered (see "Before M0" below)
+
+## M0: Foundations and measurement
+
+**Goal:** a skeleton that builds, and the numbers needed to lock the engine defaults.
+
+- **Workspace and CI:**
+  - the Cargo workspace + pnpm UI per ARCHITECTURE §7;
+  - CI (fmt, clippy, tests, `cargo deny`) on Windows, plus Linux/macOS checks for the portable
+    crates.
+- **Core scaffolding:**
+  - `kivo-core` event and state types, and the session state machine with tests;
+  - `kivo-ipc` transport (named pipe + token + JSON-RPC) and TS type generation;
+  - `kivo-store` config (TOML + migrations), SQLite with migrations, and logging with
+    redaction.
+- **Runtime and app shells:**
+  - a `kivo-runtime` that starts, holds the single-instance mutex, shows the tray, and serves IPC;
+  - a `kivo-app` Tauri shell that connects, shows the runtime state, and can be restarted
+    independently.
+- **Spikes, measured with `kivo-bench`:**
+  - **overlay:** a transparent, non-focusable, always-on-top pill and card. Measure the white
+    flash, show latency, and idle/animating GPU power.
+  - **audio:** WASAPI/cpal capture and playback, resampling, the AEC3 loop, Silero VAD, and idle
+    CPU.
+  - **wake:** sherpa-onnx KWS "Hey Kivo" versus a first openWakeWord-trained model, measuring
+    false accepts per hour and false rejects.
+  - **STT:** Moonshine v2 / Parakeet v3 / Whisper-turbo via transcribe-rs vs direct ort, on the
+    low and mid tiers.
+  - **TTS:** Kokoro / Supertonic / system voices, measuring first audio and RTF.
+- **License checks:** the `uiautomation` crate, Smart Turn v3, and `interprocess` DACL support.
+
+**Exit:**
+
+- CI is green.
+- The runtime and UI restart independently.
+- The benchmark report is committed to `docs/benchmarks/`.
+- The engine defaults are updated in DECISIONS.md with measured numbers.
+
+## M1: Vertical slice, "push-to-talk → action → speech"
+
+- Ctrl+Space push-to-talk, then streaming STT (the chosen default), with the transcript shown in
+  the overlay.
+- The fast path: open/close/focus app, volume/mute, media keys, screenshot, lock (grammar + app
+  index).
+- System TTS or Kokoro reply, with earcons.
+- The overlay pill and card with all M1 states, plus Esc/stop cancellation (≤ 100 ms to silence).
+- The lifecycle (UX §1): tray, close-to-tray + toast, relaunch focus, and an autostart option.
+- The Activity log, the audit log, and the basic permission engine (Safe/Low allow, Medium/High
+  confirm).
+
+**Exit:**
+
+- "Mute", "open Chrome" and "take a screenshot" work offline in ≤ 500 ms after the end of speech on
+  the mid tier.
+- Idle budgets are met.
+
+## M2: Wake word, enrollment, conversation audio
+
+- The "Hey Kivo" trained model plus two-stage verification, and the custom wake words flow (add,
+  edit, test, record, sensitivity).
+- AEC in production, barge-in, the command spotter ("stop" while speaking), and endpointing with
+  Smart Turn.
+- Voice enrollment + the speaker profile (prefer owner / owner only / off), with DPAPI storage and
+  deletion.
+- Onboarding steps 1–7.
+
+**Exit:**
+
+- Wake false accepts ≤ 0.5/h and false rejects ≤ 5% on the corpus.
+- Barge-in works with speakers (no headset) on the reference laptop.
+
+## M3: Brains
+
+- `BrainProvider` with the Anthropic, OpenAI, Gemini and OpenRouter adapters, plus the
+  OpenAI-compatible adapter for Ollama/LM Studio.
+- An **ACP client** with at least one CLI agent (Claude Code via `claude-agent-acp`, or Gemini
+  CLI); permission requests are routed to the KIVO confirmation UI.
+- Profiles, deterministic routing with a reason, failover within the privacy class, and health
+  checks.
+- Streaming LLM → phrase chunker → streaming TTS; the text normalizer.
+- The Brains screen: add/test/remove, profiles, keys stored in Credential Manager.
+
+**Exit:**
+
+- p50 end of speech → first audio ≤ 1.2 s on a cloud brain.
+- Cancel works mid-stream.
+- Killing the provider does not crash the runtime.
+
+## M4: Tools and computer control
+
+- The ToolSpec registry, the router with the capability ladder, and the app capability registry
+  (core apps).
+- UIA tools + events, files (Recycle Bin), clipboard, shell (Job Objects + risk parser), OCR, and
+  screenshot.
+- The browser extension + native messaging host (Chrome/Edge); CDP on a KIVO-managed profile.
+- Taint tracking + destination binding; grants UI; the emergency stop (all triggers).
+- `testenv/` + security test suite v1.
+
+**Exit:**
+
+- The UIA journey on the dummy app passes in CI.
+- The injection test pages cannot trigger an outbound action.
+
+## M5: Agents and background tasks
+
+- Planner (`propose_plan`) → task graph, parallel steps, validation before claiming success.
+- Coding tasks delegated to an ACP agent with progress in the card and the Tasks screen.
+- Watchers (downloads, folders, processes, builds, reminders) with no LLM while waiting.
+
+**Exit:** the plan §137 and §140 example journeys pass end to end.
+
+## M6: MCP
+
+- `rmcp` client, the MCP manager screen, per-server permissions, change detection, dynamic tool
+  exposure.
+- The KIVO MCP server for CLI agents.
+
+**Exit:** the hostile-MCP fixture tests pass.
+
+## M7: Control Center and memory (MVP complete)
+
+- The full MVP screen set, onboarding 8–12, the memory store (explicit, FTS), and privacy modes +
+  data classes.
+- Local brain path verified (the Private/Offline profiles).
+
+**Exit:** MVP checklist from plan §156 all green → **internal alpha**.
+
+## M8: Beta hardening
+
+- The companion (optional pointing via UIA bounds), the wake glow (if the power spike was OK), and
+  the custom earcon motif.
+- More STT/TTS choices, CLI discovery via the ACP registry, and the dependency manager (winget).
+- Hybrid memory retrieval (sqlite-vec), performance profiles (Battery/Gaming), and GPU policy.
+- The Performance dashboard and diagnostics bundle.
+
+## M9: Release
+
+- NSIS + MSI signed builds, the updater with channels and rollback, and THIRD_PARTY_NOTICES.
+- A signed public beta, gathering SmartScreen reputation.
+- The quality gates (plan §159) and the architecture invariants checklist all green.
+- **Then:** the MSIX/package-identity spike, then the macOS port (platform crates), then Linux.
+
+---
+
+## Before M0: remaining inputs from the owner
+
+| # | Question | Why it matters |
+|---|---|---|
+| 1 | **Open source or closed/commercial?** If open source, which license? | Decides how strict the GPL/CC-BY/OpenRAIL handling must be, and whether contributions and CLA matter |
+| 2 | **Which cloud brain first** for M3 (Anthropic, OpenAI, Gemini, OpenRouter)? And will users bring their own API keys (BYOK)? | Adapter order and onboarding copy |
+| 3 | **Which CLI agent first** (Claude Code, Codex, Gemini CLI)? | The first ACP integration target |
+| 4 | **Language scope for v1:** English only, or English plus others? | Moonshine (EN) vs Parakeet (multilingual) default, Kokoro espeak issue, grammar localization |
+| 5 | **Code signing route:** country/organization for Azure Artifact Signing eligibility, or buy an OV certificate? | Needed before a public beta, not before M0 |
+| 6 | **Low-end test machine:** is one available, or should M0 use a throttled VM profile? | Benchmarks must include the low tier |
+| 7 | **Emergency stop hotkey:** is Ctrl+Alt+Shift+Esc acceptable? | Muscle memory; conflicts |
+
+None of these block starting M0's workspace, CI, IPC and runtime skeleton. Questions 1, 4 and 6 must
+be answered before M0 finishes, because they affect the engine defaults.

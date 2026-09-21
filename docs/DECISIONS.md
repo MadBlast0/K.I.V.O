@@ -5,6 +5,43 @@ decision changes, update the entry and note the date. Do not silently rewrite it
 
 ---
 
+## 2026-09-21 — Architecture baseline (Phase 0 specs)
+
+**Decision:** Adopt the draft specs in [architecture/](architecture/ARCHITECTURE.md) as the Phase 0
+baseline. Key points:
+
+- **Processes:**
+  - `kivo-runtime` is the per-user core. It owns the tray, audio, wake word, routing, tools,
+    permissions and store.
+  - `kivo-app` is the Tauri UI and can be restarted independently.
+  - `kivo-infer` runs the supervised STT/TTS/embedding workers.
+- **IPC:** a named pipe (user-only DACL, reject remote clients, session token) carrying JSON-RPC
+  2.0, with TypeScript types generated from Rust.
+- **State:** the runtime is authoritative. There is a typed event bus (tokio broadcast), and
+  cancellation-token trees per turn and per task (cancel → silence ≤ 100 ms).
+- **Storage:**
+  - TOML config (versioned, migrated);
+  - SQLite (rusqlite, WAL) holding activity, audit (hash-chained), tasks, memory (FTS5, with
+    sqlite-vec later);
+  - secrets in Credential Manager (`keyring`), and voice data encrypted with DPAPI.
+- **Brains:**
+  - own `BrainProvider` trait, with `genai` for breadth plus native adapters where needed;
+  - an OpenAI-compatible adapter for local servers;
+  - an **ACP client** for CLI agents;
+  - a **KIVO MCP server** exposing KIVO tools to agents.
+- **Intent:** a grammar fast path, then semantic exemplar matching, then the brain. Routing is
+  deterministic and gives a reason.
+- **Computer control:** the capability ladder, UIA on a dedicated MTA thread, a browser extension +
+  native messaging, CDP only on a KIVO profile, Windows.Media.Ocr, SendInput as the last resort.
+- **Security:** risk tiers × taint × profile policy. High risk always needs an on-screen or Windows
+  Hello confirmation. Destination binding. Emergency stop on Ctrl+Alt+Shift+Esc (proposed).
+- **Distribution:** NSIS per-user primary, MSI for IT, MSIX later; minisign-signed updates with
+  rollback; models downloaded on demand with sha256 manifests; no GPL in the default dependency
+  graph.
+- **Roadmap:** vertical milestones M0–M9 ([ROADMAP.md](ROADMAP.md)).
+
+Research: [architecture-and-platform/REPORT.md](research/architecture-and-platform/REPORT.md)
+
 ## 2026-09-21 — Custom wake words
 
 **Decision:** Users can add, edit, rename, re-record, set per-word sensitivity for,

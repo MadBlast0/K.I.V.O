@@ -23,6 +23,21 @@ behind them lives in `docs/research/<topic>/` (a `REPORT.md` plus source notes).
 Check the log before re-opening a settled question, and add to it when a new
 decision is made.
 
+Engineering specs (read the relevant one before implementing a subsystem):
+
+| Spec | Covers |
+|---|---|
+| [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) | Processes, IPC, events, state machines, storage, repo layout, invariants |
+| [docs/architecture/VOICE.md](docs/architecture/VOICE.md) | Audio, wake words, enrollment, STT/TTS, barge-in, budgets |
+| [docs/architecture/BRAINS.md](docs/architecture/BRAINS.md) | Intent router, provider trait, ACP agents, routing, context |
+| [docs/architecture/TOOLS_AND_CONTROL.md](docs/architecture/TOOLS_AND_CONTROL.md) | Tool schema, UIA, browser, shell, watchers, MCP, test env |
+| [docs/architecture/SECURITY.md](docs/architecture/SECURITY.md) | Permission engine, taint, secrets, privacy, audit, emergency stop |
+| [docs/architecture/UX.md](docs/architecture/UX.md) | Lifecycle, overlay states, Control Center, onboarding, settings |
+| [docs/architecture/MEMORY.md](docs/architecture/MEMORY.md) | Conversation, task, preference, long-term memory |
+| [docs/architecture/DISTRIBUTION.md](docs/architecture/DISTRIBUTION.md) | Installers, updates, signing, model downloads, licensing |
+| [docs/architecture/BENCHMARKS.md](docs/architecture/BENCHMARKS.md) | `kivo-bench`, reference hardware, budgets |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | Milestones M0–M9 and exit criteria |
+
 ## Platform
 
 Windows 11 first and most polished; Windows 10 supported with fallbacks; macOS and
@@ -31,7 +46,9 @@ never call Win32 (or any OS API) directly from core logic.
 
 ## Status
 
-Phase 0 (specification). No source code yet. Update this section as phases land.
+Phase 0 (specification) complete except the owner inputs listed at the end of
+[docs/ROADMAP.md](docs/ROADMAP.md). Next: **M0 — foundations and measurement**. No
+source code yet. Update this section as milestones land.
 
 ## Planned stack
 

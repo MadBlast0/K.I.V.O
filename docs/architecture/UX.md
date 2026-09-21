@@ -1,0 +1,136 @@
+# UX spec: lifecycle, overlay, Control Center
+
+Status: Draft v1, 2026-09-21. Research: [voice-ui-and-app-presence/REPORT.md](../research/voice-ui-and-app-presence/REPORT.md).
+It implements plan §74–90, §118 and §129–135, and records the decisions in [DECISIONS.md](../DECISIONS.md).
+
+## 1. Lifecycle
+
+| Event | Behavior |
+|---|---|
+| First launch | The Control Center opens on **onboarding** (§4) |
+| Manual launch, not running | The runtime starts, then the Control Center is shown |
+| Launch at login (opt-in) | The runtime starts with `--autostart`; the UI preloads hidden; the tray icon appears |
+| Relaunch while running | The main window is shown, unminimized and focused |
+| Close (X / Alt+F4 / taskbar close) | The window hides, and KIVO keeps running ("On close, keep KIVO running", on by default). The first close shows a one-time toast with **Settings** and **Quit** buttons |
+| Tray left-click | Opens the Control Center |
+| Tray right-click | **Open KIVO** · Pause/Resume listening · Hide overlay for 1 hour · Stop everything · Settings · Quit KIVO |
+| Tray icon states | Normal, listening, paused (slashed mic), error (badge), updating |
+| Quit | Only from the tray or the Control Center menu. Stops the runtime and releases the mic |
+
+## 2. Voice overlay
+
+**Surfaces:**
+
+- **Pill:** about 140×38 px at bottom center of the monitor with the foreground window, above the
+  taskbar. It can be dragged, and its position is remembered per monitor. It never takes focus,
+  and it draws nothing when hidden.
+- **Card:** grows up out of the pill, 420–560 px wide and up to 60% of the screen height. It
+  scrolls, and focus is enabled only while the user types.
+- **Edge glow (optional, off by default):** a 2–4 px gradient on the active monitor for about
+  400 ms on wake.
+
+**States:**
+
+| State | Pill | Card | Sound |
+|---|---|---|---|
+| Idle / standby | Hidden (optional 10 px dot) | Hidden | — |
+| Listening | Accent + live waveform + mic icon | Opens as soon as partial text arrives (gray, live) | listen_start |
+| Thinking | Shimmer | "You said…" locked in | listen_stop |
+| Acting | Tool icon + one-line step | Step list with statuses | — |
+| Speaking | Pulse synced to TTS level | Streaming answer (rich text) | — |
+| Awaiting confirmation | Amber | Exact action + Allow once / Always… / Deny; never auto-dismisses | spoken prompt |
+| Error | Red + short reason | Reason + Retry / Open settings | error |
+| Paused | Slashed mic (only when summoned) | — | — |
+| Guest speaker | Neutral outline + "Guest" chip | Limited | — |
+| End | Collapses 4 s after the answer (not while hovered, typing or confirming) | — | hangup |
+| Fullscreen app / Focus mode | Suppressed, or a tiny pill (setting) | Suppressed | Sounds only |
+
+**Card contents:**
+
+- **Header:** the brain/profile chip ("Coding · Claude"), which shows the routing reason on hover.
+- **Body:** the transcript bubble (editable: click to fix and resend), the answer, and tool/step
+  rows.
+- **Footer:** a text field ("Type to KIVO…"), a mic toggle, the Stop button, and "Open in Control
+  Center".
+
+**Keyboard:**
+
+- Esc cancels.
+- Ctrl+Enter sends.
+- Tab moves between confirmation buttons.
+- The overlay is reachable through the Control Center hotkey.
+
+## 3. Control Center (plan §80–89)
+
+The navigation follows plan §80:
+
+- Home, Chat, Activity, Tasks
+- Brains, Voice, Tools, MCP, Integrations
+- Memory, Permissions, Privacy
+- Companion, Performance
+- Settings, Diagnostics, About
+
+MVP screens are Home, Chat, Activity, Brains, Voice, Permissions and Settings; the rest come later
+(see ROADMAP).
+
+**Design system (plan §134–135):**
+
+- **Stack:** React + TypeScript, Tailwind v4, shadcn/ui on Base UI, and Motion (`LazyMotion`).
+- **Fonts:** Inter or Geist (bundled; SF Pro is never used).
+- **Tokens:**
+  - an 8 px spacing scale;
+  - radii of 10 px (controls), 14 px (cards) and 20 px (pill/sheets);
+  - elevation from soft CSS shadows;
+  - dark-first themes.
+- **Materials:** Mica on the Control Center (Windows 11), solid on Windows 10. The overlay uses a
+  CSS translucent surface, with acrylic only on the fixed-size pill if M0 shows it is acceptable.
+- **Motion:** 150–250 ms ease-out for state changes, spring motion for card growth, and Windows
+  "Animation effects" plus an in-app setting turn motion off (WCAG 2.3.3).
+- **Voice visuals:** adapted from ElevenLabs UI (MIT): `live-waveform`, `bar-visualizer`,
+  `shimmering-text`, `transcript-viewer`, `conversation`. The LiveKit aura shader is an optional
+  later orb.
+- **Idle cost rule:** hidden windows also set WebView2 `IsVisible=false`. Animation loops run only
+  while listening or speaking, and the idle pill renders zero frames.
+
+## 4. Onboarding (plan §129–133)
+
+| Step | Content |
+|---|---|
+| 1 Welcome | "KIVO is your AI interface for Windows." Privacy promise in one line |
+| 2 Hardware | Detected CPU/GPU/NPU/RAM/battery, and a recommended performance profile |
+| 3 Microphone | Pick a device, see a level meter, then a quick test phrase |
+| 4 Voice in (STT) | Fast / Balanced / Accurate / Cloud cards (recommended one preselected); model download with progress |
+| 5 Voice out (TTS) | Instant / Natural / Expressive / System / Cloud, with preview buttons |
+| 6 Activation | Push-to-talk hotkey (**Ctrl+Space** by default, conflict-checked) + **"Hey Kivo"** opt-in (explains on-device spotting) |
+| 7 Voice enrollment | Biometric consent → 8 phrases → result. Skippable, can be done later |
+| 8 Brain | Cloud/API · CLI agent (auto-discovered list) · Local (detected Ollama / LM Studio) · Later |
+| 9 Permissions | The profile (Balanced by default), each permission class explained in one line |
+| 10 Overlay & sounds | Style (Pill + card), glow (off), sounds (on), with a live preview |
+| 11 Startup & close | "Start KIVO when I sign in" (off) and "On close, keep running" (on), explained |
+| 12 Try it | A guided "Say 'Hey Kivo, what time is it?'" |
+
+Every step has a recommended default and can be skipped.
+
+## 5. Settings (defaults)
+
+| Group | Controls (default) |
+|---|---|
+| General | Start at sign-in (off) · On close keep running (on) · Tray icon (on) · Language (EN) · Low-memory mode (off) |
+| Voice | Wake words list with Add/Edit (Hey Kivo) · Push-to-talk hotkey (Ctrl+Space) · Toggle mode (off) · Auto-end on silence (on) · Mic · Speaker profile mode (Prefer owner, after enrollment) · STT engine · TTS engine + voice · User vocabulary |
+| Overlay | Style: Pill + card / Pill only / Card only / Off · Position (bottom-center, remember drag) · Monitor (active) · Wake glow (off) · Reduce motion (follow Windows) · In fullscreen & Focus: hide / tiny pill (hide) |
+| Sounds | Master (on) · start/stop/error/done (on) · thinking (off) · volume · sound set |
+| Brains | Providers, profiles, routing rules, fallbacks |
+| Permissions | Profile (Balanced) · grants list · per-tool overrides · emergency stop hotkey |
+| Privacy | Mode (Cloud) · data classes · conversation retention (30 days) · debug transcripts (off) |
+| Memory | On (explicit only) · list/edit/delete · export |
+| Performance | Profile (auto: Battery / Balanced / Performance / Gaming) · model residency timers |
+| Accessibility | Screen-reader announcements (on) · captions for spoken replies (on) · high contrast (follow Windows) · warn if overlay and sounds are both off |
+
+## 6. Accessibility (plan §118)
+
+- **Screen readers:** the overlay and Control Center expose ARIA roles. State changes and final
+  transcripts are announced through UIA notifications.
+- **Keyboard:** full keyboard navigation with visible focus rings.
+- **Color and contrast:** no information is conveyed by color alone. Contrast is at least 4.5:1,
+  and the Windows high-contrast theme is respected.
+- **Voice-only use:** every action in the overlay can be triggered by voice.

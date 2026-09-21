@@ -9,6 +9,8 @@
 > **Document purpose:** Complete product, UX, architecture, engineering, security, performance, testing, release, and long-term expansion blueprint.
 >
 > **Implementation rule:** This document intentionally contains architecture and implementation instructions, but no production source code. The document defines *what to build, why to build it, how the parts interact, and how the finished system should behave.*
+>
+> **Companion documents (added 2026-09-21):** engineering specs in [architecture/](architecture/ARCHITECTURE.md), milestones in [ROADMAP.md](ROADMAP.md), decisions in [DECISIONS.md](DECISIONS.md), research in [research/](research/). Where they refine or change this blueprint, §167 lists the amendments.
 
 ---
 
@@ -3723,3 +3725,23 @@ The project should always favor:
 > **KIVO is the intelligent voice and operations layer between a human and their Windows computer.**
 
 That is the product we are building.
+
+---
+
+# 167. Amendments (2026-09-21)
+
+Phase 0 research changed or refined these parts of the blueprint. The detailed specs are authoritative for the items below.
+
+| Section | Amendment | Source |
+|---|---|---|
+| §5, §153 | **Platform:** Windows 11 first and most polished; Windows 10 supported with fallbacks; **macOS and Linux planned**, with all OS code behind platform traits from day one | [DECISIONS.md](DECISIONS.md) |
+| §8 | **Process model:** `kivo-runtime` (core, tray, audio, wake) + `kivo-app` (Tauri UI; restartable) + `kivo-infer` (supervised model workers). The runtime is a per-user process, not a Windows service | [ARCHITECTURE.md](architecture/ARCHITECTURE.md) |
+| §12 Type B/D | **CLI agents are integrated through the Agent Client Protocol (ACP)**, with the Codex App Server as an optional native adapter. Managed login only goes through providers' own CLIs/agents or official OAuth | [BRAINS.md](architecture/BRAINS.md) |
+| §23, §27 | **Picovoice (Porcupine/Eagle/Orca) is excluded** (enterprise-only since 2026-06-30). Wake word: a KIVO-trained "Hey Kivo" model + sherpa-onnx keyword spotting for **user-defined custom wake words** | [VOICE.md](architecture/VOICE.md) |
+| §32 | Orca is removed from the TTS options. Defaults: Kokoro (Natural), Supertonic (Instant), system voices, and cloud. **GPL espeak-ng/Piper only as optional add-ons** | [VOICE.md](architecture/VOICE.md) |
+| §27, §28 | Activation: the **"Hey Kivo" wake word** + **Ctrl+Space push-to-talk**; Siri-style **voice enrollment** (speaker verification is a convenience filter, never an authorization) | [DECISIONS.md](DECISIONS.md) |
+| §74–78 | **Voice overlay:** a pill at bottom center that grows into a transcript/answer card, with an optional wake **edge glow** (off by default); the overlay style can be turned off | [UX.md](architecture/UX.md) |
+| §49 | **Browser:** a KIVO browser extension + native messaging for the user's real browser (Chrome 136+ blocks CDP on default profiles); CDP only on a KIVO-managed profile | [TOOLS_AND_CONTROL.md](architecture/TOOLS_AND_CONTROL.md) |
+| §60 | **Prompt-injection defense:** provenance/taint tracking + destination binding at the tool boundary ("CaMeL-lite") in v1; full plan-interpreter later | [SECURITY.md](architecture/SECURITY.md) |
+| §21, §110 | **Installer:** NSIS per-user is primary; MSI for IT; MSIX/package identity is a later spike (it unlocks the Windows AI Speech API) | [DISTRIBUTION.md](architecture/DISTRIBUTION.md) |
+| §155 | Phases are refined into vertical milestones M0–M9 with exit criteria | [ROADMAP.md](ROADMAP.md) |
