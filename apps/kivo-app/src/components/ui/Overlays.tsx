@@ -7,24 +7,55 @@ import type { ReactElement, ReactNode } from "react";
 import { IconButton } from "./Button";
 
 /* ───────── Page tabs with a sliding underline ───────── */
-export interface TabDef<T extends string> { value: T; label: ReactNode; content: ReactNode }
+export interface TabDef<T extends string> {
+  value: T;
+  label: ReactNode;
+  content: ReactNode;
+}
 
-export function PageTabs<T extends string>({ tabs, value, defaultValue, onChange, label }: {
-  tabs: ReadonlyArray<TabDef<T>>; value?: T; defaultValue?: T; onChange?: (v: T) => void; label: string;
+export function PageTabs<T extends string>({
+  tabs,
+  value,
+  defaultValue,
+  onChange,
+  label,
+}: {
+  tabs: ReadonlyArray<TabDef<T>>;
+  value?: T;
+  defaultValue?: T;
+  onChange?: (v: T) => void;
+  label: string;
 }) {
   return (
-    <BTabs.Root value={value} defaultValue={defaultValue ?? tabs[0]?.value} onValueChange={(v) => onChange?.(v as T)}>
+    <BTabs.Root
+      value={value}
+      defaultValue={defaultValue ?? tabs[0]?.value}
+      onValueChange={(v) => {
+        const tab = tabs.find((t) => t.value === v);
+        if (tab) onChange?.(tab.value);
+      }}
+    >
       <BTabs.List className="k-tabs__list" aria-label={label}>
-        {tabs.map((t) => <BTabs.Tab key={t.value} value={t.value} className="k-tabs__tab">{t.label}</BTabs.Tab>)}
+        {tabs.map((t) => (
+          <BTabs.Tab key={t.value} value={t.value} className="k-tabs__tab">
+            {t.label}
+          </BTabs.Tab>
+        ))}
         <BTabs.Indicator className="k-tabs__indicator" />
       </BTabs.List>
-      {tabs.map((t) => <BTabs.Panel key={t.value} value={t.value} className="k-tabs__panel">{t.content}</BTabs.Panel>)}
+      {tabs.map((t) => (
+        <BTabs.Panel key={t.value} value={t.value} className="k-tabs__panel">
+          {t.content}
+        </BTabs.Panel>
+      ))}
     </BTabs.Root>
   );
 }
 
 /* ───────── Tooltip ───────── */
-export const TooltipProvider = ({ children }: { children: ReactNode }) => <BTooltip.Provider delay={400}>{children}</BTooltip.Provider>;
+export const TooltipProvider = ({ children }: { children: ReactNode }) => (
+  <BTooltip.Provider delay={400}>{children}</BTooltip.Provider>
+);
 
 export function Tooltip({ content, children }: { content: ReactNode; children: ReactElement }) {
   return (
@@ -80,7 +111,13 @@ export function Dialog({ open, onOpenChange, trigger, title, description, childr
 export const DialogClose = ({ children }: { children: ReactElement }) => <BDialog.Close render={children} />;
 
 /* ───────── Side sheet (details without leaving the page) ───────── */
-export function Sheet({ open, onOpenChange, trigger, title, children }: Omit<DialogProps, "description" | "footer" | "noClose">) {
+export function Sheet({
+  open,
+  onOpenChange,
+  trigger,
+  title,
+  children,
+}: Omit<DialogProps, "description" | "footer" | "noClose">) {
   return (
     <BDialog.Root open={open} onOpenChange={onOpenChange}>
       {trigger && <BDialog.Trigger render={trigger} />}
@@ -99,8 +136,16 @@ export function Sheet({ open, onOpenChange, trigger, title, children }: Omit<Dia
 }
 
 /* ───────── Popover ───────── */
-export function Popover({ trigger, title, children, side = "bottom" }: {
-  trigger: ReactElement; title?: ReactNode; children: ReactNode; side?: "top" | "bottom" | "left" | "right";
+export function Popover({
+  trigger,
+  title,
+  children,
+  side = "bottom",
+}: {
+  trigger: ReactElement;
+  title?: ReactNode;
+  children: ReactNode;
+  side?: "top" | "bottom" | "left" | "right";
 }) {
   return (
     <BPopover.Root>

@@ -1,6 +1,13 @@
 import { useMemo, useState } from "react";
 import { AppWindow, PageHeader, Sidebar, type PageId } from "./components/layout/Shell";
-import { CommandPalette, EmptyState, ToastProvider, TooltipProvider, useCommandPaletteHotkey, type Command } from "./components/ui";
+import {
+  CommandPalette,
+  EmptyState,
+  ToastProvider,
+  TooltipProvider,
+  useCommandPaletteHotkey,
+  type Command,
+} from "./components/ui";
 import { ThemeProvider } from "./lib/theme";
 import { Gallery } from "./pages/Gallery";
 
@@ -17,9 +24,20 @@ export function App() {
 }
 
 const TITLES: Record<PageId, string> = {
-  home: "Home", chat: "Chat", tasks: "Tasks", activity: "Activity", routines: "Routines", brains: "Brains",
-  agents: "Agents", voice: "Voice", extensions: "Extensions", permissions: "Permissions", memory: "Memory",
-  usage: "Usage", settings: "Settings", gallery: "Components",
+  home: "Home",
+  chat: "Chat",
+  tasks: "Tasks",
+  activity: "Activity",
+  routines: "Routines",
+  brains: "Brains",
+  agents: "Agents",
+  voice: "Voice",
+  extensions: "Extensions",
+  permissions: "Permissions",
+  memory: "Memory",
+  usage: "Usage",
+  settings: "Settings",
+  gallery: "Components",
 };
 
 function Shell() {
@@ -28,20 +46,33 @@ function Shell() {
   const [palette, setPalette] = useState(false);
   useCommandPaletteHotkey(setPalette);
 
-  const commands = useMemo<Command[]>(() => [
-    { id: "gallery", group: "Go to", label: "Component gallery", icon: "layers", run: () => setPage("gallery") },
-    { id: "home", group: "Go to", label: "Home", icon: "home", run: () => setPage("home") },
-    { id: "settings", group: "Go to", label: "Settings", icon: "settings", run: () => setPage("settings") },
-    { id: "permissions", group: "Go to", label: "Permissions", icon: "permissions", run: () => setPage("permissions") },
-  ], []);
+  const commands = useMemo<Command[]>(
+    () => [
+      { id: "gallery", group: "Go to", label: "Component gallery", icon: "layers", run: () => setPage("gallery") },
+      { id: "home", group: "Go to", label: "Home", icon: "home", run: () => setPage("home") },
+      { id: "settings", group: "Go to", label: "Settings", icon: "settings", run: () => setPage("settings") },
+      {
+        id: "permissions",
+        group: "Go to",
+        label: "Permissions",
+        icon: "permissions",
+        run: () => setPage("permissions"),
+      },
+    ],
+    [],
+  );
 
   return (
     <>
       <AppWindow sidebar={<Sidebar current={page} onNavigate={setPage} onSearch={() => setPalette(true)} />}>
-        {page === "gallery" ? <Gallery /> : (
+        {page === "gallery" ? (
+          <Gallery />
+        ) : (
           <>
             <PageHeader title={TITLES[page]} />
-            <EmptyState icon="layers" title="Not built yet">This page comes next. The component gallery has every building block.</EmptyState>
+            <EmptyState icon="layers" title="Not built yet">
+              This page comes next. The component gallery has every building block.
+            </EmptyState>
           </>
         )}
       </AppWindow>

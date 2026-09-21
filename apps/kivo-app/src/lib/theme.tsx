@@ -38,7 +38,11 @@ const ThemeContext = createContext<ThemeState | null>(null);
 const KEY = "kivo.appearance";
 
 function load(): Partial<Pick<ThemeState, "theme" | "accent" | "textSize" | "motion">> {
-  try { return JSON.parse(localStorage.getItem(KEY) ?? "{}"); } catch { return {}; }
+  try {
+    return JSON.parse(localStorage.getItem(KEY) ?? "{}");
+  } catch {
+    return {};
+  }
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
@@ -65,7 +69,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     root.dataset.textsize = textSize;
     if (motion === "reduced") root.dataset.motion = "reduced";
     else delete root.dataset.motion;
-    try { localStorage.setItem(KEY, JSON.stringify({ theme, accent, textSize, motion })); } catch { /* storage unavailable */ }
+    try {
+      localStorage.setItem(KEY, JSON.stringify({ theme, accent, textSize, motion }));
+    } catch {
+      /* storage unavailable */
+    }
   }, [resolved, theme, accent, textSize, motion]);
 
   const value = useMemo(

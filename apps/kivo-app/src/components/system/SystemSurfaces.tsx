@@ -13,7 +13,15 @@ import { Mark } from "../ui/Status";
 /* ───────── Native menus (tray, jump list, Explorer) ───────── */
 
 export type NativeMenuEntry =
-  | { type: "item"; label: string; icon?: IconName; brand?: boolean; strong?: boolean; danger?: boolean; sub?: Array<{ label: string; checked?: boolean }> }
+  | {
+      type: "item";
+      label: string;
+      icon?: IconName;
+      brand?: boolean;
+      strong?: boolean;
+      danger?: boolean;
+      sub?: Array<{ label: string; checked?: boolean }>;
+    }
   | { type: "separator" }
   | { type: "header"; label: string };
 
@@ -22,8 +30,16 @@ export const TRAY_MENU: NativeMenuEntry[] = [
   { type: "item", label: "Open KIVO", strong: true },
   { type: "item", label: "Pause listening", icon: "pause" },
   {
-    type: "item", label: "Permission mode", icon: "permissions",
-    sub: [{ label: "Ask every time" }, { label: "Accept edits" }, { label: "Plan first" }, { label: "Auto", checked: true }, { label: "Bypass permissions" }],
+    type: "item",
+    label: "Permission mode",
+    icon: "permissions",
+    sub: [
+      { label: "Ask every time" },
+      { label: "Accept edits" },
+      { label: "Plan first" },
+      { label: "Auto", checked: true },
+      { label: "Bypass permissions" },
+    ],
   },
   { type: "item", label: "Hide Island for 1 hour", icon: "eyeOff" },
   { type: "separator" },
@@ -55,24 +71,63 @@ export const EXPLORER_MENU: NativeMenuEntry[] = [
   { type: "item", label: "Rename", icon: "edit" },
 ];
 
-export function NativeMenuPreview({ entries, label, width = 250 }: { entries: NativeMenuEntry[]; label: string; width?: number }) {
+export function NativeMenuPreview({
+  entries,
+  label,
+  width = 250,
+}: {
+  entries: NativeMenuEntry[];
+  label: string;
+  width?: number;
+}) {
   const [open, setOpen] = useState<number | null>(null);
   return (
-    <div className="k-native-menu" role="menu" aria-label={label} style={{ width }} onMouseLeave={() => setOpen(null)}>
+    <div
+      className="k-native-menu"
+      role="menu"
+      tabIndex={-1}
+      aria-label={label}
+      style={{ width }}
+      onMouseLeave={() => setOpen(null)}
+    >
       {entries.map((e, i) => {
         if (e.type === "separator") return <div key={i} className="k-menu__separator" />;
-        if (e.type === "header") return <div key={i} className="k-menu__label">{e.label}</div>;
+        if (e.type === "header")
+          return (
+            <div key={i} className="k-menu__label">
+              {e.label}
+            </div>
+          );
         return (
-          <div key={i} role="menuitem" className={e.danger ? "k-menu__item k-menu__item--danger" : "k-menu__item"}
-            data-highlighted={open === i ? "" : undefined} onMouseEnter={() => setOpen(e.sub ? i : null)}
-            style={{ position: "relative", fontWeight: e.strong ? 600 : undefined }}>
-            {e.brand ? <Mark size={16} /> : e.icon && <Icon name={e.icon} />}{e.label}
+          <div
+            key={i}
+            role="menuitem"
+            tabIndex={-1}
+            className={e.danger ? "k-menu__item k-menu__item--danger" : "k-menu__item"}
+            data-highlighted={open === i ? "" : undefined}
+            onMouseEnter={() => setOpen(e.sub ? i : null)}
+            style={{ position: "relative", fontWeight: e.strong ? 600 : undefined }}
+          >
+            {e.brand ? <Mark size={16} /> : e.icon && <Icon name={e.icon} />}
+            {e.label}
             {e.sub && <Icon name="chevronRight" className="k-menu__chevron" />}
             {e.sub && open === i && (
-              <div className="k-native-menu" role="menu" style={{ position: "absolute", left: "100%", top: -4, width: 200, zIndex: 2 }}>
+              <div
+                className="k-native-menu"
+                role="menu"
+                tabIndex={-1}
+                style={{ position: "absolute", left: "100%", top: -4, width: 200, zIndex: 2 }}
+              >
                 {e.sub.map((s) => (
-                  <div key={s.label} role="menuitemradio" aria-checked={!!s.checked} className="k-menu__item">
-                    <span className="k-menu__check">{s.checked && <Icon name="check" />}</span>{s.label}
+                  <div
+                    key={s.label}
+                    role="menuitemradio"
+                    tabIndex={-1}
+                    aria-checked={!!s.checked}
+                    className="k-menu__item"
+                  >
+                    <span className="k-menu__check">{s.checked && <Icon name="check" />}</span>
+                    {s.label}
                   </div>
                 ))}
               </div>
@@ -88,28 +143,56 @@ export function NativeMenuPreview({ entries, label, width = 250 }: { entries: Na
 export function TrayTooltipPreview({ state, mode, tasks }: { state: string; mode: string; tasks: number }) {
   return (
     <div className="k-tray-tip" role="tooltip">
-      <div><b>KIVO</b> · {state}</div>
-      <span>{mode} mode · {tasks === 1 ? "1 task running" : `${tasks} tasks running`}</span>
+      <div>
+        <b>KIVO</b> · {state}
+      </div>
+      <span>
+        {mode} mode · {tasks === 1 ? "1 task running" : `${tasks} tasks running`}
+      </span>
     </div>
   );
 }
 
 /* ───────── Windows notification (UX-57, UX-58) ───────── */
-export function WindowsToastPreview({ title, text, actions = [], reply = false }: { title: string; text: string; actions?: string[]; reply?: boolean }) {
+const NO_ACTIONS: readonly string[] = [];
+
+export function WindowsToastPreview({
+  title,
+  text,
+  actions = NO_ACTIONS,
+  reply = false,
+}: {
+  title: string;
+  text: string;
+  actions?: readonly string[];
+  reply?: boolean;
+}) {
   return (
     <div className="k-win-toast" role="img" aria-label={`Notification: ${title}`}>
-      <div className="k-win-toast__head"><Mark size={16} />KIVO<span className="k-win-toast__x" aria-hidden>✕</span></div>
+      <div className="k-win-toast__head">
+        <Mark size={16} />
+        KIVO
+        <span className="k-win-toast__x" aria-hidden>
+          ✕
+        </span>
+      </div>
       <span className="k-win-toast__title">{title}</span>
       <span className="k-win-toast__text">{text}</span>
       {reply && (
         <div className="k-win-toast__reply">
           <TextField placeholder="Reply to KIVO…" aria-label="Reply to KIVO" style={{ flex: 1 }} />
-          <Button size="sm" variant="primary">Send</Button>
+          <Button size="sm" variant="primary">
+            Send
+          </Button>
         </div>
       )}
       {actions.length > 0 && (
         <div className="k-win-toast__actions" style={{ gridTemplateColumns: `repeat(${actions.length}, 1fr)` }}>
-          {actions.map((a) => <Button key={a} size="sm">{a}</Button>)}
+          {actions.map((a) => (
+            <Button key={a} size="sm">
+              {a}
+            </Button>
+          ))}
         </div>
       )}
     </div>
@@ -121,9 +204,16 @@ export function HelloPreview({ title, detail }: { title: string; detail: string 
   return (
     <div className="k-hello" role="img" aria-label="Windows Hello prompt preview">
       <div style={{ fontWeight: 600, fontSize: 15 }}>{title}</div>
-      <div className="k-hello__face"><Icon name="user" size={26} /></div>
+      <div className="k-hello__face">
+        <Icon name="user" size={26} />
+      </div>
       <div style={{ color: "var(--text-2)", fontSize: 12.5 }}>{detail}</div>
-      <div className="k-hello__actions"><Button size="sm">Cancel</Button><Button size="sm" variant="primary">Use PIN</Button></div>
+      <div className="k-hello__actions">
+        <Button size="sm">Cancel</Button>
+        <Button size="sm" variant="primary">
+          Use PIN
+        </Button>
+      </div>
     </div>
   );
 }

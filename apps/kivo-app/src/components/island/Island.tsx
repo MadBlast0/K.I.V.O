@@ -19,15 +19,25 @@ export interface IslandModel {
   sub?: ReactNode;
   /** Leading glyph; defaults to the orb. */
   lead?: ReactNode;
-  /** Trailing element, or "wave" for the live waveform. */
-  trail?: ReactNode | "wave";
+  /** Trailing element (spinner, chip, keys, buttons). */
+  trail?: ReactNode;
+  /** Shows the live waveform at the end of the row (after `trail`). */
+  wave?: boolean;
   /** Expanded content under the row. */
   body?: ReactNode;
   /** Waveform colour: listening is white, KIVO speaking is light blue. */
   voice?: "user" | "kivo";
 }
 
-export function Island({ model, className, "aria-label": ariaLabel }: { model: IslandModel | null; className?: string; "aria-label"?: string }) {
+export function Island({
+  model,
+  className,
+  "aria-label": ariaLabel,
+}: {
+  model: IslandModel | null;
+  className?: string;
+  "aria-label"?: string;
+}) {
   const reduce = useReducedMotionConfig() ?? false;
   const [height, setHeight] = useState(36);
 
@@ -72,8 +82,12 @@ export function Island({ model, className, "aria-label": ariaLabel }: { model: I
               >
                 <div className="k-island__row">
                   {model.lead ?? <Orb />}
-                  <span className="k-island__label">{model.label}{model.sub && <small>{model.sub}</small>}</span>
-                  {model.trail === "wave" ? <Waveform active voice={model.voice ?? "user"} /> : model.trail}
+                  <span className="k-island__label">
+                    {model.label}
+                    {model.sub && <small>{model.sub}</small>}
+                  </span>
+                  {model.trail}
+                  {model.wave && <Waveform active voice={model.voice ?? "user"} />}
                 </div>
                 {model.body && <div className="k-island__body">{model.body}</div>}
               </motion.div>
@@ -89,7 +103,15 @@ const W = 88;
 const H = 36;
 
 /** Five rounded bars. Runs requestAnimationFrame only while `active`, then eases to rest and stops. */
-export function Waveform({ active, voice = "user", level }: { active: boolean; voice?: "user" | "kivo"; level?: () => number }) {
+export function Waveform({
+  active,
+  voice = "user",
+  level,
+}: {
+  active: boolean;
+  voice?: "user" | "kivo";
+  level?: () => number;
+}) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const reduce = useReducedMotionConfig() ?? false;
 
@@ -113,13 +135,22 @@ export function Waveform({ active, voice = "user", level }: { active: boolean; v
         ctx.fill();
       }
     };
-    if (reduce) { draw(active ? 0.5 : 0, 0); return; }
+    if (reduce) {
+      draw(active ? 0.5 : 0, 0);
+      return;
+    }
 
-    let amp = 0, t = 0, raf = 0;
+    let amp = 0,
+      t = 0,
+      raf = 0;
     const tick = () => {
       t += 1 / 60;
       // Real input comes from the runtime's level meter; the fallback is a plausible speech envelope.
-      const target = active ? (level ? level() : 0.35 + 0.65 * Math.abs(Math.sin(t * 3.1) * Math.sin(t * 1.7 + 1) + 0.25 * Math.sin(t * 9))) : 0;
+      const target = active
+        ? level
+          ? level()
+          : 0.35 + 0.65 * Math.abs(Math.sin(t * 3.1) * Math.sin(t * 1.7 + 1) + 0.25 * Math.sin(t * 9))
+        : 0;
       amp += (target - amp) * 0.12;
       draw(amp, t);
       if (!active && amp < 0.003) return; // at rest: stop scheduling frames
@@ -136,31 +167,55 @@ export function Waveform({ active, voice = "user", level }: { active: boolean; v
 
 export const IslandSpin = () => <span className="k-island__spin" aria-label="Working" />;
 export const IslandOk = () => <span className="k-island__ok" aria-label="Done" />;
-export const IslandDot = ({ color }: { color: string }) => <span className="k-island__dot" style={{ background: color }} />;
+export const IslandDot = ({ color }: { color: string }) => (
+  <span className="k-island__dot" style={{ background: color }} />
+);
 export const IslandApp = ({ text, bg, fg = "#fff" }: { text: string; bg: string; fg?: string }) => (
-  <span className="k-island__app" style={{ background: bg, color: fg }}>{text}</span>
+  <span className="k-island__app" style={{ background: bg, color: fg }}>
+    {text}
+  </span>
 );
 export const IslandRing = ({ progress = 70 }: { progress?: number }) => (
   <span className="k-island__ring" style={{ ["--p" as string]: `${progress}%` }} />
 );
 export const IslandProgress = ({ value }: { value: number }) => (
-  <span className="k-island__progress"><span style={{ width: `${value}%` }} /></span>
+  <span className="k-island__progress">
+    <span style={{ width: `${value}%` }} />
+  </span>
 );
 export const IslandChip = ({ children, danger }: { children: ReactNode; danger?: boolean }) => (
   <span className={danger ? "k-island__chip k-island__chip--danger" : "k-island__chip"}>{children}</span>
 );
 
-export interface IslandAction { label: string; kind?: "primary" | "danger"; onClick?: () => void }
+export interface IslandAction {
+  label: string;
+  kind?: "primary" | "danger";
+  onClick?: () => void;
+}
 
 /** Buttons plus the matching voice hint: every button's word can be spoken. */
-export function IslandActions({ actions, hint = true, extraHint }: { actions: IslandAction[]; hint?: boolean; extraHint?: ReactNode }) {
+export function IslandActions({
+  actions,
+  hint = true,
+  extraHint,
+}: {
+  actions: IslandAction[];
+  hint?: boolean;
+  extraHint?: ReactNode;
+}) {
   const words = actions.map((a) => a.label.toLowerCase());
   return (
     <>
       <div className="k-island__buttons">
         {actions.map((a) => (
-          <button key={a.label} type="button" onClick={a.onClick}
-            className={a.kind ? `k-island__btn k-island__btn--${a.kind}` : "k-island__btn"}>{a.label}</button>
+          <button
+            key={a.label}
+            type="button"
+            onClick={a.onClick}
+            className={a.kind ? `k-island__btn k-island__btn--${a.kind}` : "k-island__btn"}
+          >
+            {a.label}
+          </button>
         ))}
       </div>
       {hint && <VoiceHint words={words} extra={extraHint} />}
@@ -171,10 +226,19 @@ export function IslandActions({ actions, hint = true, extraHint }: { actions: Is
 export function VoiceHint({ words, extra }: { words: string[]; extra?: ReactNode }) {
   return (
     <div className="k-island__hint">
-      <span className="k-island__mic"><Icon name="mic" /></span>
-      <span>Say {words.map((w, i) => (
-        <span key={w}><b>“{w}”</b>{i < words.length - 2 ? ", " : i === words.length - 2 ? " or " : ""}</span>
-      ))}{extra}</span>
+      <span className="k-island__mic">
+        <Icon name="mic" />
+      </span>
+      <span>
+        Say{" "}
+        {words.map((w, i) => (
+          <span key={w}>
+            <b>“{w}”</b>
+            {i < words.length - 2 ? ", " : i === words.length - 2 ? " or " : ""}
+          </span>
+        ))}
+        {extra}
+      </span>
     </div>
   );
 }
@@ -182,7 +246,8 @@ export function VoiceHint({ words, extra }: { words: string[]; extra?: ReactNode
 export function IslandRisk({ level }: { level: "medium" | "high" }) {
   return (
     <div className={level === "high" ? "k-island__risk k-island__risk--high" : "k-island__risk"}>
-      <Icon name={level === "high" ? "permissions" : "warning"} />{level === "high" ? "HIGH RISK" : "MEDIUM RISK"}
+      <Icon name={level === "high" ? "permissions" : "warning"} />
+      {level === "high" ? "HIGH RISK" : "MEDIUM RISK"}
     </div>
   );
 }

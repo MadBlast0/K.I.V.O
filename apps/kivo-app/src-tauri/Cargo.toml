@@ -5,6 +5,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+publish.workspace = true
 
 [lib]
 # The _lib suffix avoids a name clash with the binary on Windows (cargo#8519).

@@ -9,7 +9,12 @@ import { useEffect, useState } from "react";
 
 // Segoe Fluent Icons (Windows 11) with Segoe MDL2 Assets (Windows 10) as the fallback,
 // so the buttons match the system caption buttons exactly.
-const GLYPH = { minimize: "", maximize: "", restore: "", close: "" };
+const GLYPH = { minimize: "\uE921", maximize: "\uE922", restore: "\uE923", close: "\uE8BB" };
+
+/** Window commands are fire-and-forget; a failure (e.g. a missing permission) is logged, not thrown. */
+const run = (action: Promise<unknown>) => {
+  action.catch((error: unknown) => console.error("window command failed", error));
+};
 
 export function WindowControls() {
   const [maximized, setMaximized] = useState(false);
@@ -18,9 +23,19 @@ export function WindowControls() {
     if (!isTauri()) return;
     const win = getCurrentWindow();
     let unlisten: (() => void) | undefined;
-    const sync = () => { win.isMaximized().then(setMaximized).catch(() => {}); };
+    const sync = () => {
+      win
+        .isMaximized()
+        .then(setMaximized)
+        .catch(() => {});
+    };
     sync();
-    win.onResized(sync).then((u) => { unlisten = u; }).catch(() => {});
+    win
+      .onResized(sync)
+      .then((u) => {
+        unlisten = u;
+      })
+      .catch(() => {});
     return () => unlisten?.();
   }, []);
 
@@ -30,10 +45,33 @@ export function WindowControls() {
 
   return (
     <div className="k-caption" role="group" aria-label="Window">
-      <button type="button" className="k-caption__btn" aria-label="Minimize" title="Minimize" onClick={() => win.minimize()}>{GLYPH.minimize}</button>
-      <button type="button" className="k-caption__btn" aria-label={maximized ? "Restore" : "Maximize"} title={maximized ? "Restore" : "Maximize"}
-        onClick={() => win.toggleMaximize()}>{maximized ? GLYPH.restore : GLYPH.maximize}</button>
-      <button type="button" className="k-caption__btn k-caption__btn--close" aria-label="Close" title="Close" onClick={() => win.close()}>{GLYPH.close}</button>
+      <button
+        type="button"
+        className="k-caption__btn"
+        aria-label="Minimize"
+        title="Minimize"
+        onClick={() => run(win.minimize())}
+      >
+        {GLYPH.minimize}
+      </button>
+      <button
+        type="button"
+        className="k-caption__btn"
+        aria-label={maximized ? "Restore" : "Maximize"}
+        title={maximized ? "Restore" : "Maximize"}
+        onClick={() => run(win.toggleMaximize())}
+      >
+        {maximized ? GLYPH.restore : GLYPH.maximize}
+      </button>
+      <button
+        type="button"
+        className="k-caption__btn k-caption__btn--close"
+        aria-label="Close"
+        title="Close"
+        onClick={() => run(win.close())}
+      >
+        {GLYPH.close}
+      </button>
     </div>
   );
 }

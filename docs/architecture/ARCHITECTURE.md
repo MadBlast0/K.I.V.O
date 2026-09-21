@@ -251,7 +251,8 @@ K.I.V.O/
 
 - Rust stable (MSRV pinned in `rust-toolchain.toml`), `cargo fmt`, `clippy -D warnings`, and
   `cargo deny` (licenses and advisories; GPL is disallowed in the default graph).
-- Node LTS with pnpm, TypeScript strict, ESLint and Prettier. Vitest for the UI, and Playwright
+- Node LTS with pnpm, TypeScript strict, **Oxlint** (type-aware; ESLint can't run on TypeScript 7)
+  and Prettier. Vitest for the UI, and Playwright
   for UI tests against the Tauri dev build where practical.
 - **CI:** GitHub Actions on `windows-latest`, with Linux and macOS build checks for the
   platform-independent crates from M0, so the portability promise is enforced.

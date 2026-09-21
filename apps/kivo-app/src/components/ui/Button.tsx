@@ -12,10 +12,16 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = "secondary", size = "md", icon, className, children, type = "button", ...rest }, ref,
+  { variant = "secondary", size = "md", icon, className, children, type = "button", ...rest },
+  ref,
 ) {
   return (
-    <button ref={ref} type={type} className={cn("k-btn", variant !== "secondary" && `k-btn--${variant}`, size === "sm" && "k-btn--sm", className)} {...rest}>
+    <button
+      ref={ref}
+      type={type}
+      className={cn("k-btn", variant !== "secondary" && `k-btn--${variant}`, size === "sm" && "k-btn--sm", className)}
+      {...rest}
+    >
       {icon && <Icon name={icon} />}
       {children}
     </button>
@@ -29,11 +35,23 @@ export interface IconButtonProps extends Omit<ButtonProps, "icon" | "children"> 
 }
 
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
-  { icon, label, variant = "plain", size = "md", className, ...rest }, ref,
+  { icon, label, variant = "plain", size = "md", className, ...rest },
+  ref,
 ) {
   return (
-    <button ref={ref} type="button" aria-label={label} title={label}
-      className={cn("k-btn k-btn--icon", variant !== "secondary" && `k-btn--${variant}`, size === "sm" && "k-btn--sm", className)} {...rest}>
+    <button
+      ref={ref}
+      type="button"
+      aria-label={label}
+      title={label}
+      className={cn(
+        "k-btn k-btn--icon",
+        variant !== "secondary" && `k-btn--${variant}`,
+        size === "sm" && "k-btn--sm",
+        className,
+      )}
+      {...rest}
+    >
       <Icon name={icon} />
     </button>
   );

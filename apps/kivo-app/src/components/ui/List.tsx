@@ -4,37 +4,63 @@ import { Icon, type IconName } from "../../icons";
 import { cn } from "../../lib/cn";
 
 export function Section({ title, aside }: { title: ReactNode; aside?: ReactNode }) {
-  return <div className="k-section"><span>{title}</span>{aside && <span className="k-section__aside">{aside}</span>}</div>;
+  return (
+    <div className="k-section">
+      <span>{title}</span>
+      {aside && <span className="k-section__aside">{aside}</span>}
+    </div>
+  );
 }
 
 export function Group({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cn("k-group", className)} role="list">{children}</div>;
+  return <div className={cn("k-group", className)}>{children}</div>;
 }
 
 export interface RowProps {
-  /** A semantic icon name, or any leading element (monogram, spinner, status). */
-  lead?: IconName | ReactNode;
+  /** A semantic icon shown before the text. */
+  icon?: IconName;
+  /** Any other leading element (monogram, spinner, status); used when `icon` isn't set. */
+  lead?: ReactNode;
   title: ReactNode;
   subtitle?: ReactNode;
   end?: ReactNode;
-  /** Shows a chevron and makes the row clickable. */
+  /** Makes the whole row a button and shows a chevron. */
   onClick?: () => void;
   chevron?: boolean;
 }
 
-export function Row({ lead, title, subtitle, end, onClick, chevron = !!onClick }: RowProps) {
-  const hasLead = lead !== undefined && lead !== null;
-  const leadEl = typeof lead === "string" ? <span className="k-row__icon"><Icon name={lead as IconName} /></span> : lead;
-  return (
-    <div role="listitem" className={cn("k-row", hasLead && "k-row--icon", onClick && "k-row--clickable")}
-      onClick={onClick} tabIndex={onClick ? 0 : undefined} onKeyDown={onClick ? (e) => { if (e.key === "Enter") onClick(); } : undefined}>
+export function Row({ icon, lead, title, subtitle, end, onClick, chevron = !!onClick }: RowProps) {
+  const leadEl = icon ? (
+    <span className="k-row__icon">
+      <Icon name={icon} />
+    </span>
+  ) : (
+    lead
+  );
+  const hasLead = leadEl !== undefined && leadEl !== null;
+  const content = (
+    <>
       {hasLead && leadEl}
       <div className="k-row__text">
         <div className="k-row__title">{title}</div>
         {subtitle && <div className="k-row__subtitle">{subtitle}</div>}
       </div>
-      {(end || chevron) && <div className="k-row__end">{end}{chevron && <Icon name="chevronRight" className="k-row__chevron" />}</div>}
-    </div>
+      {(end || chevron) && (
+        <div className="k-row__end">
+          {end}
+          {chevron && <Icon name="chevronRight" className="k-row__chevron" />}
+        </div>
+      )}
+    </>
+  );
+  const className = cn("k-row", hasLead && "k-row--icon", onClick && "k-row--clickable");
+  // A clickable row is a real button, so keyboard and screen-reader users get it for free.
+  return onClick ? (
+    <button type="button" className={className} onClick={onClick}>
+      {content}
+    </button>
+  ) : (
+    <div className={className}>{content}</div>
   );
 }
 

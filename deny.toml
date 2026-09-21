@@ -1,0 +1,32 @@
+# cargo-deny policy (ARCH-35, DIST-17). Run: cargo deny check
+# Until KIVO's own license is chosen, the default graph stays permissive-compatible: no GPL/AGPL.
+
+[graph]
+all-features = true
+
+[licenses]
+# Permissive licenses in use, plus MPL-2.0 (file-level copyleft; via Tauri's HTML/CSS parser).
+# Add another permissive license here only when a new dependency needs it.
+allow = [
+  "MIT", "MIT-0", "Apache-2.0", "Apache-2.0 WITH LLVM-exception", "BSD-3-Clause",
+  "0BSD", "Zlib", "CC0-1.0", "Unlicense", "Unicode-3.0", "MPL-2.0",
+]
+confidence-threshold = 0.9
+# KIVO's own crates are unpublished and not yet licensed (DECISIONS: license still to choose).
+private = { ignore = true }
+
+[advisories]
+# Vulnerabilities and unsound crates always fail. "Unmaintained" notices fail only for crates KIVO
+# depends on directly; transitive ones (proc-macro-error and unic-* via Tauri) are Tauri's to
+# replace. Note: GitHub also flags glib < 0.20 (VariantStrIter unsoundness, Linux-only, via Tauri's
+# GTK stack). It is not in the RustSec database; it is fixed only by a Tauri upgrade to gtk-rs 0.20.
+unmaintained = "workspace"
+
+[bans]
+multiple-versions = "allow"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

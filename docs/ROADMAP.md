@@ -158,7 +158,7 @@ defaults.
 
 **Build order:**
 
-1. **Toolchain and CI.** The Cargo + pnpm workspace (ARCH-33, done); `cargo deny` with GPL denied (ARCH-35, DIST-17); ESLint, Prettier and
+1. **Toolchain and CI.** The Cargo + pnpm workspace (ARCH-33, done); `cargo deny` with GPL denied (ARCH-35, DIST-17); Oxlint, Prettier and
    Vitest for the UI (ARCH-36); `ci.yml` on Windows plus Linux/macOS checks for the portable
    crates (REL-03, ARCH-34); PR title check and release-please (REL-01, REL-02); CodeQL and
    Dependabot (REL-12, SEC-31); required checks on `main` (REL-04); unit-test layout (PLAN-13).
