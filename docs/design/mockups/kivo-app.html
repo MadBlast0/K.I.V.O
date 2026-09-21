@@ -777,14 +777,13 @@ const PARENT = {}; Object.entries(TABS).forEach(([pg, ts]) => ts.forEach(([t]) =
 S.tabs = S.tabs || {};
 const ALIAS = {companion:'island'};
 const goTo = raw => { const id = ALIAS[raw] || raw; const pg = PARENT[id] || id; S.sec = 'cc'; S.page = pg; if (TABS[pg]) S.tabs[pg] = id; };
-const SUBS = {extensions:'Give KIVO more abilities. Not sure which? Start with Connectors.', permissions:'What KIVO may do, and how much it asks first.', brains:'How KIVO thinks, and what it starts each conversation with.', settings:''};
+const SUBS = {extensions:'Apps, tools, add-ons and skills that KIVO can use.', permissions:'What KIVO may do, and how much it asks first.', brains:'How KIVO thinks, and what it starts each conversation with.', settings:''};
 const pageBody = () => {
   const pg = NAV.flatMap(g => g[1]).some(x => x[0]===S.page) ? S.page : 'home';
   if (!TABS[pg]) { TABMODE = false; return PAGES[pg](); }
   const cur = S.tabs[pg] && TABS[pg].some(t => t[0]===S.tabs[pg]) ? S.tabs[pg] : TABS[pg][0][0];
   TABMODE = true; const body = PAGES[cur](); TABMODE = false;
-  const EXPLAIN = pg === 'extensions' ? `<div class="explain">${[['connectors','plug','Connectors','Apps you sign in to, like Google Calendar or GitHub'],['mcp','server','MCP servers','Extra tools from developers, for advanced users'],['plugins','zap','Plugins','Add-ons that add new features to KIVO itself'],['skills','skill','Skills','Know-how KIVO follows, like writing release notes']].map(([t,ic,n,d]) => `<div class="tile" data-tab="${t}" role="button" tabindex="0"><span style="color:var(--text-2)">${I(ic)}</span><div><b>${n}</b><span>${d}</span></div></div>`).join('')}</div>` : '';
-  return `<div class="ph"><div><h2>${TITLES[pg]}</h2>${SUBS[pg]?`<p>${SUBS[pg]}</p>`:''}</div></div>${EXPLAIN}<div class="ptabs" role="tablist">${TABS[pg].map(([t,l]) => `<button role="tab" aria-selected="${t===cur}" data-tab="${t}">${l}</button>`).join('')}<i class="ind"></i></div>${body}`;
+  return `<div class="ph"><div><h2>${TITLES[pg]}</h2>${SUBS[pg]?`<p>${SUBS[pg]}</p>`:''}</div></div><div class="ptabs" role="tablist">${TABS[pg].map(([t,l]) => `<button role="tab" aria-selected="${t===cur}" data-tab="${t}">${l}</button>`).join('')}<i class="ind"></i></div>${body}`;
 };
 const TITLES = Object.fromEntries(NAV.flatMap(g => g[1]).map(x => [x[0], x[1]]));
 const editDel = () => `<button class="btn sm ic plain" aria-label="Edit">${I('edit')}</button><button class="btn sm ic plain" aria-label="Delete">${I('trash')}</button>`;
@@ -874,25 +873,21 @@ agents: () => ph('Agents','Other AIs KIVO can run and talk to for you: coding ag
     li('shield','Starting an agent in bypass mode','Always asks first, because the agent can then change anything', pill('High','r')),
     li('check','Review prompts before sending','Show a draft in the Island first', tog(true)),
     li('bot','Share my workspace notes with agents','Read-only, through KIVO’s MCP server', tog(true))),
-plugins: () => ph('Plugins','Add-ons that add new features to KIVO, like new commands, voices or Island styles. Each one runs in a sandbox and asks for permissions, like a phone app.', `<button class="btn">${I('folder')}Install from file</button><button class="btn pri">${I('plus')}Browse plugins</button>`) +
-  sect('Installed') + group(
-    li('zap','Recipe Helper','Adds “what can I cook?” commands · can read Documents\Recipes', pill('2 permissions')+tog(true)+chev,'click'),
-    li('zap','Retro Island','A pixel-art Island style · no permissions', tog(true)+chev,'click'),
-    li('zap','Stock Ticker','Live prices as an Island activity · internet access', pill('Update asks for more','o')+tog(false)+chev,'click')) +
-  sect('Permissions plugins can ask for') + group(
-    li('globe','Internet','Only the websites a plugin names'),
-    li('folder','Files','Only the folders you approve'),
-    li('plus','New tools and commands','They follow your permission mode like any other action')) +
-  `<p class="note">Plugins can never approve their own actions or turn on capabilities you switched off.</p>`,
-skills: () => ph('Skills','Instructions and scripts KIVO can use when a task needs them. Only their names use context until one is needed.', `<button class="btn">${I('folder')}Open skills folder</button><button class="btn pri">${I('plus')}Add skill</button>`) +
-  sect('Enabled') + group(
+plugins: () => ph('Plugins','Add-ons that add features to KIVO, such as commands, voices or Island styles. Each runs in a sandbox with only the permissions you grant.', `<button class="btn">${I('folder')}Install from file</button><button class="btn pri">${I('plus')}Browse plugins</button>`) +
+  sect('Installed', '<span class="meta">3</span>') + group(
+    li('zap','Recipe Helper','Adds cooking commands · Internet, Documents\Recipes', tog(true)+chev,'click'),
+    li('zap','Retro Island','Pixel-art Island style · No permissions', tog(true)+chev,'click'),
+    li('zap','Stock Ticker','Live prices as an Island activity · The update asks for new permissions', tag('Needs review','o')+'<button class="btn sm">Review</button>')) +
+  `<p class="note">Plugins can’t approve their own actions or turn on capabilities you’ve switched off.</p>`,
+skills: () => ph('Skills','Know-how KIVO follows for specific tasks. A skill only loads when a task needs it.', `<button class="btn">${I('folder')}Open skills folder</button><button class="btn pri">${I('plus')}Add skill</button>`) +
+  sect('Installed', '<span class="meta">3</span>') + group(
     li('skill','release-notes','Turns commits into release notes · from a folder', '<span class="meta">~40 tokens</span>'+tog(true)),
     li('skill','meeting-brief','Prepares a brief from your calendar and notes · made from a routine', '<span class="meta">~35 tokens</span>'+tog(true)),
     li('skill','pdf-tools','Fill, merge and split PDFs · includes scripts', pill('Runs scripts','o')+'<span class="meta">~45 tokens</span>'+tog(true))) +
-  sect('Available') + group(
+  sect('Waiting for review', '<span class="meta">2</span>') + group(
     li('skill','frontend-design','Shared by Claude Code in K.I.V.O', '<button class="btn sm">Review</button>'),
     li('skill','data-cleanup','Imported from a zip · not checked yet', pill('Untrusted','o')+'<button class="btn sm">Review</button>')) +
-  `<p class="note">Skills use the open Agent Skills format (SKILL.md), so skills made for Claude, Codex or Gemini work here too. KIVO shows what a skill contains before you enable it.</p>`,
+  `<p class="note">Skills use the open SKILL.md format, so skills made for Claude, Codex or Gemini work here too.</p>`,
 context: () => ph('Context','What the AI starts with in each new conversation. The defaults work; change them only if you want to.', `<button class="btn" data-sheet="preview">${I('eye')}Preview what the AI sees</button>`) +
   `<div class="tile"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap"><b>≈ 1,480 tokens to start a conversation</b><span style="font-size:12px;color:var(--text-2)">≈ $0.004 with Claude Sonnet · about 90% cheaper after the first message (cached)</span></div>
     <div class="ctxbar" style="margin-top:10px">${[['var(--text)',40],['var(--acc)',27],['#8E8E93',7],['#32D74B',18],['#FF9F0A',8]].map(([c,w]) => `<i style="width:${w}%;background:${c}"></i>`).join('')}</div>
@@ -927,16 +922,22 @@ voice: () => ph('Voice','Wake words, how KIVO hears you, and how it sounds.') +
     li('download','Whisper Turbo','Speech to text · 1.6 GB · more accurate', '<div class="meter" style="width:80px"><span style="width:68%"></span></div><span class="meta">68%</span>'),
     li('download','Parakeet v3','Speech to text · 640 MB · 25 languages', '<button class="btn sm">Download</button>')) +
   sect('Your voice') + group(li('user','Voice recognition','Trained Sep 21 · improves as you use KIVO', seg(['Off','Prefer me','Only me'],'Prefer me')), li('book','Words KIVO should know','Maya, Tauri, cargo, Punjabi, D:\\work…', chev,'click'), li('refresh','Retrain','','<button class="btn sm">Retrain</button>'), li('trash','Delete voice data','Removes recordings and voiceprint', '<button class="btn sm destr">Delete</button>')),
-connectors: () => ph('Connectors','Connect apps with one sign-in. No keys, ever.', `<div class="field" style="width:200px">${I('search')}<input placeholder="Search"></div><button class="btn">${I('link')}Custom</button>`) +
-  sect('Works without connecting') + group(
-    li('music','Media','Spotify, YouTube Music and any player, via Windows media controls', tag('Built in','g')),
-    li('globe','Your browser','Chrome and Edge tabs, through the KIVO extension', '<button class="btn sm">Install</button>'),
-    li('code','Developer tools','git, GitHub CLI, VS Code, Terminal', tag('Detected','g'))) +
-  sect('Connected') + group(li(mono('GH','#24292F'),'GitHub','Signed in as MadBlast0 · 12 tools', chev,'click')) +
-  sect('Available') + `<div class="grid g3">${[['GC','#1A73E8','Google Calendar','Events and scheduling'],['GD','#0F9D58','Google Drive','Files you choose'],['GM','#EA4335','Gmail','Coming later'],['OL','#0078D4','Outlook','Mail and calendar'],['TM','#5B5FC7','Teams','Chats and meetings'],['NO','#191919','Notion','Pages and databases'],['LI','#5E6AD2','Linear','Issues and projects'],['SL','#4A154B','Slack','Messages and channels'],['AS','#F06A6A','Asana','Tasks and projects']].map(([m,c,n,d]) => `<div class="tile" style="display:flex;gap:12px;align-items:center">${mono(m,c,1)}<div style="flex:1;min-width:0"><b>${n}</b><div style="font-size:12px;color:var(--text-2)">${d}</div></div>${d==='Coming later'?'':'<button class="btn sm">Connect</button>'}</div>`).join('')}</div>`,
-mcp: () => ph('MCP servers','Tools from MCP servers. Each server and tool has its own permission.', `<button class="btn pri" data-modal="mcpadd">${I('plus')}Add server</button>`) +
-  group(li('server','github','Remote · 12 tools', tag('Healthy','g')+chev,'click'), li('server','filesystem-projects','Local · 5 tools · D:\\work only', tag('Healthy','g')+chev,'click'), li('alert','weather-demo','Its tool descriptions changed since you approved them', '<button class="btn sm">Review</button>')) +
-  sect('github · tools') + group(...[['search_issues','Safe',1],['get_pull_request','Safe',1],['create_issue','Medium',1],['merge_pull_request','High',0]].map(([n,r,on]) => li('',`<code>${n}</code>`,'', pill(r, r==='High'?'r':r==='Medium'?'o':'') + tog(on,n)))),
+connectors: () => ph('Connectors','Apps you sign in to. KIVO never needs your passwords or API keys.', `<div class="field" style="width:220px">${I('search')}<input placeholder="Search connectors"></div><button class="btn">${I('link')}Add custom</button>`) +
+  sect('Connected', '<span class="meta">2</span>') + group(
+    li(mono('GH','#24292F'),'GitHub','MadBlast0 · 12 actions', tag('Connected','g')+tog(true)+chev,'click'),
+    li(mono('GC','#1A73E8'),'Google Calendar','sam@gmail.com · 4 actions', tag('Connected','g')+tog(true)+chev,'click')) +
+  sect('Built in', '<span class="meta">No sign-in needed</span>') + group(
+    li('music','Media controls','Spotify, YouTube Music and any other player', tag('On','g')),
+    li('code','Developer tools','git, GitHub CLI, VS Code and Terminal', tag('Found on this PC','g')),
+    li('globe','Browser extension','Your open tabs in Chrome and Edge', '<button class="btn sm">Install</button>')) +
+  sect('Available') + group(...[['GD','#0F9D58','Google Drive','Files you choose'],['OL','#0078D4','Outlook','Microsoft 365 mail and calendar'],['TM','#5B5FC7','Microsoft Teams','Chats and meetings'],['NO','#191919','Notion','Pages and databases'],['LI','#5E6AD2','Linear','Issues and projects'],['SL','#4A154B','Slack','Messages and channels'],['AS','#F06A6A','Asana','Tasks and projects'],['GM','#EA4335','Gmail','Search and draft email','soon']].map(([m,c,n,d,soon]) => li(mono(m,c), n, d, soon ? pill('Coming later') : `<button class="btn sm" data-toast="${n} connected">Connect</button>`))),
+mcp: () => ph('MCP servers','Servers that give KIVO extra tools. Each tool has its own permission.', `<button class="btn pri" data-modal="mcpadd">${I('plus')}Add server</button>`) +
+  sect('Servers', '<span class="meta">3</span>') + group(
+    li('server','github','Remote · 12 tools', tag('Running','g')+tog(true)+chev,'click'),
+    li('server','filesystem-projects','On this PC · 5 tools · limited to D:\work', tag('Running','g')+tog(true)+chev,'click'),
+    li('server','weather-demo','On this PC · tool descriptions changed since you approved them', tag('Needs review','o')+'<button class="btn sm">Review</button>')) +
+  sect('github · tools', '<span class="meta">Risk · On</span>') + group(...[['search_issues','Search issues','Safe',1],['get_pull_request','Read a pull request','Safe',1],['create_issue','Create an issue','Medium',1],['merge_pull_request','Merge a pull request','High',0]].map(([c,n,r,on]) => li('', n, `<code>${c}</code>`, pill(r, r==='High'?'r':r==='Medium'?'o':'') + tog(on,n)))) +
+  `<p class="note">Medium and High tools follow your permission mode. High always asks unless Bypass is on.</p>`,
 permissions: () => ph('Permission mode','How much KIVO does on its own before asking you. Auto suits most people.') + `<div style="display:flex;flex-direction:column;gap:8px">${MODES.map(([k,n,d,x]) => option(n, d, S.mode===k, x==='Recommended'?pill('Recommended','a'):k==='bypass'?pill('Use with care','r'):'', k==='bypass'&&S.mode!=='bypass'?'data-modal="bypass"':`data-set="mode" data-val="${k}"`)).join('')}</div>` +
   (S.mode==='bypass' ? `<div style="margin-top:10px">${alertB('danger','Bypass is on · turns off in 58 min','KIVO won’t ask before anything, including sending, deleting or paying. The Island shows <b>BYPASS</b> while this is on.')}</div>` : '') +
   `<p class="note">Switch anytime from the Island, the tray, chat, or ${keys('Ctrl','Shift','M')}.</p>` +
