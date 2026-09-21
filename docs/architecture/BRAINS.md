@@ -67,6 +67,16 @@ enum NormalizedError { Auth, RateLimited{retry_after}, Quota, ContextTooLong, Co
 | **CLI agent** | Claude Code (`claude-agent-acp`), Gemini CLI (`--acp`), Codex (`codex-acp`, or Codex App Server natively), GitHub Copilot CLI, OpenCode, Goose, … | **KIVO is an ACP client** (JSON-RPC over stdio). Codex App Server is an optional richer adapter |
 | **Managed login** | Via the provider's own CLI/agent authentication (ACP agents), or OAuth where a provider officially offers it to third-party apps | Never extract or reuse consumer session tokens |
 
+**Signing in without API keys (owner preference, 2026-09-21).** Onboarding and the Brains page
+lead with options that need no key:
+
+| Option | How the user connects |
+|---|---|
+| **CLI agents** (Claude Code, Codex, Gemini CLI) | They sign in with their own account or subscription in the CLI's own login flow. KIVO can launch the login flow |
+| **OpenRouter** | **OAuth PKCE "Connect with OpenRouter"**: the user signs in, and OpenRouter returns a user-controlled key to KIVO automatically. There is nothing to copy ([OpenRouter OAuth PKCE](https://openrouter.ai/docs/guides/overview/auth/oauth)) |
+| **Local models** (Ollama, LM Studio) | Auto-detected; no account |
+| Direct Anthropic / OpenAI / Gemini APIs | Their public APIs require an API key. This stays available under **"Advanced: use your own API key"** and is never required |
+
 **ACP specifics:**
 
 - The agent's permission requests (`session/request_permission`) are routed into KIVO's

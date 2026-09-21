@@ -4,7 +4,25 @@ Status: exploration, 2026-09-21. Mockups: [mockups/kivo-mockups.html](mockups/ki
 (open it in a browser, and switch directions at the top right). The UX behavior is specified in
 [../architecture/UX.md](../architecture/UX.md). This file covers the *look*.
 
-## 1. Directions under consideration
+## 0. Round 2 (current): wake-up concepts
+
+Round 1 (below, and `mockups/kivo-mockups.html`) was **rejected** because it looked too generic.
+Round 2 starts from the wake-up moment instead of color themes, and shows it over a realistic
+Windows 11 desktop: [mockups/kivo-wake-concepts.html](mockups/kivo-wake-concepts.html).
+
+| # | Concept | Idea |
+|---|---|---|
+| 01 | **Native** | A Fluent-style acrylic flyout above the taskbar, in the Windows accent color and system font. Feels built into Windows |
+| 02 | **Line** | No container. The voice is a single luminous line at the bottom, with film-style captions above it |
+| 03 | **Island** | A black capsule at the top center that morphs with springs into a card, then into a small live activity |
+| 04 | **Halo** | Soft light blooms up from the bottom edge and breathes with the voice, with a frosted caption card |
+
+- **Font:** round 2 uses the **Windows system font (Segoe UI Variable)**, which ships with Windows,
+  so there is nothing to bundle and no license issue. Other platforms use their system fonts.
+- **Process:** after the owner picks a concept (or a mix), the Control Center, onboarding and
+  brand get designed in that language.
+
+## 1. Round 1 directions (rejected)
 
 | Direction | Feel | Palette (dark) | Type candidates | GPU cost | Risk |
 |---|---|---|---|---|---|

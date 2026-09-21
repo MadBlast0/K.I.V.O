@@ -4,6 +4,32 @@ Status: Draft v1, 2026-09-21. Research: [features-and-extensions/REPORT.md](../r
 Implements plan §121, §149–152, and the owner's integration priorities (Google, Microsoft,
 Spotify/media, dev tools, then other major apps).
 
+## 0. Owner rule: no keys for users (2026-09-21)
+
+**Users never paste API keys or register their own developer apps.** Connecting works the way
+Claude Desktop's **Settings → Connectors** does: a directory of connectors, a **Connect** button, a
+browser sign-in, done. This supersedes the "bring-your-own client ID" idea below. How it is
+achieved:
+
+| Mechanism | Used for | Why no user keys are needed |
+|---|---|---|
+| **Remote MCP connectors with MCP authorization** (OAuth 2.1 + PKCE; the client registers itself through **Dynamic Client Registration** or a **Client ID Metadata Document**) | Services that host an official remote MCP server (GitHub, Notion, Linear, Atlassian, Asana, and more) | The client registers itself with the server automatically. KIVO publishes a CIMD URL identifying "KIVO". ([MCP authorization spec](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization), [client registration](https://blog.modelcontextprotocol.io/posts/client_registration/)) |
+| **KIVO-owned OAuth apps** (one client ID per provider, registered by the KIVO project and embedded as a public PKCE client) | Google Workspace (its official remote MCP servers or the APIs), Microsoft Graph | The project registers once and users just sign in. **Cost to the project:** Google verification and, for restricted scopes (Gmail read, full Drive), an **annual CASA assessment**. Start with non-restricted scopes (Calendar, `drive.file`) and add restricted scopes when funded ([Google Workspace MCP](https://developers.google.com/workspace/guides/configure-mcp-servers)) |
+| **Local means, no account at all** | Media (Spotify playback through Windows media controls), desktop apps (UIA), web apps (browser extension on the user's logged-in session), CLIs (`gh`, `code`) | Nothing to connect. These work out of the box |
+| **Services that can't be offered publicly** | Spotify Web API (5-user dev mode, extended quota only for organizations with 250k MAU) | Use local means only (media controls, `spotify:` URIs, UIA). There is no Web API connector until the platform allows it |
+
+**Connectors page** (Control Center → Integrations → Connectors), same idea as Claude's:
+
+- **Directory:** a curated list with each connector's logo, a description, the tools it provides,
+  the data it can access, and badges (Local / Cloud / Sensitive).
+- **Connecting:** **Connect** opens the system browser for sign-in. The token is stored in
+  Credential Manager. Afterwards the page shows the connected account, the tools with per-tool
+  toggles and risk levels, **Disconnect**, and a last-used time.
+- **Custom connector (advanced):** paste a remote MCP URL. DCR or CIMD handles registration, so a
+  key is still not needed when the server supports it.
+- **Capabilities:** all tools are subject to [CAPABILITIES.md](CAPABILITIES.md) and the
+  permission engine.
+
 ## 1. Integration strategy: the cheapest path that works
 
 For each app, this order applies:

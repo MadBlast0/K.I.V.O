@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KIVO Wake Concepts</title>
+<style>
+:root{
+  --page:#EDECE8; --ink:#1B1B1A; --ink-2:#5E5D58; --ink-3:#8E8C85; --rule:#D8D6CF; --chip:#E2E0DA;
+  --sys:"Segoe UI Variable Text","Segoe UI Variable","Segoe UI",system-ui,-apple-system,sans-serif;
+  --sys-disp:"Segoe UI Variable Display","Segoe UI Variable","Segoe UI",system-ui,sans-serif;
+  --mono:"Cascadia Mono","Cascadia Code",Consolas,ui-monospace,monospace;
+  --spring:cubic-bezier(.32,1.28,.54,1); --out:cubic-bezier(.2,.8,.2,1);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-page="light"]){--page:#161615;--ink:#EDECE8;--ink-2:#A8A69F;--ink-3:#77756F;--rule:#2B2A28;--chip:#242321}
+}
+:root[data-page="dark"]{--page:#161615;--ink:#EDECE8;--ink-2:#A8A69F;--ink-3:#77756F;--rule:#2B2A28;--chip:#242321}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--page);color:var(--ink);font-family:var(--sys);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;cursor:pointer}
+.wrap{max-width:1160px;margin:0 auto;padding:32px 16px 72px}
+
+/* Page header */
+.head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:22px}
+.kicker{font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--ink-3)}
+h1{font-family:var(--sys-disp);font-weight:600;font-size:30px;letter-spacing:-.02em;margin:4px 0 0}
+.lede{color:var(--ink-2);max-width:620px;margin:6px 0 0}
+.seg{display:inline-flex;background:var(--chip);border-radius:10px;padding:3px;gap:2px}
+.seg button{border:0;background:transparent;padding:7px 14px;border-radius:8px;color:var(--ink-2);font-weight:500}
+.seg button[aria-pressed="true"]{background:var(--page);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+.tab{border:1px solid var(--rule);background:transparent;border-radius:12px;padding:12px 14px;text-align:left;transition:border-color .2s,background .2s}
+.tab b{display:block;font-family:var(--sys-disp);font-size:16px;font-weight:600}
+.tab span{font-size:12.5px;color:var(--ink-2)}
+.tab .n{font-family:var(--mono);font-size:11px;color:var(--ink-3)}
+.tab[aria-selected="true"]{border-color:var(--ink);background:var(--chip)}
+
+/* Stage = a believable Windows 11 desktop */
+.stage{position:relative;aspect-ratio:16/10;border-radius:14px;overflow:hidden;isolation:isolate;box-shadow:0 1px 0 rgba(255,255,255,.4) inset,0 30px 60px -30px rgba(0,0,0,.45);container-type:inline-size}
+.wall{position:absolute;inset:0;z-index:-2;transition:filter .6s}
+.stage[data-desk="light"] .wall{background:
+  radial-gradient(60% 80% at 78% 30%, #CBD9E6 0%, transparent 60%),
+  radial-gradient(70% 70% at 10% 90%, #E8D9C8 0%, transparent 60%),
+  linear-gradient(160deg,#EEF1F4,#DCE3EA 55%,#E9E2D9)}
+.stage[data-desk="dark"] .wall{background:
+  radial-gradient(60% 80% at 78% 25%, #2A3A4E 0%, transparent 60%),
+  radial-gradient(70% 70% at 10% 95%, #3A2E27 0%, transparent 60%),
+  linear-gradient(160deg,#15181D,#1B2129 55%,#1E1A17)}
+/* App window: a doc editor */
+.app{position:absolute;left:8%;top:6.5%;width:64%;height:74%;border-radius:8px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 0 0 1px rgba(0,0,0,.08),0 18px 50px -18px rgba(0,0,0,.35)}
+.stage[data-desk="light"] .app{background:#FBFBFA;color:#222}
+.stage[data-desk="dark"] .app{background:#202124;color:#DADADA;box-shadow:0 0 0 1px rgba(255,255,255,.07),0 18px 50px -18px rgba(0,0,0,.6)}
+.app .tb{height:5.4cqw;max-height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 1.4cqw;font-size:max(10px,1.05cqw);opacity:.75;border-bottom:1px solid rgba(127,127,127,.15)}
+.app .tb .ctl{display:flex;gap:2.2cqw;font-family:var(--mono);letter-spacing:.1em}
+.app .doc{padding:3cqw 6cqw;overflow:hidden}
+.app .doc h2{font-family:var(--sys-disp);font-size:max(14px,2.3cqw);font-weight:600;margin:0 0 .8cqw}
+.app .doc .meta{font-size:max(9px,1cqw);opacity:.55;margin-bottom:1.6cqw}
+.app .doc p{font-size:max(10px,1.2cqw);line-height:1.65;margin:0 0 1.1cqw;opacity:.85}
+.app .doc ul{font-size:max(10px,1.2cqw);line-height:1.65;margin:0;padding-left:1.4em;opacity:.85}
+.side-app{position:absolute;right:4%;top:14%;width:26%;height:44%;border-radius:8px;opacity:.9;box-shadow:0 0 0 1px rgba(0,0,0,.07),0 14px 40px -18px rgba(0,0,0,.35)}
+.stage[data-desk="light"] .side-app{background:#F3F4F6}
+.stage[data-desk="dark"] .side-app{background:#1A1B1E}
+.side-app i{display:block;height:1cqw;margin:1.6cqw 1.6cqw 0;border-radius:3px;background:rgba(127,127,127,.18)}
+.side-app i:nth-child(2){width:60%}.side-app i:nth-child(4){width:75%}
+/* Taskbar */
+.taskbar{position:absolute;left:0;right:0;bottom:0;height:6.2%;display:flex;align-items:center;justify-content:center;gap:.9cqw;backdrop-filter:blur(20px) saturate(1.4)}
+.stage[data-desk="light"] .taskbar{background:rgba(243,243,243,.82);border-top:1px solid rgba(0,0,0,.06)}
+.stage[data-desk="dark"] .taskbar{background:rgba(32,32,32,.82);border-top:1px solid rgba(255,255,255,.06)}
+.taskbar i{width:2.3cqw;height:2.3cqw;border-radius:.5cqw;background:rgba(127,127,127,.35)}
+.taskbar i:first-child{background:#3B82F6;opacity:.85}
+.taskbar .clock{position:absolute;right:1.4cqw;font-size:max(9px,.95cqw);text-align:right;line-height:1.25;opacity:.8}
+.stage[data-desk="dark"] .taskbar{color:#ddd}
+
+/* Concept layers */
+.layer{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .25s}
+.layer.on{opacity:1}
+.layer *{pointer-events:auto}
+
+/* ── Concept 1: NATIVE (Fluent flyout) ── */
+.nat{--acc:#005FB8;--fg:#1A1A1A;--fg2:#5C5C5C;--bg:rgba(249,249,249,.78);--stroke:rgba(0,0,0,.08);--sub:rgba(0,0,0,.035)}
+.stage[data-desk="dark"] .nat{--acc:#60CDFF;--fg:#FFFFFF;--fg2:#C5C5C5;--bg:rgba(44,44,44,.76);--stroke:rgba(255,255,255,.08);--sub:rgba(255,255,255,.05)}
+.nat .fly{position:absolute;left:50%;bottom:calc(6.2% + 12px);transform:translate(-50%,8px);width:min(420px,44cqw);border-radius:8px;background:var(--bg);backdrop-filter:blur(40px) saturate(1.6);box-shadow:0 0 0 1px var(--stroke),0 16px 32px rgba(0,0,0,.18),0 2px 6px rgba(0,0,0,.08);color:var(--fg);font-family:var(--sys);opacity:0;transition:opacity .18s var(--out),transform .25s var(--out)}
+.nat .fly.show{opacity:1;transform:translate(-50%,0)}
+.nat .top{display:flex;align-items:center;gap:10px;padding:10px 12px}
+.nat .mark{width:22px;height:22px;flex:none}
+.nat .status{font-size:12px;color:var(--fg2);flex:1}
+.nat canvas{width:84px;height:22px}
+.nat .esc{font-size:11px;color:var(--fg2);border:1px solid var(--stroke);border-radius:4px;padding:0 5px}
+.nat .body{border-top:1px solid var(--stroke);padding:12px 14px 14px;display:none}
+.nat .body.show{display:block}
+.nat .q{font-size:14px;line-height:1.45}
+.nat .q.live{color:var(--fg2)}
+.nat .steps{margin-top:10px;display:flex;flex-direction:column;gap:6px}
+.nat .st{display:flex;gap:8px;align-items:center;font-size:12.5px;color:var(--fg2)}
+.nat .ring{width:14px;height:14px;border-radius:50%;border:2px solid var(--sub);border-top-color:var(--acc);animation:spin .9s linear infinite}
+.nat .ok{width:14px;height:14px;border-radius:50%;background:var(--acc);display:grid;place-items:center}
+.nat .ok::after{content:"";width:6px;height:3px;border-left:1.5px solid #fff;border-bottom:1.5px solid #fff;transform:rotate(-45deg) translate(1px,-1px)}
+.stage[data-desk="dark"] .nat .ok::after{border-color:#003A5C}
+.nat .ans{margin-top:10px;padding:10px 12px;background:var(--sub);border-radius:6px;font-size:13.5px;line-height:1.5}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Concept 2: LINE (voice as a line, captions) ── */
+.lin .scrim{position:absolute;left:0;right:0;bottom:6.2%;height:34%;background:linear-gradient(to top,rgba(0,0,0,.55),transparent);opacity:0;transition:opacity .4s}
+.lin.active .scrim{opacity:1}
+.lin canvas{position:absolute;left:50%;bottom:calc(6.2% + 2.2cqw);transform:translateX(-50%);width:62%;height:6cqw}
+.lin .cap{position:absolute;left:50%;bottom:calc(6.2% + 8.8cqw);transform:translateX(-50%);width:62%;text-align:center;color:#fff;text-shadow:0 1px 12px rgba(0,0,0,.35)}
+.lin .you{font-family:var(--sys-disp);font-weight:600;font-size:max(15px,2.1cqw);letter-spacing:-.01em;line-height:1.25;transition:opacity .3s}
+.lin .you .dim{opacity:.55}
+.lin .say{margin-top:1cqw;font-size:max(12px,1.35cqw);line-height:1.45;opacity:.92;min-height:1em}
+.lin .act{margin-top:.9cqw;font-family:var(--mono);font-size:max(10px,1cqw);letter-spacing:.04em;opacity:.8}
+.lin .tag{position:absolute;left:19%;bottom:calc(6.2% + 2.4cqw);font-family:var(--mono);font-size:max(9px,.9cqw);letter-spacing:.14em;color:rgba(255,255,255,.75);text-transform:uppercase}
+
+/* ── Concept 3: ISLAND (top capsule that morphs) ── */
+.isl .cap{position:absolute;left:50%;top:1.2cqw;transform:translateX(-50%);background:#000;color:#fff;border-radius:22px;width:0;height:34px;overflow:hidden;box-shadow:0 10px 30px -10px rgba(0,0,0,.6);transition:width .55s var(--spring),height .55s var(--spring),border-radius .45s var(--out),opacity .2s;opacity:0;font-family:var(--sys)}
+.isl .cap.show{opacity:1}
+.isl .row{display:flex;align-items:center;gap:10px;height:34px;padding:0 12px;white-space:nowrap}
+.isl .orb{width:18px;height:18px;border-radius:50%;flex:none;background:radial-gradient(circle at 35% 30%,#fff 0 12%,#9AD3FF 30%,#3A6DFF 70%,#1B1F6B);box-shadow:0 0 12px rgba(120,170,255,.6)}
+.isl .lab{font-size:13px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis}
+.isl .lab small{font-weight:400;opacity:.6;margin-left:6px}
+.isl canvas{width:46px;height:18px;flex:none}
+.isl .more{padding:2px 16px 16px;font-size:14px;line-height:1.45;opacity:0;transition:opacity .25s .15s}
+.isl .cap.tall .more{opacity:1}
+.isl .more .q{opacity:.6}
+.isl .more .a{margin-top:8px}
+.isl .pillbtns{display:flex;gap:8px;margin-top:12px}
+.isl .pillbtns span{background:#1E1E1E;border-radius:999px;padding:5px 12px;font-size:12px}
+
+/* ── Concept 4: HALO (bottom bloom + floating caption) ── */
+.hal{--amp:0}
+.hal .bloom{position:absolute;left:50%;bottom:6.2%;width:78%;height:46%;transform:translate(-50%,36%) scale(calc(.85 + var(--amp)*.25));border-radius:50%;background:radial-gradient(closest-side,rgba(255,255,255,1),rgba(170,205,255,.85) 32%,rgba(255,180,150,.5) 58%,transparent 76%);filter:blur(16px);opacity:0;transition:opacity .5s var(--out)}
+.stage[data-desk="dark"] .hal .bloom{background:radial-gradient(closest-side,rgba(225,236,255,.95),rgba(100,145,255,.7) 32%,rgba(255,140,110,.4) 58%,transparent 76%)}
+.hal.active .bloom{opacity:calc(.55 + var(--amp)*.45)}
+.hal .edge{position:absolute;inset:0;border-radius:14px;box-shadow:inset 0 0 0 2px rgba(255,255,255,.0);transition:box-shadow .6s}
+.hal .edge.flash{box-shadow:inset 0 0 0 2px rgba(255,255,255,.75),inset 0 0 40px rgba(170,200,255,.45)}
+.hal .glass{position:absolute;left:50%;bottom:calc(6.2% + 4.2cqw);transform:translate(-50%,10px);width:min(460px,48cqw);border-radius:18px;padding:14px 18px;background:rgba(255,255,255,.62);backdrop-filter:blur(28px) saturate(1.5);box-shadow:0 0 0 1px rgba(255,255,255,.6) inset,0 18px 40px -16px rgba(20,30,60,.35);color:#16181D;opacity:0;transition:opacity .3s var(--out),transform .45s var(--spring)}
+.stage[data-desk="dark"] .hal .glass{background:rgba(30,33,40,.62);color:#F2F4F8;box-shadow:0 0 0 1px rgba(255,255,255,.08) inset,0 18px 40px -16px rgba(0,0,0,.6)}
+.hal .glass.show{opacity:1;transform:translate(-50%,0)}
+.hal .q{font-family:var(--sys-disp);font-size:16px;font-weight:600;letter-spacing:-.01em}
+.hal .q.live{opacity:.55}
+.hal .a{margin-top:6px;font-size:13.5px;line-height:1.5;opacity:.85}
+.hal .chips{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.hal .chips span{font-size:11.5px;padding:3px 9px;border-radius:999px;background:rgba(127,127,127,.14)}
+
+/* Controls under stage */
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin:14px 0 0}
+.go{border:0;background:var(--ink);color:var(--page);border-radius:10px;padding:10px 16px;font-weight:600;display:inline-flex;gap:8px;align-items:center}
+.go svg{width:14px;height:14px}
+.states{display:flex;flex-wrap:wrap;gap:6px}
+.states button{border:1px solid var(--rule);background:transparent;border-radius:999px;padding:5px 11px;font-size:12.5px;color:var(--ink-2)}
+.states button[aria-pressed="true"]{border-color:var(--ink);color:var(--ink)}
+
+/* Notes */
+.notes{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:28px;margin-top:28px;padding-top:22px;border-top:1px solid var(--rule)}
+.notes h3{font-family:var(--sys-disp);font-size:13px;font-weight:600;margin:0 0 6px;color:var(--ink)}
+.notes p,.notes li{color:var(--ink-2);font-size:13.5px;margin:0}
+.notes ul{margin:0;padding-left:1.1em}
+.notes li{margin-bottom:4px}
+.fine{margin-top:34px;color:var(--ink-3);font-size:12px}
+@media (max-width:820px){.tabs{grid-template-columns:1fr 1fr}.notes{grid-template-columns:1fr}}
+@media (prefers-reduced-motion: reduce){*{transition-duration:0s!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <div>
+      <div class="kicker">KIVO · WAKE-UP CONCEPTS · ROUND 2</div>
+      <h1>What you see when you say “Hey Kivo”</h1>
+      <p class="lede">Four different ideas for the moment KIVO wakes up over whatever you’re working on. Pick a concept, press <b>Say “Hey Kivo”</b>, and watch a full request play out. The Control Center gets designed after you choose.</p>
+    </div>
+    <div class="seg" role="group" aria-label="Desktop theme">
+      <button data-desk="light" aria-pressed="true">Light desktop</button>
+      <button data-desk="dark" aria-pressed="false">Dark desktop</button>
+    </div>
+  </div>
+
+  <div class="tabs" role="tablist" aria-label="Concepts">
+    <button class="tab" role="tab" data-c="nat" aria-selected="true"><span class="n">01</span><b>Native</b><span>Feels built into Windows 11</span></button>
+    <button class="tab" role="tab" data-c="lin" aria-selected="false"><span class="n">02</span><b>Line</b><span>Voice as a single line, with captions</span></button>
+    <button class="tab" role="tab" data-c="isl" aria-selected="false"><span class="n">03</span><b>Island</b><span>A capsule that morphs at the top</span></button>
+    <button class="tab" role="tab" data-c="hal" aria-selected="false"><span class="n">04</span><b>Halo</b><span>Soft light rising from below</span></button>
+  </div>
+
+  <div class="stage" id="stage" data-desk="light">
+    <div class="wall"></div>
+    <div class="side-app"><i></i><i></i><i></i><i></i></div>
+    <div class="app">
+      <div class="tb"><span>Q4 planning — Notes</span><span class="ctl">—&nbsp;&nbsp;▢&nbsp;&nbsp;✕</span></div>
+      <div class="doc">
+        <h2>Q4 planning</h2>
+        <div class="meta">Edited 2 min ago</div>
+        <p>Goals for the quarter: ship the voice overlay, cut idle CPU below 2%, and run the first benchmark pass on low-end hardware.</p>
+        <ul><li>Overlay spike: measure show latency and the white flash</li><li>Wake word: compare the trained model with keyword spotting</li><li>Call Maya about the design review</li></ul>
+        <p style="margin-top:1.1cqw">Open question: do we ship the edge glow in v1, or wait for the power numbers?</p>
+      </div>
+    </div>
+
+    <!-- 01 Native -->
+    <div class="layer nat" id="nat">
+      <div class="fly" id="natFly" role="status" aria-live="polite">
+        <div class="top">
+          <svg class="mark" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="var(--acc)" stroke-width="2"/><circle cx="12" cy="12" r="4" fill="var(--acc)"/></svg>
+          <span class="status" id="natStatus">Listening</span>
+          <canvas id="natWave" width="168" height="44"></canvas>
+          <span class="esc">Esc</span>
+        </div>
+        <div class="body" id="natBody"></div>
+      </div>
+    </div>
+
+    <!-- 02 Line -->
+    <div class="layer lin" id="lin">
+      <div class="scrim"></div>
+      <div class="cap" aria-live="polite">
+        <div class="you" id="linYou"></div>
+        <div class="act" id="linAct"></div>
+        <div class="say" id="linSay"></div>
+      </div>
+      <span class="tag" id="linTag"></span>
+      <canvas id="linWave" width="1200" height="120"></canvas>
+    </div>
+
+    <!-- 03 Island -->
+    <div class="layer isl" id="isl">
+      <div class="cap" id="islCap" role="status" aria-live="polite">
+        <div class="row"><span class="orb"></span><span class="lab" id="islLab">Listening</span><canvas id="islWave" width="92" height="36"></canvas></div>
+        <div class="more" id="islMore"></div>
+      </div>
+    </div>
+
+    <!-- 04 Halo -->
+    <div class="layer hal" id="hal">
+      <div class="edge" id="halEdge"></div>
+      <div class="bloom"></div>
+      <div class="glass" id="halGlass" role="status" aria-live="polite"></div>
+    </div>
+
+    <div class="taskbar"><i></i><i></i><i></i><i></i><i></i><i></i><div class="clock">16:42<br>21/09/2026</div></div>
+  </div>
+
+  <div class="bar">
+    <button class="go" id="go"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-2.08A7 7 0 0 0 19 12h-2Z"/></svg>Say “Hey Kivo”</button>
+    <div class="states" role="group" aria-label="Jump to state">
+      <button data-s="listening">Listening</button><button data-s="thinking">Thinking</button><button data-s="acting">Acting</button><button data-s="speaking">Speaking</button><button data-s="done">Done</button><button data-s="idle">Idle</button>
+    </div>
+  </div>
+
+  <div class="notes" id="notes"></div>
+  <p class="fine">Mockup only. Typography uses the Windows system font (Segoe UI Variable), which ships with Windows, so KIVO doesn’t need to bundle a font there. The request plays with simulated audio.</p>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const stage = $('stage');
+  const REQ = 'Play something calm on Spotify and remind me at five to call Maya';
+  const ANS = 'Playing Lo-fi Focus on Spotify. I’ll remind you to call Maya at 5 PM.';
+  const STEPS = [['Spotify','Playing “Lo-fi Focus”'],['Reminder','Call Maya · 5:00 PM']];
+  const NOTES = {
+    nat:{what:'A small flyout above the taskbar that looks like a native Windows 11 surface: system font, acrylic material, Windows accent blue, 8 px corners. It grows downward into a panel with your words, the steps, and the answer.',
+      good:['Instantly familiar; feels trustworthy and “part of Windows”','Holds text and confirmations comfortably','Cheapest to render; follows light and dark mode'],
+      trade:['Least distinctive; could be mistaken for a system panel','Personality has to come from motion and sound']},
+    lin:{what:'No box at all. Your voice becomes one thin line at the bottom of the screen, and what you say appears as large captions above it, like film subtitles. The answer and actions follow as smaller captions, then everything fades.',
+      good:['Very distinctive and minimal; nothing covers your window','Captions are easy to read at a glance','The line is a strong, ownable brand mark'],
+      trade:['Needs a subtle dark scrim for legibility on light content','Less room for rich answers and buttons (those open the card)']},
+    isl:{what:'A black capsule at the top center that morphs, springing wider to listen, pulsing while it thinks, expanding into a card for the answer, then shrinking into a small “live activity” (for example what’s playing) before it disappears.',
+      good:['Playful, fluid and memorable; the morphing tells the state','Stays clear of the taskbar and bottom-of-window content','Collapsed live activities suit timers, downloads and music'],
+      trade:['Top center can cover browser tabs and title bars','Strongly associated with Apple’s Dynamic Island']},
+    hal:{what:'A soft light blooms up from the bottom edge and breathes with your voice, a calmer desktop take on Siri’s glow. A frosted caption card floats above it with your words and the answer. A faint edge flash marks the wake moment.',
+      good:['The most “magical” and warm; clearly an assistant moment','The light reacts to voice without any hard UI','A frosted card keeps text readable on any background'],
+      trade:['The heaviest to render (blur and glow), so it needs the power measurement','Can feel decorative for quick commands']}
+  };
+
+  // ── state + simulated audio envelope ──
+  const S = {state:'idle', partial:'', final:'', steps:0, answer:''};
+  let amp = 0, target = 0, t = 0, raf = null, current = 'nat';
+  const speakingish = () => S.state === 'listening' || S.state === 'speaking';
+  const loop = () => {
+    t += 1/60;
+    target = speakingish() ? .35 + .65 * Math.abs(Math.sin(t*3.1) * Math.sin(t*1.7 + 1) + .25*Math.sin(t*9)) : 0;
+    amp += (target - amp) * .12;
+    draw();
+    if (S.state === 'idle' && amp < .002) { raf = null; amp = 0; draw(); return; }  // zero frames at rest
+    raf = requestAnimationFrame(loop);
+  };
+  const kick = () => { if (!raf && !matchMedia('(prefers-reduced-motion: reduce)').matches) raf = requestAnimationFrame(loop); };
+
+  const sineLine = (ctx, w, h, a, color, lw, waves) => {
+    ctx.clearRect(0,0,w,h); ctx.lineWidth = lw; ctx.strokeStyle = color; ctx.lineCap = 'round';
+    waves.forEach(([f, ph, k, alpha]) => {
+      ctx.globalAlpha = alpha; ctx.beginPath();
+      for (let x = 0; x <= w; x += 2) {
+        const u = x / w, env = Math.sin(Math.PI * u) ** 2;
+        const y = h/2 + Math.sin(u * f * Math.PI * 2 + t * ph) * env * a * k * (h/2 - lw);
+        x ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      }
+      ctx.stroke();
+    });
+    ctx.globalAlpha = 1;
+  };
+  function draw(){
+    const dark = stage.dataset.desk === 'dark';
+    if (current === 'nat') { const c = $('natWave'), x = c.getContext('2d');
+      sineLine(x, c.width, c.height, Math.max(amp, .04), dark ? '#60CDFF' : '#005FB8', 3, [[2.2,5,1,1],[3.1,-4,.6,.45]]); }
+    if (current === 'lin') { const c = $('linWave'), x = c.getContext('2d');
+      sineLine(x, c.width, c.height, Math.max(amp, S.state==='idle'?0:.03), '#FFFFFF', 3, [[3,4,1,1],[5,-6,.55,.5],[1.5,2.5,.8,.35]]); }
+    if (current === 'isl') { const c = $('islWave'), x = c.getContext('2d'); x.clearRect(0,0,c.width,c.height);
+      for (let i = 0; i < 5; i++) { const hgt = 6 + (c.height - 8) * Math.max(.08, amp * (.5 + .5*Math.abs(Math.sin(t*6 + i*1.3))));
+        x.fillStyle = S.state === 'speaking' ? '#9AD3FF' : '#FFFFFF'; x.beginPath(); x.roundRect(6 + i*17, (c.height-hgt)/2, 8, hgt, 4); x.fill(); } }
+    if (current === 'hal') $('hal').style.setProperty('--amp', amp.toFixed(3));
+  }
+
+  // ── renderers ──
+  const esc = s => s.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]));
+  const R = {
+    nat(){
+      const fly = $('natFly'), body = $('natBody');
+      fly.classList.toggle('show', S.state !== 'idle');
+      $('natStatus').textContent = {listening:'Listening',thinking:'Working on it',acting:'Working on it',speaking:'Speaking',done:'Done',idle:''}[S.state];
+      const q = S.final || S.partial;
+      body.classList.toggle('show', !!q);
+      let h = q ? `<div class="q ${S.final?'':'live'}">${esc(q)}</div>` : '';
+      if (S.steps) h += '<div class="steps">' + STEPS.slice(0, S.steps).map(([a,b],i) =>
+        `<div class="st">${(i === S.steps-1 && S.state==='acting') ? '<span class="ring"></span>' : '<span class="ok"></span>'}<b style="font-weight:600;color:var(--fg)">${a}</b>&nbsp;${b}</div>`).join('') + '</div>';
+      if (S.answer) h += `<div class="ans">${esc(S.answer)}</div>`;
+      body.innerHTML = h;
+    },
+    lin(){
+      const on = S.state !== 'idle'; $('lin').classList.toggle('active', on);
+      const q = S.final || S.partial;
+      $('linYou').innerHTML = S.final ? esc(S.final) : (S.partial ? `<span class="dim">${esc(S.partial)}</span>` : '');
+      $('linYou').style.opacity = (S.state === 'speaking' || S.state === 'done') ? .45 : 1;
+      $('linAct').textContent = S.steps ? STEPS.slice(0,S.steps).map(([a,b]) => `→ ${a} · ${b}`).join('    ') : '';
+      $('linSay').textContent = S.answer;
+      $('linTag').textContent = on ? ({listening:'Listening',thinking:'Thinking',acting:'Working',speaking:'Kivo',done:'Done'}[S.state]) : '';
+    },
+    isl(){
+      const cap = $('islCap'), more = $('islMore');
+      const q = S.final || S.partial;
+      let w = 0, h = 34, r = 22, lab = '';
+      if (S.state === 'listening'){ w = 230; lab = 'Listening'; if (q){ w = 440; h = 34 + 60; r = 26; } }
+      if (S.state === 'thinking'){ w = 200; lab = 'Thinking<small>…</small>'; }
+      if (S.state === 'acting'){ w = 300; lab = STEPS[S.steps-1] ? `${STEPS[S.steps-1][0]}<small>${STEPS[S.steps-1][1]}</small>` : 'Working'; }
+      if (S.state === 'speaking'){ w = 440; h = 34 + 92; r = 28; lab = 'Kivo'; }
+      if (S.state === 'done'){ w = 250; lab = 'Lo-fi Focus<small>Spotify</small>'; }
+      cap.classList.toggle('show', S.state !== 'idle');
+      cap.classList.toggle('tall', h > 34);
+      cap.style.width = w + 'px'; cap.style.height = h + 'px'; cap.style.borderRadius = r + 'px';
+      $('islLab').innerHTML = lab;
+      more.innerHTML = S.state === 'speaking' ? `<div class="q">${esc(S.final)}</div><div class="a">${esc(S.answer)}</div>`
+        : (S.state === 'listening' && q ? `<div>${esc(q)}</div>` : '');
+    },
+    hal(){
+      const on = S.state !== 'idle'; $('hal').classList.toggle('active', on);
+      const g = $('halGlass'), q = S.final || S.partial;
+      g.classList.toggle('show', on && !!q);
+      g.innerHTML = q ? `<div class="q ${S.final?'':'live'}">${esc(q)}</div>`
+        + (S.answer ? `<div class="a">${esc(S.answer)}</div>` : '')
+        + (S.steps ? `<div class="chips">${STEPS.slice(0,S.steps).map(([a,b]) => `<span>${a} · ${b}</span>`).join('')}</div>` : '') : '';
+    }
+  };
+  const render = () => { R[current](); kick(); draw(); };
+  const set = p => { Object.assign(S, p); render(); document.querySelectorAll('.states button').forEach(b => b.setAttribute('aria-pressed', b.dataset.s === S.state)); };
+
+  // ── timeline ──
+  let timers = [];
+  const stop = () => { timers.forEach(clearTimeout); timers = []; };
+  const at = (ms, fn) => timers.push(setTimeout(fn, ms));
+  const play = () => {
+    stop(); set({state:'idle', partial:'', final:'', steps:0, answer:''});
+    if (current === 'hal') { at(150, () => { $('halEdge').classList.add('flash'); }); at(700, () => $('halEdge').classList.remove('flash')); }
+    at(250, () => set({state:'listening'}));
+    const w = REQ.split(' '); let acc = '';
+    w.forEach((x, i) => at(700 + i * 230, () => { acc += (i ? ' ' : '') + x; set({partial: acc}); }));
+    let T = 700 + w.length * 230 + 350;
+    at(T, () => set({state:'thinking', final: REQ}));
+    at(T += 900, () => set({state:'acting', steps:1}));
+    at(T += 900, () => set({steps:2}));
+    at(T += 800, () => set({state:'speaking', answer:''}));
+    const a = ANS.split(' '); let ans = '';
+    a.forEach((x, i) => at(T + 100 + i * 150, () => { ans += (i ? ' ' : '') + x; set({answer: ans}); }));
+    T += 100 + a.length * 150 + 900;
+    at(T, () => set({state:'done'}));
+    at(T += 2600, () => set({state:'idle', partial:'', final:'', steps:0, answer:''}));
+  };
+  $('go').addEventListener('click', play);
+
+  // jump to states
+  const snap = s => {
+    stop();
+    const base = {partial:'', final:REQ, steps:0, answer:''};
+    set({ idle:{...base, final:'', state:'idle'}, listening:{...base, final:'', partial:REQ.split(' ').slice(0,7).join(' '), state:'listening'},
+      thinking:{...base, state:'thinking'}, acting:{...base, state:'acting', steps:2}, speaking:{...base, state:'speaking', steps:2, answer:ANS},
+      done:{...base, state:'done', steps:2, answer:ANS} }[s]);
+  };
+  document.querySelectorAll('.states button').forEach(b => b.addEventListener('click', () => snap(b.dataset.s)));
+
+  // concept tabs
+  const notes = c => { const n = NOTES[c];
+    $('notes').innerHTML = `<div><h3>The idea</h3><p>${n.what}</p></div><div><h3>Strengths</h3><ul>${n.good.map(x=>`<li>${x}</li>`).join('')}</ul></div><div><h3>Trade-offs</h3><ul>${n.trade.map(x=>`<li>${x}</li>`).join('')}</ul></div>`; };
+  const choose = c => {
+    stop(); current = c;
+    document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', t.dataset.c === c));
+    document.querySelectorAll('.layer').forEach(l => l.classList.toggle('on', l.id === c));
+    notes(c); snap('listening');
+  };
+  document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => choose(t.dataset.c)));
+
+  // desktop theme
+  document.querySelectorAll('[data-desk]').forEach(b => { if (b.tagName !== 'BUTTON') return;
+    b.addEventListener('click', () => { stage.dataset.desk = b.dataset.desk;
+      document.querySelectorAll('.seg button').forEach(x => x.setAttribute('aria-pressed', x === b)); draw(); }); });
+
+  choose('nat');
+})();
+</script>
+</body>
+</html>

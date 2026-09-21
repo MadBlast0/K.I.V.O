@@ -3751,4 +3751,4 @@ Phase 0 research changed or refined these parts of the blueprint. The detailed s
 | §74–78 | Companion styles: Pill, Orb, Character or Hidden, switchable | [UX.md §6](architecture/UX.md) |
 | §121, §151–152 | Integration strategy, WASM plugins, KIVO Remote | [INTEGRATIONS_AND_PLUGINS.md](architecture/INTEGRATIONS_AND_PLUGINS.md) |
 | §22 | No bundled local LLM; users connect their own local servers | [DECISIONS.md](DECISIONS.md) |
-| §2 | The public name is under review because of existing "KIVO" AI products | [research §8](research/features-and-extensions/REPORT.md) |
+| §2 | The name **KIVO is kept** (owner decision), despite existing "KIVO" AI products; check the registries before public release | [research §8](research/features-and-extensions/REPORT.md) |

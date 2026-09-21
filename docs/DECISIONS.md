@@ -21,7 +21,9 @@ decision changes, update the entry and note the date. Do not silently rewrite it
 | **Plugins** | WASM Component Model (wasmtime + WIT), with capabilities granted by linked imports. Post-MVP |
 | **Remote access** | Phone pairing with QR, an E2E-encrypted channel, an untrusted relay, and a separate permission principal. Post-MVP |
 | **Design** | Three directions are mocked up ([mockups](design/mockups/kivo-mockups.html)). **Owner choice pending** |
-| **Name** | "KIVO" conflicts with an existing AI-companion app, Kivo.ai and kivo.io. **Owner decision pending** on a public name ([research §8](research/features-and-extensions/REPORT.md)) |
+| **Name** | **Keep "KIVO"** (owner decision). The owner accepts the risk from existing "KIVO"/Kivo.ai/kivo.io uses ([research §8](research/features-and-extensions/REPORT.md)). A registry check (USPTO/EUIPO/WIPO/India) is recommended before the first public release |
+| **No user keys** | Users never paste API keys or register developer apps. Connectors work like Claude Desktop's "Connect" flow: remote MCP with DCR/CIMD, KIVO-owned OAuth apps, or local means ([INTEGRATIONS_AND_PLUGINS.md §0](architecture/INTEGRATIONS_AND_PLUGINS.md)). Brains prefer CLI-agent logins, OpenRouter OAuth and local models; direct API keys are optional (advanced) |
+| **Design round 1** | Rejected by the owner (too generic). Round 2 focuses on the **wake-up moment**, with four interaction concepts ([kivo-wake-concepts.html](design/mockups/kivo-wake-concepts.html)): Native, Line, Island, Halo. Choice pending |
 
 ## 2026-09-21 — Owner answers (pre-M0)
 
