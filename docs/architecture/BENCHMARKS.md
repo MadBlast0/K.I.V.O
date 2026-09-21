@@ -57,7 +57,7 @@ See [VOICE.md §10](VOICE.md). In addition:
 
 Status marks and the build protocol: [docs/README.md](../README.md).
 
-- [~] **BENCH-01** · M0 · `kivo-bench` CLI with the harness: machine fingerprint (CPU, GPU, RAM, OS build, power source), ≥ 5 runs with p50/p95, warmup excluded from cold metrics, JSON into the `benchmarks` table and `bench-results/<date>-<machine>.json`, Markdown summary into `docs/benchmarks/` (§1) → partial: `apps/kivo-bench` stub · missing: everything
+- [x] **BENCH-01** · M0 · `kivo-bench` CLI with the harness: machine fingerprint (CPU, GPU, RAM, OS build, power source), ≥ 5 runs with p50/p95, warmup excluded from cold metrics, JSON into the `benchmarks` table and `bench-results/<date>-<machine>.json`, Markdown summary into `docs/benchmarks/` (§1) → done: `apps/kivo-bench` (`machine.rs` fingerprint from `kivo-platform-windows::WindowsSystemInfo` + capabilities; `harness.rs` warmup discarded then N runs; `stats.rs` nearest-rank p50/p95/min/max/mean; `report.rs` merges each day's `bench-results/<date>-<machine>.json`, rewrites `docs/benchmarks/<date>-<machine>.md`; rows in the new `benchmarks` table, migration 2); saved runs require ≥ 5 runs · verified: 8 unit tests; `kivo-bench ipc --runs 10 --warmup 2` on this PC wrote all three outputs (ping round trip p50 28.7 µs)
 - [ ] **BENCH-02** · M0 · `stt` suite: cold load, first partial, final latency, RTF, WER (overall + accented), peak RAM/VRAM, CPU% on LibriSpeech subset, accented English and 50 KIVO commands (§1)
 - [ ] **BENCH-03** · M0 · `tts` suite: first audio (short/medium/long), RTF, RAM, cancel-to-silence (§1)
 - [ ] **BENCH-04** · M0 · `wake` suite: false accepts/hour on ≥ 10 h negative audio, false rejects % on the recorded "Hey Kivo" set, CPU% (§1)

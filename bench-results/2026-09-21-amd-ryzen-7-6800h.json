@@ -1,0 +1,123 @@
+{
+  "date": "2026-09-21",
+  "machine": {
+    "id": "amd-ryzen-7-6800h",
+    "cpu": "AMD Ryzen 7 6800H with Radeon Graphics",
+    "logicalCpus": 16,
+    "ramMb": 15556,
+    "gpus": [
+      {
+        "name": "NVIDIA GeForce RTX 3060 Laptop GPU",
+        "vramMb": 5994
+      },
+      {
+        "name": "AMD Radeon(TM) Graphics",
+        "vramMb": 485
+      }
+    ],
+    "os": "Windows 11 25H2 (build 26200)",
+    "power": "AC"
+  },
+  "suites": [
+    {
+      "suite": "ipc",
+      "startedAt": 1790010143213,
+      "runs": 10,
+      "warmup": 2,
+      "metrics": [
+        {
+          "name": "connect + hello",
+          "unit": "µs",
+          "lowerIsBetter": true,
+          "samples": [
+            124.39999999999999,
+            152.9,
+            113.8,
+            114.7,
+            132.5,
+            140.4,
+            145.6,
+            131.9,
+            99.8,
+            97.3
+          ],
+          "p50": 124.39999999999999,
+          "p95": 152.9,
+          "min": 97.3,
+          "max": 152.9,
+          "mean": 125.33
+        },
+        {
+          "name": "ping round trip (median of 200)",
+          "unit": "µs",
+          "lowerIsBetter": true,
+          "samples": [
+            28.799999999999997,
+            28.7,
+            28.799999999999997,
+            28.5,
+            27.0,
+            29.5,
+            28.900000000000002,
+            28.7,
+            27.5,
+            27.7
+          ],
+          "p50": 28.7,
+          "p95": 29.5,
+          "min": 27.0,
+          "max": 29.5,
+          "mean": 28.410000000000004
+        },
+        {
+          "name": "ping round trip (p95 of 200)",
+          "unit": "µs",
+          "lowerIsBetter": true,
+          "samples": [
+            44.6,
+            42.0,
+            38.2,
+            43.4,
+            45.300000000000004,
+            49.1,
+            41.8,
+            38.9,
+            41.199999999999996,
+            38.699999999999996
+          ],
+          "p50": 41.8,
+          "p95": 49.1,
+          "min": 38.2,
+          "max": 49.1,
+          "mean": 42.32000000000001
+        },
+        {
+          "name": "state.get round trip",
+          "unit": "µs",
+          "lowerIsBetter": true,
+          "samples": [
+            33.2,
+            30.7,
+            33.5,
+            32.199999999999996,
+            34.7,
+            34.6,
+            31.4,
+            32.1,
+            30.599999999999998,
+            30.800000000000004
+          ],
+          "p50": 32.1,
+          "p95": 34.7,
+          "min": 30.599999999999998,
+          "max": 34.7,
+          "mean": 32.38
+        }
+      ],
+      "notes": [
+        "Real kivo-ipc server and client in one process over the real transport (named pipe with the user-only DACL, session token, JSON-RPC frames), on a private pipe name.",
+        "Each run opens a fresh connection, then sends 200 pings and one state.get."
+      ]
+    }
+  ]
+}

@@ -27,6 +27,15 @@ const SCHEMA: &[&str] = &[
              created_at INTEGER NOT NULL
          ) STRICT;
      CREATE UNIQUE INDEX one_owner ON profiles (is_owner) WHERE is_owner = 1;",
+    // 2: benchmark results (BENCHMARKS §1). About the machine, not a person.
+    "CREATE TABLE benchmarks (
+             id         INTEGER PRIMARY KEY,
+             suite      TEXT NOT NULL,
+             machine    TEXT NOT NULL,
+             started_at INTEGER NOT NULL,
+             result     TEXT NOT NULL CHECK (json_valid(result))
+         ) STRICT;
+     CREATE INDEX benchmarks_by_suite ON benchmarks (suite, started_at);",
 ];
 
 static MIGRATIONS: LazyLock<Migrations<'static>> =
@@ -98,6 +107,22 @@ impl Database {
         Ok(id)
     }
 
+    /// Stores one benchmark suite's result (`kivo-bench`): the suite, the machine id, when it
+    /// started (Unix milliseconds) and the full result as JSON.
+    pub fn record_benchmark(
+        &self,
+        suite: &str,
+        machine: &str,
+        started_at_ms: i64,
+        result_json: &str,
+    ) -> Result<(), DbError> {
+        self.conn.execute(
+            "INSERT INTO benchmarks (suite, machine, started_at, result) VALUES (?1, ?2, ?3, ?4)",
+            params![suite, machine, started_at_ms, result_json],
+        )?;
+        Ok(())
+    }
+
     pub fn schema_version(&self) -> Result<usize, DbError> {
         current_version(&self.conn)
     }
@@ -139,7 +164,7 @@ mod tests {
     use super::*;
 
     /// Tables that are about the app itself rather than a person.
-    const UNSCOPED_TABLES: &[&str] = &["app_meta", "profiles"];
+    const UNSCOPED_TABLES: &[&str] = &["app_meta", "profiles", "benchmarks"];
 
     /// Tables holding personal data that lack a `profile_id` column tied to `profiles`.
     fn unscoped_tables(conn: &Connection) -> Vec<String> {
@@ -261,6 +286,21 @@ mod tests {
             )
             .unwrap();
         assert_eq!(owners, 1);
+    }
+
+    #[test]
+    fn benchmark_results_are_stored_as_valid_json() {
+        let db = Database::in_memory().unwrap();
+        db.record_benchmark("ipc", "amd-ryzen-7-6800h", 1, r#"{"p50":1.0}"#)
+            .unwrap();
+        let (suite, result): (String, String) = db
+            .connection()
+            .query_row("SELECT suite, result FROM benchmarks", [], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })
+            .unwrap();
+        assert_eq!((suite.as_str(), result.as_str()), ("ipc", r#"{"p50":1.0}"#));
+        assert!(db.record_benchmark("ipc", "m", 1, "not json").is_err());
     }
 
     #[test]
