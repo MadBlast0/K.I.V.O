@@ -176,7 +176,7 @@ Context = { session: owner|guest, speaker_confidence, profile: MaxSafety|Balance
   message size limit.
 - Native messaging host: the manifest allows only KIVO's extension ID; payload limits.
 - Dependencies: `cargo deny` (licenses, advisories, bans), `pnpm audit`, lockfiles committed,
-  Dependabot.
+  Dependabot alerts.
 - Updates: minisign-signed update manifests plus Authenticode-signed binaries; the updater verifies
   both before running the installer.
 
@@ -237,5 +237,5 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 - [~] **SEC-28** · M0 · Tauri: strict CSP, no remote content, `withGlobalTauri: false`, no `shell` plugin, minimal `capabilities/*.json` per window (the overlay window gets almost nothing) (§9) → partial: CSP set, `withGlobalTauri` off (default), no shell plugin, main-window capability limited to core + window controls · missing: overlay window and its capability file
 - [x] **SEC-29** · M0 · IPC hardening: user-only DACL, reject remote clients, session token, schema validation, message size limit (§9, ARCH-14–16) → done: user-only DACL, PIPE_REJECT_REMOTE_CLIENTS, first-instance pipes, session token, strict schema parsing (unknown fields and malformed messages close the connection), 1 MiB frame limit · verified: 20 IPC tests over the real transport, stable over 20 runs
 - [ ] **SEC-30** · M4 · Native messaging host manifest allows only KIVO's extension ID; payload limits (§9)
-- [x] **SEC-31** · M0 · Dependencies: `cargo deny`, `pnpm audit`, lockfiles committed, Dependabot (§9) → done: `cargo deny` and `pnpm audit --audit-level high` in CI, `Cargo.lock` + `pnpm-lock.yaml` committed and used with --locked/--frozen-lockfile, Dependabot alerts + updates · verified: CI green
+- [x] **SEC-31** · M0 · Dependencies: `cargo deny`, `pnpm audit`, lockfiles committed, Dependabot alerts (§9) → done: `cargo deny` and `pnpm audit --audit-level high` in CI (on version tags), `Cargo.lock` + `pnpm-lock.yaml` committed and used with --locked/--frozen-lockfile, Dependabot alerts · verified: CI green; `cargo deny check` and `pnpm audit` also run locally
 - [ ] **SEC-32** · M9 · Updates: minisign-signed manifests + Authenticode binaries, both verified before running the installer (§9)

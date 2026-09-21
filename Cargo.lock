@@ -1735,7 +1735,7 @@ dependencies = [
 
 [[package]]
 name = "kivo-app"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -1745,19 +1745,19 @@ dependencies = [
 
 [[package]]
 name = "kivo-audio"
-version = "0.1.0"
+version = "0.0.0"
 
 [[package]]
 name = "kivo-bench"
-version = "0.1.0"
+version = "0.0.0"
 
 [[package]]
 name = "kivo-brain"
-version = "0.1.0"
+version = "0.0.0"
 
 [[package]]
 name = "kivo-core"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -1772,15 +1772,15 @@ dependencies = [
 
 [[package]]
 name = "kivo-infer"
-version = "0.1.0"
+version = "0.0.0"
 
 [[package]]
 name = "kivo-intent"
-version = "0.1.0"
+version = "0.0.0"
 
 [[package]]
 name = "kivo-ipc"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "bytes",
  "futures-util",
@@ -1799,11 +1799,11 @@ dependencies = [
 
 [[package]]
 name = "kivo-mcp"
-version = "0.1.0"
+version = "0.0.0"
 
 [[package]]
 name = "kivo-platform"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "dirs 7.0.0",
  "kivo-core",
@@ -1813,7 +1813,7 @@ dependencies = [
 
 [[package]]
 name = "kivo-platform-windows"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "kivo-platform",
  "png 0.18.1",
@@ -1824,15 +1824,15 @@ dependencies = [
 
 [[package]]
 name = "kivo-runtime"
-version = "0.1.0"
+version = "0.0.0"
 
 [[package]]
 name = "kivo-security"
-version = "0.1.0"
+version = "0.0.0"
 
 [[package]]
 name = "kivo-store"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "kivo-core",
  "kivo-platform",
@@ -1851,7 +1851,7 @@ dependencies = [
 
 [[package]]
 name = "kivo-testkit"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "kivo-core",
  "kivo-platform",
@@ -1859,11 +1859,11 @@ dependencies = [
 
 [[package]]
 name = "kivo-tools"
-version = "0.1.0"
+version = "0.0.0"
 
 [[package]]
 name = "kivo-voice"
-version = "0.1.0"
+version = "0.0.0"
 
 [[package]]
 name = "lazy_static"

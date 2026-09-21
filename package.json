@@ -1,7 +1,7 @@
 {
   "name": "kivo",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.0.0",
   "packageManager": "pnpm@11.27.1",
   "scripts": {
     "dev": "pnpm --filter kivo-app tauri dev",
@@ -9,6 +9,7 @@
     "build": "pnpm --filter kivo-app tauri build",
     "typecheck": "pnpm --filter kivo-app typecheck",
     "docs:sync": "node scripts/sync-roadmap.mjs",
+    "release:version": "node scripts/set-version.mjs",
     "lint": "pnpm --filter kivo-app lint",
     "format:check": "pnpm --filter kivo-app format:check",
     "test": "pnpm --filter kivo-app test"

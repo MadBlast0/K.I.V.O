@@ -1,9 +1,11 @@
 name: CI
 
+# Runs only for releases: when a version tag is pushed (RELEASE.md §2), or by hand from the
+# Actions tab. Day-to-day pushes to main run nothing; check locally before pushing.
 on:
-  pull_request:
   push:
-    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -22,22 +24,6 @@ env:
     -p kivo-brain -p kivo-tools -p kivo-security -p kivo-mcp -p kivo-store -p kivo-testkit
 
 jobs:
-  commit-messages:
-    name: Conventional Commit messages
-    # Direct pushes to main skip the PR-title check, so the pushed commits are checked here.
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check commit subjects
-        run: |
-          pattern='^(feat|fix|perf|refactor|docs|test|build|ci|chore|revert)(\([a-z0-9-]+\))?!?: .+'
-          bad=$(jq -r '.commits[] | select(.author.name != "dependabot[bot]") | .message | split("\n")[0]' "$GITHUB_EVENT_PATH" | grep -Ev "$pattern" || true)
-          if [ -n "$bad" ]; then
-            echo "These commit subjects are not Conventional Commits (RELEASE.md §1):"
-            echo "$bad"
-            exit 1
-          fi
-
   rust-windows:
     name: Rust (Windows)
     runs-on: windows-latest

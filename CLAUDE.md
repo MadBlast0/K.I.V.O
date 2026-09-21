@@ -144,6 +144,9 @@ The docs are the build plan, and progress is recorded in them. Full rules:
 
 - Windows is the primary platform; line endings are normalized via `.gitattributes`.
 - **Commit subjects are Conventional Commits** (`feat(core): …`, `fix(ui): …`, `ci: …`, `docs: …`).
-  release-please builds versions and the changelog from them, and CI rejects other subjects on
-  pushes to `main` (RELEASE.md §1).
+  Nothing enforces this in CI; keep to it by hand (RELEASE.md §1).
+- **GitHub Actions run only when a version tag is pushed** (owner decision). Pushes to `main` run
+  nothing, so run the checks locally before pushing. Never add a workflow trigger on push, PR or
+  schedule. The owner releases with `pnpm release:version X.Y.Z`, then commits, tags `vX.Y.Z` and
+  pushes.
 - Keep this file current as the build, test, and lint commands come into existence.
