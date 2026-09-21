@@ -341,6 +341,14 @@ pub fn window_style(title: &str) -> Option<(u32, bool)> {
     }
 }
 
+/// The handle of the top-level window with this title.
+pub fn find_window(title: &str) -> Option<isize> {
+    // SAFETY: a plain window query.
+    unsafe { FindWindowW(PCWSTR::null(), &HSTRING::from(title)) }
+        .ok()
+        .map(|h| h.0 as isize)
+}
+
 pub fn foreground() -> isize {
     // SAFETY: a plain query.
     unsafe { GetForegroundWindow() }.0 as isize
@@ -348,7 +356,6 @@ pub fn foreground() -> isize {
 
 pub const EX_NOACTIVATE: u32 = WS_EX_NOACTIVATE.0;
 pub const EX_TOPMOST: u32 = WS_EX_TOPMOST.0;
-pub const EX_TOOLWINDOW: u32 = WS_EX_TOOLWINDOW.0;
 /// Click-through (with layered).
 pub const EX_TRANSPARENT: u32 = windows::Win32::UI::WindowsAndMessaging::WS_EX_TRANSPARENT.0;
 

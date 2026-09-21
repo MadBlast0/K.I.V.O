@@ -7,8 +7,8 @@
 //!   over a mid-grey backdrop so a flash cannot hide;
 //! - release → Island gone (includes the designed exit animation);
 //! - GPU 3D load and CPU package power (RAPL) with the Island hidden vs animating;
-//! - the window's styles (never activates, click-through, topmost, no taskbar entry) and that the
-//!   foreground window never changes.
+//! - the window's styles (never activates, click-through, topmost) and that the Island never
+//!   becomes the foreground window.
 
 use crate::harness::{Sample, Suite};
 use crate::win;
@@ -138,13 +138,15 @@ impl Suite for Overlay {
         let hidden = self.counters.sample()?;
 
         // Hold the keys and wait for the capsule.
-        let focus = win::foreground();
+        let island = win::find_window(TITLE).ok_or("the Island window is gone")?;
+        let mut took_focus = false;
         let pressed = Instant::now();
         win::keys(&self.keys, false);
         let mut flash = false;
         let shown = loop {
             let pixels = self.grab()?;
             flash |= white(&pixels);
+            took_focus |= win::foreground() == island;
             if black(&pixels) {
                 break pressed.elapsed();
             }
@@ -163,10 +165,13 @@ impl Suite for Overlay {
         let until = Instant::now() + MEASURE;
         while Instant::now() < until {
             flash |= white(&self.grab()?);
+            took_focus |= win::foreground() == island;
             std::thread::sleep(Duration::from_millis(50));
         }
         let animating = self.counters.sample()?;
-        let focus_kept = win::foreground() == focus;
+        // The Island must never become the foreground window. (Other focus changes are the
+        // user's own, if they use the PC during the run.)
+        let focus_kept = !took_focus;
 
         let released = Instant::now();
         win::keys(&self.keys.iter().rev().copied().collect::<Vec<_>>(), true);
@@ -182,11 +187,10 @@ impl Suite for Overlay {
 
         let styles = format!(
             "Window checks: visible {visible}; never activates {}; click-through {}; topmost {}; \
-             no taskbar entry {}; foreground unchanged {focus_kept}.",
+             never took focus {focus_kept}.",
             ex & win::EX_NOACTIVATE != 0,
             ex & win::EX_TRANSPARENT != 0,
             ex & win::EX_TOPMOST != 0,
-            ex & win::EX_TOOLWINDOW != 0,
         );
         let required = win::EX_NOACTIVATE | win::EX_TRANSPARENT | win::EX_TOPMOST;
         if !(visible && focus_kept && ex & required == required) {

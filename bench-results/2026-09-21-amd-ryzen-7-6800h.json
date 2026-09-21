@@ -20,103 +20,347 @@
   },
   "suites": [
     {
+      "suite": "audio",
+      "startedAt": 1790016115217,
+      "runs": 5,
+      "warmup": 1,
+      "metrics": [
+        {
+          "name": "capture CPU (share of the whole machine)",
+          "unit": "%",
+          "lowerIsBetter": true,
+          "samples": [
+            0.009720600442428728,
+            0.0,
+            0.019439791805888753,
+            0.02916205880215763,
+            0.0
+          ],
+          "p50": 0.009720600442428728,
+          "p95": 0.02916205880215763,
+          "min": 0.0,
+          "max": 0.02916205880215763,
+          "mean": 0.01166449021009502
+        },
+        {
+          "name": "capture open → first packet",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            56.0045,
+            53.7075,
+            56.7876,
+            55.848099999999995,
+            56.3386
+          ],
+          "p50": 56.0045,
+          "p95": 56.7876,
+          "min": 53.7075,
+          "max": 56.7876,
+          "mean": 55.737260000000006
+        },
+        {
+          "name": "capture packet period (median)",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            9.9899,
+            9.9956,
+            9.9958,
+            9.9829,
+            9.9912
+          ],
+          "p50": 9.9912,
+          "p95": 9.9958,
+          "min": 9.9829,
+          "max": 9.9958,
+          "mean": 9.99108
+        },
+        {
+          "name": "capture packet period (p99)",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            10.3305,
+            10.3631,
+            10.3225,
+            10.374,
+            10.3386
+          ],
+          "p50": 10.3386,
+          "p95": 10.374,
+          "min": 10.3225,
+          "max": 10.374,
+          "mean": 10.345739999999996
+        },
+        {
+          "name": "capture frames delivered vs device clock",
+          "unit": "%",
+          "lowerIsBetter": false,
+          "samples": [
+            99.99685495377112,
+            99.99720328142172,
+            99.99740447177382,
+            99.99617732331134,
+            99.9966978067461
+          ],
+          "p50": 99.99685495377112,
+          "p95": 99.99740447177382,
+          "min": 99.99617732331134,
+          "max": 99.99740447177382,
+          "mean": 99.99686756740482
+        },
+        {
+          "name": "playback open → first fill",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            41.0332,
+            38.7228,
+            40.4095,
+            39.7055,
+            38.6704
+          ],
+          "p50": 39.7055,
+          "p95": 41.0332,
+          "min": 38.6704,
+          "max": 41.0332,
+          "mean": 39.70828
+        },
+        {
+          "name": "playback CPU (share of the whole machine)",
+          "unit": "%",
+          "lowerIsBetter": true,
+          "samples": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "p50": 0.0,
+          "p95": 0.0,
+          "min": 0.0,
+          "max": 0.0,
+          "mean": 0.0
+        }
+      ],
+      "notes": [
+        "Default microphone \"Microphone Array (Realtek(R) Audio)\" held open for 10 s per run (shared mode, event-driven, 32-bit float, MMCSS \"Audio\" thread); the callback only counts frames.",
+        "Device format: 48000 Hz, 2 channel(s).",
+        "Playback: 2 s of silence on the default output per run."
+      ]
+    },
+    {
       "suite": "ipc",
-      "startedAt": 1790010143213,
-      "runs": 10,
-      "warmup": 2,
+      "startedAt": 1790016115164,
+      "runs": 5,
+      "warmup": 1,
       "metrics": [
         {
           "name": "connect + hello",
           "unit": "µs",
           "lowerIsBetter": true,
           "samples": [
-            124.39999999999999,
-            152.9,
-            113.8,
-            114.7,
-            132.5,
-            140.4,
-            145.6,
-            131.9,
-            99.8,
-            97.3
+            173.1,
+            160.5,
+            148.3,
+            140.6,
+            140.0
           ],
-          "p50": 124.39999999999999,
-          "p95": 152.9,
-          "min": 97.3,
-          "max": 152.9,
-          "mean": 125.33
+          "p50": 148.3,
+          "p95": 173.1,
+          "min": 140.0,
+          "max": 173.1,
+          "mean": 152.50000000000003
         },
         {
           "name": "ping round trip (median of 200)",
           "unit": "µs",
           "lowerIsBetter": true,
           "samples": [
-            28.799999999999997,
-            28.7,
-            28.799999999999997,
-            28.5,
-            27.0,
-            29.5,
-            28.900000000000002,
-            28.7,
-            27.5,
-            27.7
+            31.1,
+            30.9,
+            31.0,
+            31.1,
+            31.7
           ],
-          "p50": 28.7,
-          "p95": 29.5,
-          "min": 27.0,
-          "max": 29.5,
-          "mean": 28.410000000000004
+          "p50": 31.1,
+          "p95": 31.7,
+          "min": 30.9,
+          "max": 31.7,
+          "mean": 31.159999999999997
         },
         {
           "name": "ping round trip (p95 of 200)",
           "unit": "µs",
           "lowerIsBetter": true,
           "samples": [
-            44.6,
-            42.0,
-            38.2,
-            43.4,
-            45.300000000000004,
-            49.1,
-            41.8,
-            38.9,
-            41.199999999999996,
-            38.699999999999996
+            46.1,
+            47.2,
+            48.3,
+            47.8,
+            52.2
           ],
-          "p50": 41.8,
-          "p95": 49.1,
-          "min": 38.2,
-          "max": 49.1,
-          "mean": 42.32000000000001
+          "p50": 47.8,
+          "p95": 52.2,
+          "min": 46.1,
+          "max": 52.2,
+          "mean": 48.32000000000001
         },
         {
           "name": "state.get round trip",
           "unit": "µs",
           "lowerIsBetter": true,
           "samples": [
-            33.2,
-            30.7,
-            33.5,
-            32.199999999999996,
-            34.7,
-            34.6,
-            31.4,
-            32.1,
-            30.599999999999998,
-            30.800000000000004
+            36.4,
+            35.3,
+            47.3,
+            35.9,
+            37.1
           ],
-          "p50": 32.1,
-          "p95": 34.7,
-          "min": 30.599999999999998,
-          "max": 34.7,
-          "mean": 32.38
+          "p50": 36.4,
+          "p95": 47.3,
+          "min": 35.3,
+          "max": 47.3,
+          "mean": 38.4
         }
       ],
       "notes": [
         "Real kivo-ipc server and client in one process over the real transport (named pipe with the user-only DACL, session token, JSON-RPC frames), on a private pipe name.",
         "Each run opens a fresh connection, then sends 200 pings and one state.get."
+      ]
+    },
+    {
+      "suite": "overlay",
+      "startedAt": 1790016282027,
+      "runs": 5,
+      "warmup": 1,
+      "metrics": [
+        {
+          "name": "hotkey → Island visible",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            155.24699999999999,
+            153.7598,
+            155.0027,
+            155.2997,
+            154.44830000000002
+          ],
+          "p50": 155.0027,
+          "p95": 155.2997,
+          "min": 153.7598,
+          "max": 155.2997,
+          "mean": 154.75150000000002
+        },
+        {
+          "name": "release → Island gone (incl. exit animation)",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            166.9135,
+            161.1693,
+            161.0386,
+            162.4005,
+            173.1651
+          ],
+          "p50": 162.4005,
+          "p95": 173.1651,
+          "min": 161.0386,
+          "max": 173.1651,
+          "mean": 164.93739999999997
+        },
+        {
+          "name": "white flash seen",
+          "unit": "runs",
+          "lowerIsBetter": true,
+          "samples": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "p50": 0.0,
+          "p95": 0.0,
+          "min": 0.0,
+          "max": 0.0,
+          "mean": 0.0
+        },
+        {
+          "name": "GPU 3D load, Island hidden",
+          "unit": "%",
+          "lowerIsBetter": true,
+          "samples": [
+            2.1790333869070433,
+            2.0824118453341094,
+            2.090957147877412,
+            1.9951275582978893,
+            2.0301309253789364
+          ],
+          "p50": 2.0824118453341094,
+          "p95": 2.1790333869070433,
+          "min": 1.9951275582978893,
+          "max": 2.1790333869070433,
+          "mean": 2.075532172759078
+        },
+        {
+          "name": "GPU 3D load, Island animating",
+          "unit": "%",
+          "lowerIsBetter": true,
+          "samples": [
+            4.037126804091704,
+            4.013319111783131,
+            4.161768512794267,
+            4.079819861376713,
+            4.188302001465513
+          ],
+          "p50": 4.079819861376713,
+          "p95": 4.188302001465513,
+          "min": 4.013319111783131,
+          "max": 4.188302001465513,
+          "mean": 4.0960672583022655
+        },
+        {
+          "name": "CPU package power, Island hidden",
+          "unit": "W",
+          "lowerIsBetter": true,
+          "samples": [
+            24.45561688798718,
+            27.38848931763014,
+            22.00811138729613,
+            22.475900786248655,
+            23.637971120691983
+          ],
+          "p50": 23.637971120691983,
+          "p95": 27.38848931763014,
+          "min": 22.00811138729613,
+          "max": 27.38848931763014,
+          "mean": 23.99321789997082
+        },
+        {
+          "name": "CPU package power, Island animating",
+          "unit": "W",
+          "lowerIsBetter": true,
+          "samples": [
+            25.713576729769883,
+            24.72228994502039,
+            22.16518627596029,
+            25.128944754336363,
+            24.437808354541964
+          ],
+          "p50": 24.72228994502039,
+          "p95": 25.713576729769883,
+          "min": 22.16518627596029,
+          "max": 25.713576729769883,
+          "mean": 24.433561211925777
+        }
+      ],
+      "notes": [
+        "Drives the running KIVO: holds Ctrl+Space with synthetic input and samples the screen at the top center of the primary monitor (a grey backdrop sits behind the Island).",
+        "GPU load is the sum of all 3D engines on the machine and power is the CPU package (RAPL energy meter), so both include everything else running; compare hidden with animating rather than reading them as KIVO's alone.",
+        "Window checks: visible true; never activates true; click-through true; topmost true; no taskbar entry false; never took focus true."
       ]
     }
   ]

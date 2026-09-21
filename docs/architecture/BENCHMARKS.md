@@ -12,7 +12,7 @@ harness, not by guesswork.**
 | `wake` | false accepts/hour, false rejects %, CPU% | Negative: ≥ 10 h of speech/podcast/TV audio; positive: recorded "Hey Kivo" set (varied speakers/mics/distances) + synthetic |
 | `vad` / `aec` | detection latency, false triggers with TTS playing, echo leakage into STT | Scripted playback + capture loop |
 | `idle` | CPU%, RAM, wakeups/sec, package power over 30 min, listening on | Real runtime, idle desktop |
-| `overlay` | show latency (hotkey → first frame), white-flash check, GPU utilization/power while idle vs animating | Tauri overlay spike + PresentMon |
+| `overlay` | show latency (hotkey → first frame), white-flash check, GPU utilization/power while idle vs animating | The running Island, driven by synthetic push-to-talk; screen sampling; Windows performance counters (GPU engine load, RAPL package power) |
 | `e2e` | T0–T10 spans (plan §97) for the three journeys of plan §102 | Scripted audio injected via virtual mic, fake/real brains |
 | `brain` | TTFT, tokens/s, tool-call latency, structured-output validity, cancellation latency, error rate | Fixed prompts per provider |
 
@@ -63,7 +63,7 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 - [ ] **BENCH-04** · M0 · `wake` suite: false accepts/hour on ≥ 10 h negative audio, false rejects % on the recorded "Hey Kivo" set, CPU% (§1)
 - [ ] **BENCH-05** · M0 · `vad` / `aec` suite: detection latency, false triggers with TTS playing, echo leakage into STT (§1)
 - [ ] **BENCH-06** · M0 · `idle` suite: CPU%, RAM, wakeups/s and package power over 30 min with listening on (§1)
-- [ ] **BENCH-07** · M0 · `overlay` suite: hotkey → first frame, white-flash check, GPU utilization and power idle vs animating (PresentMon) (§1)
+- [x] **BENCH-07** · M0 · `overlay` suite: hotkey → done: `apps/kivo-bench/src/suites/overlay.rs` + `win.rs` (synthetic push-to-talk; screen sampling over a grey backdrop for first frame, white flash and exit; window style and focus checks; GPU 3D load and RAPL package power from Windows performance counters instead of PresentMon, DECISIONS "Benchmark counters") · verified: saved release-build run (2026-09-21): 155 ms p50 to visible, no flash, +1.1 W package power while animating (was +12 W before the redraw fixes)
 - [ ] **BENCH-08** · M1 · `e2e` suite: T0–T10 spans for the three plan §102 journeys with scripted audio via a virtual mic (§1)
 - [ ] **BENCH-09** · M3 · `brain` suite: TTFT, tokens/s, tool-call latency, structured-output validity, cancellation latency, error rate (§1)
 - [ ] **BENCH-10** · M0 · Reference machines recorded: the owner's PC (mid/high) and the 4-core / 8 GB / no-GPU VM (low, labelled approximate) (§2, DECISIONS)
