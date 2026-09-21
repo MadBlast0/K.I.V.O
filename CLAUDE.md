@@ -38,6 +38,7 @@ Engineering specs (read the relevant one before implementing a subsystem):
 | [docs/architecture/RELEASE.md](docs/architecture/RELEASE.md) | Versioning, CI workflows, installer build matrix, channels, signing |
 | [docs/architecture/BENCHMARKS.md](docs/architecture/BENCHMARKS.md) | `kivo-bench`, reference hardware, budgets |
 | [docs/architecture/CONVERSATION.md](docs/architecture/CONVERSATION.md) | Threads, context budgets, instructions, memory v2, driving other AIs, voice confirmations |
+| [docs/architecture/DISCOVERY.md](docs/architecture/DISCOVERY.md) | Detecting brains/agents/extensions, in-app installs, refresh, data freshness |
 | [docs/architecture/CAPABILITIES.md](docs/architecture/CAPABILITIES.md) | Capability toggles, screen awareness, computer use |
 | [docs/architecture/ROUTINES.md](docs/architecture/ROUTINES.md) | Custom commands and routines |
 | [docs/architecture/INTEGRATIONS_AND_PLUGINS.md](docs/architecture/INTEGRATIONS_AND_PLUGINS.md) | App integrations, WASM plugins, phone remote |

@@ -192,6 +192,9 @@ Specs: [architecture/](architecture/ARCHITECTURE.md) · Decisions: [DECISIONS.md
 | Release matrix (NSIS/MSI/DMG/AppImage/deb/rpm) + nightly | same | Draft in M1 (Windows), full matrix by M9 |
 | Context page, preview, session management UI | [CONVERSATION.md §0, §8](architecture/CONVERSATION.md) | M3 (budgets), M7 (UI) |
 | Skills (Agent Skills standard) | same §9 | M6 (with MCP) |
+| Discovery (CLIs, local servers, MCP imports, skills folders, gh) + Refresh | [DISCOVERY.md](architecture/DISCOVERY.md) | M3 (brains), M6 (MCP/skills imports) |
+| In-app CLI installs (winget/npm with consent) | same §1.1 | M8 |
+| Data freshness (watchers, max-age checks, catalogs) | same §3 | M1 onward |
 | Model manager (download/delete) | [DISTRIBUTION.md §4](architecture/DISTRIBUTION.md) | M1 |
 | KIVO Remote (phone) | same §4 | Post-M9 track |
 

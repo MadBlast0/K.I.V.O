@@ -331,6 +331,11 @@ code{font-family:var(--mono);font-size:12px;background:var(--fill);padding:1px 5
 .soundset .option{align-items:center}
 .code-edit{font-family:var(--mono);font-size:12px;line-height:1.6;background:var(--group);box-shadow:0 0 0 1px var(--border);border-radius:var(--r-m);padding:12px 14px;white-space:pre-wrap;color:var(--text)}
 .code-edit .c{color:var(--text-3)}
+.rf{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:400;color:var(--text-3)}
+.rf .btn{height:22px;padding:0 8px;font-size:12px}
+.rf .btn .i{width:13px;height:13px}
+.rf.busy .btn .i{animation:spin .8s linear infinite}
+.newdot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--acc);margin-left:6px;vertical-align:middle}
 .themes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
 .themes .option{flex-direction:column;align-items:stretch;gap:10px;padding:10px}
 .themes .pv{height:78px;border-radius:7px;overflow:hidden;display:flex;box-shadow:0 0 0 1px var(--border)}
@@ -789,6 +794,8 @@ const TITLES = Object.fromEntries(NAV.flatMap(g => g[1]).map(x => [x[0], x[1]]))
 const editDel = () => `<button class="btn sm ic plain" aria-label="Edit">${I('edit')}</button><button class="btn sm ic plain" aria-label="Delete">${I('trash')}</button>`;
 
 const themeTile = (v, n, bg, side, line, isl='#000') => `<button class="option" aria-pressed="${S.themePref===v}" data-set="themePref" data-val="${v}"><div class="pv" style="background:${bg}"><div class="sb" style="background:${side}"><i style="background:${line};width:70%"></i><i style="background:${line};width:50%"></i><i style="background:${line};width:60%"></i></div><div class="mn"><i class="pill-i" style="background:${isl}"></i><i style="background:${line};width:60%"></i><i style="background:${line};width:85%"></i><i style="background:${line};width:40%"></i></div></div><span class="ot"><span class="rad ${S.themePref===v?'on':''}"></span><b>${n}</b></span></button>`;
+const rf = (ago='2 min ago') => `<span class="rf">Checked ${ago} <button class="btn plain" data-refresh>${I('refresh')}Refresh</button></span>`;
+const NEW = '<span class="newdot" title="New"></span>';
 const PAGES = {
 home: () => `<div class="home"><div class="big"><span class="orb"></span></div>
     <h2>Listening for “Hey Kivo”</h2><p>Or hold ${keys('Ctrl','Space')} to talk · ${keys('Ctrl','Shift','Space')} to type</p>
@@ -848,11 +855,16 @@ brains: () => ph('Brains','How KIVO thinks. Sign in with something you already u
     li(mono('CC','#C96442'),'Claude Code','Your Claude account · via ACP', tag('Ready','g')+chev,'click'),
     li(mono('OR','#4B4BD6'),'OpenRouter','Connected with sign-in · 300+ models', tag('Ready','g')+chev,'click'),
     li(mono('OL','#1D1D1F'),'Ollama','On this PC · nothing leaves your PC', pill('Free','g')+chev,'click')) +
-  sect('Available') + group(
-    li(mono('GC','#4285F4'),'Gemini CLI','Sign in with Google · about 1,000 requests a day', pill('Free','g')+'<button class="btn sm pri">Connect</button>'),
-    li(mono('CX','#10A37F'),'Codex','Sign in with ChatGPT · works on the Free plan with a small limit', pill('Free tier','g')+'<button class="btn sm pri">Connect</button>'),
-    li(mono('LM','#6B4BD6'),'LM Studio','Not running','<button class="btn sm">Detect</button>'),
-    li('key','Use your own API key','Optional, for advanced users','<button class="btn sm">Add key</button>')) +
+  sect('Found on this PC', rf()) + group(
+    li(mono('GC','#4285F4'),'Gemini CLI'+NEW,'Installed · signed in with Google · about 1,000 free requests a day', pill('Free','g')+'<button class="btn sm pri" data-toast="Gemini CLI added">Use</button>'),
+    li(mono('CX','#10A37F'),'Codex','Installed · needs sign-in (works on ChatGPT Free)', pill('Free tier','g')+'<button class="btn sm">Sign in</button>'),
+    li(mono('LM','#6B4BD6'),'LM Studio','Installed · not running', '<button class="btn sm">Start it</button>')) +
+  sect('Not installed', '<span class="meta">KIVO can install these for you</span>') + group(
+    li(mono('CP','#24292F'),'GitHub Copilot CLI','Needs Node.js · KIVO installs it first', '<button class="btn sm" data-modal="install">Install</button>'),
+    li(mono('OC','#1D1D1F'),'OpenCode','Open-source coding agent', '<button class="btn sm" data-modal="install">Install</button>')) +
+  sect('Other ways') + group(
+    li('key','Use your own API key','Optional, for advanced users','<button class="btn sm">Add key</button>'),
+    li('link','Custom endpoint','Any OpenAI-compatible server','<button class="btn sm">Add</button>')) +
   sect('Profiles') + group(...[['Default','Claude Code','OpenRouter · Claude Sonnet'],['Fast','OpenRouter · Gemini Flash','Ollama · llama3.2'],['Coding','Claude Code','Codex'],['Private','Ollama · qwen2.5','none, stays local'],['Offline','Ollama · llama3.2','none']].map(([n,a,b]) => li('', n, `${a} · fallback: ${b}`, chev,'click'))) +
   `<p class="note">KIVO never charges for AI. Free options are marked; paid ones use your own account.</p><p class="note">KIVO picks a profile from what you asked, how sensitive the data is, whether you’re online, and cost. Every answer says which one it used.</p>`,
 agents: () => ph('Agents','Other AIs KIVO can run and talk to for you: coding agents, terminals and desktop AI apps.', `<button class="btn pri" data-modal="launch">${I('plus')}Start an agent</button>`) +
@@ -865,7 +877,7 @@ agents: () => ph('Agents','Other AIs KIVO can run and talk to for you: coding ag
     li('term','Claude Code in a terminal','Choose a folder and a mode', seg(['Ask','Auto','Bypass'],'Auto')+'<button class="btn sm">Start</button>'),
     li('term','Codex in the background','KIVO follows along and reports back', '<button class="btn sm">Start</button>'),
     li('term','Gemini CLI','Free with a Google account', pill('Free','g')+'<button class="btn sm">Start</button>')) +
-  sect('Desktop AI apps') + group(
+  sect('Desktop AI apps', rf('3 min ago')) + group(
     li(mono('CD','#D97757'),'Claude Desktop','KIVO can type prompts and read replies', tag('Found','g')),
     li(mono('GP','#10A37F'),'ChatGPT','KIVO can type prompts and read replies', tag('Found','g')),
     li(mono('CP','#0078D4'),'Microsoft Copilot','Not found','<button class="btn sm">Detect</button>')) +
@@ -884,6 +896,8 @@ skills: () => ph('Skills','Know-how KIVO follows for specific tasks. A skill onl
     li('skill','release-notes','Turns commits into release notes · from a folder', '<span class="meta">~40 tokens</span>'+tog(true)),
     li('skill','meeting-brief','Prepares a brief from your calendar and notes · made from a routine', '<span class="meta">~35 tokens</span>'+tog(true)),
     li('skill','pdf-tools','Fill, merge and split PDFs · includes scripts', pill('Runs scripts','o')+'<span class="meta">~45 tokens</span>'+tog(true))) +
+  sect('Found in other apps', rf('1 min ago')) + group(
+    li(mono('CC','#C96442'),'Claude Code'+NEW,'4 skills in your .claude/skills folder', '<button class="btn sm">Review</button>')) +
   sect('Waiting for review', '<span class="meta">2</span>') + group(
     li('skill','frontend-design','Shared by Claude Code in K.I.V.O', '<button class="btn sm">Review</button>'),
     li('skill','data-cleanup','Imported from a zip · not checked yet', pill('Untrusted','o')+'<button class="btn sm">Review</button>')) +
@@ -926,12 +940,19 @@ connectors: () => ph('Connectors','Apps you sign in to. KIVO never needs your pa
   sect('Connected', '<span class="meta">2</span>') + group(
     li(mono('GH','#24292F'),'GitHub','MadBlast0 · 12 actions', tag('Connected','g')+tog(true)+chev,'click'),
     li(mono('GC','#1A73E8'),'Google Calendar','sam@gmail.com · 4 actions', tag('Connected','g')+tog(true)+chev,'click')) +
+  sect('Ready to use', rf('5 min ago')) + group(
+    li(mono('GH','#24292F'),'GitHub via GitHub CLI'+NEW,'You’re already signed in to gh on this PC', '<button class="btn sm pri" data-toast="GitHub ready">Turn on</button>'),
+    li(mono('SP','#1DB954'),'Spotify','Desktop app found · controls playback, no sign-in', tog(true))) +
   sect('Built in', '<span class="meta">No sign-in needed</span>') + group(
     li('music','Media controls','Spotify, YouTube Music and any other player', tag('On','g')),
     li('code','Developer tools','git, GitHub CLI, VS Code and Terminal', tag('Found on this PC','g')),
     li('globe','Browser extension','Your open tabs in Chrome and Edge', '<button class="btn sm">Install</button>')) +
   sect('Available') + group(...[['GD','#0F9D58','Google Drive','Files you choose'],['OL','#0078D4','Outlook','Microsoft 365 mail and calendar'],['TM','#5B5FC7','Microsoft Teams','Chats and meetings'],['NO','#191919','Notion','Pages and databases'],['LI','#5E6AD2','Linear','Issues and projects'],['SL','#4A154B','Slack','Messages and channels'],['AS','#F06A6A','Asana','Tasks and projects'],['GM','#EA4335','Gmail','Search and draft email','soon']].map(([m,c,n,d,soon]) => li(mono(m,c), n, d, soon ? pill('Coming later') : `<button class="btn sm" data-toast="${n} connected">Connect</button>`))),
 mcp: () => ph('MCP servers','Servers that give KIVO extra tools. Each tool has its own permission.', `<button class="btn pri" data-modal="mcpadd">${I('plus')}Add server</button>`) +
+  sect('Found in other apps', rf()) + group(
+    li(mono('CD','#D97757'),'Claude Desktop'+NEW,'3 servers: filesystem, brave-search, sqlite', '<button class="btn sm pri" data-toast="3 servers imported · review their tools">Import</button>'),
+    li(mono('CR','#1D1D1F'),'Cursor','1 server: linear', '<button class="btn sm">Import</button>')) +
+  `<p class="note">Importing copies the setup into KIVO. The other app isn’t changed, and every tool is shown before it’s turned on.</p>` +
   sect('Servers', '<span class="meta">3</span>') + group(
     li('server','github','Remote · 12 tools', tag('Running','g')+tog(true)+chev,'click'),
     li('server','filesystem-projects','On this PC · 5 tools · limited to D:\work', tag('Running','g')+tog(true)+chev,'click'),
@@ -1275,6 +1296,11 @@ const MODALS = {
     <div class="mb"><div class="field">${I('sparkle')}<input value="When I say work mode, open VS Code and Slack and turn on Focus"></div><p class="note" style="margin:6px 2px 0">KIVO drafts the steps; you review them before saving.</p>
     ${sect('Templates')}${group(li('routine','Work mode','Open apps and turn on Focus',chev,'click'), li('clock','Focus timer','Timer and Do Not Disturb',chev,'click'), li('users','Meeting','Mute, headset, calendar link',chev,'click'), li('moon','Goodnight','Close apps, then sleep (asks first)',chev,'click'))}</div>
     <div class="mf"><button class="btn" data-close>Cancel</button><button class="btn pri" data-close>Continue</button></div></div>`,
+  install: () => `<div class="modal"><div class="mh"><div><h3>Install GitHub Copilot CLI</h3><p>KIVO runs the installer for you and checks that it works.</p></div><button class="btn sm ic plain" data-close aria-label="Close">${I('x')}</button></div>
+    <div class="mb">${group(li('check','Node.js','Already installed · v22.4', tag('Ready','g')), li('download','Copilot CLI','From the official npm package', '<span class="meta">~40 MB</span>'))}
+    <div class="code-edit" style="margin-top:12px">npm install -g @github/copilot</div>
+    <p class="note" style="margin:10px 2px 0">After installing, you’ll sign in with your GitHub account in a browser window. Nothing is installed without this confirmation.</p></div>
+    <div class="mf"><button class="btn" data-close>Cancel</button><button class="btn pri" data-close data-toast="Installing GitHub Copilot CLI…">Install</button></div></div>`,
   mcpadd: () => `<div class="modal"><div class="mh"><div><h3>Add an MCP server</h3><p>Paste a link from the developer, or pick a program on this PC.</p></div><button class="btn sm ic plain" data-close aria-label="Close">${I('x')}</button></div>
     <div class="mb">${seg(['Link (remote)','Program on this PC'],'Link (remote)')}
     <div class="field" style="margin-top:12px">${I('link')}<input value="https://mcp.linear.app/mcp"></div>
@@ -1402,6 +1428,7 @@ document.addEventListener('click', e => {
   if (d.onbnav) { onbDir = +d.onbnav; S.onb = Math.max(0, Math.min(ONB.length-1, S.onb + +d.onbnav)); render(); return; }
   if (d.finish !== undefined) { S.onb = 0; S.sec = 'cc'; S.page = 'home'; render(); window.scrollTo(0,0); toast('KIVO is ready. Say “Hey Kivo”'); return; }
   if (d.obtry !== undefined) { playMini(); return; }
+  if (d.refresh !== undefined) { const w = el.closest('.rf'); w.classList.add('busy'); setTimeout(() => { w.classList.remove('busy'); w.firstChild.textContent = 'Checked just now '; }, 900); return; }
   if (d.act === 'tog') { el.setAttribute('aria-checked', el.getAttribute('aria-checked') !== 'true'); return; }
   if (d.act === 'seg') { el.parentElement.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b === el)); return; }
   if (d.act === 'opt') { el.parentElement.querySelectorAll('.option').forEach(b => { b.setAttribute('aria-pressed', b === el); b.querySelector('.rad')?.classList.toggle('on', b === el); }); return; }
