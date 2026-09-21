@@ -293,9 +293,9 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 
 **Platform abstraction (§2)**
 
-- [ ] **ARCH-11** · M0 · `kivo-platform` defines every trait in the §2 table (`AudioIo`, `EchoCancel`, `Hotkeys`, `Tray`, `Apps`, `Windows`, `UiAutomation`, `Input`, `Screen`, `Ocr`, `Secrets`, `SystemInfo`, `Notifications`); core crates depend only on the traits (§2)
-- [ ] **ARCH-12** · M0 · A `Capabilities` struct is filled at startup (Windows build, OS AEC, Mica, NPU, …); Windows 10 differences are handled only inside `kivo-platform-windows` (§2)
-- [ ] **ARCH-13** · M0 · `kivo-testkit` provides fake platform, fake audio and fake brain implementations for tests (§7)
+- [x] **ARCH-11** · M0 · `kivo-platform` defines every trait in the §2 table (`AudioIo`, `EchoCancel`, `Hotkeys`, `Tray`, `Apps`, `Windows`, `UiAutomation`, `Input`, `Screen`, `Ocr`, `Secrets`, `SystemInfo`, `Notifications`); core crates depend only on the traits (§2) → done: `crates/kivo-platform` (AudioIo + FrameSink/FrameSource, EchoCancel, Hotkeys, Tray, Apps, Windows, UiAutomation, Input, Screen, Ocr, Secrets, SystemInfo, Notifications; object-safe; user-safe PlatformError) · verified: 7 unit tests, builds on Windows, Ubuntu and macOS in CI
+- [x] **ARCH-12** · M0 · A `Capabilities` struct is filled at startup (Windows build, OS AEC, Mica, NPU, …); Windows 10 differences are handled only inside `kivo-platform-windows` (§2) → done: `crates/kivo-platform-windows/src/capabilities.rs` (RtlGetVersion build, DisplayVersion, OS AEC from 22621, Mica from 22000, package identity, NPU via DXCore GENERIC_ML + NPU attribute GUIDs from the Windows SDK header) · verified: on this PC reports "Windows 11 25H2 (build 26200)", AEC and Mica true, not packaged; NPU=false here (a positive NPU result still needs a Copilot+ PC to confirm)
+- [~] **ARCH-13** · M0 · `kivo-testkit` provides fake platform, fake audio and fake brain implementations for tests (§7) → partial: `crates/kivo-testkit` fakes for hotkeys (conflicts), tray, notifications, apps, windows, secrets, system info and a scripted audio device (capture on a thread, deterministic playback), 9 tests, stable over 25 runs · missing: the fake brain (needs the BrainProvider trait, M3)
 
 **IPC (§3)**
 

@@ -8,6 +8,8 @@ license.workspace = true
 publish = false
 
 [dependencies]
+kivo-core.workspace = true
+kivo-platform.workspace = true
 
 [lints]
 workspace = true

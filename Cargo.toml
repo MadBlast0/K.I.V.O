@@ -20,6 +20,7 @@ tracing = "0.1.44"
 uuid = { version = "1.26.1", features = ["v7", "serde"] }
 zeroize = "1.9.0"
 kivo-core = { path = "crates/kivo-core" }
+kivo-platform = { path = "crates/kivo-platform" }
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
