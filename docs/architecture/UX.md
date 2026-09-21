@@ -19,13 +19,30 @@ It implements plan §74–90, §118 and §129–135, and records the decisions i
 
 ## 2. Voice overlay
 
+**Chosen concept: "Island"** (owner decision, 2026-09-21; the mockup is
+[kivo-wake-concepts.html](../design/mockups/kivo-wake-concepts.html), tab 03). Throughout the
+specs, "pill" means the Island capsule.
+
 **Surfaces:**
 
-- **Pill:** about 140×38 px at bottom center of the monitor with the foreground window, above the
-  taskbar. It can be dragged, and its position is remembered per monitor. It never takes focus,
-  and it draws nothing when hidden.
-- **Card:** grows up out of the pill, 420–560 px wide and up to 60% of the screen height. It
-  scrolls, and focus is enabled only while the user types.
+- **Island (pill):**
+  - **Placement:** a black capsule at the **top center** of the monitor with the foreground
+    window, about 8 px from the top edge. It never takes focus, and it draws nothing when hidden.
+  - **Morphing:** it springs between sizes by state (≈ 230×34 listening → wider with the live
+    transcript → a tall card for answers and confirmations → a compact **live activity**, such as
+    "Lo-fi Focus · Spotify" or a timer, then gone).
+  - **Moving it:** draggable, and position is remembered per monitor. A setting offers "Top
+    center (default) / Bottom center / Remember drag".
+  - **Title-bar overlap:** if the foreground window's title bar or tabs sit under the island, it
+    shifts down by the title-bar height while it's only listening. It expands over the content only
+    when it has text to show, and it collapses right after.
+  - **Contrast:** the capsule is always near-black (`#000`), in light and dark mode, for maximum
+    contrast and an identity of its own. The accent orb and waveform carry the state color.
+- **Card (expanded island):** up to 520 px wide and 50% of the screen height, with the same rounded
+  black material. It scrolls, and focus is enabled only while the user types.
+- **Live activities:** after a request, the island can stay collapsed with ongoing status (media,
+  timer, download, agent task progress) until it's dismissed or times out. Each source is
+  configurable, and they're off in fullscreen.
 - **Edge glow (optional, off by default):** a 2–4 px gradient on the active monitor for about
   400 ms on wake.
 

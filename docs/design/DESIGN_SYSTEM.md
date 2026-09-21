@@ -22,6 +22,16 @@ Windows 11 desktop: [mockups/kivo-wake-concepts.html](mockups/kivo-wake-concepts
 - **Process:** after the owner picks a concept (or a mix), the Control Center, onboarding and
   brand get designed in that language.
 
+**Chosen: 03 Island** (2026-09-21). The design language that follows from it:
+
+- **Material:** true black capsules and cards (`#000`) with 1 px inner highlights. Continuous
+  corner radii (capsule, then 26–28 px for cards).
+- **Motion:** springs (`cubic-bezier(.32,1.28,.54,1)`) that morph size and shape to express
+  state. Content cross-fades inside the morphing shape.
+- **Accent:** a small luminous orb (blue by default) plus a white or tinted waveform.
+- **Type:** system font; white text on black, with secondary text at 60% opacity.
+- **Next:** Control Center, onboarding and live-activity mockups in this language (D0).
+
 ## 1. Round 1 directions (rejected)
 
 | Direction | Feel | Palette (dark) | Type candidates | GPU cost | Risk |

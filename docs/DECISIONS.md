@@ -23,7 +23,9 @@ decision changes, update the entry and note the date. Do not silently rewrite it
 | **Design** | Three directions are mocked up ([mockups](design/mockups/kivo-mockups.html)). **Owner choice pending** |
 | **Name** | **Keep "KIVO"** (owner decision). The owner accepts the risk from existing "KIVO"/Kivo.ai/kivo.io uses ([research §8](research/features-and-extensions/REPORT.md)). A registry check (USPTO/EUIPO/WIPO/India) is recommended before the first public release |
 | **No user keys** | Users never paste API keys or register developer apps. Connectors work like Claude Desktop's "Connect" flow: remote MCP with DCR/CIMD, KIVO-owned OAuth apps, or local means ([INTEGRATIONS_AND_PLUGINS.md §0](architecture/INTEGRATIONS_AND_PLUGINS.md)). Brains prefer CLI-agent logins, OpenRouter OAuth and local models; direct API keys are optional (advanced) |
-| **Design round 1** | Rejected by the owner (too generic). Round 2 focuses on the **wake-up moment**, with four interaction concepts ([kivo-wake-concepts.html](design/mockups/kivo-wake-concepts.html)): Native, Line, Island, Halo. Choice pending |
+| **Design round 1** | Rejected by the owner (too generic). Round 2 focuses on the **wake-up moment**, with four interaction concepts ([kivo-wake-concepts.html](design/mockups/kivo-wake-concepts.html)): Native, Line, Island, Halo |
+| **Overlay concept** | **Island (03)**: a black capsule at the top center that morphs into a card, then a compact live activity. It supersedes the bottom-center pill placement; bottom center stays available as a setting. The Control Center, onboarding and brand are designed next in the same language ([UX.md §2](architecture/UX.md)) |
+| **GitHub repo** | Applied: private vulnerability reporting, Dependabot alerts + security updates, secret scanning + push protection, description/topics, wiki off, squash-only merges + delete branch on merge, Discussions on, a ruleset on `main` (no force-push, no deletion) |
 
 ## 2026-09-21 — Owner answers (pre-M0)
 
