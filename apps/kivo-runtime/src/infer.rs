@@ -523,6 +523,10 @@ fn forward(method_name: &str, params: Value, events: &mpsc::UnboundedSender<Infe
     }
 }
 
+fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -603,8 +607,4 @@ mod tests {
             "unknown messages are ignored, not delivered"
         );
     }
-}
-
-fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
-    m.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
