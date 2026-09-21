@@ -13,11 +13,16 @@ pub struct AppEntry {
     pub name: String,
     /// Other names the user might say ("VS Code" for "Visual Studio Code").
     pub aliases: Vec<String>,
+    /// The program file, when known (matches running windows to their app).
+    pub exe: Option<String>,
 }
 
 pub trait Apps: Send + Sync {
     fn installed(&self) -> PlatformResult<Vec<AppEntry>>;
     fn launch(&self, app: &AppEntry, args: &[String]) -> PlatformResult<()>;
+    /// Asks every window of `app` to close (the app may still ask to save). Returns how many
+    /// windows were asked; `NotFound` when the app isn't running.
+    fn close(&self, app: &AppEntry) -> PlatformResult<usize>;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

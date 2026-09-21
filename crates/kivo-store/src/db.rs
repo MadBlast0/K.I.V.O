@@ -36,6 +36,66 @@ const SCHEMA: &[&str] = &[
              result     TEXT NOT NULL CHECK (json_valid(result))
          ) STRICT;
      CREATE INDEX benchmarks_by_suite ON benchmarks (suite, started_at);",
+    // 3: turns and their timings, the Activity timeline, the hash-chained audit log and
+    // permission grants (ARCHITECTURE §4.1, §4.3; SECURITY §2, §7).
+    "CREATE TABLE turns (
+             id         TEXT PRIMARY KEY,
+             profile_id TEXT NOT NULL REFERENCES profiles(id),
+             started_at INTEGER NOT NULL,
+             ended_at   INTEGER,
+             source     TEXT NOT NULL,
+             transcript TEXT,
+             route      TEXT,
+             outcome    TEXT,
+             reply      TEXT
+         ) STRICT;
+     CREATE INDEX turns_by_time ON turns (started_at);
+     CREATE TABLE turn_metrics (
+             turn_id    TEXT PRIMARY KEY REFERENCES turns(id) ON DELETE CASCADE,
+             profile_id TEXT NOT NULL REFERENCES profiles(id),
+             spans      TEXT NOT NULL CHECK (json_valid(spans))
+         ) STRICT;
+     CREATE TABLE activity (
+             id         INTEGER PRIMARY KEY,
+             profile_id TEXT NOT NULL REFERENCES profiles(id),
+             ts         INTEGER NOT NULL,
+             turn_id    TEXT,
+             task_id    TEXT,
+             kind       TEXT NOT NULL,
+             title      TEXT NOT NULL,
+             detail     TEXT,
+             status     TEXT NOT NULL,
+             data       TEXT CHECK (data IS NULL OR json_valid(data))
+         ) STRICT;
+     CREATE INDEX activity_by_time ON activity (ts);
+     CREATE TABLE audit (
+             id           INTEGER PRIMARY KEY,
+             profile_id   TEXT NOT NULL REFERENCES profiles(id),
+             ts           INTEGER NOT NULL,
+             turn_id      TEXT,
+             task_id      TEXT,
+             tool         TEXT NOT NULL,
+             args_summary TEXT NOT NULL,
+             risk         TEXT NOT NULL,
+             decision     TEXT NOT NULL,
+             confirmed_by TEXT,
+             result       TEXT,
+             error        TEXT,
+             prev_hash    TEXT NOT NULL,
+             hash         TEXT NOT NULL UNIQUE
+         ) STRICT;
+     CREATE TRIGGER audit_is_append_only_update BEFORE UPDATE ON audit
+         BEGIN SELECT RAISE(ABORT, 'the audit log is append-only'); END;
+     CREATE TRIGGER audit_is_append_only_delete BEFORE DELETE ON audit
+         BEGIN SELECT RAISE(ABORT, 'the audit log is append-only'); END;
+     CREATE TABLE permissions_grants (
+             id         INTEGER PRIMARY KEY,
+             profile_id TEXT NOT NULL REFERENCES profiles(id),
+             tool       TEXT NOT NULL,
+             scope      TEXT,
+             created_at INTEGER NOT NULL,
+             expires_at INTEGER
+         ) STRICT;",
 ];
 
 static MIGRATIONS: LazyLock<Migrations<'static>> =
@@ -129,6 +189,10 @@ impl Database {
 
     pub fn connection(&self) -> &Connection {
         &self.conn
+    }
+
+    pub(crate) fn connection_mut(&mut self) -> &mut Connection {
+        &mut self.conn
     }
 }
 

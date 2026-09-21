@@ -2285,6 +2285,12 @@ dependencies = [
 [[package]]
 name = "kivo-intent"
 version = "0.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "toml 1.1.6+spec-1.1.0",
+]
 
 [[package]]
 name = "kivo-ipc"
@@ -2351,6 +2357,12 @@ dependencies = [
 [[package]]
 name = "kivo-security"
 version = "0.0.0"
+dependencies = [
+ "kivo-core",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+]
 
 [[package]]
 name = "kivo-store"
@@ -2385,6 +2397,19 @@ dependencies = [
 [[package]]
 name = "kivo-tools"
 version = "0.0.0"
+dependencies = [
+ "jiff",
+ "kivo-core",
+ "kivo-platform",
+ "kivo-security",
+ "kivo-testkit",
+ "png 0.18.1",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tokio-util",
+ "tracing",
+]
 
 [[package]]
 name = "kivo-voice"

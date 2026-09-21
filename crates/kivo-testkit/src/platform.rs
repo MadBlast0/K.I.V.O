@@ -3,9 +3,9 @@
 
 use kivo_core::Secret;
 use kivo_platform::{
-    AppEntry, Apps, Chord, HotkeyId, Hotkeys, Notification, Notifications, PlatformError,
-    PlatformResult, SecretHandle, Secrets, SystemInfo, SystemSnapshot, Tray, TrayIcon,
-    TrayMenuItem, WindowId, WindowInfo, Windows,
+    AppEntry, Apps, Chord, HotkeyId, Hotkeys, MediaAction, Notification, Notifications, NowPlaying,
+    PlatformError, PlatformResult, PowerAction, SecretHandle, Secrets, SystemControl, SystemInfo,
+    SystemSnapshot, Tray, TrayIcon, TrayMenuItem, VolumeState, WindowId, WindowInfo, Windows,
 };
 use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
@@ -75,11 +75,13 @@ impl Notifications for FakeNotifications {
     }
 }
 
-/// Apps: a fixed list; launches are recorded, unknown apps fail with `NotFound`.
+/// Apps: a fixed list; launches and closes are recorded, unknown apps fail with `NotFound`.
+/// An app counts as running once launched.
 #[derive(Default)]
 pub struct FakeApps {
     pub installed: Vec<AppEntry>,
     pub launched: Mutex<Vec<String>>,
+    pub closed: Mutex<Vec<String>>,
 }
 
 impl Apps for FakeApps {
@@ -91,6 +93,83 @@ impl Apps for FakeApps {
             return Err(PlatformError::NotFound(app.name.clone()));
         }
         lock(&self.launched).push(app.id.clone());
+        Ok(())
+    }
+    fn close(&self, app: &AppEntry) -> PlatformResult<usize> {
+        if !lock(&self.launched).contains(&app.id) {
+            return Err(PlatformError::NotFound(app.name.clone()));
+        }
+        lock(&self.launched).retain(|id| id != &app.id);
+        lock(&self.closed).push(app.id.clone());
+        Ok(1)
+    }
+}
+
+/// System controls: in-memory volume, microphone and media state; power actions are recorded,
+/// never performed.
+pub struct FakeSystemControl {
+    pub volume: Mutex<VolumeState>,
+    pub mic: Mutex<VolumeState>,
+    pub media: Mutex<Vec<MediaAction>>,
+    pub playing: Mutex<Option<NowPlaying>>,
+    pub power: Mutex<Vec<PowerAction>>,
+    pub opened: Mutex<Vec<String>>,
+}
+
+impl Default for FakeSystemControl {
+    fn default() -> Self {
+        let level = |level| {
+            Mutex::new(VolumeState {
+                level,
+                muted: false,
+            })
+        };
+        Self {
+            volume: level(0.5),
+            mic: level(1.0),
+            media: Mutex::default(),
+            playing: Mutex::default(),
+            power: Mutex::default(),
+            opened: Mutex::default(),
+        }
+    }
+}
+
+impl SystemControl for FakeSystemControl {
+    fn volume(&self) -> PlatformResult<VolumeState> {
+        Ok(*lock(&self.volume))
+    }
+    fn set_volume(&self, level: f32) -> PlatformResult<()> {
+        lock(&self.volume).level = level.clamp(0.0, 1.0);
+        Ok(())
+    }
+    fn set_muted(&self, muted: bool) -> PlatformResult<()> {
+        lock(&self.volume).muted = muted;
+        Ok(())
+    }
+    fn microphone(&self) -> PlatformResult<VolumeState> {
+        Ok(*lock(&self.mic))
+    }
+    fn set_mic_muted(&self, muted: bool) -> PlatformResult<()> {
+        lock(&self.mic).muted = muted;
+        Ok(())
+    }
+    fn media(&self, action: MediaAction) -> PlatformResult<()> {
+        if lock(&self.playing).is_none() {
+            return Err(PlatformError::NotFound("anything playing".into()));
+        }
+        lock(&self.media).push(action);
+        Ok(())
+    }
+    fn now_playing(&self) -> PlatformResult<Option<NowPlaying>> {
+        Ok(lock(&self.playing).clone())
+    }
+    fn power(&self, action: PowerAction) -> PlatformResult<()> {
+        lock(&self.power).push(action);
+        Ok(())
+    }
+    fn open_url(&self, url: &str) -> PlatformResult<()> {
+        lock(&self.opened).push(url.to_owned());
         Ok(())
     }
 }
@@ -274,6 +353,7 @@ mod tests {
             id: "chrome".into(),
             name: "Google Chrome".into(),
             aliases: vec!["Chrome".into()],
+            exe: None,
         };
         let apps = FakeApps {
             installed: vec![chrome.clone()],
@@ -284,6 +364,7 @@ mod tests {
             id: "x".into(),
             name: "Nope".into(),
             aliases: vec![],
+            exe: None,
         };
         assert!(apps.launch(&missing, &[]).is_err());
         assert_eq!(*lock(&apps.launched), vec!["chrome".to_owned()]);

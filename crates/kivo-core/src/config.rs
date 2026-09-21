@@ -15,6 +15,8 @@ pub struct KivoConfig {
     pub overlay: Overlay,
     pub sounds: Sounds,
     pub permissions: Permissions,
+    /// Capability toggles changed from their defaults (CAPABILITIES §1).
+    pub capabilities: crate::capability::CapabilitySettings,
     pub privacy: Privacy,
     pub memory: Memory,
     pub companion: Companion,
@@ -38,6 +40,7 @@ impl Default for KivoConfig {
             overlay: Overlay::default(),
             sounds: Sounds::default(),
             permissions: Permissions::default(),
+            capabilities: crate::capability::CapabilitySettings::default(),
             privacy: Privacy::default(),
             memory: Memory::default(),
             companion: Companion::default(),
@@ -93,6 +96,13 @@ pub struct Voice {
     pub speaker_mode: SpeakerMode,
     /// Seconds to listen for a follow-up without the wake word; 0 turns it off (UX §8.1).
     pub follow_up_seconds: u8,
+    /// Speech-to-text engine id; empty picks the best installed one for the language (VOICE-36).
+    pub stt_engine: String,
+    /// Text-to-speech engine and voice ids; an empty voice uses the engine's default.
+    pub tts_engine: String,
+    pub tts_voice: String,
+    /// Speak answers to typed requests too (UX §8: off, text in, text out).
+    pub speak_typed_replies: bool,
 }
 
 impl Default for Voice {
@@ -106,6 +116,10 @@ impl Default for Voice {
             output_device: None,
             speaker_mode: SpeakerMode::Off,
             follow_up_seconds: 8,
+            stt_engine: String::new(),
+            tts_engine: "system".into(),
+            tts_voice: String::new(),
+            speak_typed_replies: false,
         }
     }
 }

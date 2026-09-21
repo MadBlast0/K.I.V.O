@@ -34,5 +34,8 @@ pub use shell::{
     TrayIcon, TrayMenuItem,
 };
 pub use speech::{SpeechSynth, SynthAudio, SystemVoice};
-pub use system::{GpuInfo, SystemInfo, SystemSnapshot};
+pub use system::{
+    GpuInfo, MediaAction, NowPlaying, PowerAction, SystemControl, SystemInfo, SystemSnapshot,
+    VolumeState,
+};
 pub use types::{DeviceId, Point, Rect, WindowId};

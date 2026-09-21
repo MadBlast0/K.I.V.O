@@ -1,0 +1,118 @@
+# KIVO fast-path commands, English (BRAINS §2, VOICE §9). Each command names the tool it runs and
+# the phrasings that mean it. `{slot}` captures words; `{slot?}` may be left out. Slot kinds:
+#   app     an installed app, fuzzy-matched against the live app index
+#   window  an open window, matched by title or app
+#   number  0–100 as digits or words ("fifty", "25%")
+#   url     a web address ("youtube.com", "youtube dot com")
+#   text    free text (a search query)
+# Phrasings are matched after normalization: lower case, no punctuation, and polite fillers
+# ("please", "can you", "hey kivo") removed. Earlier commands win ties.
+
+[fillers]
+leading = ["hey kivo", "okay kivo", "ok kivo", "kivo", "please", "can you", "could you", "would you", "will you", "i want to", "i'd like to", "go ahead and", "just"]
+trailing = ["please", "for me", "now", "right now", "thanks", "thank you", "kivo"]
+
+[[command]]
+tool = "browser.open_url"
+patterns = ["open {url}", "go to {url}", "visit {url}", "open the website {url}", "take me to {url}"]
+
+[[command]]
+tool = "browser.search"
+patterns = [
+  "search for {text}", "search the web for {text}", "search {text}", "google {text}",
+  "look up {text}", "search online for {text}", "find {text} on the web",
+]
+
+[[command]]
+tool = "apps.launch"
+patterns = ["open {app}", "launch {app}", "start {app}", "run {app}", "open up {app}", "fire up {app}", "bring up {app}"]
+
+[[command]]
+tool = "apps.close"
+patterns = ["close {app}", "quit {app}", "exit {app}", "kill {app}", "shut {app}"]
+
+[[command]]
+tool = "windows.focus"
+patterns = ["switch to {window}", "go to {window}", "show {window}", "focus {window}", "bring {window} to the front"]
+
+[[command]]
+tool = "windows.minimize"
+patterns = ["minimize {window?}", "minimise {window?}", "minimize this window", "minimize the window", "hide this window"]
+
+[[command]]
+tool = "windows.maximize"
+patterns = ["maximize {window?}", "maximise {window?}", "maximize this window", "make this window full screen", "make it bigger"]
+
+[[command]]
+tool = "windows.close"
+patterns = ["close this window", "close the window", "close this", "close it", "close window"]
+
+[[command]]
+tool = "audio.mute"
+patterns = ["mute", "mute the sound", "mute the volume", "mute audio", "mute the audio", "mute sound", "silence", "sound off", "turn the sound off"]
+
+[[command]]
+tool = "audio.unmute"
+patterns = ["unmute", "unmute the sound", "unmute audio", "sound on", "turn the sound on", "turn the sound back on"]
+
+[[command]]
+tool = "audio.volume_set"
+patterns = [
+  "set the volume to {number}", "set volume to {number}", "volume to {number}", "volume {number}",
+  "set the volume at {number}", "change the volume to {number}", "turn the volume to {number}",
+]
+
+[[command]]
+tool = "audio.volume_up"
+patterns = ["volume up", "turn it up", "turn the volume up", "turn up the volume", "louder", "increase the volume", "raise the volume"]
+
+[[command]]
+tool = "audio.volume_down"
+patterns = ["volume down", "turn it down", "turn the volume down", "turn down the volume", "quieter", "lower the volume", "decrease the volume"]
+
+[[command]]
+tool = "audio.mic_mute"
+patterns = ["mute the microphone", "mute my microphone", "mute the mic", "mute my mic", "turn off the microphone", "turn off my mic"]
+
+[[command]]
+tool = "audio.mic_unmute"
+patterns = ["unmute the microphone", "unmute my microphone", "unmute the mic", "unmute my mic", "turn on the microphone", "turn on my mic"]
+
+[[command]]
+tool = "media.play_pause"
+patterns = ["pause", "play", "resume", "pause the music", "play the music", "resume the music", "pause music", "play music", "pause the video", "play the video", "stop the music"]
+
+[[command]]
+tool = "media.next"
+patterns = ["next", "next song", "next track", "skip", "skip this song", "skip the song", "skip track", "play the next song"]
+
+[[command]]
+tool = "media.previous"
+patterns = ["previous", "previous song", "previous track", "go back a song", "last song", "play the previous song"]
+
+[[command]]
+tool = "media.now_playing"
+patterns = ["what's playing", "what is playing", "what song is this", "what's this song", "what is this song", "which song is this"]
+
+[[command]]
+tool = "screen.screenshot"
+patterns = [
+  "take a screenshot", "screenshot", "take screenshot", "capture the screen", "grab the screen",
+  "take a screen shot", "screen shot", "capture my screen", "take a picture of the screen",
+]
+
+[[command]]
+tool = "system.lock"
+patterns = ["lock", "lock the computer", "lock my computer", "lock the pc", "lock my pc", "lock the screen", "lock windows"]
+
+[[command]]
+tool = "system.sleep"
+patterns = ["go to sleep", "sleep", "put the computer to sleep", "put my pc to sleep", "sleep the computer"]
+
+[[command]]
+tool = "system.restart"
+patterns = ["restart", "restart the computer", "restart my computer", "restart the pc", "restart my pc", "reboot", "reboot the computer"]
+
+[[command]]
+tool = "system.shutdown"
+patterns = ["shut down", "shutdown", "shut down the computer", "shut down my computer", "turn off the computer", "turn off my pc", "power off", "shut down the pc"]
