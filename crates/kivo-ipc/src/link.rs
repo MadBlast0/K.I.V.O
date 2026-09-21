@@ -18,7 +18,7 @@ pub enum LinkStatus {
 }
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Link {
     pub status: LinkStatus,

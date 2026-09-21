@@ -166,6 +166,7 @@ fn utterance(
         vocabulary: start.vocabulary.clone(),
     };
     let mut stream = engine.start(&options, cancel.clone());
+    let mut heard = 0usize;
     // Wake regularly so a cancel ends the utterance even when no more audio comes.
     while !cancel.is_cancelled() {
         let command = match rx.recv_timeout(std::time::Duration::from_millis(50)) {
@@ -175,6 +176,7 @@ fn utterance(
         };
         match command {
             Command::Audio { id: utterance, pcm } if utterance == start.id => {
+                heard += pcm.len();
                 match stream.accept(&pcm) {
                     Ok(events) => {
                         for event in events {
@@ -205,6 +207,15 @@ fn utterance(
                 let result = stream
                     .finish()
                     .map_err(|e| user_error(&e))
+                    .inspect(|text| {
+                        // Lengths only: transcripts never reach the log (ARCH-32).
+                        tracing::info!(
+                            samples = heard,
+                            chars = text.len(),
+                            ms = started.elapsed().as_millis(),
+                            "utterance transcribed"
+                        );
+                    })
                     .map(|text| SttFinal {
                         text,
                         millis: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),

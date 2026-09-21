@@ -1,8 +1,11 @@
 //! Global hotkeys, in the runtime so they work whether or not the app is running: push-to-talk
-//! (VOICE-41: hold the configured keys, Ctrl+Space by default, to talk) and Ctrl+Shift+M to switch
-//! the permission mode (SECURITY §1.1).
+//! (VOICE-41: hold the configured keys, Ctrl+Space by default, to talk), Ctrl+Shift+Space to type
+//! to KIVO (UX §8), Ctrl+Shift+M to switch the permission mode (SECURITY §1.1) and the emergency
+//! stop (SECURITY §8).
 
 use crate::core::Core;
+use crate::engine::Engine;
+use kivo_core::event::{CancelReason, TurnSource};
 use kivo_platform::{Chord, HotkeyEvent, HotkeyId, Hotkeys, PlatformError};
 use kivo_platform_windows::WindowsHotkeys;
 use std::sync::Arc;
@@ -11,25 +14,65 @@ use tokio::sync::mpsc;
 const PUSH_TO_TALK: HotkeyId = HotkeyId(1);
 const SWITCH_MODE: HotkeyId = HotkeyId(2);
 const EMERGENCY_STOP: HotkeyId = HotkeyId(3);
+const TYPE_TO_KIVO: HotkeyId = HotkeyId(4);
 
-fn handle(core: &Core, event: HotkeyEvent) {
-    let result = match event {
-        HotkeyEvent::Pressed(PUSH_TO_TALK) => core.start_listening().map(drop),
-        HotkeyEvent::Released(PUSH_TO_TALK) => core.stop_listening().map(drop),
-        HotkeyEvent::Pressed(SWITCH_MODE) => core.cycle_mode().map(drop),
-        HotkeyEvent::Pressed(EMERGENCY_STOP) => {
-            core.stop_everything();
-            Ok(())
-        }
-        HotkeyEvent::Pressed(_) | HotkeyEvent::Released(_) => return,
-    };
-    if let Err(refused) = result {
-        tracing::debug!(reason = refused.0, ?event, "push-to-talk ignored");
+/// What a hotkey means. Kept separate from the async work so it can be tested without a desktop.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Action {
+    StartListening,
+    StopListening,
+    CycleMode,
+    StopEverything,
+    OpenTextBox,
+    Ignore,
+}
+
+pub fn action(event: HotkeyEvent, toggle_mode: bool, listening: bool) -> Action {
+    match event {
+        // In toggle mode a press starts listening and the next press ends it (VOICE-41).
+        HotkeyEvent::Pressed(PUSH_TO_TALK) if toggle_mode && listening => Action::StopListening,
+        HotkeyEvent::Pressed(PUSH_TO_TALK) => Action::StartListening,
+        HotkeyEvent::Released(PUSH_TO_TALK) if toggle_mode => Action::Ignore,
+        HotkeyEvent::Released(PUSH_TO_TALK) => Action::StopListening,
+        HotkeyEvent::Pressed(SWITCH_MODE) => Action::CycleMode,
+        HotkeyEvent::Pressed(EMERGENCY_STOP) => Action::StopEverything,
+        HotkeyEvent::Pressed(TYPE_TO_KIVO) => Action::OpenTextBox,
+        HotkeyEvent::Pressed(_) | HotkeyEvent::Released(_) => Action::Ignore,
     }
 }
 
-/// Registers push-to-talk and handles it until KIVO quits.
-pub async fn run(core: Arc<Core>, keys: Vec<String>, emergency_stop: Vec<String>) {
+async fn handle(core: &Core, engine: &Arc<Engine>, event: HotkeyEvent) {
+    let config = core.config();
+    let listening = engine.is_listening();
+    match action(event, config.voice.toggle_mode, listening) {
+        Action::StartListening => {
+            if let Err(reason) = engine.talk(TurnSource::PushToTalk).await {
+                tracing::debug!(reason, "push-to-talk ignored");
+            }
+        }
+        Action::StopListening => engine.release(),
+        Action::CycleMode => {
+            if let Err(refused) = core.cycle_mode() {
+                tracing::debug!(reason = refused.0, "mode switch ignored");
+            }
+        }
+        Action::StopEverything => {
+            engine.stop_everything();
+            engine.cancel(CancelReason::EmergencyStop);
+        }
+        // Type to KIVO opens the Island's text box in the app (UX-41).
+        Action::OpenTextBox => core.open_control_center(Some("type")),
+        Action::Ignore => {}
+    }
+}
+
+/// Registers the hotkeys and handles them until KIVO quits.
+pub async fn run(
+    core: Arc<Core>,
+    engine: Arc<Engine>,
+    keys: Vec<String>,
+    emergency_stop: Vec<String>,
+) {
     let (tx, mut events) = mpsc::unbounded_channel();
     let hotkeys = match WindowsHotkeys::start(move |e| {
         let _ = tx.send(e);
@@ -43,15 +86,20 @@ pub async fn run(core: Arc<Core>, keys: Vec<String>, emergency_stop: Vec<String>
     let chord = Chord(keys);
     match hotkeys.register(PUSH_TO_TALK, &chord) {
         Ok(()) => tracing::info!(%chord, "push-to-talk ready"),
-        // Another app owns the keys; the rebind prompt joins with Settings → Shortcuts (M1).
+        // Another app owns the keys: KIVO says so and the user can rebind in Settings → Shortcuts.
         Err(PlatformError::Conflict(_)) => {
             tracing::warn!(%chord, "another app already uses the push-to-talk keys");
+            core.set_hotkey_conflict(Some(chord.to_string()));
         }
         Err(e) => tracing::error!(%e, %chord, "couldn't register push-to-talk"),
     }
     let mode_keys = Chord(vec!["Ctrl".into(), "Shift".into(), "M".into()]);
     if let Err(e) = hotkeys.register(SWITCH_MODE, &mode_keys) {
         tracing::warn!(%e, chord = %mode_keys, "couldn't register the mode hotkey");
+    }
+    let type_keys = Chord(core.config().voice.type_to_kivo.clone());
+    if let Err(e) = hotkeys.register(TYPE_TO_KIVO, &type_keys) {
+        tracing::warn!(%e, chord = %type_keys, "couldn't register the type-to-KIVO keys");
     }
     let stop_keys = Chord(emergency_stop);
     if let Err(e) = hotkeys.register(EMERGENCY_STOP, &stop_keys) {
@@ -60,7 +108,7 @@ pub async fn run(core: Arc<Core>, keys: Vec<String>, emergency_stop: Vec<String>
     let shutdown = core.shutdown();
     loop {
         tokio::select! {
-            Some(event) = events.recv() => handle(&core, event),
+            Some(event) = events.recv() => handle(&core, &engine, event).await,
             () = shutdown.cancelled() => break,
         }
     }
@@ -69,33 +117,52 @@ pub async fn run(core: Arc<Core>, keys: Vec<String>, emergency_stop: Vec<String>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kivo_core::SessionState;
 
     #[test]
-    fn holding_the_keys_listens_and_releasing_ends_the_turn() {
-        let core = Core::new();
-        handle(&core, HotkeyEvent::Pressed(PUSH_TO_TALK));
-        assert_eq!(core.session(), SessionState::Listening);
-        handle(&core, HotkeyEvent::Released(PUSH_TO_TALK));
-        assert_eq!(core.session(), SessionState::Idle);
-        handle(&core, HotkeyEvent::Pressed(SWITCH_MODE));
+    fn holding_talks_and_releasing_ends_the_utterance() {
         assert_eq!(
-            core.state().borrow().mode,
-            kivo_core::config::PermissionMode::Ask,
-            "Ctrl+Shift+M moves Auto on to Ask"
+            action(HotkeyEvent::Pressed(PUSH_TO_TALK), false, false),
+            Action::StartListening
         );
-        core.start_listening().unwrap();
-        handle(&core, HotkeyEvent::Pressed(EMERGENCY_STOP));
         assert_eq!(
-            core.session(),
-            SessionState::Idle,
-            "the emergency stop ends the turn"
+            action(HotkeyEvent::Released(PUSH_TO_TALK), false, true),
+            Action::StopListening
         );
-        handle(&core, HotkeyEvent::Pressed(HotkeyId(99)));
+    }
+
+    #[test]
+    fn toggle_mode_starts_on_one_press_and_ends_on_the_next() {
         assert_eq!(
-            core.session(),
-            SessionState::Idle,
-            "other hotkeys are not push-to-talk"
+            action(HotkeyEvent::Pressed(PUSH_TO_TALK), true, false),
+            Action::StartListening
+        );
+        assert_eq!(
+            action(HotkeyEvent::Released(PUSH_TO_TALK), true, true),
+            Action::Ignore
+        );
+        assert_eq!(
+            action(HotkeyEvent::Pressed(PUSH_TO_TALK), true, true),
+            Action::StopListening
+        );
+    }
+
+    #[test]
+    fn the_other_hotkeys_map_to_their_actions() {
+        assert_eq!(
+            action(HotkeyEvent::Pressed(SWITCH_MODE), false, false),
+            Action::CycleMode
+        );
+        assert_eq!(
+            action(HotkeyEvent::Pressed(EMERGENCY_STOP), false, true),
+            Action::StopEverything
+        );
+        assert_eq!(
+            action(HotkeyEvent::Pressed(TYPE_TO_KIVO), false, false),
+            Action::OpenTextBox
+        );
+        assert_eq!(
+            action(HotkeyEvent::Pressed(HotkeyId(99)), false, false),
+            Action::Ignore
         );
     }
 }

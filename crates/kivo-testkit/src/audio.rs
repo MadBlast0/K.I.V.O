@@ -24,6 +24,9 @@ pub struct FakeAudio {
     pub playback_chunks: usize,
     /// Everything playback streams produced.
     pub played: Arc<Mutex<Vec<f32>>>,
+    /// Deliver the clip in real time, one 10 ms chunk every 10 ms, like a microphone (a virtual
+    /// mic for end-to-end tests, BENCH-08). Otherwise it is delivered as fast as possible.
+    pub realtime: bool,
 }
 
 impl FakeAudio {
@@ -32,6 +35,15 @@ impl FakeAudio {
             clip,
             playback_chunks: 1,
             played: Arc::default(),
+            realtime: false,
+        }
+    }
+
+    /// A virtual microphone: the clip arrives at the pace speech does.
+    pub fn microphone(clip: Vec<f32>) -> Self {
+        Self {
+            realtime: true,
+            ..Self::with_clip(clip)
         }
     }
 
@@ -91,10 +103,19 @@ impl AudioIo for FakeAudio {
         mut sink: FrameSink,
     ) -> PlatformResult<Box<dyn AudioStream>> {
         let clip = self.clip.clone();
+        let realtime = self.realtime;
         Ok(Box::new(FakeStream::spawn(move |stop| {
-            for chunk in clip.chunks(CHUNK) {
+            let started = std::time::Instant::now();
+            for (i, chunk) in clip.chunks(CHUNK).enumerate() {
                 if stop.load(Ordering::SeqCst) {
                     break;
+                }
+                if realtime {
+                    // Chunk i is due 10 ms × i after the stream starts.
+                    let due = std::time::Duration::from_millis(10 * u64::try_from(i).unwrap_or(0));
+                    if let Some(wait) = due.checked_sub(started.elapsed()) {
+                        std::thread::sleep(wait);
+                    }
                 }
                 sink(chunk, FAKE_FORMAT);
             }
@@ -122,6 +143,27 @@ impl AudioIo for FakeAudio {
 mod tests {
     use super::*;
     use std::sync::mpsc;
+
+    #[test]
+    fn a_virtual_microphone_delivers_at_the_pace_of_speech() {
+        let audio = FakeAudio::microphone(vec![0.0; 16_000 / 5]);
+        let (tx, rx) = mpsc::channel();
+        let started = std::time::Instant::now();
+        let stream = audio
+            .open_capture(
+                None,
+                Box::new(move |frames, _| tx.send(frames.len()).unwrap()),
+            )
+            .unwrap();
+        let samples: usize = rx.iter().sum();
+        drop(stream);
+        assert_eq!(samples, 3200);
+        assert!(
+            started.elapsed() >= std::time::Duration::from_millis(180),
+            "200 ms of audio took {:?}",
+            started.elapsed()
+        );
+    }
 
     #[test]
     fn capture_delivers_the_whole_clip_in_10ms_chunks() {

@@ -3,6 +3,7 @@
 //! running. The menu, icon and tooltip are derived from the session state.
 
 use crate::core::{Core, describe};
+use crate::engine::Engine;
 use kivo_core::SessionState;
 use kivo_core::config::PermissionMode;
 use kivo_ipc::StateSnapshot;
@@ -136,7 +137,7 @@ fn tooltip(state: SessionState, mode: PermissionMode) -> String {
 }
 
 /// What a tray choice does.
-fn handle(core: &Arc<Core>, event: &TrayEvent) {
+fn handle(core: &Arc<Core>, engine: Option<&Arc<Engine>>, event: &TrayEvent) {
     let result = match event {
         TrayEvent::Click => {
             core.open_control_center(None);
@@ -166,7 +167,11 @@ fn handle(core: &Arc<Core>, event: &TrayEvent) {
                 Ok(())
             }
             STOP => {
-                core.stop_everything();
+                // Stop everything: the turn, the voice and (from M5) tasks (SEC-25).
+                match engine {
+                    Some(engine) => engine.stop_everything(),
+                    None => core.stop_everything(),
+                }
                 Ok(())
             }
             // Bypass is confirmed in the Control Center, not from a menu click (SEC-03).
@@ -193,7 +198,7 @@ fn handle(core: &Arc<Core>, event: &TrayEvent) {
 
 /// Shows the tray icon and keeps it in step with the session until KIVO quits. The icon is
 /// removed when this returns.
-pub async fn run(core: Arc<Core>) {
+pub async fn run(core: Arc<Core>, engine: Arc<Engine>) {
     let mut state = core.state();
     let mut shown = Shown::from(&*state.borrow_and_update());
     let (tx, mut events) = mpsc::unbounded_channel();
@@ -217,7 +222,7 @@ pub async fn run(core: Arc<Core>) {
     let shutdown = core.shutdown();
     loop {
         tokio::select! {
-            Some(event) = events.recv() => handle(&core, &event),
+            Some(event) = events.recv() => handle(&core, Some(&engine), &event),
             changed = state.changed() => {
                 if changed.is_err() { break }
                 let now = Shown::from(&*state.borrow_and_update());
@@ -314,27 +319,28 @@ mod tests {
 
     #[tokio::test]
     async fn tray_choices_reach_the_core() {
-        let core = Arc::new(Core::new());
-        handle(&core, &TrayEvent::Menu(PAUSE.into()));
+        let core = Arc::new(Core::default());
+        handle(&core, None, &TrayEvent::Menu(PAUSE.into()));
         assert_eq!(core.session(), SessionState::Paused);
-        handle(&core, &TrayEvent::Menu(RESUME.into()));
+        handle(&core, None, &TrayEvent::Menu(RESUME.into()));
         assert_eq!(core.session(), SessionState::Idle);
-        handle(&core, &TrayEvent::Menu("mode:ask".into()));
+        handle(&core, None, &TrayEvent::Menu("mode:ask".into()));
         assert_eq!(core.state().borrow().mode, PermissionMode::Ask);
-        handle(&core, &TrayEvent::Menu(BYPASS.into()));
+        handle(&core, None, &TrayEvent::Menu(BYPASS.into()));
         assert_eq!(
             core.state().borrow().mode,
             PermissionMode::Ask,
             "Bypass isn't switched on from the tray"
         );
-        handle(&core, &TrayEvent::Menu(HIDE_ISLAND.into()));
+        handle(&core, None, &TrayEvent::Menu(HIDE_ISLAND.into()));
         assert!(core.state().borrow().island_hidden);
-        handle(&core, &TrayEvent::Menu(SHOW_ISLAND.into()));
+        handle(&core, None, &TrayEvent::Menu(SHOW_ISLAND.into()));
         assert!(!core.state().borrow().island_hidden);
-        core.start_listening().unwrap();
-        handle(&core, &TrayEvent::Menu(STOP.into()));
+        core.begin_turn("t1", kivo_core::event::TurnSource::PushToTalk, "")
+            .unwrap();
+        handle(&core, None, &TrayEvent::Menu(STOP.into()));
         assert_eq!(core.session(), SessionState::Idle);
-        handle(&core, &TrayEvent::Menu(QUIT.into()));
+        handle(&core, None, &TrayEvent::Menu(QUIT.into()));
         assert!(core.shutdown().is_cancelled());
     }
 }

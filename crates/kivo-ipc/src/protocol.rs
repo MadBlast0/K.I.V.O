@@ -5,6 +5,8 @@
 //! fresh `snapshot` notification whenever the client may have missed events.
 
 use kivo_core::config::PermissionMode;
+use kivo_core::event::{StepStatus, TurnSource};
+use kivo_core::tool::ConfirmSpec;
 use kivo_core::{Event, SessionState};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -12,7 +14,9 @@ use serde_json::Value;
 /// Bumped on breaking changes (major) and additions (minor). Clients with another major
 /// version are refused with a clear error (for example after a partial update).
 /// 1.1 added the permission mode and "Island hidden" to the snapshot, and `permissions.setMode`.
-pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 1 };
+/// 1.2 added the live turn (transcript, steps, answer, confirmation), capabilities, Activity,
+/// speech models and the requests the Island and the Control Center make.
+pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 2 };
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -45,6 +49,41 @@ pub mod method {
     /// Client → runtime: switch the permission mode (`{ "mode": "plan" }`). Only the user does
     /// this, from the UI or the hotkey, never a tool or voice alone (SECURITY §1.1).
     pub const PERMISSIONS_SET_MODE: &str = "permissions.setMode";
+    /// Client → runtime: start listening, as the Talk button does (`{}`).
+    pub const SESSION_TALK: &str = "session.talk";
+    /// Client → runtime: a typed request (`{ "text": "open chrome" }`, UX §8).
+    pub const SESSION_SAY: &str = "session.say";
+    /// Client → runtime: stop the current turn (Esc, the Island's Stop button).
+    pub const SESSION_CANCEL: &str = "session.cancel";
+    /// Client → runtime: stop everything (SEC-25).
+    pub const SESSION_STOP_ALL: &str = "session.stopEverything";
+    /// Client → runtime: answer a confirmation
+    /// (`{ "callId": …, "answer": "allow" | "deny", "always": bool }`, SEC-10).
+    pub const PERMISSIONS_ANSWER: &str = "permissions.answer";
+    /// Client → runtime: the capability toggles (CAPABILITIES §1).
+    pub const CAPABILITIES_GET: &str = "capabilities.get";
+    /// Client → runtime: turn a capability on or off (`{ "capability": …, "on": bool }`).
+    pub const CAPABILITIES_SET: &str = "capabilities.set";
+    /// Client → runtime: a page of the Activity timeline (`{ "before": id?, "limit": n }`).
+    pub const ACTIVITY_LIST: &str = "activity.list";
+    /// Client → runtime: the speech models on this PC and what can be downloaded (DIST-12).
+    pub const MODELS_LIST: &str = "models.list";
+    /// Client → runtime: download a model (`{ "id": "moonshine-base-en" }`).
+    pub const MODELS_INSTALL: &str = "models.install";
+    /// Client → runtime: delete a downloaded model (`{ "id": … }`).
+    pub const MODELS_REMOVE: &str = "models.remove";
+    /// Client → runtime: the settings the Control Center edits.
+    pub const SETTINGS_GET: &str = "settings.get";
+    /// Client → runtime: change settings (merged into the current values).
+    pub const SETTINGS_SET: &str = "settings.set";
+    /// Client → runtime: the "always allow" grants in force (SEC-08).
+    pub const PERMISSIONS_GRANTS: &str = "permissions.grants";
+    /// Client → runtime: revoke one grant (`{ "id": 3 }`).
+    pub const PERMISSIONS_REVOKE: &str = "permissions.revoke";
+    /// Client → runtime: the audit log, newest first (`{ "limit": n }`, SECURITY §7).
+    pub const AUDIT_LIST: &str = "audit.list";
+    /// Runtime → client notification: a model download's progress.
+    pub const MODEL_PROGRESS: &str = "models.progress";
 }
 
 /// The name the desktop app gives in `hello`; the runtime supervises the client with this name.
@@ -74,7 +113,7 @@ pub struct Welcome {
 
 /// Everything a UI needs to render from scratch (ARCHITECTURE §3: full snapshot, then deltas).
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StateSnapshot {
     pub session: SessionState,
@@ -82,8 +121,72 @@ pub struct StateSnapshot {
     pub mode: PermissionMode,
     /// "Hide Island for 1 hour" (UX §1): the Island shows nothing until this is cleared.
     pub island_hidden: bool,
+    /// What KIVO is working on now: what it heard, what it is doing and what it will say
+    /// (UX §2). `None` between turns.
+    pub turn: Option<TurnView>,
+    /// Whether speech recognition is ready, downloading or missing.
+    pub speech: SpeechStatus,
+    /// Another app owns the push-to-talk keys, so KIVO can't use them (VOICE-41). The Control
+    /// Center offers a rebind.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hotkey_conflict: Option<String>,
     /// Increases with every state change, so a client can tell whether its view is current.
     pub revision: u64,
+}
+
+/// The turn the Island is showing (UX §2 card contents).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnView {
+    pub id: String,
+    pub source: TurnSource,
+    /// What KIVO has heard so far, or the typed request.
+    pub transcript: String,
+    /// The transcript won't change any more.
+    pub transcript_final: bool,
+    /// What KIVO is doing, in order.
+    pub steps: Vec<StepView>,
+    /// What KIVO says back.
+    pub answer: Option<String>,
+    /// Why it couldn't be done, in plain words.
+    pub error: Option<String>,
+    /// A decision waiting for the user (SEC-10).
+    pub confirm: Option<ConfirmSpec>,
+    /// The app the action is aimed at, for the Island's leading icon (UX §8.1).
+    pub target_app: Option<String>,
+}
+
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StepView {
+    /// The tool call's id.
+    pub id: String,
+    /// What it does, in the user's words ("Open Google Chrome").
+    pub title: String,
+    pub status: StepStatus,
+    /// A short result or reason ("Volume 30%", "Chrome isn't installed").
+    pub detail: Option<String>,
+}
+
+/// Whether KIVO can hear: the speech model is a download (DIST-12).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "state")]
+pub enum SpeechStatus {
+    Ready,
+    /// The speech model is downloading.
+    Downloading {
+        percent: u8,
+    },
+    /// It isn't downloaded yet.
+    #[default]
+    Missing,
+    /// The engine failed; the message is safe to show.
+    Failed {
+        message: String,
+    },
 }
 
 /// A JSON-RPC 2.0 request id (numbers only; KIVO's clients never send strings).

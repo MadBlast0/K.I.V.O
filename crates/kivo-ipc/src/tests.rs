@@ -1,7 +1,7 @@
 //! End-to-end tests over the real transport (named pipes on Windows, sockets elsewhere).
 
 use crate::frame::{codec, frames};
-use crate::protocol::{Message, Outcome, Request, method};
+use crate::protocol::{Message, Outcome, Request, SpeechStatus, method};
 use crate::transport::{self, unique_endpoint};
 use crate::*;
 use bytes::Bytes;
@@ -57,6 +57,9 @@ fn start_on(endpoint: String, hello_timeout: Duration) -> Running {
         session: SessionState::Idle,
         mode: PermissionMode::Auto,
         island_hidden: false,
+        turn: None,
+        speech: SpeechStatus::Missing,
+        hotkey_conflict: None,
         revision: 1,
     });
     let task = tokio::spawn(server.run(
@@ -110,7 +113,7 @@ async fn a_client_gets_the_snapshot_answers_and_events() {
     );
     assert_eq!(
         c.request(method::STATE, Value::Null).await.unwrap(),
-        json!({"session":"idle","mode":"auto","islandHidden":false,"revision":1})
+        json!({"session":"idle","mode":"auto","islandHidden":false,"turn":null,"speech":{"state":"missing"},"revision":1})
     );
     assert_eq!(
         c.request("echo", json!({"a": [1, 2]})).await.unwrap(),
@@ -266,6 +269,9 @@ async fn a_client_that_falls_behind_gets_a_snapshot() {
             session: SessionState::Listening,
             mode: PermissionMode::Auto,
             island_hidden: false,
+            turn: None,
+            speech: SpeechStatus::Missing,
+            hotkey_conflict: None,
             revision: 42,
         };
         false
@@ -366,6 +372,9 @@ async fn state_changes_are_pushed_to_every_client() {
         session: SessionState::Paused,
         mode: PermissionMode::Auto,
         island_hidden: false,
+        turn: None,
+        speech: SpeechStatus::Missing,
+        hotkey_conflict: None,
         revision: 2,
     });
     for conn in [&mut a, &mut b] {
@@ -379,7 +388,7 @@ async fn state_changes_are_pushed_to_every_client() {
     }
     assert_eq!(
         a.client.request(method::STATE, Value::Null).await.unwrap(),
-        json!({"session":"paused","mode":"auto","islandHidden":false,"revision":2})
+        json!({"session":"paused","mode":"auto","islandHidden":false,"turn":null,"speech":{"state":"missing"},"revision":2})
     );
     rt.shutdown.cancel();
 }
@@ -432,6 +441,9 @@ async fn microphone_levels_stream_while_they_change() {
         session: SessionState::Listening,
         mode: PermissionMode::Auto,
         island_hidden: false,
+        turn: None,
+        speech: SpeechStatus::Missing,
+        hotkey_conflict: None,
         revision: 0,
     });
     let shutdown = CancellationToken::new();

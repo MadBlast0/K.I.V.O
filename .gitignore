@@ -28,6 +28,9 @@ venv/
 # Models, local data, benchmarks
 models/
 *.onnx
+# ...except the small bundled ones that ship with KIVO (assets/models/README.md).
+!assets/models/
+!assets/models/*.onnx
 *.gguf
 *.bin
 *.sqlite

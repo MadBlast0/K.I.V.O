@@ -8,7 +8,8 @@
 use kivo_core::capability::{Capability, CapabilitySettings};
 use kivo_core::config::PermissionMode;
 use kivo_core::tool::{
-    Initiator, Provenance, Reversibility, Risk, SideEffect, Target, ToolCall, ToolSpec,
+    ConfirmSpec, ConfirmedBy, Initiator, Provenance, Reversibility, Risk, SideEffect, Strength,
+    Target, ToolCall, ToolSpec,
 };
 use serde::{Deserialize, Serialize};
 
@@ -56,38 +57,6 @@ pub struct Context<'a> {
     pub grants: &'a [Grant],
 }
 
-/// How strongly a confirmation must be given.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum Strength {
-    /// A click, Enter, or the owner's voice (CONVERSATION §7).
-    Normal,
-    /// High risk: an on-screen click or Windows Hello; voice alone is never enough.
-    Strong,
-}
-
-/// What the confirmation card shows (SEC-10).
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ConfirmSpec {
-    pub call_id: String,
-    pub tool: String,
-    /// The exact action in plain words ("Shut down the computer").
-    pub action: String,
-    /// What it acts on, if anything ("Google Chrome").
-    pub target: Option<String>,
-    /// Why KIVO is asking.
-    pub why: String,
-    /// Where the request came from ("You asked", "Requested after reading example.com").
-    pub provenance: String,
-    pub risk: Risk,
-    pub strength: Strength,
-    /// Offer "Always for …" (not for High risk or guests).
-    pub allow_always: bool,
-    /// The mode is Plan first: approving grants exactly this step.
-    pub plan: bool,
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", tag = "kind", content = "capability")]
 pub enum DenyCode {
@@ -106,17 +75,6 @@ pub struct Denial {
     pub code: DenyCode,
     /// Safe to show and speak.
     pub message: String,
-}
-
-/// How an action was allowed, for the audit log (SECURITY §7 `confirmed_by`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum ConfirmedBy {
-    Policy,
-    Grant,
-    Click,
-    Voice,
-    Hello,
 }
 
 /// Proof that one specific call was authorized. It can't be built, cloned or deserialized outside

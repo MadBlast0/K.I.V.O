@@ -49,6 +49,9 @@ impl Ipc {
             session: SessionState::Idle,
             mode: PermissionMode::Auto,
             island_hidden: false,
+            turn: None,
+            speech: kivo_ipc::protocol::SpeechStatus::Ready,
+            hotkey_conflict: None,
             revision: 0,
         });
         let shutdown = CancellationToken::new();

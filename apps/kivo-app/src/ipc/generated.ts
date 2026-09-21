@@ -57,6 +57,90 @@ export type SessionState = "idle" | "listening" | "thinking" | "acting" | "speak
 
 export type PermissionMode = "ask" | "accept-edits" | "plan" | "auto" | "bypass";
 
+export type TurnView = { id: string, source: TurnSource, 
+/**
+ * What KIVO has heard so far, or the typed request.
+ */
+transcript: string, 
+/**
+ * The transcript won't change any more.
+ */
+transcriptFinal: boolean, 
+/**
+ * What KIVO is doing, in order.
+ */
+steps: Array<StepView>, 
+/**
+ * What KIVO says back.
+ */
+answer: string | null, 
+/**
+ * Why it couldn't be done, in plain words.
+ */
+error: string | null, 
+/**
+ * A decision waiting for the user (SEC-10).
+ */
+confirm: ConfirmSpec | null, 
+/**
+ * The app the action is aimed at, for the Island's leading icon (UX §8.1).
+ */
+targetApp: string | null, };
+
+export type StepView = { 
+/**
+ * The tool call's id.
+ */
+id: string, 
+/**
+ * What it does, in the user's words ("Open Google Chrome").
+ */
+title: string, status: StepStatus, 
+/**
+ * A short result or reason ("Volume 30%", "Chrome isn't installed").
+ */
+detail: string | null, };
+
+export type SpeechStatus = { "state": "ready" } | { "state": "downloading", percent: number, } | { "state": "missing" } | { "state": "failed", message: string, };
+
+export type Residency = "unloaded" | "warming" | "warm" | "active" | "idle" | "unloading";
+
+export type Risk = "safe" | "low" | "medium" | "high";
+
+export type Strength = "normal" | "strong";
+
+export type ConfirmedBy = "policy" | "grant" | "click" | "voice" | "hello";
+
+export type ConfirmSpec = { callId: string, tool: string, 
+/**
+ * The exact action in plain words ("Shut down the computer").
+ */
+action: string, 
+/**
+ * What it acts on, if anything ("Google Chrome").
+ */
+target: string | null, 
+/**
+ * Why KIVO is asking.
+ */
+why: string, 
+/**
+ * Where the request came from ("You asked", "Requested after reading example.com").
+ */
+provenance: string, risk: Risk, strength: Strength, 
+/**
+ * Offer "Always for …" (not for High risk or guests).
+ */
+allowAlways: boolean, 
+/**
+ * The mode is Plan first: approving grants exactly this step.
+ */
+plan: boolean, };
+
+export type Capability = "mic-listening" | "push-to-talk" | "speak-responses" | "apps-and-windows" | "system-controls" | "power-actions" | "files-read" | "files-modify" | "clipboard" | "browser-open-links" | "browser-pages" | "browser-autonomous" | "ui-automation" | "screen-awareness" | "computer-use" | "shell" | "background-tasks" | "routines" | "memory" | "cloud-brains" | "realtime-voice" | "cli-agents" | "mcp-servers" | "integrations" | "speaker-recognition" | "remote-access" | "notifications";
+
+export type Badge = "local" | "cloud" | "costly" | "sensitive";
+
 export type StateSnapshot = { session: SessionState, 
 /**
  * How much KIVO may do without asking (SECURITY §1.1).
@@ -66,6 +150,20 @@ mode: PermissionMode,
  * "Hide Island for 1 hour" (UX §1): the Island shows nothing until this is cleared.
  */
 islandHidden: boolean, 
+/**
+ * What KIVO is working on now: what it heard, what it is doing and what it will say
+ * (UX §2). `None` between turns.
+ */
+turn: TurnView | null, 
+/**
+ * Whether speech recognition is ready, downloading or missing.
+ */
+speech: SpeechStatus, 
+/**
+ * Another app owns the push-to-talk keys, so KIVO can't use them (VOICE-41). The Control
+ * Center offers a rebind.
+ */
+hotkeyConflict?: string | null, 
 /**
  * Increases with every state change, so a client can tell whether its view is current.
  */
@@ -99,6 +197,22 @@ export const Method = {
   sessionResume: "session.resume",
   runtimeQuit: "runtime.quit",
   permissionsSetMode: "permissions.setMode",
+  sessionTalk: "session.talk",
+  sessionSay: "session.say",
+  sessionCancel: "session.cancel",
+  sessionStopEverything: "session.stopEverything",
+  permissionsAnswer: "permissions.answer",
+  permissionsGrants: "permissions.grants",
+  permissionsRevoke: "permissions.revoke",
+  capabilitiesGet: "capabilities.get",
+  capabilitiesSet: "capabilities.set",
+  activityList: "activity.list",
+  auditList: "audit.list",
+  modelsList: "models.list",
+  modelsInstall: "models.install",
+  modelsRemove: "models.remove",
+  settingsGet: "settings.get",
+  settingsSet: "settings.set",
 } as const;
 
 export type Method = (typeof Method)[keyof typeof Method];

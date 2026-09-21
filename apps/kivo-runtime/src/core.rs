@@ -4,9 +4,10 @@
 //! here are saved to `kivo.toml`.
 
 use kivo_core::config::PermissionMode;
-use kivo_core::event::{EventKind, SystemEvent, UiEvent};
+use kivo_core::event::{EventKind, SystemEvent, TurnSource, UiEvent};
 use kivo_core::{Event, EventBus, KivoConfig, Session, SessionInput, SessionState};
 use kivo_ipc::StateSnapshot;
+use kivo_ipc::protocol::{SpeechStatus, StepView, TurnView};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -23,17 +24,19 @@ pub struct Core {
     shutdown: CancellationToken,
 }
 
+/// A core with default settings that are never saved (tests).
+#[cfg(test)]
+impl Default for Core {
+    fn default() -> Self {
+        Self::with_config(KivoConfig::default(), None)
+    }
+}
+
 /// Why a user request was refused (not a bug: the UI or tray raced a state change).
 #[derive(Debug, PartialEq, Eq)]
 pub struct Refused(pub String);
 
 impl Core {
-    /// A core with default settings that are never saved (tests).
-    #[cfg(test)]
-    pub fn new() -> Self {
-        Self::with_config(KivoConfig::default(), None)
-    }
-
     /// A core that starts from `config` and saves changes to `config_file`.
     pub fn with_config(config: KivoConfig, config_file: Option<PathBuf>) -> Self {
         let mode = config.permissions.mode;
@@ -46,6 +49,9 @@ impl Core {
                 session: SessionState::Idle,
                 mode,
                 island_hidden: false,
+                turn: None,
+                speech: SpeechStatus::Missing,
+                hotkey_conflict: None,
                 revision: 0,
             }),
             shutdown: CancellationToken::new(),
@@ -97,25 +103,166 @@ impl Core {
         self.request(SessionInput::Resume, "KIVO isn't paused")
     }
 
-    /// Push-to-talk pressed: start listening (VOICE-41).
-    pub fn start_listening(&self) -> Result<SessionState, Refused> {
-        self.request(
-            SessionInput::Activate,
-            "KIVO can listen only when it isn't busy or paused",
-        )
+    /// Cancels whatever KIVO is doing now (Esc, the Island's Stop button, a hotkey release with
+    /// nothing heard). The Island clears.
+    pub fn cancel_turn(&self) -> Result<SessionState, Refused> {
+        let state = self.state.borrow().session;
+        if !state.is_active() && state != SessionState::FollowUp {
+            return Err(Refused(format!("KIVO isn't busy ({})", describe(state))));
+        }
+        self.request(SessionInput::Cancel, "KIVO isn't busy")?;
+        let next = if state == SessionState::FollowUp {
+            SessionState::Idle
+        } else {
+            self.request(
+                SessionInput::InterruptionHandled { listen: false },
+                "KIVO isn't stopping",
+            )?
+        };
+        self.clear_turn();
+        Ok(next)
     }
 
-    /// Push-to-talk released. Speech recognition joins in M1; until then there is nothing to do
-    /// with what was heard, so the turn ends as cancelled instead of pretending to think.
-    pub fn stop_listening(&self) -> Result<SessionState, Refused> {
-        if self.state.borrow().session != SessionState::Listening {
-            return Err(Refused("KIVO isn't listening".into()));
+    /// The settings as they are now.
+    pub fn config(&self) -> KivoConfig {
+        self.config
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    /// Changes settings and saves them; returns the new settings.
+    pub fn update_config(&self, change: impl FnOnce(&mut KivoConfig)) -> KivoConfig {
+        let updated = {
+            let mut config = self.config.lock().unwrap_or_else(|e| e.into_inner());
+            change(&mut config);
+            config.clone()
+        };
+        if let Some(file) = &self.config_file
+            && let Err(e) = kivo_store::config::save(file, &updated)
+        {
+            tracing::error!(%e, "couldn't save the settings");
         }
-        self.request(SessionInput::Cancel, "KIVO isn't listening")?;
-        self.request(
-            SessionInput::InterruptionHandled { listen: false },
-            "KIVO isn't stopping",
-        )
+        updated
+    }
+
+    /// Whether KIVO can hear right now (the speech model is a download, DIST-12).
+    pub fn set_speech_status(&self, status: SpeechStatus) {
+        self.state.send_if_modified(|s| {
+            if s.speech == status {
+                return false;
+            }
+            s.speech = status;
+            s.revision += 1;
+            true
+        });
+    }
+
+    pub fn speech_status(&self) -> SpeechStatus {
+        self.state.borrow().speech.clone()
+    }
+
+    /// Another app owns the push-to-talk keys (VOICE-41): the UI offers a rebind.
+    pub fn set_hotkey_conflict(&self, keys: Option<String>) {
+        self.state.send_if_modified(|s| {
+            if s.hotkey_conflict == keys {
+                return false;
+            }
+            s.hotkey_conflict = keys;
+            s.revision += 1;
+            true
+        });
+    }
+
+    /// An internal transition (the pipeline's own progress, not a user request). An input that
+    /// doesn't fit is a bug: `Session` logs it at error and the state is unchanged.
+    pub fn advance(&self, input: SessionInput) -> SessionState {
+        let mut session = self.session.lock().unwrap_or_else(|e| e.into_inner());
+        let next = session.apply(input).unwrap_or_else(|_| session.state());
+        drop(session);
+        self.state.send_modify(|s| {
+            if s.session != next {
+                s.session = next;
+            }
+            s.revision += 1;
+        });
+        next
+    }
+
+    /// Starts a turn: KIVO is listening (or working on typed text), and the Island shows it.
+    pub fn begin_turn(
+        &self,
+        id: &str,
+        source: TurnSource,
+        transcript: &str,
+    ) -> Result<SessionState, Refused> {
+        let state = self.request(
+            SessionInput::Activate,
+            "KIVO can listen only when it isn't busy or paused",
+        )?;
+        self.state.send_modify(|s| {
+            s.turn = Some(TurnView {
+                id: id.to_owned(),
+                source,
+                transcript: transcript.to_owned(),
+                transcript_final: !transcript.is_empty(),
+                ..TurnView::default()
+            });
+            s.revision += 1;
+        });
+        Ok(state)
+    }
+
+    /// Changes what the Island shows about the current turn.
+    pub fn update_turn(&self, change: impl FnOnce(&mut TurnView)) {
+        self.state.send_if_modified(|s| {
+            let Some(turn) = s.turn.as_mut() else {
+                return false;
+            };
+            let before = turn.clone();
+            change(turn);
+            let changed = *turn != before;
+            if changed {
+                s.revision += 1;
+            }
+            changed
+        });
+    }
+
+    /// Adds or updates a step in the Island's list.
+    pub fn set_step(&self, step: StepView) {
+        self.update_turn(
+            |turn| match turn.steps.iter_mut().find(|s| s.id == step.id) {
+                Some(existing) => *existing = step,
+                None => turn.steps.push(step),
+            },
+        );
+    }
+
+    /// The turn the Island is showing, if any.
+    pub fn turn_view(&self) -> Option<TurnView> {
+        self.state.borrow().turn.clone()
+    }
+
+    /// Clears the Island (the turn ended).
+    pub fn clear_turn(&self) {
+        self.state.send_if_modified(|s| {
+            if s.turn.is_none() {
+                return false;
+            }
+            s.turn = None;
+            s.revision += 1;
+            true
+        });
+    }
+
+    /// The end of speech: KIVO starts thinking about what it heard.
+    pub fn end_of_speech(&self) -> SessionState {
+        if self.state.borrow().session == SessionState::Listening {
+            self.advance(SessionInput::EndOfSpeech)
+        } else {
+            self.state.borrow().session
+        }
     }
 
     /// Switches the permission mode (SECURITY §1.1). Only the user does this, from the UI, the tray
@@ -164,6 +311,7 @@ impl Core {
         if let Some(next) = cancelled {
             self.state.send_modify(|s| {
                 s.session = next;
+                s.turn = None;
                 s.revision += 1;
             });
         }
@@ -244,7 +392,7 @@ mod tests {
 
     #[test]
     fn pause_and_resume_publish_new_snapshots() {
-        let core = Core::new();
+        let core = Core::default();
         let state = core.state();
         assert_eq!(core.pause(), Ok(SessionState::Paused));
         assert_eq!(
@@ -253,6 +401,9 @@ mod tests {
                 session: SessionState::Paused,
                 mode: PermissionMode::Auto,
                 island_hidden: false,
+                turn: None,
+                speech: SpeechStatus::Missing,
+                hotkey_conflict: None,
                 revision: 1
             }
         );
@@ -262,7 +413,7 @@ mod tests {
 
     #[test]
     fn requests_that_dont_fit_the_state_are_refused_without_changing_it() {
-        let core = Core::new();
+        let core = Core::default();
         let refused = core.resume().unwrap_err();
         assert_eq!(refused, Refused("KIVO isn't paused (Ready)".into()));
         core.pause().unwrap();
@@ -273,21 +424,27 @@ mod tests {
 
     #[test]
     fn push_to_talk_listens_while_held() {
-        let core = Core::new();
+        let core = Core::default();
         let mut state = core.state();
-        assert_eq!(core.start_listening(), Ok(SessionState::Listening));
-        assert!(core.start_listening().is_err(), "already listening");
-        assert_eq!(core.stop_listening(), Ok(SessionState::Idle));
-        assert!(core.stop_listening().is_err(), "not listening any more");
+        assert_eq!(
+            core.begin_turn("t1", TurnSource::PushToTalk, ""),
+            Ok(SessionState::Listening)
+        );
+        assert!(
+            core.begin_turn("t1", TurnSource::PushToTalk, "").is_err(),
+            "already listening"
+        );
+        assert_eq!(core.cancel_turn(), Ok(SessionState::Idle));
+        assert!(core.cancel_turn().is_err(), "not listening any more");
         assert_eq!(
             state.borrow_and_update().revision,
-            3,
-            "listening, stopping, idle"
+            5,
+            "listening, the Island's turn, stopping, idle, the Island cleared"
         );
 
         core.pause().unwrap();
         assert!(
-            core.start_listening().is_err(),
+            core.begin_turn("t2", TurnSource::PushToTalk, "").is_err(),
             "a paused KIVO doesn't listen"
         );
     }
@@ -309,21 +466,21 @@ mod tests {
 
     #[test]
     fn stop_everything_ends_what_kivo_is_doing() {
-        let core = Core::new();
+        let core = Core::default();
         core.stop_everything();
         assert_eq!(
             core.session(),
             SessionState::Idle,
             "nothing to stop is fine"
         );
-        core.start_listening().unwrap();
+        core.begin_turn("t9", TurnSource::PushToTalk, "").unwrap();
         core.stop_everything();
         assert_eq!(core.session(), SessionState::Idle);
     }
 
     #[tokio::test(start_paused = true)]
     async fn the_island_comes_back_after_being_hidden() {
-        let core = std::sync::Arc::new(Core::new());
+        let core = std::sync::Arc::new(Core::default());
         core.hide_island_for(Duration::from_secs(3600));
         assert!(core.state().borrow().island_hidden);
         tokio::time::sleep(Duration::from_secs(3601)).await;
@@ -341,14 +498,14 @@ mod tests {
 
     #[test]
     fn bypass_is_never_switched_on_directly() {
-        let core = Core::new();
+        let core = Core::default();
         assert!(core.set_mode(PermissionMode::Bypass).is_err());
         assert_eq!(core.state().borrow().mode, PermissionMode::Auto);
     }
 
     #[tokio::test]
     async fn quit_announces_shutdown_once_then_cancels() {
-        let core = Core::new();
+        let core = Core::default();
         let mut events = core.bus.subscribe();
         let shutdown = core.shutdown();
         core.quit();
@@ -364,7 +521,7 @@ mod tests {
 
     #[tokio::test]
     async fn opening_the_control_center_is_an_event_for_the_app() {
-        let core = Core::new();
+        let core = Core::default();
         let mut events = core.bus.subscribe();
         core.open_control_center(Some("settings"));
         let Received::Event(event) = events.recv().await else {

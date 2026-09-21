@@ -2341,17 +2341,26 @@ dependencies = [
 name = "kivo-runtime"
 version = "0.0.0"
 dependencies = [
+ "dirs 7.0.0",
+ "kivo-audio",
  "kivo-core",
+ "kivo-intent",
  "kivo-ipc",
  "kivo-platform",
  "kivo-platform-windows",
+ "kivo-security",
  "kivo-store",
+ "kivo-testkit",
+ "kivo-tools",
+ "kivo-voice",
  "serde",
  "serde_json",
  "tempfile",
+ "thiserror 2.0.20",
  "tokio",
  "tokio-util",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

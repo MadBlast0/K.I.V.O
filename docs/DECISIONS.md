@@ -5,6 +5,17 @@ decision changes, update the entry and note the date. Do not silently rewrite it
 
 ---
 
+## 2026-09-22 — M1 build
+
+| Topic | Decision |
+|---|---|
+| **Speech engines on `ort`** | `kivo-infer` and the runtime's VAD run on `ort` (ONNX Runtime, MIT, linked statically), not the sherpa-onnx crate: sherpa's static library contains espeak-ng (GPL-3.0). Moonshine Base (MIT, English) is the M1 speech-to-text model, loaded from `.ort` files; partial transcripts come from re-transcribing the audio so far every 0.5 s. Silero VAD v6 (MIT, 2.3 MB) is bundled in `assets/models`; everything larger is downloaded by the model manager from Hugging Face with sha256 checks |
+| **`kivo-infer` binary** | A separate `kivo-infer.exe` (the ARCHITECTURE §7 layout and DIST-01 sidecar list) run as `kivo-infer serve`, speaking the UI protocol's framed JSON-RPC over stdin/stdout. It starts on demand when a model is wanted, is restarted with backoff, and a lost worker fails only the current turn |
+| **Earcons generated, not Kenney** | KIVO's Soft cues are synthesized at startup (rounded two-note tones, each under 300 ms) instead of shipping the Kenney CC0 placeholder files: no licence to track, no files to load, and the motif is KIVO's own (VOICE-24/29) |
+| **Earcon gating** | While a cue plays, *voice detection* ignores the microphone (cue + 50 ms), so a chime never counts as speech (VOICE-25); *recognition* still receives every sample. Measured: dropping the cue's 310 ms cut the first word of "Open Chrome" when the user speaks right after pressing the key. Echo cancellation (M2) removes the chime from the recognized audio |
+| **System voice first** | Spoken replies use the Windows voices (WinRT `SpeechSynthesizer`) through the same streaming `TtsEngine` trait and mixer; Kokoro joins as a second engine once its permissive phonemizer exists (VOICE-09) |
+| **Auto means Medium runs** | SECURITY §1.1 (the owner's mode table) is authoritative over the older §2 profile table where they differ: in Auto, Safe/Low/Medium run on clean, user-initiated turns; tainted or AI-initiated Medium actions still ask; High always asks except in Bypass |
+
 ## 2026-09-21 — Implementation start
 
 | Topic | Decision |

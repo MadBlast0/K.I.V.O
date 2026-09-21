@@ -271,7 +271,7 @@ mod tests {
     }
 
     fn setup(initial: Option<Launch>) -> (Arc<Core>, Arc<FakeApp>, tokio::task::JoinHandle<()>) {
-        let core = Arc::new(Core::new());
+        let core = Arc::new(Core::default());
         let (clients, rx) = watch::channel(Vec::new());
         let app = Arc::new(FakeApp {
             launches: Mutex::new(Vec::new()),

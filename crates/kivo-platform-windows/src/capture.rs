@@ -27,6 +27,9 @@ use windows::Win32::System::WinRT::Graphics::Capture::IGraphicsCaptureItemIntero
 use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
 use windows::core::Interface;
 
+/// A rectangle inside the captured image: x, y, width, height.
+type Crop = (i32, i32, u32, u32);
+
 /// How long to wait for the first frame.
 const FRAME_TIMEOUT: Duration = Duration::from_secs(2);
 
@@ -60,9 +63,7 @@ fn d3d_device() -> PlatformResult<(ID3D11Device, ID3D11DeviceContext, IDirect3DD
     Ok((device, context, winrt.cast().map_err(|e| os_error(&e))?))
 }
 
-fn item_for(
-    target: CaptureTarget,
-) -> PlatformResult<(GraphicsCaptureItem, Option<(i32, i32, u32, u32)>)> {
+fn item_for(target: CaptureTarget) -> PlatformResult<(GraphicsCaptureItem, Option<Crop>)> {
     let interop = windows::core::factory::<GraphicsCaptureItem, IGraphicsCaptureItemInterop>()
         .map_err(|e| os_error(&e))?;
     // SAFETY: the handles come from the OS for the current session.

@@ -142,6 +142,52 @@ pub struct ToolCall {
     pub targets: Vec<Target>,
 }
 
+/// How strongly a confirmation must be given.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Strength {
+    /// A click, Enter, or the owner's voice (CONVERSATION §7).
+    Normal,
+    /// High risk: an on-screen click or Windows Hello; voice alone is never enough.
+    Strong,
+}
+
+/// What the confirmation card shows (SEC-10).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfirmSpec {
+    pub call_id: String,
+    pub tool: String,
+    /// The exact action in plain words ("Shut down the computer").
+    pub action: String,
+    /// What it acts on, if anything ("Google Chrome").
+    pub target: Option<String>,
+    /// Why KIVO is asking.
+    pub why: String,
+    /// Where the request came from ("You asked", "Requested after reading example.com").
+    pub provenance: String,
+    pub risk: Risk,
+    pub strength: Strength,
+    /// Offer "Always for …" (not for High risk or guests).
+    pub allow_always: bool,
+    /// The mode is Plan first: approving grants exactly this step.
+    pub plan: bool,
+}
+
+/// How an action was allowed, for the audit log (SECURITY §7 `confirmed_by`).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ConfirmedBy {
+    Policy,
+    Grant,
+    Click,
+    Voice,
+    Hello,
+}
+
 /// A failure the user can understand (plan §146). `code` is for machines and the log; `message`
 /// is safe to show and speak; `detail` (raw OS errors) is logged only.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, thiserror::Error)]

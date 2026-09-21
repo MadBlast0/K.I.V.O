@@ -4,13 +4,16 @@
 //! Regenerate:   KIVO_WRITE_TS=1 cargo test -p kivo-ipc --features ts --test ts_bindings
 #![cfg(feature = "ts")]
 
+use kivo_core::capability::{Badge, Capability};
 use kivo_core::config::PermissionMode;
 use kivo_core::event::{
     CancelReason, DeviceKind, EventKind, IntentPath, PermissionDecision, ProviderEvent, StepStatus,
     SystemEvent, TaskEvent, ToolEvent, TtsStopReason, TurnEvent, TurnSource, UiEvent, VoiceEvent,
 };
+use kivo_core::tool::{ConfirmSpec, ConfirmedBy, Risk, Strength};
 use kivo_core::{Event, EventMeta, ProfileId, SessionState, TaskId, Timestamp, TraceId, TurnId};
-use kivo_ipc::protocol::ProtocolVersion;
+use kivo_ipc::infer::Residency;
+use kivo_ipc::protocol::{ProtocolVersion, SpeechStatus, StepView, TurnView};
 use kivo_ipc::{Link, LinkStatus, RpcError, StateSnapshot, Welcome, method};
 use std::path::PathBuf;
 use ts_rs::{Config, TS};
@@ -46,6 +49,18 @@ fn render() -> String {
         // session and protocol
         SessionState::decl(&cfg),
         PermissionMode::decl(&cfg),
+        // what KIVO is doing now
+        TurnView::decl(&cfg),
+        StepView::decl(&cfg),
+        SpeechStatus::decl(&cfg),
+        Residency::decl(&cfg),
+        // permissions and capabilities
+        Risk::decl(&cfg),
+        Strength::decl(&cfg),
+        ConfirmedBy::decl(&cfg),
+        ConfirmSpec::decl(&cfg),
+        Capability::decl(&cfg),
+        Badge::decl(&cfg),
         StateSnapshot::decl(&cfg),
         ProtocolVersion::decl(&cfg),
         Welcome::decl(&cfg),
@@ -69,6 +84,22 @@ fn render() -> String {
         ("sessionResume", method::SESSION_RESUME),
         ("runtimeQuit", method::RUNTIME_QUIT),
         ("permissionsSetMode", method::PERMISSIONS_SET_MODE),
+        ("sessionTalk", method::SESSION_TALK),
+        ("sessionSay", method::SESSION_SAY),
+        ("sessionCancel", method::SESSION_CANCEL),
+        ("sessionStopEverything", method::SESSION_STOP_ALL),
+        ("permissionsAnswer", method::PERMISSIONS_ANSWER),
+        ("permissionsGrants", method::PERMISSIONS_GRANTS),
+        ("permissionsRevoke", method::PERMISSIONS_REVOKE),
+        ("capabilitiesGet", method::CAPABILITIES_GET),
+        ("capabilitiesSet", method::CAPABILITIES_SET),
+        ("activityList", method::ACTIVITY_LIST),
+        ("auditList", method::AUDIT_LIST),
+        ("modelsList", method::MODELS_LIST),
+        ("modelsInstall", method::MODELS_INSTALL),
+        ("modelsRemove", method::MODELS_REMOVE),
+        ("settingsGet", method::SETTINGS_GET),
+        ("settingsSet", method::SETTINGS_SET),
     ];
     out.push_str("\n/** IPC methods the UI can call. */\nexport const Method = {\n");
     for (name, value) in methods {
