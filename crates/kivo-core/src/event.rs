@@ -11,6 +11,7 @@ use crate::time::Timestamp;
 use serde::{Deserialize, Serialize};
 
 /// Something that happened, with who/when metadata.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Event {
     pub meta: EventMeta,
@@ -43,6 +44,7 @@ impl Event {
     }
 }
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EventMeta {
@@ -66,6 +68,7 @@ impl EventMeta {
 }
 
 /// The event groups of ARCHITECTURE §4.1.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "group", content = "event", rename_all = "camelCase")]
 pub enum EventKind {
@@ -78,6 +81,7 @@ pub enum EventKind {
     Ui(UiEvent),
 }
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(
     tag = "type",
@@ -107,6 +111,7 @@ pub enum VoiceEvent {
     BargeIn,
 }
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum TtsStopReason {
@@ -115,6 +120,7 @@ pub enum TtsStopReason {
     BargeIn,
 }
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(
     tag = "type",
@@ -146,6 +152,7 @@ pub enum TurnEvent {
     },
 }
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum TurnSource {
@@ -156,6 +163,7 @@ pub enum TurnSource {
     Routine,
 }
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum IntentPath {
@@ -165,6 +173,7 @@ pub enum IntentPath {
 }
 
 /// Why a turn or task was cancelled (plan §43).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum CancelReason {
@@ -178,6 +187,7 @@ pub enum CancelReason {
     Shutdown,
 }
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(
     tag = "type",
@@ -209,6 +219,7 @@ pub enum ToolEvent {
     },
 }
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PermissionDecision {
@@ -217,6 +228,7 @@ pub enum PermissionDecision {
     Deny,
 }
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(
     tag = "type",
@@ -232,6 +244,7 @@ pub enum TaskEvent {
     Failed { message: String },
 }
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum StepStatus {
@@ -242,6 +255,7 @@ pub enum StepStatus {
     Skipped,
 }
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(
     tag = "type",
@@ -279,6 +293,7 @@ pub enum SystemEvent {
     },
 }
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum DeviceKind {
@@ -286,6 +301,7 @@ pub enum DeviceKind {
     Speaker,
 }
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(
     tag = "type",
@@ -306,6 +322,7 @@ pub enum ProviderEvent {
     },
 }
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(
     tag = "type",

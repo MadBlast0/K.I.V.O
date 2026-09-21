@@ -149,7 +149,7 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 
 **KIVO Remote (§4)**
 
-- [ ] **INT-11** · M0 · Nothing assumes the UI is local-only: IPC is versioned and clients are untrusted (§4)
+- [x] **INT-11** · M0 · Nothing assumes the UI is local-only: IPC is versioned and clients are untrusted (§4) → done: every IPC client is untrusted: token-authenticated, version-checked, schema-validated and size-limited; nothing assumes the UI is local-only beyond the transport · verified: kivo-ipc tests
 - [ ] **INT-12** · Post · Pairing by single-use QR (Ed25519 key, one-time secret, 2 min expiry), Noise/X25519 handshake, AEAD channel with replay counters (§4)
 - [ ] **INT-13** · Post · Transports LAN (mDNS), WebRTC P2P, self-hostable ciphertext-only relay (§4)
 - [ ] **INT-14** · Post · Remote principal with the Remote Balanced profile (no shell, no computer use, Medium confirmed), High confirmed on the phone with biometrics, paired devices listed and revocable, remote actions audited with device id (§4)

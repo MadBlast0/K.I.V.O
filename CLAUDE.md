@@ -71,6 +71,7 @@ table at the top of [docs/ROADMAP.md](docs/ROADMAP.md). Update this section as m
 | Check UI | `pnpm typecheck` · `pnpm lint` (Oxlint, type-aware) · `pnpm format:check` · `pnpm test` (Vitest) |
 | Installer build | `pnpm build` |
 | Sync ROADMAP from the spec checklists | `pnpm docs:sync` |
+| Regenerate the UI's IPC types | `KIVO_WRITE_TS=1 cargo test -p kivo-ipc --features ts --test ts_bindings` |
 
 The tree must stay free of warnings from tsc, Vite, rustc and clippy. The native title
 bar is off (`decorations: false`); the app draws its own (`components/layout/TitleBar.tsx`).

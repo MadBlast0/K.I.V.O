@@ -8,6 +8,31 @@ license.workspace = true
 publish = false
 
 [dependencies]
+kivo-core.workspace = true
+bytes.workspace = true
+futures-util.workspace = true
+getrandom.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["net", "io-util", "rt", "time", "sync", "macros"] }
+tokio-util = { workspace = true, features = ["codec"] }
+tracing.workspace = true
+ts-rs = { workspace = true, optional = true }
+
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = [
+  "Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Threading",
+  "Win32_System_Memory",
+] }
+
+[features]
+# Generates TypeScript types for the UI (ARCH-18); only the type-generation test enables it.
+ts = ["dep:ts-rs", "kivo-core/ts"]
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio = { workspace = true, features = ["net", "io-util", "rt-multi-thread", "time", "sync", "macros"] }
 
 [lints]
 workspace = true

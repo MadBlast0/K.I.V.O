@@ -112,9 +112,11 @@ startup (the `Capabilities` struct). They are never scattered through core code.
 
 ## 3. IPC
 
-- **Transport:** `interprocess` local sockets, which are named pipes on Windows (`\\.\pipe\kivo-<user-sid>`).
-  - The pipe gets a security descriptor that grants only the current user's SID, plus
-    `PIPE_REJECT_REMOTE_CLIENTS`.
+- **Transport:** tokio named pipes on Windows (`\\.\pipe\kivo-<user-sid>`); Unix-domain sockets
+  (mode 600, in the private run folder) on other platforms.
+  - The pipe gets a protected security descriptor that grants only the current user's SID, plus
+    `PIPE_REJECT_REMOTE_CLIENTS`, and is created "first instance only", so a process squatting
+    the name makes the runtime fail loudly instead of connecting to it.
   - The runtime writes a random 256-bit **session token** to
     `%LOCALAPPDATA%\KIVO\run\session.token` (user-only ACL). Clients must present it in
     `hello`.
@@ -122,11 +124,13 @@ startup (the `Capabilities` struct). They are never scattered through core code.
   - Messages come in three kinds: `request`/`response`, `notification` (events), and a separate
     high-rate **`levels`** notification carrying audio levels for the overlay at 30–60 Hz, only
     while the overlay is animating.
-- **Versioning:** `hello { protocol_version, client, capabilities }`. The runtime rejects
-  incompatible major versions with a clear error (for example after a partial update).
-- **Schema source of truth:** Rust types in `kivo-ipc`. TypeScript types are generated with
-  **`specta`** (or `ts-rs`) into `apps/kivo-app/src/ipc/generated.ts`, and CI fails if the
-  generated types are stale.
+- **Versioning:** `hello { protocol_version, client, token }` must be the first message, within 3 s.
+  The runtime rejects a wrong token and incompatible major versions with a clear error (for
+  example after a partial update). Frames over 1 MiB close the connection.
+- **Schema source of truth:** Rust types in `kivo-ipc` and `kivo-core`. TypeScript types are
+  generated with **`ts-rs`** into `apps/kivo-app/src/ipc/generated.ts`
+  (`KIVO_WRITE_TS=1 cargo test -p kivo-ipc --features ts --test ts_bindings`), and CI fails if
+  the generated types are stale.
 - **Reconnect:** the UI reconnects with backoff and re-subscribes. On reconnect the runtime sends a
   full `StateSnapshot`, then deltas.
 - **The same protocol runs between the runtime and kivo-infer**, with added methods for streaming
@@ -299,12 +303,12 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 
 **IPC (§3)**
 
-- [ ] **ARCH-14** · M0 · Named-pipe transport (`interprocess`), `\.\pipe\kivo-<user-sid>`, security descriptor granting only the current user's SID, `PIPE_REJECT_REMOTE_CLIENTS` (§3)
-- [ ] **ARCH-15** · M0 · Random 256-bit session token in `%LOCALAPPDATA%\KIVO\run\session.token` (user-only ACL); clients must present it in `hello` (§3)
-- [ ] **ARCH-16** · M0 · Length-prefixed frames carrying JSON-RPC 2.0: request/response, notifications (events), and a message size limit (§3, SECURITY §9)
-- [ ] **ARCH-17** · M0 · `hello { protocol_version, client, capabilities }`; incompatible major versions are rejected with a clear error (§3)
-- [ ] **ARCH-18** · M0 · Rust types in `kivo-ipc` are the source of truth; TypeScript types are generated (`specta` or `ts-rs`) into `apps/kivo-app/src/ipc/generated.ts`, and CI fails when they are stale (§3)
-- [ ] **ARCH-19** · M0 · The UI reconnects with backoff and re-subscribes; on reconnect the runtime sends a full `StateSnapshot`, then deltas (§3)
+- [x] **ARCH-14** · M0 · Named-pipe transport (`interprocess`), `\.\pipe\kivo-<user-sid>`, security descriptor granting only the current user's SID, `PIPE_REJECT_REMOTE_CLIENTS` (§3) → done: `crates/kivo-ipc/src/transport/windows.rs` (tokio named pipe `\.\pipe\kivo-<sid>`, protected user-only DACL, reject remote clients, first-instance creation) and `transport/unix.rs` (mode-600 socket) · verified: tests read the pipe DACL back as `D:P(A;;FA;;;<user sid>)` and prove a second first-instance (squatting) is refused
+- [x] **ARCH-15** · M0 · Random 256-bit session token in `%LOCALAPPDATA%\KIVO\run\session.token` (user-only ACL); clients must present it in `hello` (§3) → done: `crates/kivo-ipc/src/token.rs` (256-bit random, written to a file restricted to the user before the secret is written, constant-time compare) · verified: tests for format, uniqueness, exact matching, file round trip and the file DACL
+- [x] **ARCH-16** · M0 · Length-prefixed frames carrying JSON-RPC 2.0: request/response, notifications (events), and a message size limit (§3, SECURITY §9) → done: `frame.rs` (u32 LE length prefix, 1 MiB limit) + `protocol.rs` (strict JSON-RPC 2.0: request/response/notification, "2.0" enforced, unknown fields rejected) · verified: protocol unit tests and `oversized_frames_close_the_connection`
+- [x] **ARCH-17** · M0 · `hello { protocol_version, client, capabilities }`; incompatible major versions are rejected with a clear error (§3) → done: `hello { protocolVersion, client, token }` must come first within 3 s; wrong token → -32001, other major → -32002 with a clear message; welcome returns the snapshot · verified: `another_protocol_major_is_refused_with_a_clear_message`, `a_wrong_token_is_refused_and_others_still_connect`, `the_first_message_must_be_hello`, `silent_clients_are_dropped_after_the_hello_timeout`
+- [x] **ARCH-18** · M0 · Rust types in `kivo-ipc` are the source of truth; TypeScript types are generated (`specta` or `ts-rs`) into `apps/kivo-app/src/ipc/generated.ts`, and CI fails when they are stale (§3) → done: ts-rs derives behind a `ts` feature; `crates/kivo-ipc/tests/ts_bindings.rs` writes `apps/kivo-app/src/ipc/generated.ts`; CI step fails when stale · verified: UI typechecks the file; a hand edit makes the check fail
+- [~] **ARCH-19** · M0 · The UI reconnects with backoff and re-subscribes; on reconnect the runtime sends a full `StateSnapshot`, then deltas (§3) → partial: `client::connect_with_backoff` (100 ms → 2 s, re-reads the token each try), welcome carries a full snapshot, lagging clients get a `snapshot` notification · verified: `clients_reconnect_after_the_runtime_restarts_with_a_new_token`, `a_client_that_falls_behind_gets_a_snapshot` · missing: the app using it (ARCH-04)
 - [ ] **ARCH-20** · M1 · A separate high-rate `levels` notification (30–60 Hz) carries audio levels, only while the overlay is animating (§3)
 - [ ] **ARCH-21** · M1 · The same protocol runs between the runtime and `kivo-infer`, with methods for streaming audio frames and results (§3)
 

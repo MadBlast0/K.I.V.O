@@ -6,6 +6,7 @@ use std::sync::OnceLock;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 /// When something happened.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Timestamp {

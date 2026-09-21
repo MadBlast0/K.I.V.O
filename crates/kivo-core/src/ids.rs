@@ -7,9 +7,22 @@ use uuid::Uuid;
 macro_rules! id_type {
     ($(#[$doc:meta])* $name:ident) => {
         $(#[$doc])*
-        #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-        #[serde(transparent)]
+        #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+        #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(type = "string"))]
         pub struct $name(Uuid);
+
+        /// Serialized as the plain UUID string.
+        impl Serialize for $name {
+            fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+                self.0.serialize(s)
+            }
+        }
+
+        impl<'de> Deserialize<'de> for $name {
+            fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+                Uuid::deserialize(d).map(Self)
+            }
+        }
 
         impl $name {
             /// A new, unique, time-ordered id.

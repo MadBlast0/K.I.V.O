@@ -12,6 +12,7 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum SessionState {
@@ -31,6 +32,7 @@ pub enum SessionState {
 }
 
 /// What happened, from the state machine's point of view.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum SessionInput {

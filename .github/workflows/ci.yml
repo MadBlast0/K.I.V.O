@@ -51,6 +51,8 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked
       - name: Test
         run: cargo test --workspace --locked
+      - name: Generated IPC types are up to date
+        run: cargo test -p kivo-ipc --features ts --test ts_bindings --locked
 
   rust-portable:
     name: Rust (${{ matrix.os }}, portable crates)
