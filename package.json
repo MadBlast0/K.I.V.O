@@ -2,7 +2,7 @@
   "name": "kivo",
   "private": true,
   "version": "0.1.0",
-  "packageManager": "pnpm@11.13.0",
+  "packageManager": "pnpm@11.27.1",
   "scripts": {
     "dev": "pnpm --filter kivo-app tauri dev",
     "ui": "pnpm --filter kivo-app dev",
