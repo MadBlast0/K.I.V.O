@@ -193,17 +193,27 @@ impl Models {
         Ok(())
     }
 
-    /// Tells the worker which engines to hold, and the UI whether KIVO can hear (VOICE §8).
+    /// Tells the worker which engines to use (they load on the first request, VOICE-34) and the
+    /// UI whether KIVO can hear.
     pub fn apply_engines(&self, config: &KivoConfig) {
         let wanted = Self::wanted_stt(config);
         let stt = self.installed_dir(&wanted).map(|dir| (wanted.clone(), dir));
         let ready = stt.is_some();
         let tts = (!config.voice.tts_engine.is_empty()).then(|| config.voice.tts_engine.clone());
-        self.infer.set_engines(Engines {
-            stt,
-            tts,
-            threads: threads_for(config),
-        });
+        let warm_minutes = u64::from(
+            config
+                .performance
+                .stt_warm_minutes
+                .max(config.performance.tts_warm_minutes),
+        );
+        self.infer.configure(
+            Engines {
+                stt,
+                tts,
+                threads: threads_for(config),
+            },
+            std::time::Duration::from_secs(warm_minutes.max(1) * 60),
+        );
         if ready {
             self.core.set_speech_status(SpeechStatus::Ready);
         } else if !matches!(self.core.speech_status(), SpeechStatus::Downloading { .. }) {
@@ -211,7 +221,8 @@ impl Models {
         }
     }
 
-    /// At startup: load what is installed, and fetch the speech model if it is missing.
+    /// At startup: note what is installed (nothing is loaded yet), and fetch the speech model if
+    /// it is missing.
     pub fn ensure_speech(self: &Arc<Self>, config: &KivoConfig) {
         self.apply_engines(config);
         let wanted = Self::wanted_stt(config);

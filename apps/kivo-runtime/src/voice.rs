@@ -45,6 +45,10 @@ enum Command {
     },
     /// The user let go of push-to-talk: finish the utterance.
     Stop,
+    /// The speech worker has started this utterance: send it the audio (buffered until now).
+    Ready {
+        utterance: u64,
+    },
     /// Drop the utterance without a result.
     Cancel,
     Quit,
@@ -80,6 +84,11 @@ impl Listener {
             utterance,
             auto_end,
         });
+    }
+
+    /// The speech worker is ready for this utterance: the audio heard so far is sent at once.
+    pub fn stt_ready(&self, utterance: u64) {
+        let _ = self.commands.send(Command::Ready { utterance });
     }
 
     /// Ends the utterance (push-to-talk released).
@@ -147,7 +156,14 @@ struct Utterance {
     last_speech: Option<Instant>,
     /// The user let go; finish as soon as the audio is sent.
     ending: bool,
+    /// The speech worker has started the utterance. Until then the audio waits in `pending`
+    /// (the models load when the request starts, so the first words are never lost).
+    ready: bool,
+    pending: Vec<f32>,
 }
+
+/// The most audio held while the speech worker starts (one long utterance).
+const PENDING_LIMIT: usize = kivo_audio::capture::RATE as usize * 45;
 
 #[allow(
     clippy::too_many_lines,
@@ -216,7 +232,20 @@ fn run(pipeline: Pipeline, commands: &Receiver<Command>, listening: &Arc<Mutex<O
                             heard_speech: false,
                             last_speech: None,
                             ending: false,
+                            ready: false,
+                            pending: Vec::new(),
                         });
+                    }
+                }
+                Ok(Command::Ready { utterance }) => {
+                    if let Some(u) = current.as_mut().filter(|u| u.id == utterance) {
+                        u.ready = true;
+                        let pending = std::mem::take(&mut u.pending);
+                        if !pending.is_empty()
+                            && let Err(e) = infer.send_audio(u.id, &pending)
+                        {
+                            tracing::debug!(%e, "buffered audio dropped");
+                        }
                     }
                 }
                 Ok(Command::Stop) => {
@@ -245,9 +274,14 @@ fn run(pipeline: Pipeline, commands: &Receiver<Command>, listening: &Arc<Mutex<O
             history.push(&audio_buf);
             if let Some(u) = current.as_mut() {
                 // Every sample goes to recognition: people start talking the moment they press the
-                // key, so dropping the chime's length would cut off their first word.
-                if let Err(e) = infer.send_audio(u.id, &audio_buf) {
-                    tracing::debug!(%e, "audio dropped while the speech engine restarts");
+                // key, so dropping the chime's length would cut off their first word. Until the
+                // worker has started the utterance, the audio waits here.
+                if u.ready {
+                    if let Err(e) = infer.send_audio(u.id, &audio_buf) {
+                        tracing::debug!(%e, "audio dropped while the speech engine restarts");
+                    }
+                } else if u.pending.len() + audio_buf.len() <= PENDING_LIMIT {
+                    u.pending.extend_from_slice(&audio_buf);
                 }
                 // KIVO's own cue must not count as the user speaking (VOICE-25).
                 let muted = speaker.muting_microphone();
@@ -421,6 +455,7 @@ mod tests {
             signals,
         });
         listener.listen(7, true);
+        listener.stt_ready(7);
         let signal = tokio::time::timeout(Duration::from_secs(10), async {
             loop {
                 match rx.recv().await {

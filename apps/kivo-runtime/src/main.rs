@@ -255,6 +255,8 @@ async fn run(args: Args, paths: &Paths, config: kivo_core::KivoConfig, writable:
         core.shutdown(),
     ));
 
+    // Models load when a request starts and unload after going unused (VOICE-34).
+    let cooling = tokio::spawn(infer.clone().cool_down(core.shutdown()));
     let worker = tokio::spawn(infer::supervise(
         infer.clone(),
         infer_sender,
@@ -332,6 +334,7 @@ async fn run(args: Args, paths: &Paths, config: kivo_core::KivoConfig, writable:
     drop(listener);
     infer.shutdown().await;
     let _ = worker.await;
+    let _ = cooling.await;
     turns.abort();
     match ipc.await {
         Ok(Ok(())) => {}

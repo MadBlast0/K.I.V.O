@@ -50,6 +50,8 @@ struct Running {
     pending: Option<(ConfirmSpec, ToolCall)>,
     /// The id of the speech being played, so a late `SpeakDone` can be matched.
     speaking: Option<u64>,
+    /// Becomes true once the speech worker has started this utterance.
+    stt_started: tokio::sync::watch::Receiver<bool>,
 }
 
 /// What the engine is built from.
@@ -166,10 +168,12 @@ impl Engine {
         Index::new(entries)
     }
 
-    /// Starts listening (push-to-talk, the Talk button, or a follow-up).
-    pub async fn talk(&self, source: TurnSource) -> Result<(), String> {
-        if !matches!(self.core.speech_status(), SpeechStatus::Ready) && !self.infer.is_ready() {
-            // Speech isn't ready: say so instead of listening into nothing.
+    /// Starts listening (push-to-talk, the Talk button, or a follow-up). The microphone opens at
+    /// once; the speech models load in parallel (prewarm on turn start, VOICE-34) and the audio
+    /// heard meanwhile is kept, so nothing the user says is lost to a cold start.
+    pub async fn talk(self: &Arc<Self>, source: TurnSource) -> Result<(), String> {
+        if !matches!(self.core.speech_status(), SpeechStatus::Ready) {
+            // Speech isn't installed yet: say so instead of listening into nothing.
             let message = match self.core.speech_status() {
                 SpeechStatus::Downloading { percent } => {
                     format!("I'm still downloading my speech model ({percent}%).")
@@ -181,14 +185,12 @@ impl Engine {
             self.speaker.cue(Cue::Error);
             return Err(message);
         }
-        // The worker starts on demand: give it a moment when this is the first request.
-        if !self.infer.is_ready() {
-            self.infer.wait_ready(WORKER_START).await;
-        }
+        self.infer.warm();
         let id = self.turn_id();
         self.core.begin_turn(&id, source, "").map_err(|e| e.0)?;
         let config = self.core.config();
         let utterance = self.infer.next_utterance();
+        let (started, started_rx) = tokio::sync::watch::channel(false);
         let running = Running {
             id: id.clone(),
             utterance,
@@ -199,6 +201,7 @@ impl Engine {
             transcript: String::new(),
             pending: None,
             speaking: None,
+            stt_started: started_rx,
         };
         *lock(&self.turn) = Some(running);
         self.recorder.turn_started(&id, source);
@@ -209,14 +212,6 @@ impl Engine {
             .bus
             .publish(Event::new(EventKind::Voice(VoiceEvent::SpeechStarted)));
         self.speaker.cue(Cue::ListenStart);
-        let language = config.general.language.clone();
-        let vocabulary = kivo_voice::language::pack(&language)
-            .map(|p| p.vocabulary)
-            .unwrap_or_default();
-        if let Err(e) = self.infer.start_stt(utterance, &language, vocabulary).await {
-            self.fail_turn(&e.to_string());
-            return Err(e.to_string());
-        }
         if let Some(listener) = self.listener() {
             listener.listen(
                 utterance,
@@ -224,7 +219,46 @@ impl Engine {
             );
         }
         self.mark("t1Listening");
+
+        // Start recognition as soon as the worker is up.
+        let engine = Arc::clone(self);
+        let language = config.general.language.clone();
+        tokio::spawn(async move {
+            let vocabulary = kivo_voice::language::pack(&language)
+                .map(|p| p.vocabulary)
+                .unwrap_or_default();
+            let result = if engine.infer.wait_ready(WORKER_START).await {
+                engine
+                    .infer
+                    .start_stt(utterance, &language, vocabulary)
+                    .await
+            } else {
+                Err(crate::infer::InferError::NotReady)
+            };
+            match result {
+                Ok(()) => {
+                    if let Some(listener) = engine.listener() {
+                        listener.stt_ready(utterance);
+                    }
+                    let _ = started.send(true);
+                }
+                Err(e) => {
+                    let current = lock(&engine.turn).as_ref().map(|t| t.utterance);
+                    if current == Some(utterance) {
+                        engine.cancel_listening();
+                        engine.fail_turn(&format!("I couldn't start listening. {e}"));
+                    }
+                }
+            }
+        });
         Ok(())
+    }
+
+    /// Stops the microphone without a result (the speech engine failed to start).
+    fn cancel_listening(&self) {
+        if let Some(listener) = self.listener() {
+            listener.cancel();
+        }
     }
 
     /// The settings changed: apply the ones the engine and the speaker hold (UX §5).
@@ -258,6 +292,7 @@ impl Engine {
         if text.is_empty() {
             return Err("There was nothing to send.".into());
         }
+        self.infer.warm();
         let id = self.turn_id();
         self.core
             .begin_turn(&id, TurnSource::Typed, text)
@@ -272,6 +307,7 @@ impl Engine {
             transcript: text.to_owned(),
             pending: None,
             speaking: None,
+            stt_started: tokio::sync::watch::channel(true).1,
         });
         self.recorder.turn_started(&id, TurnSource::Typed);
         self.core.advance(SessionInput::EndOfSpeech);
@@ -295,6 +331,14 @@ impl Engine {
         self.core
             .bus
             .publish(Event::new(EventKind::Voice(VoiceEvent::SpeechEnded)));
+        let started = lock(&self.turn).as_ref().map(|t| t.stt_started.clone());
+        if let Some(mut started) = started {
+            let ready = tokio::time::timeout(WORKER_START, started.wait_for(|s| *s)).await;
+            if !matches!(ready, Ok(Ok(_))) {
+                self.fail_turn("My speech engine didn't start in time. Try again.");
+                return;
+            }
+        }
         let text = match self.infer.finish_stt(utterance).await {
             Ok(final_text) => final_text.text,
             Err(e) => {
@@ -690,6 +734,7 @@ impl Engine {
         let Some(running) = lock(&self.turn).take() else {
             return;
         };
+        self.infer.touch();
         let state = self.core.state().borrow().session;
         let follow_up_seconds = self.core.config().voice.follow_up_seconds;
         let spoken = state == SessionState::Speaking;

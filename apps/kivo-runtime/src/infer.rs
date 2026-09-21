@@ -70,11 +70,20 @@ pub enum InferError {
 }
 
 /// A handle to the worker. Cloning is cheap; every call goes to the live connection.
+///
+/// Residency (VOICE §8, PLAN-02): the engines the settings choose are only *configured* here.
+/// They are loaded when a request starts (`warm`: prewarm on turn start) and unloaded after
+/// `warm_for` without use; with nothing loaded the worker process exits, so an idle KIVO holds no
+/// model at all (plan §128).
 #[derive(Clone)]
 pub struct Infer {
     peer: Arc<Mutex<Option<Peer>>>,
     ready: watch::Sender<bool>,
     engines: watch::Sender<Engines>,
+    configured: Arc<Mutex<Engines>>,
+    /// Bumped on every use; the cool-down timer only unloads if nothing used the models since.
+    used: watch::Sender<u64>,
+    warm_for: Arc<Mutex<Duration>>,
     next_id: Arc<AtomicU64>,
     program: PathBuf,
 }
@@ -94,6 +103,9 @@ impl Infer {
                 peer: Arc::default(),
                 ready: watch::Sender::new(false),
                 engines: watch::Sender::new(Engines::default()),
+                configured: Arc::default(),
+                used: watch::Sender::new(0),
+                warm_for: Arc::new(Mutex::new(Duration::from_secs(10 * 60))),
                 next_id: Arc::new(AtomicU64::new(1)),
                 program,
             },
@@ -124,13 +136,77 @@ impl Infer {
         .unwrap_or(false)
     }
 
-    /// Sets which engines to keep loaded (the supervisor loads them, and reloads after a restart).
+    /// Sets which engines to keep loaded now (the supervisor loads them, and reloads after a
+    /// restart). Most callers use `configure` and `warm` instead.
     pub fn set_engines(&self, engines: Engines) {
         self.engines.send_replace(engines);
     }
 
+    /// The engines the settings choose. If they are loaded, they are reloaded as configured.
+    pub fn configure(&self, engines: Engines, warm_for: Duration) {
+        *lock(&self.warm_for) = warm_for;
+        *lock(&self.configured) = engines.clone();
+        let loaded = {
+            let current = self.engines.borrow();
+            current.stt.is_some() || current.tts.is_some()
+        };
+        if loaded {
+            self.engines.send_replace(engines);
+        }
+    }
+
+    /// A request is starting: load the configured engines now if they aren't (prewarm on turn
+    /// start, VOICE-34) and restart the cool-down.
+    pub fn warm(&self) {
+        let configured = lock(&self.configured).clone();
+        self.engines.send_if_modified(|current| {
+            let changed = *current != configured;
+            if changed {
+                current.clone_from(&configured);
+            }
+            changed
+        });
+        self.used.send_modify(|n| *n += 1);
+    }
+
+    /// Keeps the models warm (called when a request finishes).
+    pub fn touch(&self) {
+        self.used.send_modify(|n| *n += 1);
+    }
+
+    /// The residency of each slot, as the worker last reported it.
+    pub fn loaded(&self) -> bool {
+        let e = self.engines.borrow();
+        e.stt.is_some() || e.tts.is_some()
+    }
+
     pub fn next_utterance(&self) -> u64 {
         self.next_id.fetch_add(1, Ordering::Relaxed)
+    }
+
+    /// Unloads the models once they have gone `warm_for` without use (VOICE §8). Runs until
+    /// shutdown.
+    pub async fn cool_down(self, shutdown: CancellationToken) {
+        let mut used = self.used.subscribe();
+        loop {
+            let seen = *used.borrow_and_update();
+            let warm_for = *lock(&self.warm_for);
+            tokio::select! {
+                () = tokio::time::sleep(warm_for) => {
+                    if *self.used.borrow() == seen && self.loaded() {
+                        tracing::info!(minutes = warm_for.as_secs() / 60, "speech models unloaded after going unused");
+                        self.engines.send_replace(Engines::default());
+                    }
+                    // Cold now: wait for the next use (or shutdown) before timing again.
+                    tokio::select! {
+                        changed = used.changed() => if changed.is_err() { return },
+                        () = shutdown.cancelled() => return,
+                    }
+                }
+                changed = used.changed() => if changed.is_err() { return },
+                () = shutdown.cancelled() => return,
+            }
+        }
     }
 
     fn peer(&self) -> Result<Peer, InferError> {
@@ -312,6 +388,11 @@ async fn run_worker(
                     break Ok(());
                 }
                 let engines = engines_rx.borrow_and_update().clone();
+                if engines.stt.is_none() && engines.tts.is_none() {
+                    // Nothing to hold: the worker process goes away until it is needed again.
+                    let _ = peer.request(method::SHUTDOWN, Value::Null).await;
+                    break Ok(());
+                }
                 if let Err(e) = load_engines(&peer, &engines).await {
                     break Err(e);
                 }
@@ -463,6 +544,30 @@ mod tests {
         assert_eq!(ids, [1, 2, 3]);
     }
 
+    #[tokio::test(start_paused = true)]
+    async fn models_load_on_use_and_unload_after_the_warm_time() {
+        let (infer, _events, _tx) = Infer::new(PathBuf::from("kivo-infer"));
+        let engines = Engines {
+            stt: None,
+            tts: Some("system".into()),
+            threads: 1,
+        };
+        infer.configure(engines.clone(), Duration::from_secs(600));
+        assert!(!infer.loaded(), "configuring loads nothing");
+        let shutdown = CancellationToken::new();
+        let cooling = tokio::spawn(infer.clone().cool_down(shutdown.clone()));
+        infer.warm();
+        assert!(infer.loaded(), "a request loads the engines");
+        tokio::time::sleep(Duration::from_secs(300)).await;
+        infer.touch();
+        tokio::time::sleep(Duration::from_secs(400)).await;
+        assert!(infer.loaded(), "use restarts the cool-down");
+        tokio::time::sleep(Duration::from_secs(300)).await;
+        assert!(!infer.loaded(), "unloaded after 10 minutes unused");
+        shutdown.cancel();
+        cooling.await.unwrap();
+    }
+
     #[test]
     fn worker_messages_become_events() {
         let (tx, mut rx) = mpsc::unbounded_channel();
@@ -498,4 +603,8 @@ mod tests {
             "unknown messages are ignored, not delivered"
         );
     }
+}
+
+fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }

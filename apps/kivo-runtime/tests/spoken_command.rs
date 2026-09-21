@@ -63,13 +63,16 @@ fn rig(
     let db = Arc::new(Mutex::new(Database::in_memory().unwrap()));
     let recorder = activity::Recorder::new(Arc::clone(&db), true);
     let (infer, mut events, sender) = Infer::new(worker());
-    infer.set_engines(infer::Engines {
-        stt: model_dir
-            .is_dir()
-            .then(|| (kivo_voice::moonshine::MODEL_ID.to_owned(), model_dir)),
-        tts: Some("system".to_owned()),
-        threads: 4,
-    });
+    infer.configure(
+        infer::Engines {
+            stt: model_dir
+                .is_dir()
+                .then(|| (kivo_voice::moonshine::MODEL_ID.to_owned(), model_dir)),
+            tts: Some("system".to_owned()),
+            threads: 4,
+        },
+        Duration::from_secs(600),
+    );
     let chrome = AppEntry {
         id: "Chrome".into(),
         name: "Google Chrome".into(),
