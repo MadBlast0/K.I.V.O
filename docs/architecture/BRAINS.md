@@ -129,7 +129,80 @@ Profile { id, name, primary: ProviderModelRef, fallbacks: [ProviderModelRef],
 - **Coding tasks** are delegated to the Coding profile's CLI agent via ACP. KIVO supervises, shows
   progress, relays permission prompts, and summarizes.
 
-## 8. Voice response style (plan §144)
+## 8. Realtime conversation mode (optional)
+
+Research: [features-and-extensions/REPORT.md §1](../research/features-and-extensions/REPORT.md).
+
+- **What it is:** a `RealtimeProvider` brain type that uses speech-to-speech models (OpenAI
+  `gpt-realtime` family, Gemini Live native audio). The model hears and speaks directly, which gives
+  the most natural turn-taking, tone and interruptions.
+- **What stays local:** the wake word, VAD, the fast path and the permission engine. **The fast
+  path always runs first**, so "mute" never opens a realtime session.
+- **When a session opens:**
+  - a conversation-type request ("let's talk about…", "practice my interview");
+  - a profile set to Realtime;
+  - the user toggling the mode in the card.
+- **When it closes:** after N seconds of silence (15 s by default), when the user says "that's
+  all", or at the budget limit.
+- **Tools:** tool calls from the realtime model go through `authorize()`. While a confirmation is
+  pending, the model's audio is held back.
+- **Session limits:** Gemini connections last about 10 min, so the adapter implements session
+  resumption and context compression. The adapter hides these limits from the user.
+- **Transcripts** from the provider are shown in the card, and history is saved as usual.
+- **Cost:** about $0.02–0.11/min (OpenAI) and about $0.02/min (Gemini) at research time. It is
+  metered live; see §9.
+- **Capability:** off by default; toggled in [CAPABILITIES.md](CAPABILITIES.md).
+
+## 9. Usage, cost tracking and limits
+
+**Metering:**
+
+- Every brain, STT, TTS, realtime and computer-use call records `Usage { provider, model,
+  input_tokens, output_tokens, cached_tokens, audio_seconds, images, requests }` into a `usage`
+  table, with turn, task and routine ids.
+- **Cost** = usage × price table.
+  - The price table is bundled, derived from LiteLLM's `model_prices_and_context_window.json`
+    (MIT), and refreshed from GitHub weekly (the user can turn this off).
+  - Users can override the price per model, for example for negotiated rates or free tiers.
+  - Local models cost $0.
+  - The UI labels estimates clearly as *estimates*.
+
+**Limits (all user-chosen; the default is "track only, no limit"):**
+
+| Setting | Options |
+|---|---|
+| Budget scope | Overall · per provider · per profile · per feature (realtime, computer use, agents) |
+| Period | Daily · weekly · monthly (reset day configurable) |
+| Limit | None (default) · amount in the user's currency |
+| Warnings | User-chosen thresholds, e.g. 50% / 80% / 95%, as a toast + card note + optional spoken warning |
+| At limit | Ask each time (default when a limit is set) · switch to a cheaper profile · switch to local only · block |
+| Per-task caps | Computer use (default $0.50/task), agents (default $2/task), realtime (default 30 min/session); each can be changed or set to none |
+
+**Where it shows:**
+
+- **Control Center → Usage:** charts by day, provider, feature and routine; the top expensive
+  tasks; CSV export.
+- **The card:** long tasks show a live "≈ $0.12" when the user has the cost display on.
+
+## 10. Personas (personality and voice)
+
+- **What a persona is:** `Persona { id, name, style_prompt, verbosity: Brief|Normal|Detailed,
+  humor: Off|Light|Playful, formality, default_voice_per_lang, earcon_set }`.
+- **Built-in personas** (the user picks one in onboarding and can switch any time):
+
+  | Persona | Style |
+  |---|---|
+  | **Calm** (default) | Concise, neutral, precise; the plan's §144 style |
+  | **Friendly** | Warm, a little conversational, still brief |
+  | **Witty** | Light humour and banter, never in confirmations, errors or high-risk flows |
+  | **Custom** | The user writes the style, within guardrails |
+
+- **Guardrails:** personas can never change safety behavior, permission prompts or the honesty of
+  status reports. Confirmations and errors always use neutral wording.
+- **Scope:** persona is per user profile, and can be overridden per brain profile. The voice is
+  chosen separately, by language.
+
+## 11. Voice response style (plan §144)
 
 - The system prompt for voice turns asks for short, speakable answers. There is no markdown in
   speech; the card shows the rich text while TTS gets a speakable version.

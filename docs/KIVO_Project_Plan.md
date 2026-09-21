@@ -3745,3 +3745,10 @@ Phase 0 research changed or refined these parts of the blueprint. The detailed s
 | §60 | **Prompt-injection defense:** provenance/taint tracking + destination binding at the tool boundary ("CaMeL-lite") in v1; full plan-interpreter later | [SECURITY.md](architecture/SECURITY.md) |
 | §21, §110 | **Installer:** NSIS per-user is primary; MSI for IT; MSIX/package identity is a later spike (it unlocks the Windows AI Speech API) | [DISTRIBUTION.md](architecture/DISTRIBUTION.md) |
 | §155 | Phases are refined into vertical milestones M0–M9 with exit criteria | [ROADMAP.md](ROADMAP.md) |
+| §58, new | **Capabilities center:** every capability can be toggled, and disabled means removed. Includes opt-in **computer use** and **screen awareness** | [CAPABILITIES.md](architecture/CAPABILITIES.md) |
+| §148, new | **Routines and custom commands** (no AI required), built on the Task engine | [ROUTINES.md](architecture/ROUTINES.md) |
+| §12, new | **Realtime speech-to-speech** conversation mode; **usage/cost tracking with optional user limits**; **personas** | [BRAINS.md §8–10](architecture/BRAINS.md) |
+| §74–78 | Companion styles: Pill, Orb, Character or Hidden, switchable | [UX.md §6](architecture/UX.md) |
+| §121, §151–152 | Integration strategy, WASM plugins, KIVO Remote | [INTEGRATIONS_AND_PLUGINS.md](architecture/INTEGRATIONS_AND_PLUGINS.md) |
+| §22 | No bundled local LLM; users connect their own local servers | [DECISIONS.md](DECISIONS.md) |
+| §2 | The public name is under review because of existing "KIVO" AI products | [research §8](research/features-and-extensions/REPORT.md) |

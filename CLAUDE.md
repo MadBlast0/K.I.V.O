@@ -36,7 +36,11 @@ Engineering specs (read the relevant one before implementing a subsystem):
 | [docs/architecture/MEMORY.md](docs/architecture/MEMORY.md) | Conversation, task, preference, long-term memory |
 | [docs/architecture/DISTRIBUTION.md](docs/architecture/DISTRIBUTION.md) | Installers, updates, signing, model downloads, licensing |
 | [docs/architecture/BENCHMARKS.md](docs/architecture/BENCHMARKS.md) | `kivo-bench`, reference hardware, budgets |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | Milestones M0–M9 and exit criteria |
+| [docs/architecture/CAPABILITIES.md](docs/architecture/CAPABILITIES.md) | Capability toggles, screen awareness, computer use |
+| [docs/architecture/ROUTINES.md](docs/architecture/ROUTINES.md) | Custom commands and routines |
+| [docs/architecture/INTEGRATIONS_AND_PLUGINS.md](docs/architecture/INTEGRATIONS_AND_PLUGINS.md) | App integrations, WASM plugins, phone remote |
+| [docs/design/DESIGN_SYSTEM.md](docs/design/DESIGN_SYSTEM.md) | Visual directions, tokens ([mockups](docs/design/mockups/kivo-mockups.html)) |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | Milestones M0–M9, feature placement, exit criteria |
 
 ## Platform
 

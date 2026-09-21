@@ -1,0 +1,17 @@
+name: Language support
+description: Help add or improve a language (recordings, phrasings, review)
+labels: [language]
+body:
+  - type: input
+    id: lang
+    attributes: { label: Language, placeholder: "e.g. Punjabi (pa-IN)" }
+    validations: { required: true }
+  - type: dropdown
+    id: help
+    attributes:
+      label: How can you help?
+      multiple: true
+      options: [Native-speaker review, Command phrasings, Test recordings (with consent), Wake-word samples, UI translation]
+  - type: textarea
+    id: notes
+    attributes: { label: Notes, description: Dialects, code-mixing (e.g. Hinglish), known engine issues }

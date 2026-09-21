@@ -1,0 +1,26 @@
+name: Bug report
+description: Something in KIVO doesn't work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: "Security issues: please use private vulnerability reporting (see SECURITY.md), not this form."
+  - type: textarea
+    id: what
+    attributes: { label: What happened?, description: What did you do, what did you expect, and what happened instead? }
+    validations: { required: true }
+  - type: textarea
+    id: repro
+    attributes: { label: Steps to reproduce }
+  - type: input
+    id: version
+    attributes: { label: KIVO version / commit }
+  - type: input
+    id: os
+    attributes: { label: Windows version and build, placeholder: "Windows 11 24H2 (26100.x)" }
+  - type: textarea
+    id: setup
+    attributes: { label: Voice / brain setup, description: "STT/TTS engines, brain provider/profile, mic/headset (no API keys!)" }
+  - type: textarea
+    id: logs
+    attributes: { label: Logs or diagnostics, description: Attach a reviewed diagnostics bundle if possible. Remove anything private. }

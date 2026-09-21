@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="en" data-theme="graphite">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KIVO Design Directions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Sora:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ───────────────────────── Theme tokens ───────────────────────── */
+:root{
+  --radius-ctl:10px; --radius-card:16px; --radius-pill:22px;
+  --ease: cubic-bezier(.2,.8,.2,1);
+}
+[data-theme="graphite"]{
+  --font-display:"Geist",system-ui,sans-serif; --font-body:"Geist",system-ui,sans-serif; --font-mono:"Geist Mono",ui-monospace,monospace;
+  --bg:#0B0C0E; --bg-2:#111317; --surface:#16181D; --surface-2:#1D2026; --line:#2A2E36;
+  --text:#ECEEF2; --text-2:#9AA1AD; --text-3:#646B77;
+  --accent:#4DE8FF; --accent-2:#1FB6FF; --accent-ink:#021217;
+  --warn:#FFB84D; --danger:#FF5C6C; --ok:#5CFFB0;
+  --pill-bg:rgba(20,22,27,.92); --pill-line:rgba(77,232,255,.28);
+  --glow:0 0 0 1px rgba(77,232,255,.25),0 10px 40px -8px rgba(77,232,255,.35);
+  --shadow:0 20px 60px -20px rgba(0,0,0,.8),0 2px 0 rgba(255,255,255,.03) inset;
+  --scene: radial-gradient(1200px 600px at 70% -10%, #1a2330 0%, transparent 60%), linear-gradient(#0d0f13,#0a0b0d);
+  --blur:0px;
+}
+[data-theme="glass"]{
+  --font-display:"Sora",system-ui,sans-serif; --font-body:"Sora",system-ui,sans-serif; --font-mono:"Geist Mono",ui-monospace,monospace;
+  --bg:#0E0B1A; --bg-2:#141026; --surface:rgba(255,255,255,.07); --surface-2:rgba(255,255,255,.11); --line:rgba(255,255,255,.14);
+  --text:#F6F3FF; --text-2:#C4BCDD; --text-3:#8C84A8;
+  --accent:#9FE7FF; --accent-2:#FF9BD8; --accent-ink:#130A26;
+  --warn:#FFD48A; --danger:#FF7E9A; --ok:#8CFFD2;
+  --pill-bg:rgba(255,255,255,.12); --pill-line:rgba(255,255,255,.28);
+  --glow:0 0 0 1px rgba(255,255,255,.25),0 10px 50px -6px rgba(255,155,216,.45),0 0 70px -10px rgba(159,231,255,.4);
+  --shadow:0 30px 80px -20px rgba(10,0,40,.7),0 1px 0 rgba(255,255,255,.25) inset;
+  --scene: radial-gradient(700px 500px at 15% 20%, rgba(255,120,200,.35), transparent 60%), radial-gradient(800px 600px at 85% 30%, rgba(90,200,255,.32), transparent 60%), radial-gradient(900px 600px at 50% 110%, rgba(140,90,255,.45), transparent 60%), #0E0B1A;
+  --blur:22px;
+}
+[data-theme="warm"]{
+  --font-display:"Fraunces",Georgia,serif; --font-body:"Instrument Sans",system-ui,sans-serif; --font-mono:"Geist Mono",ui-monospace,monospace;
+  --bg:#17130F; --bg-2:#1E1914; --surface:#241E18; --surface-2:#2C251E; --line:#3A3128;
+  --text:#F3EAE0; --text-2:#BDAE9E; --text-3:#85776A;
+  --accent:#FF8A5B; --accent-2:#FFC46B; --accent-ink:#2A0F04;
+  --warn:#FFC46B; --danger:#FF6B5B; --ok:#9BD88A;
+  --pill-bg:rgba(36,30,24,.95); --pill-line:rgba(255,138,91,.35);
+  --glow:0 0 0 1px rgba(255,138,91,.3),0 12px 40px -10px rgba(255,138,91,.45);
+  --shadow:0 24px 60px -24px rgba(0,0,0,.75),0 1px 0 rgba(255,255,255,.04) inset;
+  --scene: radial-gradient(900px 500px at 20% 0%, #2b2118 0%, transparent 60%), linear-gradient(#1a1511,#15110d);
+  --blur:0px;
+}
+@media (prefers-reduced-motion: reduce){ *{animation:none!important;transition:none!important} }
+
+/* ───────────────────────── Base ───────────────────────── */
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;transition:background .4s var(--ease),color .4s}
+button{font:inherit;color:inherit;cursor:pointer}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 16px 80px}
+h1,h2,h3{font-family:var(--font-display);font-weight:600;letter-spacing:-.01em;margin:0}
+.eyebrow{font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-3)}
+.muted{color:var(--text-2)}
+
+/* Header / theme switch */
+header.top{display:flex;flex-wrap:wrap;gap:16px;align-items:end;justify-content:space-between;margin-bottom:28px}
+.brand{display:flex;align-items:center;gap:14px}
+.logo{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:var(--surface-2);border:1px solid var(--line);position:relative;overflow:hidden}
+.logo::after{content:"";width:16px;height:16px;border-radius:50%;background:conic-gradient(from 200deg,var(--accent),var(--accent-2),var(--accent));box-shadow:0 0 18px var(--accent)}
+.brand h1{font-size:26px}
+.brand h1 span{color:var(--text-3);font-weight:400}
+.switch{display:flex;gap:6px;background:var(--surface);border:1px solid var(--line);padding:5px;border-radius:14px;backdrop-filter:blur(var(--blur))}
+.switch button{border:0;background:transparent;padding:8px 14px;border-radius:10px;color:var(--text-2);font-weight:500;display:flex;gap:8px;align-items:center}
+.switch button .sw{width:12px;height:12px;border-radius:50%}
+.switch button[aria-pressed="true"]{background:var(--surface-2);color:var(--text);box-shadow:0 0 0 1px var(--line)}
+.note{margin:0 0 22px;padding:14px 16px;border-radius:12px;background:var(--surface);border:1px solid var(--line);color:var(--text-2);backdrop-filter:blur(var(--blur))}
+.note b{color:var(--text)}
+
+/* Section */
+section{margin-top:44px}
+.sec-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:end;gap:12px;margin-bottom:14px}
+.sec-head h2{font-size:22px}
+
+/* ───────────────────────── Desktop scene ───────────────────────── */
+.scene{position:relative;height:560px;border-radius:18px;overflow:hidden;background:var(--scene);border:1px solid var(--line)}
+.win{position:absolute;left:6%;top:8%;width:62%;height:64%;background:#0f1115;border:1px solid #242833;border-radius:10px;box-shadow:0 30px 60px -20px rgba(0,0,0,.7);overflow:hidden}
+[data-theme="warm"] .win{background:#13100d;border-color:#2e261e}
+.win .bar{height:32px;display:flex;align-items:center;gap:8px;padding:0 12px;border-bottom:1px solid rgba(255,255,255,.06);font-size:12px;color:#8b93a1}
+.win .bar i{width:10px;height:10px;border-radius:50%;background:#2c313b;display:inline-block}
+.win pre{margin:0;padding:14px 16px;font-family:var(--font-mono);font-size:12px;line-height:1.7;color:#8f98a8}
+.win pre .k{color:#c792ea}.win pre .s{color:#c3e88d}.win pre .e{color:#ff5c6c;background:rgba(255,92,108,.08)}
+.win2{left:52%;top:18%;width:40%;height:44%;opacity:.55}
+.taskbar{position:absolute;left:0;right:0;bottom:0;height:40px;background:rgba(10,10,14,.75);backdrop-filter:blur(14px);border-top:1px solid rgba(255,255,255,.06);display:flex;justify-content:center;align-items:center;gap:10px}
+.taskbar i{width:22px;height:22px;border-radius:6px;background:rgba(255,255,255,.12);display:block}
+.taskbar .tray{position:absolute;right:14px;display:flex;gap:10px;align-items:center;font-size:11px;color:#9aa1ad}
+.tray-kivo{width:16px;height:16px;border-radius:50%;background:conic-gradient(var(--accent),var(--accent-2),var(--accent));box-shadow:0 0 8px var(--accent)}
+
+/* Edge glow */
+.edge{position:absolute;inset:0;pointer-events:none;border-radius:18px;opacity:0}
+.edge.on{animation:edge 900ms var(--ease)}
+.edge::before{content:"";position:absolute;inset:0;border-radius:18px;padding:3px;background:conic-gradient(from var(--a,0deg),var(--accent),var(--accent-2),var(--accent));-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;filter:blur(1px)}
+@keyframes edge{0%{opacity:0}25%{opacity:1}100%{opacity:0}}
+
+/* Overlay: card + pill */
+.overlay{position:absolute;left:50%;bottom:56px;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:10px;width:min(520px,92%)}
+.card{width:100%;background:var(--pill-bg);border:1px solid var(--line);border-radius:var(--radius-card);box-shadow:var(--shadow);backdrop-filter:blur(var(--blur)) saturate(1.3);overflow:hidden;transform-origin:bottom center;transition:opacity .28s var(--ease),transform .32s var(--ease),max-height .4s var(--ease);max-height:360px}
+.card.hidden{opacity:0;transform:translateY(12px) scale(.96);max-height:0;pointer-events:none}
+.card-h{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line)}
+.chip{font-family:var(--font-mono);font-size:11px;padding:3px 8px;border-radius:999px;background:var(--surface-2);color:var(--text-2);border:1px solid var(--line)}
+.chip b{color:var(--accent);font-weight:500}
+.card-b{padding:12px 14px;display:flex;flex-direction:column;gap:10px;max-height:250px;overflow:auto}
+.you{align-self:flex-end;max-width:85%;background:var(--surface-2);border:1px solid var(--line);padding:8px 12px;border-radius:14px 14px 4px 14px}
+.you.live{color:var(--text-3)}
+.you.live::after{content:"▍";color:var(--accent);animation:blink 1s steps(2) infinite}
+@keyframes blink{50%{opacity:0}}
+.kv{max-width:92%;padding:2px 2px}
+.kv p{margin:0}
+.steps{display:flex;flex-direction:column;gap:6px;font-size:13px}
+.step{display:flex;gap:10px;align-items:center;color:var(--text-2)}
+.step .d{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--line);display:grid;place-items:center;font-size:10px}
+.step.done .d{background:var(--ok);border-color:var(--ok);color:#06140c}
+.step.run .d{border-color:var(--accent);border-top-color:transparent;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.confirm{border:1px solid color-mix(in srgb,var(--warn) 45%,transparent);background:color-mix(in srgb,var(--warn) 9%,transparent);border-radius:12px;padding:10px 12px}
+.confirm .t{font-weight:600;color:var(--warn);font-size:12px;letter-spacing:.02em}
+.btns{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:var(--surface-2);padding:7px 12px;border-radius:var(--radius-ctl);font-weight:500;font-size:13px}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:transparent}
+.btn.danger{color:var(--danger)}
+.card-f{display:flex;gap:8px;align-items:center;padding:10px 14px;border-top:1px solid var(--line)}
+.card-f input{flex:1;background:transparent;border:0;outline:0;color:var(--text);font:inherit}
+.card-f input::placeholder{color:var(--text-3)}
+.kbd{font-family:var(--font-mono);font-size:11px;color:var(--text-3);border:1px solid var(--line);border-radius:6px;padding:1px 6px}
+
+.pill{height:44px;min-width:150px;padding:0 16px 0 12px;border-radius:var(--radius-pill);background:var(--pill-bg);border:1px solid var(--pill-line);display:flex;align-items:center;gap:10px;box-shadow:var(--glow);backdrop-filter:blur(var(--blur)) saturate(1.4);transition:all .3s var(--ease);position:relative}
+.pill .ic{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:var(--accent-ink);flex:none;transition:background .3s}
+.pill .ic svg{width:14px;height:14px}
+.pill .lbl{font-size:12.5px;font-weight:500;color:var(--text-2);white-space:nowrap}
+.wave{display:flex;align-items:center;gap:3px;height:22px}
+.wave span{width:3px;border-radius:3px;background:var(--accent);height:4px;transition:height .09s linear}
+.shimmer{font-size:12.5px;font-weight:500;background:linear-gradient(90deg,var(--text-3),var(--text),var(--text-3));background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:sh 1.6s linear infinite}
+@keyframes sh{to{background-position:-200% 0}}
+.pill[data-s="confirm"]{border-color:color-mix(in srgb,var(--warn) 60%,transparent);box-shadow:0 0 0 1px color-mix(in srgb,var(--warn) 40%,transparent),0 10px 40px -10px color-mix(in srgb,var(--warn) 55%,transparent)}
+.pill[data-s="confirm"] .ic{background:var(--warn)}
+.pill[data-s="error"]{border-color:color-mix(in srgb,var(--danger) 60%,transparent);box-shadow:0 0 0 1px color-mix(in srgb,var(--danger) 40%,transparent),0 10px 40px -10px color-mix(in srgb,var(--danger) 55%,transparent)}
+.pill[data-s="error"] .ic{background:var(--danger)}
+.pill[data-s="idle"]{min-width:12px;width:12px;height:12px;padding:0;border-radius:50%;box-shadow:none;opacity:.7}
+.pill[data-s="idle"] > *{display:none}
+
+.controls{display:flex;flex-wrap:wrap;gap:6px}
+.controls button{border:1px solid var(--line);background:var(--surface);padding:7px 12px;border-radius:10px;color:var(--text-2);font-weight:500;font-size:13px;backdrop-filter:blur(var(--blur))}
+.controls button[aria-pressed="true"]{color:var(--accent-ink);background:var(--accent);border-color:transparent}
+.controls .play{color:var(--text);border-color:var(--accent)}
+
+/* ───────────────────────── Compare strip ───────────────────────── */
+.compare{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.cmp{border-radius:16px;padding:22px 16px;border:1px solid var(--line);display:flex;flex-direction:column;gap:14px;align-items:center;background:var(--scene);color:var(--text);font-family:var(--font-body)}
+.cmp h3{font-size:16px}
+.cmp .sub{font-size:12px;color:var(--text-2);text-align:center}
+.swatches{display:flex;gap:6px}
+.swatches i{width:22px;height:22px;border-radius:7px;border:1px solid rgba(255,255,255,.12)}
+.cmp .type{font-family:var(--font-display);font-size:22px}
+.cmp .pick{margin-top:4px}
+
+/* ───────────────────────── Control Center ───────────────────────── */
+.app{display:grid;grid-template-columns:220px 1fr;min-height:560px;border-radius:14px;overflow:hidden;border:1px solid var(--line);background:var(--bg-2);box-shadow:var(--shadow)}
+.side{padding:14px 10px;border-right:1px solid var(--line);background:var(--surface);backdrop-filter:blur(var(--blur));display:flex;flex-direction:column;gap:2px}
+.side .grp{margin:12px 8px 4px}
+.side a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;color:var(--text-2);text-decoration:none;font-weight:500;font-size:13px;cursor:pointer}
+.side a:hover{background:var(--surface-2);color:var(--text)}
+.side a.on{background:var(--surface-2);color:var(--text);box-shadow:inset 2px 0 0 var(--accent)}
+.side a i{width:6px;height:6px;border-radius:50%;background:var(--text-3)}
+.side a.on i{background:var(--accent)}
+.main{padding:24px 26px;overflow:auto}
+.main h2{font-size:26px;margin-bottom:4px}
+.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:12px;margin-top:18px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-card);padding:16px;backdrop-filter:blur(var(--blur))}
+.tile h3{font-size:14px;font-family:var(--font-body);font-weight:600;margin-bottom:8px}
+.status-hero{grid-column:span 7;display:flex;gap:18px;align-items:center}
+.orb{width:84px;height:84px;border-radius:50%;flex:none;background:radial-gradient(circle at 35% 30%,#fff8,transparent 40%),conic-gradient(from 90deg,var(--accent),var(--accent-2),var(--accent));filter:saturate(1.1);box-shadow:0 0 50px -6px var(--accent);animation:breathe 5s ease-in-out infinite}
+@keyframes breathe{50%{transform:scale(1.04)}}
+.status-hero .big{font-family:var(--font-display);font-size:22px}
+.kpis{grid-column:span 5;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.kpi .v{font-family:var(--font-display);font-size:22px}
+.kpi .l{font-size:12px;color:var(--text-3)}
+.span-6{grid-column:span 6}.span-12{grid-column:span 12}
+.row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid var(--line);font-size:13px}
+.row:first-of-type{border-top:0}
+.t{font-family:var(--font-mono);font-size:11.5px;color:var(--text-3)}
+.bar-meter{height:6px;border-radius:6px;background:var(--surface-2);overflow:hidden;margin-top:6px}
+.bar-meter span{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2))}
+.qa{display:flex;flex-wrap:wrap;gap:8px}
+
+/* Capabilities */
+.cap-top{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 6px}
+.seg{display:flex;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:3px}
+.seg button{border:0;background:transparent;padding:6px 12px;border-radius:8px;color:var(--text-2);font-weight:500;font-size:13px}
+.seg button[aria-pressed="true"]{background:var(--surface-2);color:var(--text)}
+.cap-list{margin-top:14px;display:flex;flex-direction:column;gap:8px}
+.cap{display:grid;grid-template-columns:36px 1fr auto;gap:14px;align-items:center;padding:12px 14px;border-radius:12px;background:var(--surface);border:1px solid var(--line);backdrop-filter:blur(var(--blur))}
+.cap .ci{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;background:var(--surface-2);font-size:16px}
+.cap .nm{font-weight:600}
+.cap .ds{font-size:12.5px;color:var(--text-2)}
+.badges{display:flex;gap:6px;margin-top:4px;flex-wrap:wrap}
+.bdg{font-family:var(--font-mono);font-size:10.5px;padding:1px 7px;border-radius:999px;border:1px solid var(--line);color:var(--text-2)}
+.bdg.costly{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 40%,transparent)}
+.bdg.sens{color:var(--accent-2);border-color:color-mix(in srgb,var(--accent-2) 40%,transparent)}
+.bdg.local{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 35%,transparent)}
+.tog{width:42px;height:24px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line);position:relative;transition:background .2s}
+.tog::after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:var(--text-3);transition:transform .22s var(--ease),background .2s}
+.tog[aria-checked="true"]{background:var(--accent);border-color:transparent}
+.tog[aria-checked="true"]::after{transform:translateX(18px);background:var(--accent-ink)}
+.tog:focus-visible,.btn:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+footer{margin-top:50px;color:var(--text-3);font-size:12px}
+
+@media (max-width:860px){
+  .compare{grid-template-columns:1fr}
+  .app{grid-template-columns:1fr}.side{flex-direction:row;overflow:auto}.side .grp{display:none}
+  .status-hero,.kpis,.span-6{grid-column:span 12}
+  .win{width:88%}.win2{display:none}
+  .scene{height:600px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <div class="brand">
+    <div class="logo" aria-hidden="true"></div>
+    <div>
+      <div class="eyebrow">Design exploration · v0.1 · 2026-09-21</div>
+      <h1>K.I.V.O. <span>visual directions</span></h1>
+    </div>
+  </div>
+  <div class="switch" role="group" aria-label="Design direction">
+    <button data-t="graphite" aria-pressed="true"><span class="sw" style="background:#4DE8FF"></span>Graphite</button>
+    <button data-t="glass" aria-pressed="false"><span class="sw" style="background:linear-gradient(135deg,#FF9BD8,#9FE7FF)"></span>Soft glass</button>
+    <button data-t="warm" aria-pressed="false"><span class="sw" style="background:#FF8A5B"></span>Warm minimal</button>
+  </div>
+</header>
+
+<p class="note"><b>How to use:</b> switch the direction at the top right; every screen below re-themes. In the desktop scene, click a state or press <b>Play conversation</b>. These are mockups: the fonts shown are candidates (the product baseline is Geist/Inter), and the colors are proposals.</p>
+
+<!-- Compare -->
+<section>
+  <div class="sec-head"><h2>Three directions</h2><span class="eyebrow">Pick one, or mix</span></div>
+  <div class="compare">
+    <div class="cmp" data-theme="graphite">
+      <h3>Graphite + electric</h3>
+      <div class="type">Precise. Quiet. Fast.</div>
+      <div class="swatches"><i style="background:#0B0C0E"></i><i style="background:#1D2026"></i><i style="background:#ECEEF2"></i><i style="background:#4DE8FF"></i><i style="background:#1FB6FF"></i></div>
+      <div class="pill" data-s="listening"><div class="ic">●</div><div class="wave"><span style="height:8px"></span><span style="height:16px"></span><span style="height:10px"></span><span style="height:20px"></span><span style="height:12px"></span><span style="height:6px"></span></div><span class="lbl">Listening</span></div>
+      <div class="sub">Raycast/Linear energy. One vivid accent on near-black. Mono details. The most "tool-like".</div>
+      <button class="btn pick" data-t="graphite">Use this</button>
+    </div>
+    <div class="cmp" data-theme="glass">
+      <h3>Soft glass + aurora</h3>
+      <div class="type">Soft light, alive.</div>
+      <div class="swatches"><i style="background:#0E0B1A"></i><i style="background:rgba(255,255,255,.12)"></i><i style="background:#F6F3FF"></i><i style="background:#9FE7FF"></i><i style="background:#FF9BD8"></i></div>
+      <div class="pill" data-s="listening"><div class="ic">●</div><div class="wave"><span style="height:8px"></span><span style="height:16px"></span><span style="height:10px"></span><span style="height:20px"></span><span style="height:12px"></span><span style="height:6px"></span></div><span class="lbl">Listening</span></div>
+      <div class="sub">Closest to Apple Intelligence/Siri: frosted surfaces, aurora gradients. The most "magical", and the heaviest on the GPU.</div>
+      <button class="btn pick" data-t="glass">Use this</button>
+    </div>
+    <div class="cmp" data-theme="warm">
+      <h3>Warm minimal</h3>
+      <div class="type">Calm, human, crafted.</div>
+      <div class="swatches"><i style="background:#17130F"></i><i style="background:#2C251E"></i><i style="background:#F3EAE0"></i><i style="background:#FF8A5B"></i><i style="background:#FFC46B"></i></div>
+      <div class="pill" data-s="listening"><div class="ic">●</div><div class="wave"><span style="height:8px"></span><span style="height:16px"></span><span style="height:10px"></span><span style="height:20px"></span><span style="height:12px"></span><span style="height:6px"></span></div><span class="lbl">Listening</span></div>
+      <div class="sub">Editorial serif headlines and warm neutrals with a coral accent. The friendliest, and the least "techy".</div>
+      <button class="btn pick" data-t="warm">Use this</button>
+    </div>
+  </div>
+</section>
+
+<!-- Desktop scene -->
+<section>
+  <div class="sec-head">
+    <div><h2>Voice overlay on the desktop</h2><div class="muted">A pill at bottom center that grows into a card. It never takes focus from your app.</div></div>
+    <div class="controls" role="group" aria-label="Overlay state">
+      <button class="play" id="play">▶ Play conversation</button>
+      <button data-s="idle">Idle</button>
+      <button data-s="listening" aria-pressed="true">Listening</button>
+      <button data-s="thinking">Thinking</button>
+      <button data-s="acting">Acting</button>
+      <button data-s="speaking">Speaking</button>
+      <button data-s="confirm">Confirm</button>
+      <button data-s="error">Error</button>
+      <button id="glowBtn">Wake glow</button>
+    </div>
+  </div>
+  <div class="scene" id="scene">
+    <div class="win win2"><div class="bar"><i></i><i></i><i></i>&nbsp; Browser — docs</div></div>
+    <div class="win">
+      <div class="bar"><i></i><i></i><i></i>&nbsp; main.rs — kivo-runtime</div>
+<pre><span class="k">fn</span> main() -&gt; anyhow::Result&lt;()&gt; {
+    <span class="k">let</span> cfg: Config = Config::load(<span class="s">"kivo.toml"</span>);
+    <span class="k">let</span> rt  = Runtime::new(cfg)?;
+    rt.run()
+}
+
+<span class="e">error[E0308]: mismatched types — expected `Config`, found `Result&lt;Config&gt;`</span>
+<span class="e">  --&gt; src/main.rs:3:22</span></pre>
+    </div>
+
+    <div class="edge" id="edge"></div>
+
+    <div class="overlay" aria-live="polite">
+      <div class="card" id="card">
+        <div class="card-h">
+          <span class="chip">Coding · <b>Claude</b></span>
+          <span class="chip" id="cost">≈ $0.004</span>
+        </div>
+        <div class="card-b" id="cardBody"></div>
+        <div class="card-f">
+          <input placeholder="Type to KIVO…" aria-label="Type to KIVO">
+          <span class="kbd">Esc</span>
+        </div>
+      </div>
+      <div class="pill" id="pill" data-s="listening" role="status">
+        <div class="ic" id="pillIc"></div>
+        <div id="pillMid"></div>
+      </div>
+    </div>
+
+    <div class="taskbar"><i></i><i></i><i></i><i></i><i></i>
+      <div class="tray"><span class="tray-kivo" title="KIVO"></span>14:42</div>
+    </div>
+  </div>
+</section>
+
+<!-- Control Center -->
+<section>
+  <div class="sec-head"><div><h2>Control Center</h2><div class="muted">The management surface. Click Home or Capabilities in the sidebar.</div></div></div>
+  <div class="app">
+    <nav class="side" aria-label="Control Center">
+      <a class="on" data-page="home"><i></i>Home</a>
+      <a><i></i>Chat</a><a><i></i>Activity</a><a><i></i>Tasks</a><a><i></i>Routines</a>
+      <div class="grp eyebrow">Intelligence</div>
+      <a><i></i>Brains</a><a><i></i>Voice</a><a><i></i>Tools</a><a><i></i>MCP</a><a><i></i>Integrations</a>
+      <div class="grp eyebrow">Control</div>
+      <a data-page="caps"><i></i>Capabilities</a><a><i></i>Permissions</a><a><i></i>Privacy</a><a><i></i>Memory</a><a><i></i>Usage</a>
+      <div class="grp eyebrow">System</div>
+      <a><i></i>Companion</a><a><i></i>Performance</a><a><i></i>Settings</a>
+    </nav>
+
+    <main class="main" id="pageHome">
+      <div class="eyebrow">Good afternoon</div>
+      <h2>KIVO is listening</h2>
+      <div class="muted">Say “Hey Kivo” or hold <span class="kbd">Ctrl</span> <span class="kbd">Space</span></div>
+      <div class="grid">
+        <div class="tile status-hero">
+          <div class="orb" aria-hidden="true"></div>
+          <div>
+            <div class="big">All systems ready</div>
+            <div class="muted">Voice: Moonshine (local) · Voice out: Kokoro · Brain: Default → Claude</div>
+            <div class="qa" style="margin-top:12px">
+              <button class="btn primary">Talk now</button><button class="btn">Pause listening</button><button class="btn danger">Stop everything</button>
+            </div>
+          </div>
+        </div>
+        <div class="kpis">
+          <div class="tile kpi"><div class="v">142 ms</div><div class="l">Wake → sound (p50)</div></div>
+          <div class="tile kpi"><div class="v">68%</div><div class="l">Handled without AI</div></div>
+          <div class="tile kpi"><div class="v">$1.84</div><div class="l">Spent this month · no limit</div></div>
+          <div class="tile kpi"><div class="v">1.3%</div><div class="l">Idle CPU</div></div>
+        </div>
+        <div class="tile span-6">
+          <h3>Recent activity</h3>
+          <div class="row"><span>Opened Chrome</span><span class="t">14:31 · fast path</span></div>
+          <div class="row"><span>Explained a compiler error</span><span class="t">14:22 · Claude</span></div>
+          <div class="row"><span>Routine “Work mode”</span><span class="t">09:02 · 4 steps</span></div>
+          <div class="row"><span>Muted audio</span><span class="t">08:58 · fast path</span></div>
+        </div>
+        <div class="tile span-6">
+          <h3>Running tasks</h3>
+          <div class="row"><span>Watch download “dataset.zip”</span><span class="t">62%</span></div>
+          <div class="bar-meter"><span style="width:62%"></span></div>
+          <div class="row" style="margin-top:8px"><span>Fix failing tests (Codex)</span><span class="t">step 3/5</span></div>
+          <div class="bar-meter"><span style="width:55%"></span></div>
+        </div>
+      </div>
+    </main>
+
+    <main class="main" id="pageCaps" hidden>
+      <div class="eyebrow">Control</div>
+      <h2>Capabilities</h2>
+      <div class="muted">Choose what KIVO is allowed to do. A capability that is off is removed entirely: no AI, routine or agent can use it.</div>
+      <div class="cap-top">
+        <div class="seg" role="group" aria-label="Preset">
+          <button aria-pressed="false">Minimal</button><button aria-pressed="true">Balanced</button><button aria-pressed="false">Power user</button><button aria-pressed="false">Custom</button>
+        </div>
+      </div>
+      <div class="cap-list" id="capList"></div>
+    </main>
+  </div>
+</section>
+
+<footer>KIVO design exploration: mockup only, not production code. Specs: docs/architecture/UX.md, CAPABILITIES.md.</footer>
+</div>
+
+<script>
+(() => {
+  const root = document.documentElement;
+  // Theme switching
+  const setTheme = t => {
+    root.dataset.theme = t;
+    document.querySelectorAll('.switch button').forEach(b => b.setAttribute('aria-pressed', b.dataset.t === t));
+    try { localStorage.setItem('kivo-theme', t); } catch(e) {}
+  };
+  document.querySelectorAll('[data-t]').forEach(b => b.addEventListener('click', () => setTheme(b.dataset.t)));
+  try { const s = localStorage.getItem('kivo-theme'); if (s) setTheme(s); } catch(e) {}
+
+  // Overlay state machine (mockup)
+  const pill = document.getElementById('pill'), ic = document.getElementById('pillIc'), mid = document.getElementById('pillMid');
+  const card = document.getElementById('card'), body = document.getElementById('cardBody');
+  const icons = {
+    mic:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-2.08A7 7 0 0 0 19 12h-2Z"/></svg>',
+    spark:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 5.4L19 9l-5.2 1.6L12 16l-1.8-5.4L5 9l5.2-1.6z"/></svg>',
+    tool:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M22 19.6 13.4 11a5.5 5.5 0 0 0-7-7l3.2 3.2-2.3 2.3L4 6.3a5.5 5.5 0 0 0 7 7L19.6 22z"/></svg>',
+    wave:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 10h2v4H3zm4-3h2v10H7zm4-4h2v18h-2zm4 4h2v10h-2zm4 3h2v4h-2z"/></svg>',
+    warn:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M1 21h22L12 2 1 21Zm12-3h-2v-2h2v2Zm0-4h-2v-4h2v4Z"/></svg>',
+    x:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7l1.4-1.4 6.3 6.3 6.3-6.3z"/></svg>'
+  };
+  const waveHTML = n => '<div class="wave">' + '<span></span>'.repeat(n) + '</div>';
+  const you = (t, live) => `<div class="you${live ? ' live' : ''}">${t}</div>`;
+  const TX = 'Why is my build failing?';
+  const ANSWER = 'Line 3: Config::load returns a Result, but the variable is typed as Config. Adding “?” fixes it. Want me to make the change and re-run cargo check?';
+  let waveTimer = null;
+  const animateWave = on => {
+    clearInterval(waveTimer);
+    if (!on || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    waveTimer = setInterval(() => pill.querySelectorAll('.wave span').forEach(s => s.style.height = (4 + Math.random() * 18) + 'px'), 90);
+  };
+  const states = {
+    idle(){ card.classList.add('hidden'); ic.innerHTML=''; mid.innerHTML=''; animateWave(false); },
+    listening(partial = 'Why is my build'){ ic.innerHTML=icons.mic; mid.innerHTML = waveHTML(9) + '<span class="lbl">Listening</span>'; card.classList.remove('hidden'); body.innerHTML = you(partial, true); animateWave(true); },
+    thinking(){ ic.innerHTML=icons.spark; mid.innerHTML='<span class="shimmer">Thinking…</span>'; card.classList.remove('hidden'); body.innerHTML = you(TX); animateWave(false); },
+    acting(){ ic.innerHTML=icons.tool; mid.innerHTML='<span class="lbl">Running cargo check…</span>'; card.classList.remove('hidden');
+      body.innerHTML = you(TX) + `<div class="steps"><div class="step done"><span class="d">✓</span>Read src/main.rs</div><div class="step run"><span class="d"></span>Run cargo check</div><div class="step"><span class="d"></span>Explain the error</div></div>`; animateWave(false); },
+    speaking(text = ANSWER){ ic.innerHTML=icons.wave; mid.innerHTML = waveHTML(7) + '<span class="lbl">Speaking</span>'; card.classList.remove('hidden'); body.innerHTML = you(TX) + `<div class="kv"><p>${text}</p></div>`; animateWave(true); },
+    confirm(){ ic.innerHTML=icons.warn; mid.innerHTML='<span class="lbl">Needs your OK</span>'; card.classList.remove('hidden');
+      body.innerHTML = you('Fix it and re-run') + `<div class="confirm"><div class="t">CONFIRM · MEDIUM RISK</div><div>Edit <b>src/main.rs</b> (1 line) and run <b>cargo check</b> in D:\\work\\kivo</div><div class="btns"><button class="btn primary">Allow once</button><button class="btn">Always for this project</button><button class="btn danger">Deny</button></div></div>`; animateWave(false); },
+    error(){ ic.innerHTML=icons.x; mid.innerHTML='<span class="lbl">Mic unavailable</span>'; card.classList.remove('hidden');
+      body.innerHTML = `<div class="kv"><p>I can’t hear you: the microphone “USB Headset” was disconnected.</p><div class="btns"><button class="btn primary">Use laptop mic</button><button class="btn">Open settings</button></div></div>`; animateWave(false); }
+  };
+  const ctlBtns = document.querySelectorAll('.controls [data-s]');
+  const setState = (s, ...a) => {
+    pill.dataset.s = s; states[s](...a);
+    ctlBtns.forEach(b => b.setAttribute('aria-pressed', b.dataset.s === s));
+  };
+  ctlBtns.forEach(b => b.addEventListener('click', () => { stopPlay(); setState(b.dataset.s); }));
+  setState('listening');
+
+  // Wake glow
+  const edge = document.getElementById('edge');
+  const glow = () => { edge.classList.remove('on'); void edge.offsetWidth; edge.classList.add('on'); };
+  document.getElementById('glowBtn').addEventListener('click', glow);
+
+  // Scripted conversation
+  let timers = [];
+  const stopPlay = () => { timers.forEach(clearTimeout); timers = []; };
+  const at = (ms, fn) => timers.push(setTimeout(fn, ms));
+  document.getElementById('play').addEventListener('click', () => {
+    stopPlay(); setState('idle');
+    at(400, () => { glow(); setState('listening', ''); });
+    const words = TX.split(' '); let acc = '';
+    words.forEach((w, i) => at(800 + i * 260, () => { acc += (i ? ' ' : '') + w; setState('listening', acc); }));
+    const t0 = 800 + words.length * 260 + 300;
+    at(t0, () => setState('thinking'));
+    at(t0 + 1100, () => setState('acting'));
+    at(t0 + 2600, () => setState('speaking', ''));
+    const aw = ANSWER.split(' '); let ans = '';
+    aw.forEach((w, i) => at(t0 + 2700 + i * 110, () => { ans += (i ? ' ' : '') + w; setState('speaking', ans); }));
+    const t1 = t0 + 2700 + aw.length * 110 + 600;
+    at(t1, () => setState('confirm'));
+  });
+
+  // Control Center pages
+  const home = document.getElementById('pageHome'), caps = document.getElementById('pageCaps');
+  document.querySelectorAll('.side a').forEach(a => a.addEventListener('click', () => {
+    if (!a.dataset.page) return;
+    document.querySelectorAll('.side a').forEach(x => x.classList.toggle('on', x === a));
+    home.hidden = a.dataset.page !== 'home'; caps.hidden = a.dataset.page !== 'caps';
+  }));
+
+  // Capabilities list
+  const CAPS = [
+    ['🎙️','Wake word “Hey Kivo”','Listens on-device for your wake words. No audio leaves the PC until you speak to KIVO.',['local'],true],
+    ['🪟','Apps & windows','Open, close, focus and arrange apps.',['local'],true],
+    ['🧭','UI Automation','Read and click buttons and fields inside apps.',['local','sens'],true],
+    ['🗂️','Files','Search, open and organize files in allowed folders. Deletes go to the Recycle Bin.',['sens'],true],
+    ['👁️','Screen awareness','On request: “what’s on my screen?” Uses local OCR first.',['sens'],false],
+    ['🖱️','Computer use','AI looks at screenshots and uses your mouse and keyboard, as a last resort.',['costly','sens'],false],
+    ['⌨️','Shell commands','Run terminal commands, each one confirmed.',['sens'],false],
+    ['📋','Clipboard','Read and write the clipboard.',['sens'],false],
+    ['☁️','Cloud AI brains','Anthropic, OpenAI, Gemini, OpenRouter.',['costly'],true],
+    ['🗣️','Realtime voice conversation','Speech-to-speech conversation mode.',['costly'],false],
+    ['🧑‍💻','Coding agents','Claude Code, Codex, Gemini CLI via ACP.',['costly'],false],
+    ['🧠','Memory','Remember things you explicitly ask it to.',['sens'],true],
+    ['📱','Remote access','Use KIVO from your paired phone.',['sens'],false]
+  ];
+  const label = {local:'Local', costly:'Costly', sens:'Sensitive'};
+  document.getElementById('capList').innerHTML = CAPS.map(([i,n,d,b,on],k) => `
+    <div class="cap">
+      <div class="ci" aria-hidden="true">${i}</div>
+      <div><div class="nm" id="cap${k}">${n}</div><div class="ds">${d}</div>
+        <div class="badges">${b.map(x => `<span class="bdg ${x}">${label[x]}</span>`).join('')}</div></div>
+      <button class="tog" role="switch" aria-checked="${on}" aria-labelledby="cap${k}"></button>
+    </div>`).join('');
+  document.querySelectorAll('.tog').forEach(t => t.addEventListener('click', () => t.setAttribute('aria-checked', t.getAttribute('aria-checked') !== 'true')));
+  document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => document.querySelectorAll('.seg button').forEach(x => x.setAttribute('aria-pressed', x === b))));
+})();
+</script>
+</body>
+</html>

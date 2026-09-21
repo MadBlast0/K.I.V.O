@@ -5,6 +5,24 @@ decision changes, update the entry and note the date. Do not silently rewrite it
 
 ---
 
+## 2026-09-21 — Feature additions (round 2)
+
+| Topic | Decision |
+|---|---|
+| **Capabilities** | An iOS-style **Capabilities** page: every capability can be toggled, and a disabled one is removed entirely. Presets: Minimal / Balanced / Power user / Custom. Active-use indicators. **Computer use is off by default**, with watch mode and per-task step and cost caps. See [CAPABILITIES.md](architecture/CAPABILITIES.md) |
+| **Screen awareness** | On request only. UIA + local OCR first; cloud vision only if allowed |
+| **Costs** | Track usage and estimated cost for everything. **Limits are optional and user-set** (none by default), with user-chosen warning thresholds and an at-limit action (ask / cheaper / local / block). Per-task caps for computer use, agents and realtime |
+| **Realtime voice** | An optional speech-to-speech conversation mode (OpenAI Realtime, Gemini Live). The fast path and permissions stay in front. Off by default |
+| **Routines** | User-defined custom commands and routines (phrase, hotkey, schedule and event triggers) built on the Task engine. No AI needed, with optional AI steps. See [ROUTINES.md](architecture/ROUTINES.md) |
+| **Companion** | Every style is available and switchable: Pill (default), Orb, Character (Rive), Hidden |
+| **Personas** | Calm (default), Friendly, Witty, Custom. They never change safety wording |
+| **Local LLM** | **Not bundled.** Users connect their own local servers (Ollama, LM Studio, llama.cpp) |
+| **Integrations** | All major apps, planned in order: Google, Microsoft, Spotify/media, dev tools, then others. Local means first, then vendor MCP servers, then native OAuth connectors with **bring-your-own client ID** where the platform restricts it (Gmail/Drive restricted scopes need CASA; Spotify dev mode allows 5 users) |
+| **Plugins** | WASM Component Model (wasmtime + WIT), with capabilities granted by linked imports. Post-MVP |
+| **Remote access** | Phone pairing with QR, an E2E-encrypted channel, an untrusted relay, and a separate permission principal. Post-MVP |
+| **Design** | Three directions are mocked up ([mockups](design/mockups/kivo-mockups.html)). **Owner choice pending** |
+| **Name** | "KIVO" conflicts with an existing AI-companion app, Kivo.ai and kivo.io. **Owner decision pending** on a public name ([research §8](research/features-and-extensions/REPORT.md)) |
+
 ## 2026-09-21 — Owner answers (pre-M0)
 
 | Topic | Decision |

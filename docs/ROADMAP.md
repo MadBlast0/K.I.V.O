@@ -160,6 +160,25 @@ Specs: [architecture/](architecture/ARCHITECTURE.md) · Decisions: [DECISIONS.md
 
 ---
 
+## Feature placement (added 2026-09-21)
+
+| Feature | Spec | Milestone |
+|---|---|---|
+| Design direction, tokens, logo | [DESIGN_SYSTEM.md](design/DESIGN_SYSTEM.md) | **D0**, in parallel with M0; must finish before M1's UI work |
+| Capabilities center (toggles, presets, indicators) | [CAPABILITIES.md](architecture/CAPABILITIES.md) | Core model in M1; full page in M4 |
+| Usage and cost tracking + user-set limits and warnings | [BRAINS.md §9](architecture/BRAINS.md) | M3 |
+| Personas (Calm / Friendly / Witty / Custom) | [BRAINS.md §10](architecture/BRAINS.md) | M3 |
+| Screen awareness (on request, local OCR first) | [CAPABILITIES.md §3](architecture/CAPABILITIES.md) | M4 |
+| Proactive speech rules, text-input hotkey | [UX.md §7–8](architecture/UX.md) | M5 (proactive), M1 (text input) |
+| Routines and custom commands | [ROUTINES.md](architecture/ROUTINES.md) | Engine + builder in M5; schedule/event triggers and voice-created routines in M8 |
+| Companion styles: Orb, Character | [UX.md §6](architecture/UX.md) | M8 |
+| Realtime voice conversation mode | [BRAINS.md §8](architecture/BRAINS.md) | M8 |
+| Computer use (opt-in, watch mode, caps) | [CAPABILITIES.md §4](architecture/CAPABILITIES.md) | M8 |
+| Integrations: local paths (media, CLIs, UIA, extension) | [INTEGRATIONS_AND_PLUGINS.md](architecture/INTEGRATIONS_AND_PLUGINS.md) | M4 |
+| Integrations: OAuth connectors (Google, Microsoft, Spotify, GitHub) | same | M8+ |
+| WASM plugins | same §3 | Post-M9 (interfaces drafted in M4) |
+| KIVO Remote (phone) | same §4 | Post-M9 track |
+
 ## Owner inputs (answered 2026-09-21)
 
 All the pre-M0 questions are answered ([DECISIONS.md → Owner answers](DECISIONS.md)):

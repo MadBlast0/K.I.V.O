@@ -126,7 +126,53 @@ Every step has a recommended default and can be skipped.
 | Performance | Profile (auto: Battery / Balanced / Performance / Gaming) · model residency timers |
 | Accessibility | Screen-reader announcements (on) · captions for spoken replies (on) · high contrast (follow Windows) · warn if overlay and sounds are both off |
 
-## 6. Internationalization (plan §119)
+## 6. Companion styles
+
+The user picks a style in Settings → Companion (switchable at any time). All styles render the
+same `SessionState` and audio levels.
+
+| Style | Description | Tech | Default |
+|---|---|---|---|
+| **Pill** | The overlay pill and card (§2) | CSS + Canvas waveform | **Yes** |
+| **Orb** | An abstract reactive orb that floats near the pill. It can glide to point at UI targets (plan §141) | Raw WebGL shader (adapted LiveKit aura) or Rive | No |
+| **Character** | A small animated mascot with expressions (idle, listening, thinking, speaking, pointing, error). Draggable, with click-through on transparent pixels | **Rive** state machine; the character is designed in the design phase | No |
+| **Hidden** | No visual companion; sounds only | — | No |
+
+- **Card:** Orb and Character still use the card for text. The companion replaces the pill, not
+  the card.
+- **Idle cost:** zero frames at idle for every style. The Character may play a short idle
+  animation every N minutes (off by default).
+- **Pointing:** the companion moves to UIA bounds on the target monitor while KIVO explains
+  something. It never covers the target.
+- **Custom skins:** additional characters and orb themes can be installed as plugins (data-only
+  Rive files).
+
+## 7. Proactive speech and notifications
+
+KIVO sometimes needs to speak without being asked: a task finished, a watcher fired, a reminder,
+or a budget warning. Rules:
+
+| Situation | Behavior |
+|---|---|
+| User active, no call, not fullscreen | Earcon + pill shows the message; speaks if the item is marked "tell me" |
+| In a call (mic in use by another app), fullscreen, presentation, Focus/DND | **No speech.** Queue it, then show a silent toast or pill badge; read it out later on "Kivo, what did I miss?" |
+| User away (idle > 5 min or locked) | Queue; summarize on return (optional) |
+| Quiet hours (setting) | Toast only |
+| Urgent (a user-marked reminder, or a task needing confirmation to continue) | Toast + earcon even in Focus, but never speech during calls |
+
+- **Grouping:** notifications are grouped, so there is at most one spoken interruption per 10 min
+  unless it is urgent.
+- **Per-source settings:** each source can be set to speak, toast or silent.
+
+## 8. Text input ("type to KIVO")
+
+- **Ctrl+Shift+Space** (configurable) opens the card in text mode at the pill position, with focus
+  in the text field. It behaves the same as a spoken request, with no speech reply unless enabled.
+- **Selection shortcut:** with text selected in any app, "Ctrl+Shift+Space → Explain / Rewrite /
+  Translate" offers quick actions. It uses the clipboard or UIA TextPattern, and requires the
+  Clipboard or UIA capability.
+
+## 9. Internationalization (plan §119)
 
 - **UI strings:** from day one, every UI string goes through i18n (`i18next` / ICU message
   format). There are no hard-coded strings, and English is the source locale.
@@ -138,7 +184,7 @@ Every step has a recommended default and can be skipped.
 - **Language settings:** a primary language plus secondary languages. Each language shows its
   status (Supported, Alpha or Planned), so users know what is tested.
 
-## 7. Accessibility (plan §118)
+## 10. Accessibility (plan §118)
 
 - **Screen readers:** the overlay and Control Center expose ARIA roles. State changes and final
   transcripts are announced through UIA notifications.
