@@ -1141,7 +1141,14 @@
 }
 
 /* ───────── Island ───────── */
+/* Geometry: the collapsed pill is 36 px tall, so its ends are 18 px circles. Leading and trailing
+   items sit concentric with those ends (an 18 px item 9 px in; smaller or taller round items are
+   nudged to share the centre), and expanded content starts on the label's text column. */
 .k-island {
+  --isl-inset: 9px;
+  --isl-lead: 18px;
+  --isl-gap: 9px;
+  --isl-text: calc(var(--isl-inset) + var(--isl-lead) + var(--isl-gap));
   background: var(--isl);
   color: var(--isl-fg);
   overflow: hidden;
@@ -1154,10 +1161,21 @@
 .k-island__row {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: var(--isl-gap);
   height: 36px;
-  padding: 0 12px 0 9px;
+  padding-inline: var(--isl-inset);
   white-space: nowrap;
+}
+/* Round trailing items share the centre of the pill's end (18 px in). */
+.k-island__row > .k-island__spin:last-child,
+.k-island__row > .k-island__ok:last-child {
+  margin-inline-end: 2px;
+}
+.k-island__row > .k-island__ring:last-child {
+  margin-inline-end: 1px;
+}
+.k-island__row > .k-island__btn:last-child {
+  margin-inline-end: -3px;
 }
 .k-island__label {
   flex: 1;
@@ -1172,7 +1190,7 @@
   font-size: 12.5px;
 }
 .k-island__body {
-  padding: 2px 16px 15px;
+  padding: 2px 16px 15px var(--isl-text);
   line-height: 1.45;
   white-space: normal;
 }

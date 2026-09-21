@@ -99,8 +99,10 @@ export function Island({
   );
 }
 
+/* Drawn in an 88×36 space and shown at 44×18 (half size), as in the design. */
 const W = 88;
 const H = 36;
+const SCALE = 0.5;
 
 /** Five rounded bars. Runs requestAnimationFrame only while `active`, then eases to rest and stops. */
 export function Waveform({
@@ -120,11 +122,11 @@ export function Waveform({
     const ctx = c?.getContext("2d");
     if (!c || !ctx) return;
     const colour = voice === "kivo" ? "#9AD3FF" : "#fff";
-    // Draw in CSS pixels on a backing store scaled to the display, so bars stay sharp at 150%/200%.
-    const dpr = Math.max(1, window.devicePixelRatio || 1);
-    c.width = W * dpr;
-    c.height = H * dpr;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // The backing store matches the display's pixels, so bars stay sharp at 150%/200%.
+    const px = Math.max(1, window.devicePixelRatio || 1) * SCALE;
+    c.width = Math.round(W * px);
+    c.height = Math.round(H * px);
+    ctx.setTransform(px, 0, 0, px, 0, 0);
     const draw = (amp: number, t: number) => {
       ctx.clearRect(0, 0, W, H);
       ctx.fillStyle = colour;
@@ -160,7 +162,7 @@ export function Waveform({
     return () => cancelAnimationFrame(raf);
   }, [active, voice, level, reduce]);
 
-  return <canvas ref={canvas} style={{ width: W, height: H, flex: "none" }} aria-hidden />;
+  return <canvas ref={canvas} style={{ width: W * SCALE, height: H * SCALE, flex: "none" }} aria-hidden />;
 }
 
 /* ───────── Building blocks for Island bodies ───────── */
