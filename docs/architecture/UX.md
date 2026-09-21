@@ -79,26 +79,24 @@ specs, "pill" means the Island capsule.
 
 ## 3. Control Center (plan §80–89)
 
-The navigation follows plan §80:
+Navigation (updated 2026-09-21; 13 items, with tabs inside pages):
 
-- Home, Chat, Activity, Tasks
-- Brains, Voice, Tools, MCP, Integrations
-- Memory, Permissions, Privacy
-- Companion, Performance
-- Settings, Diagnostics, About
-
-MVP screens are Home, Chat, Activity, Brains, Voice, Permissions and Settings; the rest come later
-(see ROADMAP).
+| Group | Items |
+|---|---|
+| — | Home · Chat · Tasks · Activity · Routines |
+| Intelligence | Brains (Brains / Context) · Agents · Voice · Extensions (Connectors / MCP servers / Skills) |
+| Control | Permissions (Mode / Capabilities / Privacy) · Memory · Usage |
+| System | Settings (General / Appearance / Island / Sounds / Notifications / Accessibility / Shortcuts / Performance / Diagnostics / About) |
 
 **Design system (plan §134–135):**
 
 - **Stack:** React + TypeScript, Tailwind v4, shadcn/ui on Base UI, and Motion (`LazyMotion`).
-- **Fonts:** Inter or Geist (bundled; SF Pro is never used).
+- **Fonts:** the system font (Segoe UI Variable on Windows; nothing bundled, and SF Pro is never used), with Noto fallbacks for other scripts.
 - **Tokens:**
   - an 8 px spacing scale;
   - radii of 10 px (controls), 14 px (cards) and 20 px (pill/sheets);
   - elevation from soft CSS shadows;
-  - dark-first themes.
+  - **Light theme by default**, with Light / Dark / System.
 - **Materials:** Mica on the Control Center (Windows 11), solid on Windows 10. The overlay uses a
   CSS translucent surface, with acrylic only on the fixed-size pill if M0 shows it is acceptable.
 - **Motion:** 150–250 ms ease-out for state changes, spring motion for card growth, and Windows
@@ -111,22 +109,17 @@ MVP screens are Home, Chat, Activity, Brains, Voice, Permissions and Settings; t
 
 ## 4. Onboarding (plan §129–133)
 
-| Step | Content |
-|---|---|
-| 1 Welcome | "KIVO is your AI interface for Windows." Privacy promise in one line |
-| 2 Hardware | Detected CPU/GPU/NPU/RAM/battery, and a recommended performance profile |
-| 3 Microphone | Pick a device, see a level meter, then a quick test phrase |
-| 4 Voice in (STT) | Fast / Balanced / Accurate / Cloud cards (recommended one preselected); model download with progress |
-| 5 Voice out (TTS) | Instant / Natural / Expressive / System / Cloud, with preview buttons |
-| 6 Activation | Push-to-talk hotkey (**Ctrl+Space** by default, conflict-checked) + **"Hey Kivo"** opt-in (explains on-device spotting) |
-| 7 Voice enrollment | Biometric consent → 8 phrases → result. Skippable, can be done later |
-| 8 Brain | Cloud/API · CLI agent (auto-discovered list) · Local (detected Ollama / LM Studio) · Later |
-| 9 Permissions | The profile (Balanced by default), each permission class explained in one line |
-| 10 Overlay & sounds | Style (Pill + card), glow (off), sounds (on), with a live preview |
-| 11 Startup & close | "Start KIVO when I sign in" (off) and "On close, keep running" (on), explained |
-| 12 Try it | A guided "Say 'Hey Kivo, what time is it?'" |
+Updated 2026-09-21: **11 steps in 5 phases**, one decision per screen, with the recommended
+choice preselected. The source of truth is [the mockup](../design/mockups/kivo-app.html) →
+Onboarding.
 
-Every step has a recommended default and can be skipped.
+| Phase | Steps |
+|---|---|
+| Welcome | 1 Welcome (black screen; the Island demonstrates itself) |
+| Voice | 2 Microphone check · 3 How you call KIVO (Ctrl+Space, "Hey Kivo") · 4 Hearing & speaking (engine + voice, background download) · 5 Your voice (optional enrollment, with consent) |
+| Brain | 6 Connect a brain (optional; sign-in, free options marked) · 7 Connect your apps and tools (optional; connectors, extension, MCP, skills) |
+| Control | 8 Permission mode · 9 Look & feel (theme, accent, Island position, chimes) · 10 Startup ("Open KIVO when Windows starts", keep running) |
+| Ready | 11 Try it (live Island demo) → **Finish opens the Control Center** |
 
 ## 5. Settings (defaults)
 
