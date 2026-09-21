@@ -189,7 +189,7 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 - [ ] **SEC-01** · M1 · Permission modes Ask every time and Auto (default) in the engine (§1.1)
 - [ ] **SEC-02** · M4 · Permission modes Accept edits and Plan first (Plan: read-only, plan shown, approval grants exactly the planned steps) (§1.1)
 - [ ] **SEC-03** · M5 · Bypass permissions: explicit opt-in dialog (optional Windows Hello), auto-expiry (15 min / 1 h default / until off), red BYPASS chip in the Island and tray, every action audited, unavailable to guests and remote clients (§1.1)
-- [ ] **SEC-04** · M1 · Switching mode only through UI or hotkey (Ctrl+Shift+M), from the Island, tray, chat and Home; never through a tool call or voice alone; the Island shows the mode while acting (hidden for Auto) (§1.1)
+- [~] **SEC-04** · M1 · Switching mode only through UI or hotkey (Ctrl+Shift+M), from the Island, tray, chat and Home; never through a tool call or voice alone; the Island shows the mode while acting (hidden for Auto) (§1.1) → partial: mode in the runtime state, saved to kivo.toml; switched from the tray submenu, Home and Ctrl+Shift+M (cycle), with an Island notice; only the user can switch (no tool or voice path exists); Bypass refused until SEC-03 · verified: core, RPC, tray and hotkey tests · missing: switching from the Island and chat; the mode chip while acting
 - [ ] **SEC-05** · M1 · Hard limits enforced in every mode: emergency stop, disabled capabilities, blocked apps, no typing into password fields, destination binding, per-task cost caps (§1.1)
 
 **Permission engine (§2–3)**
@@ -228,7 +228,7 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 
 **Emergency stop (§8)**
 
-- [ ] **SEC-25** · M1 · Emergency stop from the Ctrl+Alt+Shift+Esc hotkey (low-level hook fallback), tray "Stop everything" and the overlay/Control Center Stop button (§8)
+- [~] **SEC-25** · M1 · Emergency stop from the Ctrl+Alt+Shift+Esc hotkey (low-level hook fallback), tray "Stop everything" and the overlay/Control Center Stop button (§8) → partial: `Core::stop_everything` cancels the current turn; from the tray "Stop everything" and the Ctrl+Alt+Shift+Esc hotkey (`permissions.emergency-stop`) · verified: core, tray and hotkey tests · missing: the Island / Control Center Stop button, the low-level-hook fallback, and cancelling tools and tasks once they exist
 - [ ] **SEC-26** · M2 · Voice trigger via the command spotter (§8, VOICE-19)
 - [ ] **SEC-27** · M4 · Full effect: cancel all turns and tasks, stop TTS, kill tool Job Objects, `session/cancel` to ACP agents, stop input injection, pause background tasks, audit entry (§8)
 

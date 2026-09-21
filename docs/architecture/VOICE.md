@@ -220,7 +220,7 @@ Status marks and the build protocol: [docs/README.md](../README.md). Engine choi
 
 **Activation**
 
-- [~] **VOICE-41** · M1 · Push-to-talk: hold Ctrl+Space to talk (`Hotkeys` trait: RegisterHotKey with a low-level-hook fallback), optional toggle mode, auto-end on silence; registration conflicts (e.g. IME switching on CJK layouts) detected with a rebind prompt (DECISIONS "Activation", UX §5) → partial: hold Ctrl+Space (from `voice.push-to-talk`) to listen: `kivo-platform-windows::WindowsHotkeys` (RegisterHotKey on its own thread; release detected by a 15 ms key check only while held), conflicts reported as `Conflict`; runtime `hotkeys.rs` → `Core::start_listening`/`stop_listening` · verified: hotkey tests incl. real synthetic key presses (release noticed < 60 ms), runtime tests, live on this PC · missing: toggle mode, auto-end on silence (needs VAD, VOICE-04), the low-level-hook fallback and the rebind prompt on conflict
+- [~] **VOICE-41** · M1 · Push-to-talk: hold Ctrl+Space to talk (`Hotkeys` trait: RegisterHotKey with a low-level-hook fallback), optional toggle mode, auto-end on silence; registration conflicts (e.g. IME switching on CJK layouts) detected with a rebind prompt (DECISIONS "Activation", UX §5) → partial: hold Ctrl+Space (`voice.push-to-talk`) to listen: `WindowsHotkeys` (RegisterHotKey on its own thread; release detected by a 15 ms key check only while held); the mic opens while held and closes on release; conflicts reported · verified: hotkey tests incl. real key presses, runtime tests, live · missing: toggle mode, auto-end on silence (VAD), the low-level-hook fallback, the rebind prompt on conflict
 
 **Wake words (§4)**
 

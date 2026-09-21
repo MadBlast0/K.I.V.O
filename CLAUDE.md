@@ -53,11 +53,13 @@ never call Win32 (or any OS API) directly from core logic.
 
 ## Status
 
-Phase 0 (specification) and **D0 (design foundation)** complete. **M0 — foundations and
-measurement** in progress: core types, platform traits, store, secured IPC, and the two
-processes working together (`kivo-runtime` with tray, single instance and app supervision;
-the app connecting, starting the runtime and showing its live state). Remaining in M0: the
-spikes and benchmarks. Progress per milestone is in the
+Phase 0 (specification) and **D0 (design foundation)** complete (the Island's side-by-side
+review with the owner is the one open D0 exit check). **M0 — foundations and measurement** is
+built: core types, platform traits, store, secured IPC with live state and mic levels, the
+runtime (tray, single instance, app supervision, push-to-talk, permission modes, stop
+everything), the app (Home, overlay Island), WASAPI audio and the `kivo-bench` harness with all
+suites. The speech-engine benchmark runs are deferred by the owner (DECISIONS "Benchmarks
+deferred"). **Next: M1.** Progress per milestone is in the
 table at the top of [docs/ROADMAP.md](docs/ROADMAP.md). Update this section as milestones land.
 
 ## Build, run, check
