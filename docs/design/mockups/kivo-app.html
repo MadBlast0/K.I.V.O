@@ -339,7 +339,7 @@ code{font-family:var(--mono);font-size:12px;background:var(--fill);padding:1px 5
 .themes .pv .mn{flex:1;display:flex;flex-direction:column;gap:6px;padding:10px 8px}
 .themes .pv .pill-i{width:46%;height:10px!important;border-radius:6px!important;background:#000;align-self:center;margin-bottom:4px}
 .themes .ot{display:flex;align-items:center;gap:8px}
-.explain{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:18px}
+.explain{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:18px}
 .explain .tile{display:flex;gap:10px;align-items:flex-start;cursor:pointer;transition:box-shadow var(--t-base)}
 .explain .tile:hover{box-shadow:0 0 0 1px var(--acc)}
 .explain .tile b{display:block;font-size:13px}.explain .tile span{font-size:12px;color:var(--text-2)}
@@ -769,7 +769,7 @@ const NAV = [
 ];
 const TABS = {
   brains:[['brains','Brains'],['context','Context']],
-  extensions:[['connectors','Connectors'],['mcp','MCP servers'],['skills','Skills']],
+  extensions:[['connectors','Connectors'],['mcp','MCP servers'],['plugins','Plugins'],['skills','Skills']],
   permissions:[['permissions','Mode'],['capabilities','Capabilities'],['privacy','Privacy']],
   settings:[['settings','General'],['appearance','Appearance'],['island','Island'],['sounds','Sounds'],['notifications','Notifications'],['accessibility','Accessibility'],['shortcuts','Shortcuts'],['performance','Performance'],['diagnostics','Diagnostics'],['about','About']]
 };
@@ -783,7 +783,7 @@ const pageBody = () => {
   if (!TABS[pg]) { TABMODE = false; return PAGES[pg](); }
   const cur = S.tabs[pg] && TABS[pg].some(t => t[0]===S.tabs[pg]) ? S.tabs[pg] : TABS[pg][0][0];
   TABMODE = true; const body = PAGES[cur](); TABMODE = false;
-  const EXPLAIN = pg === 'extensions' ? `<div class="explain">${[['connectors','plug','Connectors','Apps you sign in to, like Google Calendar or GitHub'],['mcp','server','MCP servers','Extra tools from developers, for advanced users'],['skills','skill','Skills','Know-how KIVO follows, like writing release notes']].map(([t,ic,n,d]) => `<div class="tile" data-tab="${t}" role="button" tabindex="0"><span style="color:var(--text-2)">${I(ic)}</span><div><b>${n}</b><span>${d}</span></div></div>`).join('')}</div>` : '';
+  const EXPLAIN = pg === 'extensions' ? `<div class="explain">${[['connectors','plug','Connectors','Apps you sign in to, like Google Calendar or GitHub'],['mcp','server','MCP servers','Extra tools from developers, for advanced users'],['plugins','zap','Plugins','Add-ons that add new features to KIVO itself'],['skills','skill','Skills','Know-how KIVO follows, like writing release notes']].map(([t,ic,n,d]) => `<div class="tile" data-tab="${t}" role="button" tabindex="0"><span style="color:var(--text-2)">${I(ic)}</span><div><b>${n}</b><span>${d}</span></div></div>`).join('')}</div>` : '';
   return `<div class="ph"><div><h2>${TITLES[pg]}</h2>${SUBS[pg]?`<p>${SUBS[pg]}</p>`:''}</div></div>${EXPLAIN}<div class="ptabs" role="tablist">${TABS[pg].map(([t,l]) => `<button role="tab" aria-selected="${t===cur}" data-tab="${t}">${l}</button>`).join('')}<i class="ind"></i></div>${body}`;
 };
 const TITLES = Object.fromEntries(NAV.flatMap(g => g[1]).map(x => [x[0], x[1]]));
@@ -874,6 +874,16 @@ agents: () => ph('Agents','Other AIs KIVO can run and talk to for you: coding ag
     li('shield','Starting an agent in bypass mode','Always asks first, because the agent can then change anything', pill('High','r')),
     li('check','Review prompts before sending','Show a draft in the Island first', tog(true)),
     li('bot','Share my workspace notes with agents','Read-only, through KIVO’s MCP server', tog(true))),
+plugins: () => ph('Plugins','Add-ons that add new features to KIVO, like new commands, voices or Island styles. Each one runs in a sandbox and asks for permissions, like a phone app.', `<button class="btn">${I('folder')}Install from file</button><button class="btn pri">${I('plus')}Browse plugins</button>`) +
+  sect('Installed') + group(
+    li('zap','Recipe Helper','Adds “what can I cook?” commands · can read Documents\Recipes', pill('2 permissions')+tog(true)+chev,'click'),
+    li('zap','Retro Island','A pixel-art Island style · no permissions', tog(true)+chev,'click'),
+    li('zap','Stock Ticker','Live prices as an Island activity · internet access', pill('Update asks for more','o')+tog(false)+chev,'click')) +
+  sect('Permissions plugins can ask for') + group(
+    li('globe','Internet','Only the websites a plugin names'),
+    li('folder','Files','Only the folders you approve'),
+    li('plus','New tools and commands','They follow your permission mode like any other action')) +
+  `<p class="note">Plugins can never approve their own actions or turn on capabilities you switched off.</p>`,
 skills: () => ph('Skills','Instructions and scripts KIVO can use when a task needs them. Only their names use context until one is needed.', `<button class="btn">${I('folder')}Open skills folder</button><button class="btn pri">${I('plus')}Add skill</button>`) +
   sect('Enabled') + group(
     li('skill','release-notes','Turns commits into release notes · from a folder', '<span class="meta">~40 tokens</span>'+tog(true)),
