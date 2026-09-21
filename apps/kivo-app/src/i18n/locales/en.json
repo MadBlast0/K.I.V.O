@@ -34,7 +34,9 @@
     "stepFailed": "Failed",
     "turnOn": "Turn it on",
     "notNow": "Not now",
-    "retry": "Try again"
+    "retry": "Try again",
+    "say": "Say {words}",
+    "quoted": "“{word}”"
   },
   "home": {
     "talk": "Talk",

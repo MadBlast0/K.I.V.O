@@ -171,7 +171,7 @@ export function WindowsToastPreview({
 }) {
   const { t } = useTranslation();
   return (
-    <div className="k-win-toast" role="img" aria-label={t("surfaces.notification", { title })}>
+    <div className="k-win-toast" role="group" aria-label={t("surfaces.notification", { title })}>
       <div className="k-win-toast__head">
         <Mark size={16} />
         KIVO
@@ -210,7 +210,7 @@ export function WindowsToastPreview({
 export function HelloPreview({ title, detail }: { title: string; detail: string }) {
   const { t } = useTranslation();
   return (
-    <div className="k-hello" role="img" aria-label={t("surfaces.hello")}>
+    <div className="k-hello" role="group" aria-label={t("surfaces.hello")}>
       <div style={{ fontWeight: 600, fontSize: 15 }}>{title}</div>
       <div className="k-hello__face">
         <Icon name="user" size={26} />

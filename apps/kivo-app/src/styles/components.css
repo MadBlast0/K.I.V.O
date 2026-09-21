@@ -1258,6 +1258,10 @@
   font-weight: 500;
   transition: background var(--t-fast);
 }
+/* The accent ring can vanish on black; the Island's focus ring is white. */
+.k-island :focus-visible {
+  outline-color: #fff;
+}
 .k-island__btn:hover {
   background: rgba(255, 255, 255, 0.2);
 }

@@ -223,7 +223,9 @@ or a budget warning. Rules:
 
 - **Screen readers:** the overlay and Control Center expose ARIA roles. State changes and final
   transcripts are announced through UIA notifications.
-- **Keyboard:** full keyboard navigation with visible focus rings.
+- **Keyboard:** full keyboard navigation with visible focus rings. The Island never takes focus on its own; when it
+  shows buttons, Ctrl+Shift+Space (type to KIVO) moves focus onto them instead of opening the text
+  field: Tab or the arrow keys move, Enter presses, Esc gives focus back.
 - **Color and contrast:** no information is conveyed by color alone. Contrast is at least 4.5:1,
   and the Windows high-contrast theme is respected.
 - **Voice-only use:** every action in the overlay can be triggered by voice.
@@ -316,7 +318,7 @@ real runtime data over IPC, not mockup data.
 - [x] **UX-49** · M1 · Every UI string goes through i18n (`i18next`, ICU messages), English source locale; no hard-coded strings (§9) → done: the Control Center, the Island and the gallery read every string from `src/i18n/locales/en.json` (i18next + ICU, `withNodes` for sentences with elements); the runtime's own text (tray, notifications, spoken replies, action titles, refusals) comes from `crates/kivo-core/locales/en.json` through `kivo_core::text` · verified: `pnpm test` (presets have translated labels), `cargo test -p kivo-core --test text_keys` (every key the code uses exists), tray and tool tests assert no raw keys, sweep of `.tsx` for literal text (2026-09-22)
 - [x] **UX-50** · M1 · CSS logical properties so RTL works by switching `dir`; dates and numbers via `Intl` (§9) → done: every inline direction in the stylesheets and inline styles is logical (`margin-inline-*`, `inset-inline-*`, `text-align: start`); the switch thumb and the sheet mirror under `:dir(rtl)`; only centring and Base UI’s physical popup sides stay physical. Times and dates use `Intl.DateTimeFormat`, numbers, percentages, units and money use ICU number skeletons (`Intl.NumberFormat`) · verified: `dir="rtl"` in the running UI mirrors the sidebar (border and position flip), typecheck/lint/tests (2026-09-22)
 - [ ] **UX-51** · L1 · Language settings show each language's status (Supported / Alpha / Planned) (§9)
-- [~] **UX-52** · M1 · ARIA roles, full keyboard navigation and visible focus rings in the overlay and Control Center (§10) → partial: components use Base UI (ARIA, keyboard) and a focus ring · missing: overlay window, audit
+- [x] **UX-52** · M1 · ARIA roles, full keyboard navigation and visible focus rings in the overlay and Control Center (§10) → done: Base UI components (ARIA and keyboard) with a focus ring everywhere (white on the Island); the Island is a polite live region, its dots are decorative and its spinner/check are labelled images; Ctrl+Shift+Space puts keyboard focus on the Island’s buttons (arrows/Tab, Enter, Esc) · verified: axe-core audits in Vitest of Home, Activity, Chat, Settings, the component gallery and the Island with a confirmation (`src/a11y.test.tsx`, `src/overlay/Overlay.test.tsx`: no violations; contrast is UX-54), keyboard-mode tests (2026-09-22)
 - [ ] **UX-53** · M2 · State changes and final transcripts announced through UIA notifications (§10)
 - [ ] **UX-54** · M7 · Contrast ≥ 4.5:1, never color alone, Windows high-contrast respected; warn if overlay and sounds are both off (§5, §10)
 - [ ] **UX-55** · M5 · Voice-only use: every overlay action can be triggered by voice (§10)

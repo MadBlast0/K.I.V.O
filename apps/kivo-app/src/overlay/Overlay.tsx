@@ -1,7 +1,8 @@
 /**
  * The overlay window's content: the Island, driven by the runtime's state and live turn (UX §2).
  * The window is transparent and never takes focus. It lets clicks through except while the Island
- * shows buttons, and takes focus only while the user types to KIVO (UX-09, UX-41). The app shows
+ * shows buttons, and takes focus only when asked with Ctrl+Shift+Space: to type to KIVO (UX-09,
+ * UX-41) or, when the Island shows buttons, to use them from the keyboard (UX-52). The app shows
  * it only while the Island has something to show and hides it (WebView2 invisible) otherwise.
  */
 import { invoke, isTauri } from "@tauri-apps/api/core";
@@ -42,6 +43,12 @@ export function Overlay() {
   const [notice, setNotice] = useState<PermissionMode | null>(null);
   const [typing, setTyping] = useState(false);
   const [draft, setDraft] = useState("");
+  // Keyboard focus is on the Island's buttons (Tab / arrows move, Enter presses, Esc leaves): the
+  // Island it was asked for, so it ends by itself when that Island changes.
+  const [keyboardFor, setKeyboardFor] = useState<string | null>(null);
+  // The Island showing buttons right now (its key), read when the hotkey arrives.
+  const buttons = useRef<string | null>(null);
+  const root = useRef<HTMLDivElement>(null);
 
   // A change of mode (not the first one seen) shows a notice for a moment.
   const mode = snapshot?.mode ?? null;
@@ -67,8 +74,12 @@ export function Overlay() {
           level.current = e.payload;
         }),
         listen("island://type", () => {
-          setDraft("");
-          setTyping(true);
+          if (buttons.current) {
+            setKeyboardFor(buttons.current);
+          } else {
+            setDraft("");
+            setTyping(true);
+          }
         }),
       ]);
       const stop = () => stops.forEach((s) => s());
@@ -157,7 +168,42 @@ export function Overlay() {
     typingModel ?? (snapshot ? islandForTurn(snapshot, t, handlers) : null) ?? (notice ? islandForMode(notice) : null);
 
   // Clicks reach the window only while it has something to click (UX §2).
-  const interactive = typing || hasButtons(model);
+  const withButtons = !typing && hasButtons(model);
+  const interactive = typing || withButtons;
+  const islandKey = withButtons && model ? `${snapshot?.turn?.id ?? ""}:${model.state}` : null;
+  const keyboard = keyboardFor !== null && keyboardFor === islandKey;
+  useEffect(() => {
+    buttons.current = islandKey;
+  }, [islandKey]);
+
+  // Keyboard mode: focus the first button; once that Island is gone, give focus back.
+  useEffect(() => {
+    if (keyboard) {
+      root.current?.querySelector<HTMLButtonElement>(".k-island button")?.focus();
+    } else if (keyboardFor !== null && !typing) {
+      void invoke("overlay_typing_done");
+    }
+  }, [keyboard, keyboardFor, typing]);
+
+  const onIslandKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (!keyboard) return;
+    if (e.key === "Escape") {
+      e.preventDefault();
+      setKeyboardFor(null);
+      void invoke("overlay_typing_done");
+      return;
+    }
+    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+    const all = [...(root.current?.querySelectorAll<HTMLButtonElement>(".k-island button") ?? [])];
+    const at = all.findIndex((b) => b === document.activeElement);
+    const rtl = document.documentElement.dir === "rtl";
+    const step = (e.key === "ArrowRight") !== rtl ? 1 : -1;
+    const next = all[(at + step + all.length) % all.length];
+    if (next) {
+      e.preventDefault();
+      next.focus();
+    }
+  };
   useEffect(() => {
     if (isTauri()) void invoke("overlay_interactive", { interactive });
   }, [interactive]);
@@ -165,7 +211,6 @@ export function Overlay() {
   // Keep the window as small as the Island (plus its shadow): a large transparent window costs
   // GPU and power every frame. The Island's content box is measured, not its animated outline,
   // so the window changes size once per state rather than on every frame of the spring.
-  const root = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = root.current;
     if (!el || !isTauri()) return;
@@ -199,7 +244,9 @@ export function Overlay() {
   return (
     // "user" follows Windows' "Animation effects" setting (DESIGN_SYSTEM §5).
     <MotionConfig reducedMotion="user">
-      <div className="k-overlay" ref={root}>
+      {/* The keys only act while the user asked for keyboard focus (Ctrl+Shift+Space). */}
+      {/* oxlint-disable-next-line jsx-a11y/no-static-element-interactions */}
+      <div className="k-overlay" ref={root} onKeyDown={onIslandKey}>
         <Island
           model={model}
           level={readLevel}

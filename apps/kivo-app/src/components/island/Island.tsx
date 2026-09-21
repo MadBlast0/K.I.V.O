@@ -9,6 +9,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { Icon } from "../../icons";
 import { Keys, Orb } from "../ui/Status";
 import { useTranslation } from "react-i18next";
+import { withNodes } from "../../i18n/nodes";
 
 export interface IslandModel {
   /** Identifies the state; content cross-fades when it changes (e.g. "listening", "acting"). */
@@ -180,14 +181,15 @@ export function Waveform({
 
 export function IslandSpin() {
   const { t } = useTranslation();
-  return <span className="k-island__spin" aria-label={t("ui.working")} />;
+  return <span className="k-island__spin" role="img" aria-label={t("ui.working")} />;
 }
 export function IslandOk() {
   const { t } = useTranslation();
-  return <span className="k-island__ok" aria-label={t("ui.done")} />;
+  return <span className="k-island__ok" role="img" aria-label={t("ui.done")} />;
 }
+/** A coloured status dot; decoration only, since the label says the same in words (UX §10). */
 export const IslandDot = ({ color }: { color: string }) => (
-  <span className="k-island__dot" style={{ background: color }} />
+  <span className="k-island__dot" style={{ background: color }} aria-hidden />
 );
 export const IslandApp = ({ text, bg, fg = "#fff" }: { text: string; bg: string; fg?: string }) => (
   <span className="k-island__app" style={{ background: bg, color: fg }}>
@@ -242,20 +244,21 @@ export function IslandActions({
   );
 }
 
+/** “Say “allow once”, “allow for this project” or “deny””: the words joined the way the language
+ * joins alternatives (`Intl.ListFormat`), each in bold. */
 export function VoiceHint({ words, extra }: { words: string[]; extra?: ReactNode }) {
+  const { t, i18n } = useTranslation();
+  const parts = new Intl.ListFormat(i18n.language, { type: "disjunction" }).formatToParts(words);
+  const list = parts.map((p, i) =>
+    p.type === "element" ? <b key={i}>{t("island.quoted", { word: p.value })}</b> : <span key={i}>{p.value}</span>,
+  );
   return (
     <div className="k-island__hint">
-      <span className="k-island__mic">
+      <span className="k-island__mic" aria-hidden>
         <Icon name="mic" />
       </span>
       <span>
-        Say{" "}
-        {words.map((w, i) => (
-          <span key={w}>
-            <b>“{w}”</b>
-            {i < words.length - 2 ? ", " : i === words.length - 2 ? " or " : ""}
-          </span>
-        ))}
+        {withNodes(t, "island.say", { words: list })}
         {extra}
       </span>
     </div>
@@ -263,10 +266,11 @@ export function VoiceHint({ words, extra }: { words: string[]; extra?: ReactNode
 }
 
 export function IslandRisk({ level }: { level: "medium" | "high" }) {
+  const { t } = useTranslation();
   return (
     <div className={level === "high" ? "k-island__risk k-island__risk--high" : "k-island__risk"}>
       <Icon name={level === "high" ? "permissions" : "warning"} />
-      {level === "high" ? "HIGH RISK" : "MEDIUM RISK"}
+      {level === "high" ? t("island.riskHigh") : t("island.riskMedium")}
     </div>
   );
 }

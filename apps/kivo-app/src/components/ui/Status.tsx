@@ -35,7 +35,7 @@ export function Keys({ keys }: { keys: string[] }) {
 
 export function NewDot() {
   const { t } = useTranslation();
-  return <span className="k-new" title={t("ui.new")} aria-label={t("ui.new")} />;
+  return <span className="k-new" role="img" title={t("ui.new")} aria-label={t("ui.new")} />;
 }
 export function Spinner({ label }: { label?: string }) {
   const { t } = useTranslation();
@@ -44,7 +44,7 @@ export function Spinner({ label }: { label?: string }) {
 export function Done() {
   const { t } = useTranslation();
   return (
-    <span className="k-done" aria-label={t("ui.done")}>
+    <span className="k-done" role="img" aria-label={t("ui.done")}>
       <Icon name="check" />
     </span>
   );
