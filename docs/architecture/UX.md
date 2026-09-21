@@ -130,6 +130,8 @@ Every step has a recommended default and can be skipped.
 
 ## 5. Settings (defaults)
 
+> **Updated 2026-09-21:** the Settings screen is organized into tabs (General, Appearance, Island, Sounds, Notifications, Accessibility, Shortcuts, Performance, Diagnostics, About). See [DECISIONS.md](../DECISIONS.md) for the structure and [the mockup](../design/mockups/kivo-app.html) for the exact controls. **Theme default: Light**; the options are Light / Dark / System.
+
 | Group | Controls (default) |
 |---|---|
 | General | Start at sign-in (off) · On close keep running (on) · Tray icon (on) · Language (EN) · Low-memory mode (off) |
