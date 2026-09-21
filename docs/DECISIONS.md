@@ -5,6 +5,46 @@ decision changes, update the entry and note the date. Do not silently rewrite it
 
 ---
 
+## 2026-09-21 — Custom wake words
+
+**Decision:** Users can add, edit, rename, re-record, set per-word sensitivity for,
+enable/disable and delete their own wake words, with several active at once. "Hey Kivo" is
+the default.
+
+- Flow: type the phrase → validator rates it Good / Fair / Risky (syllables, phonemes,
+  confusability, collisions) → TTS plays it back so the user can adjust the pronunciation
+  spelling → it works immediately via open-vocabulary keyword spotting → the user records 3–5
+  samples to tune the threshold and build a second-stage verifier → optional background
+  "Enhance this wake word" training.
+
+Research: [voice-pipeline-engines/REPORT.md](research/voice-pipeline-engines/REPORT.md) §1
+
+## 2026-09-21 — Voice pipeline direction (proposed defaults, pending benchmarks)
+
+**Decision:** An all-local, permissively licensed pipeline on ONNX Runtime (`ort`) +
+sherpa-onnx, with every engine behind a provider trait and the user choosing among tiers.
+Defaults are **provisional** until measured on a low-end CPU-only Windows laptop.
+
+| Stage | Proposed default | Alternatives offered |
+|---|---|---|
+| Wake word | Trained "Hey Kivo" model (openWakeWord pipeline, KIVO-owned) | sherpa-onnx KWS for custom words |
+| Wake verification | Two-stage: verifier + CAM++ speaker check | — |
+| VAD | Silero v6 | — |
+| Echo cancellation | Windows 11 OS AEC where available, else WebRTC AEC3 (in-process) | — |
+| STT | Moonshine v2 streaming (EN) / Parakeet TDT v3 int8 (multilingual) | Whisper turbo, Voxtral, Windows AI Speech, Apple SpeechAnalyzer, cloud (Deepgram Flux, AssemblyAI, OpenAI) |
+| Turn detection | Silero pause + Pipecat Smart Turn v3 | Cloud engine's own endpointing |
+| TTS | Kokoro-82M | Supertonic/Piper (Instant), Chatterbox (Expressive), system voices, cloud |
+
+- **Excluded:** Picovoice (enterprise-only since 2026-06-30), openWakeWord's non-commercial
+  pretrained models, GPL espeak-ng in the core, and Windows Narrator natural voices.
+- **Speaker verification is a convenience filter only.** It never authorizes risky actions.
+- **Enrollment:** 8 prompts (30–45 s) after explicit biometric consent. Stored locally and
+  encrypted, and can be deleted. The profile grows from high-confidence matches.
+- **STT personalization:** pick the engine by the user's measured WER, add custom vocabulary,
+  and let the LLM repair transcripts. Per-user fine-tuning comes later.
+
+Research: [voice-pipeline-engines/REPORT.md](research/voice-pipeline-engines/REPORT.md)
+
 ## 2026-09-21 — Platform strategy
 
 **Decision:** Windows 11 is the primary, fully polished target. Windows 10 is
@@ -63,8 +103,7 @@ hold-to-talk (push-to-talk).
 - Enrollment data stays local, is encrypted, and can be viewed and deleted.
 - Both classic (non-LLM) and AI-model-based options are offered for the wake word and
   STT, and the user picks one. Defaults are chosen by measured speed and accuracy.
-  To research: the wake-word engine, the speaker-verification model and the
-  per-user STT adaptation method.
+  (Engines researched; see "Voice pipeline direction" above.)
 
 ## 2026-09-21 — UI stack
 

@@ -74,6 +74,12 @@ Do not violate these without an explicit architecture review:
 - Instrument latency (plan §97, T0–T10) and measure rather than assume.
 - Test computer control in a sandboxed test environment, never only on the real desktop.
 
+## Working rules for Claude
+
+- **Do not spawn or use subagents** (Agent/Task tool, workflows, or skills that
+  delegate to subagents) in this project. Do research, exploration, and writing
+  directly in the main session.
+
 ## Conventions
 
 - Windows is the primary platform; line endings are normalized via `.gitattributes`.
