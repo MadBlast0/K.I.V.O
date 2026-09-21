@@ -18,6 +18,13 @@ tokio = { workspace = true, features = ["rt-multi-thread", "time", "sync"] }
 tokio-util.workspace = true
 
 [target.'cfg(windows)'.dependencies]
+# LibriSpeech is FLAC; pure Rust, Apache-2.0.
+claxon = "0.4"
+# WebRTC echo cancellation, pure Rust port (BSD-3-Clause): the AEC side of the vad/aec suite.
+sonora = "0.2"
+# Speech engines for the M0 engine comparisons (static; bundles ONNX Runtime). Benchmark-only:
+# its TTS links espeak-ng (GPL-3.0), so it must not enter KIVO's shipped binaries (DECISIONS).
+sherpa-onnx = "1.13.8"
 kivo-platform-windows = { path = "../../crates/kivo-platform-windows" }
 windows = { workspace = true, features = [
   "Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_Diagnostics_ToolHelp",

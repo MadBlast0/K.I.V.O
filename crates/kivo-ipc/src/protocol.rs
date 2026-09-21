@@ -4,13 +4,15 @@
 //! reply is a full `StateSnapshot`; after that the runtime pushes `event` notifications, and a
 //! fresh `snapshot` notification whenever the client may have missed events.
 
+use kivo_core::config::PermissionMode;
 use kivo_core::{Event, SessionState};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 /// Bumped on breaking changes (major) and additions (minor). Clients with another major
 /// version are refused with a clear error (for example after a partial update).
-pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 0 };
+/// 1.1 added the permission mode and "Island hidden" to the snapshot, and `permissions.setMode`.
+pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 1 };
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -37,6 +39,9 @@ pub mod method {
     pub const SESSION_RESUME: &str = "session.resume";
     /// Client → runtime: quit KIVO (UX §1). The runtime announces `ShuttingDown`, then stops.
     pub const RUNTIME_QUIT: &str = "runtime.quit";
+    /// Client → runtime: switch the permission mode (`{ "mode": "plan" }`). Only the user does
+    /// this, from the UI or the hotkey, never a tool or voice alone (SECURITY §1.1).
+    pub const PERMISSIONS_SET_MODE: &str = "permissions.setMode";
 }
 
 /// The name the desktop app gives in `hello`; the runtime supervises the client with this name.
@@ -70,6 +75,10 @@ pub struct Welcome {
 #[serde(rename_all = "camelCase")]
 pub struct StateSnapshot {
     pub session: SessionState,
+    /// How much KIVO may do without asking (SECURITY §1.1).
+    pub mode: PermissionMode,
+    /// "Hide Island for 1 hour" (UX §1): the Island shows nothing until this is cleared.
+    pub island_hidden: bool,
     /// Increases with every state change, so a client can tell whether its view is current.
     pub revision: u64,
 }

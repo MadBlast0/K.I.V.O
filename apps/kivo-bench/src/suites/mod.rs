@@ -25,6 +25,22 @@ pub const ALL: &[(&str, &str)] = &[
         "the running KIVO at rest: CPU, memory, wakeups, package power (30 min; KIVO must be running)",
     ),
     (
+        "stt",
+        "speech to text: Moonshine v2, Parakeet TDT v3, Whisper turbo (load, latency, RTF, WER, memory)",
+    ),
+    (
+        "tts",
+        "text to speech: Kokoro-82M (first audio, RTF, cancel, memory)",
+    ),
+    (
+        "vad",
+        "Silero VAD and AEC3 on a simulated room: latency, false triggers, echo leakage, barge-in",
+    ),
+    (
+        "wake",
+        "\"Hey Kivo\" keyword spotting: false rejects, false accepts per hour, CPU",
+    ),
+    (
         "overlay",
         "the running Island: hotkey → visible, white flash, window styles, GPU and power (KIVO must be running)",
     ),
@@ -37,6 +53,14 @@ pub fn create(name: &str, plan: Plan) -> Result<Box<dyn Suite>, String> {
         "audio" => Ok(Box::new(audio::Audio::start()?)),
         #[cfg(windows)]
         "idle" => Ok(Box::new(idle::Idle::start(plan.runs, plan.warmup)?)),
+        #[cfg(windows)]
+        "stt" => Ok(Box::new(crate::speech::stt::Stt::start()?)),
+        #[cfg(windows)]
+        "tts" => Ok(Box::new(crate::speech::tts::Tts::start()?)),
+        #[cfg(windows)]
+        "vad" => Ok(Box::new(crate::speech::vad_aec::VadAec::start()?)),
+        #[cfg(windows)]
+        "wake" => Ok(Box::new(crate::speech::wake::Wake::start()?)),
         #[cfg(windows)]
         "overlay" => Ok(Box::new(overlay::Overlay::start()?)),
         other => Err(format!("unknown suite \"{other}\" (see `kivo-bench list`)")),

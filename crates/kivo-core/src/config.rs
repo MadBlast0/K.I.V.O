@@ -216,6 +216,7 @@ impl Default for Permissions {
 }
 
 /// SECURITY §1.1. Bypass auto-expires; loading the settings always turns it back into Auto.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum PermissionMode {
@@ -224,6 +225,19 @@ pub enum PermissionMode {
     Plan,
     Auto,
     Bypass,
+}
+
+impl PermissionMode {
+    /// The next mode for the Ctrl+Shift+M hotkey (SECURITY §1.1). Bypass is never reached this
+    /// way: it needs its own opt-in (SEC-03).
+    pub fn next(self) -> Self {
+        match self {
+            Self::Ask => Self::AcceptEdits,
+            Self::AcceptEdits => Self::Plan,
+            Self::Plan => Self::Auto,
+            Self::Auto | Self::Bypass => Self::Ask,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -433,5 +447,25 @@ mod tests {
         let problems = c.validate().unwrap_err();
         let fields: Vec<_> = problems.iter().map(|p| p.field).collect();
         assert_eq!(fields, ["sounds.volume", "voice.push-to-talk"]);
+    }
+
+    #[test]
+    fn the_mode_hotkey_cycles_the_four_everyday_modes() {
+        let mut mode = PermissionMode::Auto;
+        let mut seen = Vec::new();
+        for _ in 0..4 {
+            mode = mode.next();
+            seen.push(mode);
+        }
+        assert_eq!(
+            seen,
+            [
+                PermissionMode::Ask,
+                PermissionMode::AcceptEdits,
+                PermissionMode::Plan,
+                PermissionMode::Auto
+            ]
+        );
+        assert_eq!(PermissionMode::Bypass.next(), PermissionMode::Ask);
     }
 }

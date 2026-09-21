@@ -4,6 +4,7 @@
 //! Regenerate:   KIVO_WRITE_TS=1 cargo test -p kivo-ipc --features ts --test ts_bindings
 #![cfg(feature = "ts")]
 
+use kivo_core::config::PermissionMode;
 use kivo_core::event::{
     CancelReason, DeviceKind, EventKind, IntentPath, PermissionDecision, ProviderEvent, StepStatus,
     SystemEvent, TaskEvent, ToolEvent, TtsStopReason, TurnEvent, TurnSource, UiEvent, VoiceEvent,
@@ -44,6 +45,7 @@ fn render() -> String {
         UiEvent::decl(&cfg),
         // session and protocol
         SessionState::decl(&cfg),
+        PermissionMode::decl(&cfg),
         StateSnapshot::decl(&cfg),
         ProtocolVersion::decl(&cfg),
         Welcome::decl(&cfg),
@@ -66,6 +68,7 @@ fn render() -> String {
         ("sessionPause", method::SESSION_PAUSE),
         ("sessionResume", method::SESSION_RESUME),
         ("runtimeQuit", method::RUNTIME_QUIT),
+        ("permissionsSetMode", method::PERMISSIONS_SET_MODE),
     ];
     out.push_str("\n/** IPC methods the UI can call. */\nexport const Method = {\n");
     for (name, value) in methods {

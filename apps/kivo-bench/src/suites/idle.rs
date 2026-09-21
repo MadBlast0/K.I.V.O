@@ -20,6 +20,8 @@ pub struct Idle {
     runtime: u32,
     app: Option<u32>,
     counters: win::Counters,
+    runtime_switches: win::RawCounts,
+    app_switches: win::RawCounts,
 }
 
 impl Idle {
@@ -36,11 +38,12 @@ impl Idle {
             .and_then(|s| s.parse().ok())
             .map_or(DEFAULT_TOTAL, Duration::from_secs);
         let window = total / (runs + warmup).max(1);
-        let counters = win::Counters::open(&[
-            r"\Thread(kivo-runtime*)\Context Switches/sec",
-            r"\Thread(kivo-app*)\Context Switches/sec",
-            r"\Energy Meter(*_pkg)\Power",
-        ])?;
+        let counters = win::Counters::open(&[r"\Energy Meter(*_pkg)\Power"])?;
+        // Context switches are read raw: threads come and go, and a reused thread name would
+        // make a computed rate negative.
+        let runtime_switches =
+            win::RawCounts::open(r"\Thread(kivo-runtime*)\Context Switches/sec")?;
+        let app_switches = win::RawCounts::open(r"\Thread(kivo-app*)\Context Switches/sec")?;
         let logical_cpus = std::thread::available_parallelism().map_or(1, |n| n.get());
         #[allow(clippy::cast_precision_loss, reason = "a CPU count")]
         Ok(Self {
@@ -50,6 +53,8 @@ impl Idle {
             runtime,
             app,
             counters,
+            runtime_switches,
+            app_switches,
         })
     }
 
@@ -88,10 +93,14 @@ impl Suite for Idle {
         let (rt_cpu0, _) = Self::usage(&runtime)?;
         let (app_cpu0, _) = Self::usage(&app)?;
         self.counters.sample()?;
+        let (rt_sw0, app_sw0) = (self.runtime_switches.read()?, self.app_switches.read()?);
         let started = Instant::now();
         std::thread::sleep(self.window);
         let wall = started.elapsed();
-        let rates = self.counters.sample()?;
+        let power = self.counters.sample()?[0];
+        let seconds = wall.as_secs_f64();
+        let runtime_wakeups = win::rate(&rt_sw0, &self.runtime_switches.read()?, seconds);
+        let app_wakeups = win::rate(&app_sw0, &self.app_switches.read()?, seconds);
         let (rt_cpu1, rt_mem) = Self::usage(&runtime)?;
         let (app_cpu1, app_mem) = Self::usage(&app)?;
 
@@ -102,8 +111,8 @@ impl Suite for Idle {
                 percent(rt_cpu1.saturating_sub(rt_cpu0), wall, self.logical_cpus),
             ),
             Sample::cost("runtime private memory", "MB", mb(rt_mem)),
-            Sample::cost("runtime wakeups", "/s", rates[0]),
-            Sample::cost("CPU package power (whole machine)", "W", rates[2] / 1000.0),
+            Sample::cost("runtime wakeups", "/s", runtime_wakeups),
+            Sample::cost("CPU package power (whole machine)", "W", power / 1000.0),
         ];
         if !app.is_empty() {
             samples.extend([
@@ -113,7 +122,7 @@ impl Suite for Idle {
                     percent(app_cpu1.saturating_sub(app_cpu0), wall, self.logical_cpus),
                 ),
                 Sample::cost("app + WebView2 private memory", "MB", mb(app_mem)),
-                Sample::cost("app wakeups (its own threads)", "/s", rates[1]),
+                Sample::cost("app wakeups (its own threads)", "/s", app_wakeups),
             ]);
         }
         Ok(samples)

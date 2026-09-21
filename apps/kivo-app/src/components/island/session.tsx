@@ -2,8 +2,9 @@
  * The Island for the runtime's session state (UX §2). Only what the runtime actually reports is
  * shown: transcripts, steps and answers join as the voice pipeline and tools deliver them.
  */
-import type { SessionState } from "../../ipc/generated";
-import { IslandDot, IslandSpin, type IslandModel } from "./Island";
+import type { PermissionMode, SessionState } from "../../ipc/generated";
+import { modeLabel } from "../../lib/session";
+import { IslandChip, IslandDot, IslandSpin, type IslandModel } from "./Island";
 
 /** States that show the Island. Idle and Paused show nothing (Paused only when summoned). */
 export function islandForSession(state: SessionState): IslandModel | null {
@@ -28,4 +29,15 @@ export function islandForSession(state: SessionState): IslandModel | null {
     case "paused":
       return null;
   }
+}
+
+/** A short notice after the permission mode changes (Ctrl+Shift+M, the tray, Home). */
+export function islandForMode(mode: PermissionMode): IslandModel {
+  return {
+    state: `mode-${mode}`,
+    width: 280,
+    label: modeLabel(mode),
+    sub: "mode",
+    trail: <IslandChip>{mode === "auto" ? "AUTO" : mode === "accept-edits" ? "EDITS" : mode.toUpperCase()}</IslandChip>,
+  };
 }

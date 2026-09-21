@@ -8,34 +8,60 @@ import { listen } from "@tauri-apps/api/event";
 import { MotionConfig } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { Island } from "../components/island/Island";
-import { islandForSession } from "../components/island/session";
-import type { Link, SessionState } from "../ipc/generated";
+import { islandForMode, islandForSession } from "../components/island/session";
+import type { Link, PermissionMode, SessionState } from "../ipc/generated";
 
 /** Room below the Island for its shadow (0 16px 36px -14px → ~38 px). */
 const SHADOW = 40;
 /** `.k-overlay`'s top padding. */
 const TOP_PADDING = 1;
 
+/** How long the Island shows a mode change (the app hides the window after the same time). */
+const NOTICE_MS = 1600;
+
 function sessionOf(link: Link): SessionState | null {
   return link.status === "connected" ? (link.snapshot?.session ?? null) : null;
 }
 
+function modeOf(link: Link): PermissionMode | null {
+  return link.status === "connected" ? (link.snapshot?.mode ?? null) : null;
+}
+
 export function Overlay() {
   const [session, setSession] = useState<SessionState | null>(null);
+  const [mode, setMode] = useState<PermissionMode | null>(null);
+  const [notice, setNotice] = useState<PermissionMode | null>(null);
+  // A change of mode (not the first one seen) shows a notice for a moment.
+  const lastMode = useRef<PermissionMode | null>(null);
+  useEffect(() => {
+    if (mode === null) return;
+    const previous = lastMode.current;
+    lastMode.current = mode;
+    if (previous === null || previous === mode) return;
+    setNotice(mode);
+    const timer = window.setTimeout(() => setNotice(null), NOTICE_MS);
+    return () => window.clearTimeout(timer);
+  }, [mode]);
 
   useEffect(() => {
     if (!isTauri()) return;
     let cancelled = false;
     let unlisten: (() => void) | undefined;
     void (async () => {
-      const stop = await listen<Link>("runtime://link", (e) => setSession(sessionOf(e.payload)));
+      const stop = await listen<Link>("runtime://link", (e) => {
+        setSession(sessionOf(e.payload));
+        setMode(modeOf(e.payload));
+      });
       if (cancelled) {
         stop();
         return;
       }
       unlisten = stop;
       const boot = await invoke<{ link: Link }>("ui_ready");
-      if (!cancelled) setSession((current) => current ?? sessionOf(boot.link));
+      if (!cancelled) {
+        setSession((current) => current ?? sessionOf(boot.link));
+        setMode((current) => current ?? modeOf(boot.link));
+      }
     })();
     return () => {
       cancelled = true;
@@ -77,7 +103,8 @@ export function Overlay() {
     };
   }, []);
 
-  const model = session ? islandForSession(session) : null;
+  // A request in progress wins; otherwise a recent mode change shows briefly.
+  const model = (session ? islandForSession(session) : null) ?? (notice ? islandForMode(notice) : null);
   return (
     // "user" follows Windows' "Animation effects" setting (DESIGN_SYSTEM §5).
     <MotionConfig reducedMotion="user">

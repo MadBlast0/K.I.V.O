@@ -12,6 +12,7 @@ kivo-core.workspace = true
 kivo-ipc.workspace = true
 kivo-platform.workspace = true
 kivo-store.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync", "time", "signal", "process"] }
 tokio-util.workspace = true
@@ -22,6 +23,7 @@ kivo-platform-windows = { path = "../../crates/kivo-platform-windows" }
 
 [dev-dependencies]
 tempfile.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync", "time", "test-util"] }
 
 [lints]
 workspace = true

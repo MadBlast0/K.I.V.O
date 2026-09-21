@@ -138,7 +138,7 @@ impl Suite for Audio {
             Sample::cost("capture packet period (median)", "ms", period),
             Sample::cost("capture packet period (p99)", "ms", jitter),
             Sample {
-                metric: "capture frames delivered vs device clock",
+                metric: "capture frames delivered vs device clock".into(),
                 unit: "%",
                 lower_is_better: false,
                 value: delivered,

@@ -59,16 +59,27 @@ impl Runtime {
     }
 
     fn set_link(&self, app: &AppHandle, update: impl FnOnce(&mut Link)) {
-        let link = {
+        let (link, previous_mode) = {
             let mut guard = self.link.lock().unwrap_or_else(|e| e.into_inner());
             let link = guard.get_or_insert_with(Link::connecting);
+            let previous_mode = link.snapshot.as_ref().map(|s| s.mode);
             update(link);
-            link.clone()
+            (link.clone(), previous_mode)
         };
-        let session = (link.status == LinkStatus::Connected)
-            .then(|| link.snapshot.as_ref().map(|s| s.session))
-            .flatten();
-        crate::overlay::apply(app, session);
+        let snapshot = link
+            .snapshot
+            .as_ref()
+            .filter(|_| link.status == LinkStatus::Connected);
+        // While the Island is hidden for an hour, it shows nothing at all.
+        let island_hidden = snapshot.is_some_and(|s| s.island_hidden);
+        crate::overlay::apply(app, snapshot.map(|s| s.session).filter(|_| !island_hidden));
+        // A change of mode while connected (not the first state seen) shows the Island's notice.
+        if let (Some(before), Some(now)) = (previous_mode, snapshot.map(|s| s.mode))
+            && before != now
+            && !island_hidden
+        {
+            crate::overlay::notice(app);
+        }
         let _ = app.emit(LINK_EVENT, link);
     }
 

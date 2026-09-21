@@ -3,13 +3,13 @@
  * shown comes from the runtime; the Running and Recent lists join as tasks and Activity land.
  */
 import { useState } from "react";
-import { Alert, Button, useToast } from "../components/ui";
-import { Method } from "../ipc/generated";
+import { Alert, Button, Select, useToast } from "../components/ui";
+import { Method, type PermissionMode } from "../ipc/generated";
 import { useRuntime } from "../ipc/runtime";
 import { cn } from "../lib/cn";
-import { viewLink } from "../lib/session";
+import { MODES, viewLink } from "../lib/session";
 
-export function Home() {
+export function Home({ onOpenPermissions }: { onOpenPermissions: () => void }) {
   const { link, request, start } = useRuntime();
   const view = viewLink(link);
   const toast = useToast();
@@ -23,6 +23,12 @@ export function Home() {
   };
 
   const session = view.session;
+  const mode = link?.status === "connected" ? link.snapshot?.mode : undefined;
+  const chooseMode = (next: PermissionMode) => {
+    // Bypass is switched on with its confirmation step on the Permissions page (SEC-03).
+    if (next === "bypass") onOpenPermissions();
+    else run(() => request(Method.permissionsSetMode, { mode: next }));
+  };
   const animated = session === "listening" || session === "speaking" || session === "followUp";
 
   return (
@@ -57,6 +63,7 @@ export function Home() {
             Pause listening
           </Button>
         ) : null}
+        {mode && <Select label="Permission mode" icon="permissions" items={MODES} value={mode} onChange={chooseMode} />}
         {link?.status === "reconnecting" && (
           <Button variant="primary" icon="power" disabled={busy} onClick={() => run(start)}>
             Start KIVO

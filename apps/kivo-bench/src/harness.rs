@@ -7,7 +7,7 @@ use crate::stats::Metric;
 /// One measured value from one run.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Sample {
-    pub metric: &'static str,
+    pub metric: String,
     pub unit: &'static str,
     pub lower_is_better: bool,
     pub value: f64,
@@ -15,9 +15,9 @@ pub struct Sample {
 
 impl Sample {
     /// A value where lower is better (latency, CPU, memory).
-    pub fn cost(metric: &'static str, unit: &'static str, value: f64) -> Self {
+    pub fn cost(metric: impl Into<String>, unit: &'static str, value: f64) -> Self {
         Self {
-            metric,
+            metric: metric.into(),
             unit,
             lower_is_better: true,
             value,
@@ -55,7 +55,10 @@ pub fn execute(suite: &mut dyn Suite, plan: Plan) -> Result<SuiteResult, String>
         for s in samples {
             match metrics.iter_mut().find(|(m, _)| m.metric == s.metric) {
                 Some((_, values)) => values.push(s.value),
-                None => metrics.push((s.clone(), vec![s.value])),
+                None => {
+                    let value = s.value;
+                    metrics.push((s, vec![value]));
+                }
             }
         }
     }
@@ -66,7 +69,7 @@ pub fn execute(suite: &mut dyn Suite, plan: Plan) -> Result<SuiteResult, String>
         warmup: plan.warmup,
         metrics: metrics
             .into_iter()
-            .map(|(s, values)| Metric::new(s.metric, s.unit, s.lower_is_better, values))
+            .map(|(s, values)| Metric::new(&s.metric, s.unit, s.lower_is_better, values))
             .collect(),
         notes: suite.notes(),
     })

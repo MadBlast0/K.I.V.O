@@ -21,11 +21,22 @@ const INITIAL_HEIGHT: f64 = 84.0;
 const TOP: f64 = 8.0;
 /// The Island's exit animation runs before the window is hidden.
 const HIDE_AFTER: Duration = Duration::from_millis(450);
+/// How long a mode-change notice shows (the page uses the same time).
+const NOTICE: Duration = Duration::from_millis(1600);
 
-/// Whether the window is shown, and a generation that cancels a pending hide when the Island
-/// comes back before it ran.
 #[derive(Default)]
-pub struct Overlay(Mutex<(bool, u64)>);
+struct State {
+    shown: bool,
+    /// Bumped on every change, so a pending hide is dropped when the Island comes back first.
+    generation: u64,
+    /// The last session state (`None`: not connected).
+    session: Option<SessionState>,
+    /// A mode-change notice is showing.
+    noticing: bool,
+}
+
+#[derive(Default)]
+pub struct Overlay(Mutex<State>);
 
 pub fn create(app: &AppHandle) -> tauri::Result<()> {
     let window = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("overlay.html".into()))
@@ -48,27 +59,53 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
-/// Shows the Island for an active session, hides it otherwise (`None`: not connected).
+/// The session changed (`None`: not connected): show the Island while it is active.
 pub fn apply(app: &AppHandle, session: Option<SessionState>) {
-    let visible = session.is_some_and(|s| !matches!(s, SessionState::Idle | SessionState::Paused));
     let state = app.state::<Overlay>();
     let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
-    let (shown, generation) = &mut *guard;
-    *generation += 1;
+    guard.session = session;
+    update(app, &mut guard);
+}
+
+/// The permission mode changed: show the Island's notice for a moment.
+pub fn notice(app: &AppHandle) {
+    {
+        let state = app.state::<Overlay>();
+        let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        guard.noticing = true;
+        update(app, &mut guard);
+    }
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(NOTICE).await;
+        let state = app.state::<Overlay>();
+        let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        guard.noticing = false;
+        update(&app, &mut guard);
+    });
+}
+
+/// Shows the window if there is something to show, else hides it after the exit animation.
+fn update(app: &AppHandle, state: &mut State) {
+    let active = state
+        .session
+        .is_some_and(|s| !matches!(s, SessionState::Idle | SessionState::Paused));
+    let visible = active || (state.noticing && state.session.is_some());
+    state.generation += 1;
     if visible {
-        if !*shown {
-            *shown = true;
+        if !state.shown {
+            state.shown = true;
             show(app);
         }
-    } else if *shown {
-        let expected = *generation;
+    } else if state.shown {
+        let expected = state.generation;
         let app = app.clone();
         tauri::async_runtime::spawn(async move {
             tokio::time::sleep(HIDE_AFTER).await;
-            let state = app.state::<Overlay>();
-            let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
-            if guard.1 == expected && guard.0 {
-                guard.0 = false;
+            let overlay = app.state::<Overlay>();
+            let mut guard = overlay.0.lock().unwrap_or_else(|e| e.into_inner());
+            if guard.generation == expected && guard.shown {
+                guard.shown = false;
                 hide(&app);
             }
         });

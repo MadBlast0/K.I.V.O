@@ -1,5 +1,18 @@
 /** How the runtime's state reads in the UI: one place for the words used by Home and the sidebar. */
-import type { Link, SessionState } from "../ipc/generated";
+import type { Link, PermissionMode, SessionState } from "../ipc/generated";
+
+/** The permission modes as the user sees them (SECURITY §1.1), in menu order. */
+export const MODES: ReadonlyArray<{ value: PermissionMode; label: string }> = [
+  { value: "ask", label: "Ask every time" },
+  { value: "accept-edits", label: "Accept edits" },
+  { value: "plan", label: "Plan first" },
+  { value: "auto", label: "Auto" },
+  { value: "bypass", label: "Bypass permissions…" },
+];
+
+export function modeLabel(mode: PermissionMode): string {
+  return (MODES.find((m) => m.value === mode)?.label ?? mode).replace("…", "");
+}
 
 export interface StateText {
   title: string;

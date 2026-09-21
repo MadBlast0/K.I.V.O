@@ -47,6 +47,21 @@ impl Machine {
         }
     }
 
+    /// The same machine limited to `cores` physical cores, labelled as an emulation of the low
+    /// tier (BENCHMARKS §2) so its numbers are never mistaken for a real low-end PC's.
+    pub fn emulating_low_tier(mut self, cores: usize) -> Self {
+        self.id = format!("{}-emulated-low", self.id);
+        #[allow(clippy::cast_possible_truncation, reason = "a small core count")]
+        {
+            self.logical_cpus = cores as u32;
+        }
+        self.cpu = format!(
+            "{} limited to {cores} cores (emulated low tier, approximate)",
+            self.cpu
+        );
+        self
+    }
+
     /// One line for reports.
     pub fn describe(&self) -> String {
         let gpus = if self.gpus.is_empty() {

@@ -3,6 +3,7 @@
 //! carry no authority beyond what a user could do from the tray.
 
 use crate::core::Core;
+use kivo_core::config::PermissionMode;
 use kivo_ipc::{BoxFuture, Handler, RpcError, method};
 use serde_json::Value;
 use std::sync::Arc;
@@ -18,7 +19,7 @@ impl Rpc {
 }
 
 impl Handler for Rpc {
-    fn call(&self, name: String, _params: Value) -> BoxFuture<Result<Value, RpcError>> {
+    fn call(&self, name: String, params: Value) -> BoxFuture<Result<Value, RpcError>> {
         let core = Arc::clone(&self.core);
         Box::pin(async move {
             let refused = |e: crate::core::Refused| RpcError::new(RpcError::REFUSED, e.0);
@@ -28,6 +29,16 @@ impl Handler for Rpc {
                 method::RUNTIME_QUIT => {
                     core.quit();
                     Ok(Value::Null)
+                }
+                method::PERMISSIONS_SET_MODE => {
+                    #[derive(serde::Deserialize)]
+                    #[serde(deny_unknown_fields)]
+                    struct Params {
+                        mode: PermissionMode,
+                    }
+                    let Params { mode } =
+                        serde_json::from_value(params).map_err(RpcError::invalid_params)?;
+                    core.set_mode(mode).map(|_| Value::Null).map_err(refused)
                 }
                 _ => Err(RpcError::method_not_found(&name)),
             }
@@ -56,6 +67,35 @@ mod tests {
         assert_eq!(core.session(), SessionState::Idle);
         call(&rpc, method::RUNTIME_QUIT).await.unwrap();
         assert!(core.shutdown().is_cancelled());
+    }
+
+    #[tokio::test]
+    async fn the_mode_is_set_from_its_params() {
+        let core = Arc::new(Core::new());
+        let rpc = Rpc::new(Arc::clone(&core));
+        rpc.call(
+            method::PERMISSIONS_SET_MODE.into(),
+            serde_json::json!({ "mode": "ask" }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(core.state().borrow().mode, PermissionMode::Ask);
+        let bad = rpc
+            .call(
+                method::PERMISSIONS_SET_MODE.into(),
+                serde_json::json!({ "mode": "yolo" }),
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(bad.code, RpcError::INVALID_PARAMS);
+        let bypass = rpc
+            .call(
+                method::PERMISSIONS_SET_MODE.into(),
+                serde_json::json!({ "mode": "bypass" }),
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(bypass.code, RpcError::REFUSED);
     }
 
     #[tokio::test]

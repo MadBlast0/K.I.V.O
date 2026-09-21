@@ -39,6 +39,10 @@ jobs:
         run: cargo test --workspace --locked
       - name: Generated IPC types are up to date
         run: cargo test -p kivo-ipc --features ts --test ts_bindings --locked
+      # BENCHMARKS §4 smoke subset: the IPC round trip over the real pipe (the state-machine and
+      # cancellation tests run above; the intent-router latency joins with the router, M1).
+      - name: Smoke benchmarks
+        run: cargo run --locked --release -p kivo-bench -- ipc --runs 5 --warmup 1 --no-save
 
   rust-portable:
     name: Rust (${{ matrix.os }}, portable crates)

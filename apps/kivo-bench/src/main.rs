@@ -7,11 +7,14 @@
 //!
 //! Options: --runs N (default 5, at least 5 for saved results) · --warmup N (default 1) ·
 //! --out DIR (default: the current folder; results go to bench-results/ and docs/benchmarks/) ·
-//! --no-save (print only).
+//! --no-save (print only) · --tier low (emulate the low tier, BENCHMARKS §2: this process runs
+//! on 4 physical cores and its results are saved under a separate, "emulated" machine id).
 
 mod harness;
 mod machine;
 mod report;
+#[cfg(windows)]
+mod speech;
 mod stats;
 mod suites;
 #[cfg(windows)]
@@ -23,11 +26,17 @@ use report::Output;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+/// BENCHMARKS §2: the low tier is a 4-core laptop CPU.
+#[cfg(windows)]
+const LOW_TIER_CORES: usize = 4;
+
 struct Options {
     suites: Vec<String>,
     plan: Plan,
     out: PathBuf,
     save: bool,
+    /// Emulate the low reference tier on this machine.
+    low_tier: bool,
 }
 
 fn parse(args: impl IntoIterator<Item = String>) -> Result<Options, String> {
@@ -36,6 +45,7 @@ fn parse(args: impl IntoIterator<Item = String>) -> Result<Options, String> {
         plan: Plan { runs: 5, warmup: 1 },
         out: PathBuf::from("."),
         save: true,
+        low_tier: false,
     };
     let mut args = args.into_iter();
     while let Some(arg) = args.next() {
@@ -53,6 +63,10 @@ fn parse(args: impl IntoIterator<Item = String>) -> Result<Options, String> {
             }
             "--out" => options.out = PathBuf::from(value("--out")?),
             "--no-save" => options.save = false,
+            "--tier" => match value("--tier")?.as_str() {
+                "low" => options.low_tier = true,
+                other => return Err(format!("unknown tier {other} (only \"low\" is emulated)")),
+            },
             flag if flag.starts_with("--") => return Err(format!("unknown option {flag}")),
             suite => options.suites.push(suite.to_owned()),
         }
@@ -111,7 +125,16 @@ fn main() -> ExitCode {
 }
 
 fn run(options: &Options) -> Result<(), String> {
-    let machine = Machine::detect()?;
+    let mut machine = Machine::detect()?;
+    if options.low_tier {
+        #[cfg(windows)]
+        {
+            let cores = win::limit_to_physical_cores(LOW_TIER_CORES)?;
+            machine = machine.emulating_low_tier(cores);
+        }
+        #[cfg(not(windows))]
+        return Err("the low tier is emulated on Windows only".into());
+    }
     println!("{}", machine.describe());
     let db = if options.save {
         let paths = kivo_platform::Paths::user().ok_or("couldn't find the AppData folders")?;
@@ -169,5 +192,7 @@ mod tests {
         assert!(args(&["ipc", "--runs", "3", "--no-save"]).is_ok());
         assert!(args(&["ipc", "--bogus"]).is_err());
         assert!(args(&["ipc", "--runs"]).is_err());
+        assert!(args(&["ipc", "--tier", "low"]).unwrap().low_tier);
+        assert!(args(&["ipc", "--tier", "high"]).is_err());
     }
 }

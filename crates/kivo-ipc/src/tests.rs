@@ -6,6 +6,7 @@ use crate::transport::{self, unique_endpoint};
 use crate::*;
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
+use kivo_core::config::PermissionMode;
 use kivo_core::event::{EventKind, SystemEvent, UiEvent};
 use kivo_core::{Event, EventBus, SessionState};
 use serde_json::{Value, json};
@@ -54,6 +55,8 @@ fn start_on(endpoint: String, hello_timeout: Duration) -> Running {
     let (bus, shutdown) = (EventBus::new(), CancellationToken::new());
     let (state, state_rx) = watch::channel(StateSnapshot {
         session: SessionState::Idle,
+        mode: PermissionMode::Auto,
+        island_hidden: false,
         revision: 1,
     });
     let task = tokio::spawn(server.run(
@@ -107,7 +110,7 @@ async fn a_client_gets_the_snapshot_answers_and_events() {
     );
     assert_eq!(
         c.request(method::STATE, Value::Null).await.unwrap(),
-        json!({"session":"idle","revision":1})
+        json!({"session":"idle","mode":"auto","islandHidden":false,"revision":1})
     );
     assert_eq!(
         c.request("echo", json!({"a": [1, 2]})).await.unwrap(),
@@ -261,6 +264,8 @@ async fn a_client_that_falls_behind_gets_a_snapshot() {
     rt.state.send_if_modified(|s| {
         *s = StateSnapshot {
             session: SessionState::Listening,
+            mode: PermissionMode::Auto,
+            island_hidden: false,
             revision: 42,
         };
         false
@@ -359,6 +364,8 @@ async fn state_changes_are_pushed_to_every_client() {
     let mut b = connect(&rt.endpoint, &rt.token, "b").await.unwrap();
     rt.state.send_replace(StateSnapshot {
         session: SessionState::Paused,
+        mode: PermissionMode::Auto,
+        island_hidden: false,
         revision: 2,
     });
     for conn in [&mut a, &mut b] {
@@ -372,7 +379,7 @@ async fn state_changes_are_pushed_to_every_client() {
     }
     assert_eq!(
         a.client.request(method::STATE, Value::Null).await.unwrap(),
-        json!({"session":"paused","revision":2})
+        json!({"session":"paused","mode":"auto","islandHidden":false,"revision":2})
     );
     rt.shutdown.cancel();
 }

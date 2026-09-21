@@ -152,6 +152,139 @@
       ]
     },
     {
+      "suite": "idle",
+      "startedAt": 1790017268205,
+      "runs": 5,
+      "warmup": 1,
+      "metrics": [
+        {
+          "name": "runtime CPU (share of the whole machine)",
+          "unit": "%",
+          "lowerIsBetter": true,
+          "samples": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "p50": 0.0,
+          "p95": 0.0,
+          "min": 0.0,
+          "max": 0.0,
+          "mean": 0.0
+        },
+        {
+          "name": "runtime private memory",
+          "unit": "MB",
+          "lowerIsBetter": true,
+          "samples": [
+            6.78515625,
+            6.78515625,
+            6.78515625,
+            6.78515625,
+            6.78515625
+          ],
+          "p50": 6.78515625,
+          "p95": 6.78515625,
+          "min": 6.78515625,
+          "max": 6.78515625,
+          "mean": 6.78515625
+        },
+        {
+          "name": "runtime wakeups",
+          "unit": "/s",
+          "lowerIsBetter": true,
+          "samples": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "p50": 0.0,
+          "p95": 0.0,
+          "min": 0.0,
+          "max": 0.0,
+          "mean": 0.0
+        },
+        {
+          "name": "CPU package power (whole machine)",
+          "unit": "W",
+          "lowerIsBetter": true,
+          "samples": [
+            20.329692141837054,
+            22.18939008242148,
+            21.619520032542315,
+            22.699020034053508,
+            25.272299102641867
+          ],
+          "p50": 22.18939008242148,
+          "p95": 25.272299102641867,
+          "min": 20.329692141837054,
+          "max": 25.272299102641867,
+          "mean": 22.421984278699245
+        },
+        {
+          "name": "app + WebView2 CPU (share of the whole machine)",
+          "unit": "%",
+          "lowerIsBetter": true,
+          "samples": [
+            0.0006510414670139501,
+            0.0009765612779963208,
+            0.00032552022960181416,
+            0.002604162430562446,
+            0.0013020809027823148
+          ],
+          "p50": 0.0009765612779963208,
+          "p95": 0.002604162430562446,
+          "min": 0.00032552022960181416,
+          "max": 0.002604162430562446,
+          "mean": 0.0011718732615913692
+        },
+        {
+          "name": "app + WebView2 private memory",
+          "unit": "MB",
+          "lowerIsBetter": true,
+          "samples": [
+            230.203125,
+            229.88671875,
+            229.890625,
+            229.98828125,
+            230.00390625
+          ],
+          "p50": 229.98828125,
+          "p95": 230.203125,
+          "min": 229.88671875,
+          "max": 230.203125,
+          "mean": 229.99453125
+        },
+        {
+          "name": "app wakeups (its own threads)",
+          "unit": "/s",
+          "lowerIsBetter": true,
+          "samples": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "p50": 0.0,
+          "p95": 0.0,
+          "min": 0.0,
+          "max": 0.0,
+          "mean": 0.0
+        }
+      ],
+      "notes": [
+        "Watched for 1800 s in total (300 s per window; the full suite is 1800 s).",
+        "The app was running. Its WebView2 processes are counted with it for CPU and memory, but not for wakeups (their thread counters can't be told apart from other apps').",
+        "Microphone capture is not part of the runtime yet (VOICE-01 adds it), so this is the idle cost without listening.",
+        "Package power covers everything running on the machine; compare runs on a quiet desktop."
+      ]
+    },
+    {
       "suite": "ipc",
       "startedAt": 1790016115164,
       "runs": 5,
@@ -242,7 +375,7 @@
           "unit": "ms",
           "lowerIsBetter": true,
           "samples": [
-            155.24699999999999,
+            155.247,
             153.7598,
             155.0027,
             155.2997,
@@ -296,12 +429,12 @@
             2.1790333869070433,
             2.0824118453341094,
             2.090957147877412,
-            1.9951275582978893,
+            1.9951275582978891,
             2.0301309253789364
           ],
           "p50": 2.0824118453341094,
           "p95": 2.1790333869070433,
-          "min": 1.9951275582978893,
+          "min": 1.9951275582978891,
           "max": 2.1790333869070433,
           "mean": 2.075532172759078
         },

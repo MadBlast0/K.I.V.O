@@ -3,6 +3,7 @@
 //! KIVO is never touched.
 
 use crate::harness::{Sample, Suite};
+use kivo_core::config::PermissionMode;
 use kivo_core::{EventBus, SessionState};
 use kivo_ipc::{
     BoxFuture, Handler, RpcError, Server, ServerConfig, SessionToken, StateSnapshot, connect,
@@ -46,6 +47,8 @@ impl Ipc {
         let endpoint = format!("/tmp/kivo-bench-{}.sock", std::process::id());
         let state = watch::Sender::new(StateSnapshot {
             session: SessionState::Idle,
+            mode: PermissionMode::Auto,
+            island_hidden: false,
             revision: 0,
         });
         let shutdown = CancellationToken::new();

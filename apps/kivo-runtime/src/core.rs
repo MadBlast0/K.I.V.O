@@ -1,17 +1,24 @@
-//! The runtime's authoritative state (ARCHITECTURE §1, §4): the session state machine, published
-//! as a `StateSnapshot` that the IPC server pushes to every UI, plus the event bus and the
-//! shutdown signal every subsystem listens to.
+//! The runtime's authoritative state (ARCHITECTURE §1, §4): the session state machine and the
+//! permission mode, published as a `StateSnapshot` that the IPC server pushes to every UI, plus
+//! the event bus and the shutdown signal every subsystem listens to. Settings the user changes
+//! here are saved to `kivo.toml`.
 
+use kivo_core::config::PermissionMode;
 use kivo_core::event::{EventKind, SystemEvent, UiEvent};
-use kivo_core::{Event, EventBus, Session, SessionInput, SessionState};
+use kivo_core::{Event, EventBus, KivoConfig, Session, SessionInput, SessionState};
 use kivo_ipc::StateSnapshot;
+use std::path::PathBuf;
 use std::sync::Mutex;
+use std::time::Duration;
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 
 pub struct Core {
     pub bus: EventBus,
     session: Mutex<Session>,
+    config: Mutex<KivoConfig>,
+    /// Where the settings are saved; `None` keeps changes in memory (tests).
+    config_file: Option<PathBuf>,
     state: watch::Sender<StateSnapshot>,
     shutdown: CancellationToken,
 }
@@ -21,12 +28,24 @@ pub struct Core {
 pub struct Refused(pub String);
 
 impl Core {
+    /// A core with default settings that are never saved (tests).
+    #[cfg(test)]
     pub fn new() -> Self {
+        Self::with_config(KivoConfig::default(), None)
+    }
+
+    /// A core that starts from `config` and saves changes to `config_file`.
+    pub fn with_config(config: KivoConfig, config_file: Option<PathBuf>) -> Self {
+        let mode = config.permissions.mode;
         Self {
             bus: EventBus::new(),
             session: Mutex::new(Session::new()),
+            config: Mutex::new(config),
+            config_file,
             state: watch::Sender::new(StateSnapshot {
                 session: SessionState::Idle,
+                mode,
+                island_hidden: false,
                 revision: 0,
             }),
             shutdown: CancellationToken::new(),
@@ -99,6 +118,88 @@ impl Core {
         )
     }
 
+    /// Switches the permission mode (SECURITY §1.1). Only the user does this, from the UI, the tray
+    /// or the hotkey. Bypass needs its own opt-in dialog and expiry (SEC-03), so it is refused
+    /// here until that exists.
+    pub fn set_mode(&self, mode: PermissionMode) -> Result<PermissionMode, Refused> {
+        if mode == PermissionMode::Bypass {
+            return Err(Refused(
+                "Bypass permissions needs its confirmation step, which isn't available yet".into(),
+            ));
+        }
+        let saved = {
+            let mut config = self.config.lock().unwrap_or_else(|e| e.into_inner());
+            config.permissions.mode = mode;
+            config.clone()
+        };
+        self.state.send_modify(|s| {
+            s.mode = mode;
+            s.revision += 1;
+        });
+        if let Some(file) = &self.config_file
+            && let Err(e) = kivo_store::config::save(file, &saved)
+        {
+            tracing::error!(%e, "couldn't save the permission mode");
+        }
+        tracing::info!(?mode, "permission mode changed");
+        Ok(mode)
+    }
+
+    /// Stop everything (SEC-25: tray, emergency hotkey, Island button): whatever KIVO is doing now
+    /// is cancelled. Background tasks join this when they exist (M5).
+    pub fn stop_everything(&self) {
+        tracing::warn!("stop everything");
+        let mut session = self.session.lock().unwrap_or_else(|e| e.into_inner());
+        let state = session.state();
+        let cancelled = if state.is_active() {
+            session
+                .apply(SessionInput::Cancel)
+                .and_then(|_| session.apply(SessionInput::InterruptionHandled { listen: false }))
+                .ok()
+        } else if state == SessionState::FollowUp {
+            session.apply(SessionInput::Cancel).ok()
+        } else {
+            None
+        };
+        if let Some(next) = cancelled {
+            self.state.send_modify(|s| {
+                s.session = next;
+                s.revision += 1;
+            });
+        }
+    }
+
+    /// "Hide Island for 1 hour" (UX §1): the Island shows nothing for `duration`, then comes back
+    /// by itself. Must run inside the async runtime (it sets a timer).
+    pub fn hide_island_for(self: &std::sync::Arc<Self>, duration: Duration) {
+        self.set_island_hidden(true);
+        let core = std::sync::Arc::clone(self);
+        let shutdown = self.shutdown();
+        tokio::spawn(async move {
+            tokio::select! {
+                () = tokio::time::sleep(duration) => core.set_island_hidden(false),
+                () = shutdown.cancelled() => {}
+            }
+        });
+    }
+
+    pub fn set_island_hidden(&self, hidden: bool) {
+        self.state.send_if_modified(|s| {
+            if s.island_hidden == hidden {
+                return false;
+            }
+            s.island_hidden = hidden;
+            s.revision += 1;
+            true
+        });
+    }
+
+    /// Ctrl+Shift+M: the next everyday mode.
+    pub fn cycle_mode(&self) -> Result<PermissionMode, Refused> {
+        let current = self.state.borrow().mode;
+        self.set_mode(current.next())
+    }
+
     /// Asks the app to show the Control Center, optionally on a page. If the app isn't running,
     /// the supervisor launches it for this.
     pub fn open_control_center(&self, page: Option<&str>) {
@@ -150,6 +251,8 @@ mod tests {
             *state.borrow(),
             StateSnapshot {
                 session: SessionState::Paused,
+                mode: PermissionMode::Auto,
+                island_hidden: false,
                 revision: 1
             }
         );
@@ -187,6 +290,60 @@ mod tests {
             core.start_listening().is_err(),
             "a paused KIVO doesn't listen"
         );
+    }
+
+    #[test]
+    fn the_mode_changes_are_published_and_saved() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("kivo.toml");
+        let core = Core::with_config(KivoConfig::default(), Some(file.clone()));
+        assert_eq!(
+            core.set_mode(PermissionMode::Plan),
+            Ok(PermissionMode::Plan)
+        );
+        assert_eq!(core.state().borrow().mode, PermissionMode::Plan);
+        let saved = kivo_store::config::load(&file).unwrap().config;
+        assert_eq!(saved.permissions.mode, PermissionMode::Plan);
+        assert_eq!(core.cycle_mode(), Ok(PermissionMode::Auto));
+    }
+
+    #[test]
+    fn stop_everything_ends_what_kivo_is_doing() {
+        let core = Core::new();
+        core.stop_everything();
+        assert_eq!(
+            core.session(),
+            SessionState::Idle,
+            "nothing to stop is fine"
+        );
+        core.start_listening().unwrap();
+        core.stop_everything();
+        assert_eq!(core.session(), SessionState::Idle);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn the_island_comes_back_after_being_hidden() {
+        let core = std::sync::Arc::new(Core::new());
+        core.hide_island_for(Duration::from_secs(3600));
+        assert!(core.state().borrow().island_hidden);
+        tokio::time::sleep(Duration::from_secs(3601)).await;
+        assert!(
+            !core.state().borrow().island_hidden,
+            "shown again after the hour"
+        );
+        core.hide_island_for(Duration::from_secs(3600));
+        core.set_island_hidden(false);
+        assert!(
+            !core.state().borrow().island_hidden,
+            "\"Show the Island\" ends it early"
+        );
+    }
+
+    #[test]
+    fn bypass_is_never_switched_on_directly() {
+        let core = Core::new();
+        assert!(core.set_mode(PermissionMode::Bypass).is_err());
+        assert_eq!(core.state().borrow().mode, PermissionMode::Auto);
     }
 
     #[tokio::test]

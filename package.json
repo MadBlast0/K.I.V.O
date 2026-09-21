@@ -10,6 +10,7 @@
     "typecheck": "pnpm --filter kivo-app typecheck",
     "docs:sync": "node scripts/sync-roadmap.mjs",
     "release:version": "node scripts/set-version.mjs",
+    "bench:data": "node scripts/bench-data.mjs",
     "lint": "pnpm --filter kivo-app lint",
     "format:check": "pnpm --filter kivo-app format:check",
     "test": "pnpm --filter kivo-app test"

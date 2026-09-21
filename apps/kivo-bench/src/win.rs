@@ -2,6 +2,7 @@
 //! RAPL energy meter, GPU engine load), process CPU time and memory, screen sampling, synthetic
 //! key presses, and a plain backdrop window.
 
+use std::collections::HashMap;
 use std::time::Duration;
 use windows::Win32::Foundation::{CloseHandle, FILETIME, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::Graphics::Gdi::{
@@ -14,8 +15,9 @@ use windows::Win32::System::Diagnostics::ToolHelp::{
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Performance::{
-    PDH_FMT_COUNTERVALUE_ITEM_W, PDH_FMT_DOUBLE, PDH_HCOUNTER, PDH_HQUERY, PdhAddEnglishCounterW,
-    PdhCloseQuery, PdhCollectQueryData, PdhGetFormattedCounterArrayW, PdhOpenQueryW,
+    PDH_FMT_COUNTERVALUE_ITEM_W, PDH_FMT_DOUBLE, PDH_HCOUNTER, PDH_HQUERY, PDH_RAW_COUNTER_ITEM_W,
+    PdhAddEnglishCounterW, PdhCloseQuery, PdhCollectQueryData, PdhGetFormattedCounterArrayW,
+    PdhGetRawCounterArrayW, PdhOpenQueryW,
 };
 use windows::Win32::System::ProcessStatus::{GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS_EX};
 use windows::Win32::System::Threading::{
@@ -80,12 +82,103 @@ impl Counters {
     }
 }
 
+/// Cumulative raw counts per instance (e.g. each thread's context switches so far), for counters
+/// whose instances come and go: rates are computed by matching instances by name.
+pub struct RawCounts {
+    query: PDH_HQUERY,
+    counter: PDH_HCOUNTER,
+}
+
+impl RawCounts {
+    pub fn open(path: &str) -> Result<Self, String> {
+        let mut query = PDH_HQUERY::default();
+        // SAFETY: plain PDH calls; the query is closed in Drop (or here on failure).
+        unsafe {
+            let status = PdhOpenQueryW(None, 0, &raw mut query);
+            if status != 0 {
+                return Err(format!("PdhOpenQuery failed ({status:#x})"));
+            }
+            let mut counter = PDH_HCOUNTER::default();
+            let status = PdhAddEnglishCounterW(query, &HSTRING::from(path), 0, &raw mut counter);
+            if status != 0 {
+                PdhCloseQuery(query);
+                return Err(format!("counter {path} is not available ({status:#x})"));
+            }
+            Ok(Self { query, counter })
+        }
+    }
+
+    /// Every instance's cumulative value right now.
+    pub fn read(&self) -> Result<HashMap<String, i64>, String> {
+        // SAFETY: the query is open.
+        let status = unsafe { PdhCollectQueryData(self.query) };
+        if status != 0 {
+            return Err(format!("PdhCollectQueryData failed ({status:#x})"));
+        }
+        let (mut bytes, mut count) = (0u32, 0u32);
+        // SAFETY: a size query (no buffer), as documented.
+        unsafe { PdhGetRawCounterArrayW(self.counter, &raw mut bytes, &raw mut count, None) };
+        for _ in 0..5 {
+            bytes += 16 * 1024;
+            let items = (bytes as usize).div_ceil(size_of::<PDH_RAW_COUNTER_ITEM_W>());
+            let mut buf = vec![PDH_RAW_COUNTER_ITEM_W::default(); items];
+            // SAFETY: `buf` holds at least `bytes` bytes of properly aligned items.
+            let status = unsafe {
+                PdhGetRawCounterArrayW(
+                    self.counter,
+                    &raw mut bytes,
+                    &raw mut count,
+                    Some(buf.as_mut_ptr()),
+                )
+            };
+            if status == PDH_MORE_DATA {
+                continue;
+            }
+            if status != 0 {
+                return Err(format!("reading a counter failed ({status:#x})"));
+            }
+            let mut values = HashMap::new();
+            for item in &buf[..count as usize] {
+                // SAFETY: PDH filled `szName` with a terminated string inside `buf`.
+                let name = unsafe { item.szName.to_string() }.unwrap_or_default();
+                values.insert(name, item.RawValue.FirstValue);
+            }
+            return Ok(values);
+        }
+        Err("reading a counter failed: its instances kept changing".into())
+    }
+}
+
+impl Drop for RawCounts {
+    fn drop(&mut self) {
+        // SAFETY: closing the query this struct owns.
+        unsafe { PdhCloseQuery(self.query) };
+    }
+}
+
+/// The per-second rate between two raw readings, over instances present in both whose count
+/// didn't go backwards (a name reused by a new thread starts again from zero).
+pub fn rate(before: &HashMap<String, i64>, after: &HashMap<String, i64>, seconds: f64) -> f64 {
+    #[allow(clippy::cast_precision_loss, reason = "event counts")]
+    let total: f64 = after
+        .iter()
+        .filter_map(|(name, &end)| before.get(name).map(|&start| end - start))
+        .filter(|&delta| delta >= 0)
+        .map(|delta| delta as f64)
+        .sum();
+    total / seconds
+}
+
 impl Drop for Counters {
     fn drop(&mut self) {
         // SAFETY: closing the query this struct owns.
         unsafe { PdhCloseQuery(self.query) };
     }
 }
+
+/// PDH's "buffer too small": instances (threads, processes) came and went between the size query
+/// and the read.
+const PDH_MORE_DATA: u32 = 0x8000_07D2;
 
 fn sum_instances(counter: PDH_HCOUNTER) -> Result<f64, String> {
     let (mut bytes, mut count) = (0u32, 0u32);
@@ -102,32 +195,40 @@ fn sum_instances(counter: PDH_HCOUNTER) -> Result<f64, String> {
     if bytes == 0 {
         return Ok(0.0);
     }
-    let items = (bytes as usize).div_ceil(size_of::<PDH_FMT_COUNTERVALUE_ITEM_W>());
-    let mut buf = vec![PDH_FMT_COUNTERVALUE_ITEM_W::default(); items];
-    // SAFETY: `buf` holds at least `bytes` bytes of properly aligned items.
-    let status = unsafe {
-        PdhGetFormattedCounterArrayW(
-            counter,
-            PDH_FMT_DOUBLE,
-            &raw mut bytes,
-            &raw mut count,
-            Some(buf.as_mut_ptr()),
-        )
-    };
-    if status != 0 {
-        return Err(format!("reading a counter failed ({status:#x})"));
-    }
-    let mut total = 0.0;
-    for item in &buf[..count as usize] {
-        // SAFETY: PDH filled `szName` with a terminated string inside `buf`.
-        let name = unsafe { item.szName.to_string() }.unwrap_or_default();
-        if name.eq_ignore_ascii_case("_total") {
+    for _ in 0..5 {
+        // Some slack, since the set of instances can grow before the read.
+        bytes += 16 * 1024;
+        let items = (bytes as usize).div_ceil(size_of::<PDH_FMT_COUNTERVALUE_ITEM_W>());
+        let mut buf = vec![PDH_FMT_COUNTERVALUE_ITEM_W::default(); items];
+        // SAFETY: `buf` holds at least `bytes` bytes of properly aligned items.
+        let status = unsafe {
+            PdhGetFormattedCounterArrayW(
+                counter,
+                PDH_FMT_DOUBLE,
+                &raw mut bytes,
+                &raw mut count,
+                Some(buf.as_mut_ptr()),
+            )
+        };
+        if status == PDH_MORE_DATA {
             continue;
         }
-        // SAFETY: PDH_FMT_DOUBLE fills the double member.
-        total += unsafe { item.FmtValue.Anonymous.doubleValue };
+        if status != 0 {
+            return Err(format!("reading a counter failed ({status:#x})"));
+        }
+        let mut total = 0.0;
+        for item in &buf[..count as usize] {
+            // SAFETY: PDH filled `szName` with a terminated string inside `buf`.
+            let name = unsafe { item.szName.to_string() }.unwrap_or_default();
+            if name.eq_ignore_ascii_case("_total") {
+                continue;
+            }
+            // SAFETY: PDH_FMT_DOUBLE fills the double member.
+            total += unsafe { item.FmtValue.Anonymous.doubleValue };
+        }
+        return Ok(total);
     }
-    Ok(total)
+    Err("reading a counter failed: its instances kept changing".into())
 }
 
 // ───────── Processes ─────────
@@ -273,6 +374,46 @@ pub fn grab(x: i32, y: i32, width: i32, height: i32) -> Result<Vec<[u8; 3]>, Str
             return Err("GetDIBits returned no rows".into());
         }
         Ok(bgra.chunks_exact(4).map(|p| [p[2], p[1], p[0]]).collect())
+    }
+}
+
+/// Restricts this process (and the threads it starts) to one logical processor on each of the
+/// first `cores` physical cores. Returns how many cores it got.
+pub fn limit_to_physical_cores(cores: usize) -> Result<usize, String> {
+    use windows::Win32::System::SystemInformation::{
+        GetLogicalProcessorInformation, RelationProcessorCore, SYSTEM_LOGICAL_PROCESSOR_INFORMATION,
+    };
+    use windows::Win32::System::Threading::{GetCurrentProcess, SetProcessAffinityMask};
+    let mut bytes = 0u32;
+    // SAFETY: a size query, then a call with a buffer of that size; the process handle is the
+    // current-process pseudo handle.
+    unsafe {
+        let _ = GetLogicalProcessorInformation(None, &raw mut bytes);
+        let count = bytes as usize / size_of::<SYSTEM_LOGICAL_PROCESSOR_INFORMATION>();
+        let mut info = vec![SYSTEM_LOGICAL_PROCESSOR_INFORMATION::default(); count];
+        GetLogicalProcessorInformation(Some(info.as_mut_ptr()), &raw mut bytes)
+            .map_err(|e| e.to_string())?;
+        let mut mask = 0usize;
+        let mut taken = 0;
+        for entry in info
+            .iter()
+            .filter(|i| i.Relationship == RelationProcessorCore)
+        {
+            if taken == cores {
+                break;
+            }
+            // The lowest logical processor of this core.
+            let core_mask = entry.ProcessorMask;
+            if core_mask != 0 {
+                mask |= core_mask & core_mask.wrapping_neg();
+                taken += 1;
+            }
+        }
+        if taken < cores {
+            return Err(format!("this PC has only {taken} physical cores"));
+        }
+        SetProcessAffinityMask(GetCurrentProcess(), mask).map_err(|e| e.to_string())?;
+        Ok(taken)
     }
 }
 
@@ -428,5 +569,21 @@ impl Drop for Backdrop {
     fn drop(&mut self) {
         // SAFETY: destroying the window this struct created.
         let _ = unsafe { DestroyWindow(self.0) };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rates_skip_instances_that_restarted_or_appeared() {
+        let before = HashMap::from([("a".to_owned(), 100), ("b".to_owned(), 50)]);
+        let after = HashMap::from([
+            ("a".to_owned(), 160), // +60
+            ("b".to_owned(), 10),  // a reused name: skipped
+            ("c".to_owned(), 999), // new: skipped
+        ]);
+        assert!((rate(&before, &after, 2.0) - 30.0).abs() < f64::EPSILON);
     }
 }

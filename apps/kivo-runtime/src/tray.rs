@@ -5,6 +5,7 @@
 use crate::core::{Core, describe};
 use kivo_core::SessionState;
 use kivo_core::config::PermissionMode;
+use kivo_ipc::StateSnapshot;
 use kivo_platform::{Tray, TrayIcon, TrayMenuItem};
 use kivo_platform_windows::{TrayEvent, WindowsTray};
 use std::sync::Arc;
@@ -15,8 +16,58 @@ const PAUSE: &str = "pause";
 const RESUME: &str = "resume";
 const SETTINGS: &str = "settings";
 const QUIT: &str = "quit";
+const HIDE_ISLAND: &str = "hide-island";
+const SHOW_ISLAND: &str = "show-island";
+const STOP: &str = "stop";
+/// UX §1: "Hide overlay for 1 hour".
+const HIDE_FOR: std::time::Duration = std::time::Duration::from_secs(60 * 60);
+/// Menu ids for the permission modes: "mode:<mode>".
+const MODE_PREFIX: &str = "mode:";
+/// Bypass needs its confirmation step, which lives in the Control Center (SEC-03).
+const BYPASS: &str = "mode:bypass";
 
-fn menu(state: SessionState) -> Vec<TrayMenuItem> {
+const MODES: [(PermissionMode, &str, &str); 4] = [
+    (PermissionMode::Ask, "mode:ask", "Ask every time"),
+    (
+        PermissionMode::AcceptEdits,
+        "mode:accept-edits",
+        "Accept edits",
+    ),
+    (PermissionMode::Plan, "mode:plan", "Plan first"),
+    (PermissionMode::Auto, "mode:auto", "Auto"),
+];
+
+fn mode_label(mode: PermissionMode) -> &'static str {
+    MODES
+        .iter()
+        .find(|(m, _, _)| *m == mode)
+        .map_or("Bypass permissions", |(_, _, label)| label)
+}
+
+/// What the tray shows: it changes with these.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Shown {
+    session: SessionState,
+    mode: PermissionMode,
+    island_hidden: bool,
+}
+
+impl From<&StateSnapshot> for Shown {
+    fn from(s: &StateSnapshot) -> Self {
+        Self {
+            session: s.session,
+            mode: s.mode,
+            island_hidden: s.island_hidden,
+        }
+    }
+}
+
+fn menu(shown: Shown) -> Vec<TrayMenuItem> {
+    let Shown {
+        session: state,
+        mode,
+        island_hidden,
+    } = shown;
     let item = |id: &str, label: &str, enabled: bool| TrayMenuItem::Item {
         id: id.into(),
         label: label.into(),
@@ -32,9 +83,33 @@ fn menu(state: SessionState) -> Vec<TrayMenuItem> {
             matches!(state, SessionState::Idle | SessionState::FollowUp),
         )
     };
+    let mut modes: Vec<TrayMenuItem> = MODES
+        .iter()
+        .map(|(m, id, label)| TrayMenuItem::Check {
+            id: (*id).into(),
+            label: (*label).into(),
+            checked: *m == mode,
+        })
+        .collect();
+    modes.push(TrayMenuItem::Check {
+        id: BYPASS.into(),
+        label: "Bypass permissions…".into(),
+        checked: mode == PermissionMode::Bypass,
+    });
     vec![
         item(OPEN, "Open KIVO", true),
         listening,
+        TrayMenuItem::Submenu {
+            label: "Permission mode".into(),
+            items: modes,
+        },
+        if island_hidden {
+            item(SHOW_ISLAND, "Show the Island", true)
+        } else {
+            item(HIDE_ISLAND, "Hide Island for 1 hour", true)
+        },
+        TrayMenuItem::Separator,
+        item(STOP, "Stop everything", true),
         TrayMenuItem::Separator,
         item(SETTINGS, "Settings", true),
         item(QUIT, "Quit KIVO", true),
@@ -52,19 +127,16 @@ fn icon(state: SessionState) -> TrayIcon {
 
 /// "KIVO · Ready", then the permission mode and running tasks (UX-56).
 fn tooltip(state: SessionState, mode: PermissionMode) -> String {
-    let mode = match mode {
-        PermissionMode::Ask => "Ask every time",
-        PermissionMode::AcceptEdits => "Accept edits",
-        PermissionMode::Plan => "Plan first",
-        PermissionMode::Auto => "Auto",
-        PermissionMode::Bypass => "Bypass permissions",
-    };
     // Tasks arrive in M5; until then nothing runs in the background.
-    format!("KIVO · {}\n{mode} mode · 0 tasks running", describe(state))
+    format!(
+        "KIVO · {}\n{} mode · 0 tasks running",
+        describe(state),
+        mode_label(mode)
+    )
 }
 
 /// What a tray choice does.
-fn handle(core: &Core, event: &TrayEvent) {
+fn handle(core: &Arc<Core>, event: &TrayEvent) {
     let result = match event {
         TrayEvent::Click => {
             core.open_control_center(None);
@@ -85,6 +157,29 @@ fn handle(core: &Core, event: &TrayEvent) {
                 core.quit();
                 Ok(())
             }
+            HIDE_ISLAND => {
+                core.hide_island_for(HIDE_FOR);
+                Ok(())
+            }
+            SHOW_ISLAND => {
+                core.set_island_hidden(false);
+                Ok(())
+            }
+            STOP => {
+                core.stop_everything();
+                Ok(())
+            }
+            // Bypass is confirmed in the Control Center, not from a menu click (SEC-03).
+            BYPASS => {
+                core.open_control_center(Some("permissions"));
+                Ok(())
+            }
+            mode if mode.starts_with(MODE_PREFIX) => {
+                match MODES.iter().find(|(_, id, _)| *id == mode) {
+                    Some((m, _, _)) => core.set_mode(*m).map(drop),
+                    None => Ok(()),
+                }
+            }
             other => {
                 tracing::warn!(id = other, "unknown tray menu item");
                 Ok(())
@@ -98,13 +193,17 @@ fn handle(core: &Core, event: &TrayEvent) {
 
 /// Shows the tray icon and keeps it in step with the session until KIVO quits. The icon is
 /// removed when this returns.
-pub async fn run(core: Arc<Core>, mode: PermissionMode) {
+pub async fn run(core: Arc<Core>) {
     let mut state = core.state();
-    let mut shown = state.borrow_and_update().session;
+    let mut shown = Shown::from(&*state.borrow_and_update());
     let (tx, mut events) = mpsc::unbounded_channel();
-    let tray = match WindowsTray::start(&tooltip(shown, mode), &menu(shown), move |e| {
-        let _ = tx.send(e);
-    }) {
+    let tray = match WindowsTray::start(
+        &tooltip(shown.session, shown.mode),
+        &menu(shown),
+        move |e| {
+            let _ = tx.send(e);
+        },
+    ) {
         Ok(tray) => tray,
         Err(e) => {
             // KIVO still works without the tray (voice, the app); the error is logged.
@@ -112,7 +211,7 @@ pub async fn run(core: Arc<Core>, mode: PermissionMode) {
             return;
         }
     };
-    if let Err(e) = tray.set_icon(icon(shown)) {
+    if let Err(e) = tray.set_icon(icon(shown.session)) {
         tracing::warn!(%e, "tray icon update failed");
     }
     let shutdown = core.shutdown();
@@ -121,13 +220,13 @@ pub async fn run(core: Arc<Core>, mode: PermissionMode) {
             Some(event) = events.recv() => handle(&core, &event),
             changed = state.changed() => {
                 if changed.is_err() { break }
-                let session = state.borrow_and_update().session;
-                if session == shown { continue }
-                shown = session;
+                let now = Shown::from(&*state.borrow_and_update());
+                if now == shown { continue }
+                shown = now;
                 let updated = tray
-                    .set_icon(icon(session))
-                    .and_then(|()| tray.set_tooltip(&tooltip(session, mode)))
-                    .and_then(|()| tray.set_menu(&menu(session)));
+                    .set_icon(icon(now.session))
+                    .and_then(|()| tray.set_tooltip(&tooltip(now.session, now.mode)))
+                    .and_then(|()| tray.set_menu(&menu(now)));
                 if let Err(e) = updated {
                     tracing::warn!(%e, "tray update failed");
                 }
@@ -153,12 +252,52 @@ mod tests {
 
     #[test]
     fn the_menu_offers_pause_or_resume_to_fit_the_state() {
+        let shown = |session| Shown {
+            session,
+            mode: PermissionMode::Auto,
+            island_hidden: false,
+        };
         assert_eq!(
-            ids(&menu(SessionState::Idle)),
-            [(OPEN, true), (PAUSE, true), (SETTINGS, true), (QUIT, true)]
+            ids(&menu(shown(SessionState::Idle))),
+            [
+                (OPEN, true),
+                (PAUSE, true),
+                (HIDE_ISLAND, true),
+                (STOP, true),
+                (SETTINGS, true),
+                (QUIT, true)
+            ]
         );
-        assert_eq!(ids(&menu(SessionState::Paused))[1], (RESUME, true));
-        assert_eq!(ids(&menu(SessionState::Thinking))[1], (PAUSE, false));
+        assert_eq!(ids(&menu(shown(SessionState::Paused)))[1], (RESUME, true));
+        assert_eq!(ids(&menu(shown(SessionState::Thinking)))[1], (PAUSE, false));
+        let hidden = Shown {
+            island_hidden: true,
+            ..shown(SessionState::Idle)
+        };
+        assert_eq!(ids(&menu(hidden))[2], (SHOW_ISLAND, true));
+    }
+
+    #[test]
+    fn the_mode_submenu_checks_the_current_mode() {
+        let menu = menu(Shown {
+            session: SessionState::Idle,
+            mode: PermissionMode::Plan,
+            island_hidden: false,
+        });
+        let Some(TrayMenuItem::Submenu { items, .. }) = menu.get(2) else {
+            panic!("the third item is the permission-mode submenu");
+        };
+        let checked: Vec<&str> = items
+            .iter()
+            .filter_map(|i| match i {
+                TrayMenuItem::Check {
+                    id, checked: true, ..
+                } => Some(id.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(checked, ["mode:plan"]);
+        assert_eq!(items.len(), 5, "four modes and Bypass");
     }
 
     #[test]
@@ -175,10 +314,25 @@ mod tests {
 
     #[tokio::test]
     async fn tray_choices_reach_the_core() {
-        let core = Core::new();
+        let core = Arc::new(Core::new());
         handle(&core, &TrayEvent::Menu(PAUSE.into()));
         assert_eq!(core.session(), SessionState::Paused);
         handle(&core, &TrayEvent::Menu(RESUME.into()));
+        assert_eq!(core.session(), SessionState::Idle);
+        handle(&core, &TrayEvent::Menu("mode:ask".into()));
+        assert_eq!(core.state().borrow().mode, PermissionMode::Ask);
+        handle(&core, &TrayEvent::Menu(BYPASS.into()));
+        assert_eq!(
+            core.state().borrow().mode,
+            PermissionMode::Ask,
+            "Bypass isn't switched on from the tray"
+        );
+        handle(&core, &TrayEvent::Menu(HIDE_ISLAND.into()));
+        assert!(core.state().borrow().island_hidden);
+        handle(&core, &TrayEvent::Menu(SHOW_ISLAND.into()));
+        assert!(!core.state().borrow().island_hidden);
+        core.start_listening().unwrap();
+        handle(&core, &TrayEvent::Menu(STOP.into()));
         assert_eq!(core.session(), SessionState::Idle);
         handle(&core, &TrayEvent::Menu(QUIT.into()));
         assert!(core.shutdown().is_cancelled());

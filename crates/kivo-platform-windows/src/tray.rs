@@ -210,10 +210,13 @@ fn icon_for(state: TrayIcon) -> PlatformResult<Icon> {
     Icon::from_rgba(rgba, w, h).map_err(|e| os_error(&e))
 }
 
+/// UX §1 tray states: normal, listening (a blue ring), paused (greyed and slashed, as a muted
+/// mic), error (a red badge) and updating (an amber badge).
 fn pixels_for(state: TrayIcon) -> PlatformResult<(Vec<u8>, u32, u32)> {
     let (mut rgba, w, h) = decode_mark()?;
     match state {
-        TrayIcon::Normal | TrayIcon::Listening => {}
+        TrayIcon::Normal => {}
+        TrayIcon::Listening => ring(&mut rgba, w, h, [0x3B, 0x8B, 0xFF]),
         TrayIcon::Paused => {
             for px in rgba.chunks_exact_mut(4) {
                 let grey = ((u32::from(px[0]) * 30 + u32::from(px[1]) * 59 + u32::from(px[2]) * 11)
@@ -221,11 +224,53 @@ fn pixels_for(state: TrayIcon) -> PlatformResult<(Vec<u8>, u32, u32)> {
                 px[..3].fill(grey);
                 px[3] = px[3] / 2 + px[3] / 4; // 75 % opacity
             }
+            slash(&mut rgba, w, h);
         }
         TrayIcon::Error => dot(&mut rgba, w, h, [0xFF, 0x51, 0x47]),
-        TrayIcon::Updating => dot(&mut rgba, w, h, [0x3B, 0x8B, 0xFF]),
+        TrayIcon::Updating => dot(&mut rgba, w, h, [0xF5, 0xA5, 0x24]),
     }
     Ok((rgba, w, h))
+}
+
+fn set(rgba: &mut [u8], w: u32, x: u32, y: u32, color: [u8; 3]) {
+    let i = ((y * w + x) * 4) as usize;
+    rgba[i..i + 3].copy_from_slice(&color);
+    rgba[i + 3] = 255;
+}
+
+/// A ring just inside the edge, the "KIVO is listening" signal.
+fn ring(rgba: &mut [u8], w: u32, h: u32, color: [u8; 3]) {
+    let (cx, cy) = (f64::from(w) / 2.0, f64::from(h) / 2.0);
+    let outer = f64::from(w.min(h)) / 2.0 - 0.5;
+    let inner = outer - f64::from(w.min(h)) * 0.09;
+    for y in 0..h {
+        for x in 0..w {
+            let (dx, dy) = (f64::from(x) + 0.5 - cx, f64::from(y) + 0.5 - cy);
+            let d = (dx * dx + dy * dy).sqrt();
+            if (inner..=outer).contains(&d) {
+                set(rgba, w, x, y, color);
+            }
+        }
+    }
+}
+
+/// A diagonal bar from top left to bottom right, the universal "muted" mark, with a thin
+/// transparent gap on each side so it reads at 16 px.
+fn slash(rgba: &mut [u8], w: u32, h: u32) {
+    let thickness = f64::from(w.min(h)) * 0.07;
+    for y in 0..h {
+        for x in 0..w {
+            // Distance from the line x = y (scaled to the icon).
+            let d = (f64::from(x) - f64::from(y) * f64::from(w) / f64::from(h)).abs()
+                / std::f64::consts::SQRT_2;
+            let i = ((y * w + x) * 4) as usize;
+            if d <= thickness {
+                set(rgba, w, x, y, [0xE8, 0xE8, 0xED]);
+            } else if d <= thickness * 2.0 {
+                rgba[i + 3] = 0;
+            }
+        }
+    }
 }
 
 fn decode_mark() -> PlatformResult<(Vec<u8>, u32, u32)> {
@@ -248,9 +293,7 @@ fn dot(rgba: &mut [u8], w: u32, h: u32, color: [u8; 3]) {
         for x in 0..w {
             let (dx, dy) = (f64::from(x) + 0.5 - cx, f64::from(y) + 0.5 - cy);
             if dx * dx + dy * dy <= r * r {
-                let i = ((y * w + x) * 4) as usize;
-                rgba[i..i + 3].copy_from_slice(&color);
-                rgba[i + 3] = 255;
+                set(rgba, w, x, y, color);
             }
         }
     }
@@ -277,37 +320,44 @@ mod tests {
     }
 
     #[test]
-    fn each_state_looks_different_except_listening() {
-        let px = |s| pixels_for(s).unwrap().0;
-        assert_eq!(
-            px(TrayIcon::Listening),
-            px(TrayIcon::Normal),
-            "the Island shows listening, not the tray"
-        );
-        let distinct = [
-            TrayIcon::Normal,
-            TrayIcon::Paused,
-            TrayIcon::Error,
-            TrayIcon::Updating,
-        ]
-        .map(px);
-        for i in 0..distinct.len() {
-            for j in i + 1..distinct.len() {
-                assert_ne!(distinct[i], distinct[j]);
-            }
-        }
-        for state in [
+    fn every_state_looks_different() {
+        let states = [
             TrayIcon::Normal,
             TrayIcon::Listening,
             TrayIcon::Paused,
             TrayIcon::Error,
             TrayIcon::Updating,
-        ] {
-            icon_for(state).unwrap();
+        ];
+        let images: Vec<Vec<u8>> = states.iter().map(|&s| pixels_for(s).unwrap().0).collect();
+        for i in 0..images.len() {
+            for j in i + 1..images.len() {
+                assert_ne!(images[i], images[j], "{:?} vs {:?}", states[i], states[j]);
+            }
         }
     }
 
-    /// Needs an interactive desktop session (not CI): shows a real tray icon, updates it, removes it.
+    #[test]
+    fn listening_rings_and_paused_is_slashed() {
+        let at = |rgba: &[u8], x: usize, y: usize| {
+            let i = (y * 64 + x) * 4;
+            [rgba[i], rgba[i + 1], rgba[i + 2], rgba[i + 3]]
+        };
+        let listening = pixels_for(TrayIcon::Listening).unwrap().0;
+        assert_eq!(
+            at(&listening, 32, 1),
+            [0x3B, 0x8B, 0xFF, 255],
+            "the ring at the top edge"
+        );
+        let paused = pixels_for(TrayIcon::Paused).unwrap().0;
+        assert_eq!(
+            at(&paused, 32, 32),
+            [0xE8, 0xE8, 0xED, 255],
+            "the slash crosses the centre"
+        );
+        let normal = pixels_for(TrayIcon::Normal).unwrap().0;
+        assert_ne!(at(&normal, 32, 32), at(&paused, 32, 32));
+    }
+
     #[test]
     #[ignore = "shows a real tray icon"]
     fn a_real_tray_icon_starts_updates_and_stops() {

@@ -118,7 +118,7 @@ function Shell({ page, setPage }: { page: PageId; setPage: (page: PageId) => voi
         {page === "gallery" ? (
           <Gallery />
         ) : page === "home" ? (
-          <Home />
+          <Home onOpenPermissions={() => setPage("permissions")} />
         ) : (
           <>
             <PageHeader title={TITLES[page]} />

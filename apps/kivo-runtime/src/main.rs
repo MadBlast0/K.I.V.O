@@ -52,6 +52,11 @@ fn main() -> ExitCode {
         Ok(l) => l.config.clone(),
         Err(_) => kivo_core::KivoConfig::default(),
     };
+    // A settings file from a newer KIVO is used read-only: nothing here may overwrite it.
+    let writable = !matches!(
+        &loaded,
+        Ok(l) if matches!(l.notice, Some(Notice::FromNewerVersion { .. }))
+    ) && loaded.is_ok();
     let _log = kivo_store::logging::init(&paths.logs(), "info", config.privacy.debug_transcripts)
         .map_err(|e| eprintln!("kivo-runtime: logging is off: {e}"))
         .ok();
@@ -77,7 +82,7 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let code = tokio.block_on(run(args, &paths, &config));
+    let code = tokio.block_on(run(args, &paths, config, writable));
     tracing::info!("KIVO runtime stopped");
     code
 }
@@ -108,7 +113,7 @@ fn log_config_notice(notice: Option<&Notice>) {
     }
 }
 
-async fn run(args: Args, paths: &Paths, config: &kivo_core::KivoConfig) -> ExitCode {
+async fn run(args: Args, paths: &Paths, config: kivo_core::KivoConfig, writable: bool) -> ExitCode {
     #[cfg(windows)]
     tracing::info!(capabilities = ?kivo_platform_windows::detect_capabilities(), "platform");
 
@@ -149,7 +154,13 @@ async fn run(args: Args, paths: &Paths, config: &kivo_core::KivoConfig) -> ExitC
         }
     };
 
-    let core = Arc::new(Core::new());
+    let push_to_talk_keys = config.voice.push_to_talk.clone();
+    let emergency_stop_keys = config.permissions.emergency_stop.clone();
+    let show_tray = config.general.tray_icon;
+    let core = Arc::new(Core::with_config(
+        config,
+        writable.then(|| paths.config_file()),
+    ));
     let clients = server.connected_clients();
     let ipc = tokio::spawn(server.run(
         Arc::new(rpc::Rpc::new(Arc::clone(&core))),
@@ -159,15 +170,13 @@ async fn run(args: Args, paths: &Paths, config: &kivo_core::KivoConfig) -> ExitC
     ));
 
     #[cfg(windows)]
-    let tray = config
-        .general
-        .tray_icon
-        .then(|| tokio::spawn(tray::run(Arc::clone(&core), config.permissions.mode)));
+    let tray = show_tray.then(|| tokio::spawn(tray::run(Arc::clone(&core))));
 
     #[cfg(windows)]
     let push_to_talk = tokio::spawn(hotkeys::run(
         Arc::clone(&core),
-        config.voice.push_to_talk.clone(),
+        push_to_talk_keys,
+        emergency_stop_keys,
     ));
 
     let supervisor = (!args.no_app).then(|| {

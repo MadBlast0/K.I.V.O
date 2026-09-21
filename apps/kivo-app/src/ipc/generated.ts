@@ -55,7 +55,17 @@ export type UiEvent = { "type": "controlCenterRequested", page: string | null, }
 
 export type SessionState = "idle" | "listening" | "thinking" | "acting" | "speaking" | "followUp" | "interrupted" | "paused" | "awaitingConfirmation" | "error";
 
+export type PermissionMode = "ask" | "accept-edits" | "plan" | "auto" | "bypass";
+
 export type StateSnapshot = { session: SessionState, 
+/**
+ * How much KIVO may do without asking (SECURITY §1.1).
+ */
+mode: PermissionMode, 
+/**
+ * "Hide Island for 1 hour" (UX §1): the Island shows nothing until this is cleared.
+ */
+islandHidden: boolean, 
 /**
  * Increases with every state change, so a client can tell whether its view is current.
  */
@@ -88,6 +98,7 @@ export const Method = {
   sessionPause: "session.pause",
   sessionResume: "session.resume",
   runtimeQuit: "runtime.quit",
+  permissionsSetMode: "permissions.setMode",
 } as const;
 
 export type Method = (typeof Method)[keyof typeof Method];
