@@ -1,0 +1,42 @@
+/* Base element styles and global motion keyframes. */
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body, #root { margin: 0; height: 100%; }
+
+body {
+  background: var(--page);
+  color: var(--text);
+  font-family: var(--font-sys);
+  font-size: 13.5px;
+  line-height: 1.45;
+  letter-spacing: -.003em;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root { isolation: isolate; }
+button, input, select, textarea { font: inherit; color: inherit; letter-spacing: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+code { font-family: var(--font-mono); font-size: 12px; background: var(--fill); padding: 1px 5px; border-radius: 4px; }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--fill-2); border-radius: 10px; border: 3px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-track { background: transparent; }
+
+@keyframes k-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes k-pop { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: none; } }
+@keyframes k-drop { from { opacity: 0; transform: translateY(-12px) scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes k-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes k-spin { to { transform: rotate(360deg); } }
+@keyframes k-pulse { 0% { transform: scale(.92); opacity: .6; } 100% { transform: scale(1.25); opacity: 0; } }
+@keyframes k-level { 50% { height: 22px; } }
+@keyframes k-breathe { 50% { transform: scale(1.06); filter: brightness(1.15); } }
+
+.k-stagger > * { animation: k-in .34s var(--ease-out) both; animation-delay: calc(var(--i, 0) * 30ms); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0s !important; transition-duration: 0s !important; }
+}
+[data-motion="reduced"] *, [data-motion="reduced"] *::before, [data-motion="reduced"] *::after {
+  animation-duration: 0s !important; transition-duration: 0s !important;
+}

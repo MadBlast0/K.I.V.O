@@ -1,0 +1,13 @@
+[package]
+name = "kivo-platform-windows"
+description = "Windows implementations of the kivo-platform traits."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+
+[lints]
+workspace = true

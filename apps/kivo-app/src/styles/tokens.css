@@ -1,0 +1,93 @@
+/*
+ * KIVO design tokens — the single source of truth for colour, type, shape and motion.
+ * Spec: docs/design/DESIGN_SYSTEM.md · Reference: docs/design/mockups/kivo-app.html
+ * Theme: light by default; dark via [data-theme="dark"]; accent via [data-accent].
+ */
+
+:root {
+  /* Type — system font, nothing bundled (Segoe UI Variable on Windows). */
+  --font-sys: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", -apple-system, system-ui, sans-serif;
+  --font-disp: "Segoe UI Variable Display", "Segoe UI Variable", "Segoe UI", -apple-system, system-ui, sans-serif;
+  --font-mono: "Cascadia Mono", "Cascadia Code", Consolas, ui-monospace, monospace;
+
+  /* Shape */
+  --r-s: 6px;
+  --r-m: 10px;
+  --r-l: 14px;
+  --r-island: 20px;
+  --row: 44px;
+  --gap: 12px;
+
+  /* Motion (production values for Motion + CSS) */
+  --t-fast: 150ms;
+  --t-base: 250ms;
+  --t-slow: 400ms;
+  --ease-out: cubic-bezier(.2, .8, .2, 1);
+  --ease-spring: cubic-bezier(.32, 1.28, .54, 1);
+
+  /* Island — always black, in both themes */
+  --isl: #000;
+  --isl-fg: #fff;
+  --isl-2: rgba(255, 255, 255, .62);
+  --isl-3: rgba(255, 255, 255, .14);
+}
+
+:root,
+[data-theme="light"] {
+  --page: #E8E7E3;
+  --win: #FBFBFA;
+  --side: #F2F2F0;
+  --group: #FFFFFF;
+  --fill: rgba(0, 0, 0, .045);
+  --fill-2: rgba(0, 0, 0, .075);
+  --sep: rgba(0, 0, 0, .07);
+  --border: rgba(0, 0, 0, .09);
+  --text: #1D1D1F;
+  --text-2: #6E6E73;
+  --text-3: #9C9CA1;
+  --ink: #1D1D1F;
+  --ink-fg: #FFFFFF;
+  --green: #1F9D55;
+  --orange: #C77C02;
+  --red: #D93F3F;
+  --seg-on: #FFFFFF;
+  --shadow: 0 1px 1px rgba(0, 0, 0, .04), 0 8px 28px -14px rgba(0, 0, 0, .22);
+  --win-shadow: 0 0 0 1px rgba(0, 0, 0, .08), 0 30px 70px -30px rgba(0, 0, 0, .35);
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --page: #0D0D0D;
+  --win: #1B1B1C;
+  --side: #222223;
+  --group: #262628;
+  --fill: rgba(255, 255, 255, .07);
+  --fill-2: rgba(255, 255, 255, .11);
+  --sep: rgba(255, 255, 255, .07);
+  --border: rgba(255, 255, 255, .09);
+  --text: #F5F5F7;
+  --text-2: #A1A1A6;
+  --text-3: #6E6E73;
+  --ink: #F5F5F7;
+  --ink-fg: #1D1D1F;
+  --green: #32D74B;
+  --orange: #FF9F0A;
+  --red: #FF5147;
+  --seg-on: #48484A;
+  --shadow: 0 1px 1px rgba(0, 0, 0, .3), 0 10px 30px -12px rgba(0, 0, 0, .7);
+  --win-shadow: 0 0 0 1px rgba(255, 255, 255, .08), 0 30px 70px -30px rgba(0, 0, 0, .8);
+  color-scheme: dark;
+}
+
+/* Accent — used only for selection, focus and status. Buttons stay ink. */
+:root, [data-accent="blue"] { --acc: #0A6CFF; }
+[data-theme="dark"][data-accent="blue"], [data-theme="dark"]:not([data-accent]) { --acc: #3B8BFF; }
+[data-accent="violet"] { --acc: #7C5CFF; }   [data-theme="dark"][data-accent="violet"] { --acc: #A38BFF; }
+[data-accent="teal"] { --acc: #0E9494; }     [data-theme="dark"][data-accent="teal"] { --acc: #40C8C8; }
+[data-accent="green"] { --acc: #1F9D55; }    [data-theme="dark"][data-accent="green"] { --acc: #32D74B; }
+[data-accent="amber"] { --acc: #C98300; }    [data-theme="dark"][data-accent="amber"] { --acc: #FFB020; }
+[data-accent="coral"] { --acc: #E5533D; }    [data-theme="dark"][data-accent="coral"] { --acc: #FF7A5C; }
+[data-accent="graphite"] { --acc: #6E6E73; } [data-theme="dark"][data-accent="graphite"] { --acc: #AEAEB2; }
+:root { --acc-soft: color-mix(in srgb, var(--acc) 12%, transparent); }
+
+[data-textsize="large"] { font-size: 14.5px; }

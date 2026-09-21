@@ -1,0 +1,13 @@
+[package]
+name = "kivo-brain"
+description = "BrainProvider trait, API/ACP/local adapters, profiles and routing."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+
+[lints]
+workspace = true

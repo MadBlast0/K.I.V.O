@@ -1,0 +1,13 @@
+[package]
+name = "kivo-voice"
+description = "Wake word, speaker verification, speech-to-text and text-to-speech provider traits and adapters."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+
+[lints]
+workspace = true

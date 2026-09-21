@@ -1,0 +1,13 @@
+[package]
+name = "kivo-infer"
+description = "Inference worker: runs speech-to-text, text-to-speech and embedding models out of process."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+
+[lints]
+workspace = true

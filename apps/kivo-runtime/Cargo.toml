@@ -1,0 +1,13 @@
+[package]
+name = "kivo-runtime"
+description = "The KIVO runtime: the always-on core process (tray, audio, wake word, routing, tools, permissions, store)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+
+[lints]
+workspace = true

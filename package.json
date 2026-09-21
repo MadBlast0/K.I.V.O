@@ -1,0 +1,11 @@
+{
+  "name": "kivo",
+  "private": true,
+  "packageManager": "pnpm@11.13.0",
+  "scripts": {
+    "dev": "pnpm --filter kivo-app tauri dev",
+    "ui": "pnpm --filter kivo-app dev",
+    "build": "pnpm --filter kivo-app tauri build",
+    "typecheck": "pnpm --filter kivo-app typecheck"
+  }
+}

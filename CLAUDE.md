@@ -54,8 +54,24 @@ never call Win32 (or any OS API) directly from core logic.
 ## Status
 
 Phase 0 (specification) complete; owner inputs answered (see
-[docs/DECISIONS.md](docs/DECISIONS.md)). Next: **M0 — foundations and measurement**. No
-source code yet. Update this section as milestones land.
+[docs/DECISIONS.md](docs/DECISIONS.md)). **M0 — foundations and measurement** in progress:
+the Cargo/pnpm workspaces, crate stubs, Tauri shell, and the UI component library
+(`apps/kivo-app/src/components`, shown on the in-app gallery page) exist. Update this
+section as milestones land.
+
+## Build, run, check
+
+| Task | Command |
+|---|---|
+| Run the desktop app with hot reload | `preview.bat` (or `pnpm dev`) |
+| UI only, in a browser (port 1420) | `pnpm ui` |
+| Typecheck UI | `pnpm typecheck` |
+| Build UI | `pnpm --filter kivo-app build` |
+| Check / lint Rust | `cargo check --workspace` · `cargo clippy --workspace --all-targets` |
+| Installer build | `pnpm build` |
+
+The tree must stay free of warnings from tsc, Vite, rustc and clippy. The native title
+bar is off (`decorations: false`); the app draws its own (`components/layout/TitleBar.tsx`).
 
 ## Planned stack
 

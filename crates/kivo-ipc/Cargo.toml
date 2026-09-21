@@ -1,0 +1,13 @@
+[package]
+name = "kivo-ipc"
+description = "IPC protocol types and transport (named pipe + JSON-RPC 2.0) shared by the runtime, app and workers."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+
+[lints]
+workspace = true

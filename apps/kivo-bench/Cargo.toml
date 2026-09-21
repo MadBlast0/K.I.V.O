@@ -1,0 +1,13 @@
+[package]
+name = "kivo-bench"
+description = "Benchmark harness for engines, latency and resource budgets (docs/architecture/BENCHMARKS.md)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+
+[lints]
+workspace = true

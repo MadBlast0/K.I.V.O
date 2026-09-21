@@ -1,0 +1,13 @@
+[package]
+name = "kivo-tools"
+description = "Tool registry, tool schemas and built-in tools."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+
+[lints]
+workspace = true

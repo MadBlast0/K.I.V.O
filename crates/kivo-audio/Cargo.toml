@@ -1,0 +1,13 @@
+[package]
+name = "kivo-audio"
+description = "Audio capture/playback, resampling, echo cancellation, voice activity detection and ring buffers."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+
+[lints]
+workspace = true

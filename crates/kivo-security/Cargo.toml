@@ -1,0 +1,13 @@
+[package]
+name = "kivo-security"
+description = "Permission engine, permission modes, taint tracking and audit log."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+
+[lints]
+workspace = true

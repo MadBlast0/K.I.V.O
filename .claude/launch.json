@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "kivo-ui",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "kivo-app", "dev"],
+      "port": 1420
+    }
+  ]
+}

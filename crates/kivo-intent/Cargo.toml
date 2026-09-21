@@ -1,0 +1,13 @@
+[package]
+name = "kivo-intent"
+description = "Fast-path command grammar and intent classification."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+
+[lints]
+workspace = true

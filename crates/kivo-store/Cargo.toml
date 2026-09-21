@@ -1,0 +1,13 @@
+[package]
+name = "kivo-store"
+description = "SQLite storage, migrations, config IO, secrets access and the model manager."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+
+[lints]
+workspace = true
