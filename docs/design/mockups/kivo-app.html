@@ -33,6 +33,13 @@
 [data-theme="dark"][data-accent="green"]{--acc:#49C996;--acc-soft:rgba(73,201,150,.14)}
 [data-theme="dark"][data-accent="coral"]{--acc:#FF8A66;--acc-soft:rgba(255,138,102,.14)}
 [data-theme="dark"][data-accent="mono"]{--acc:#C9C9C9;--acc-soft:rgba(201,201,201,.12)}
+[data-accent="violet"]{--acc:#6E56CF;--acc-soft:rgba(110,86,207,.12)}
+[data-accent="teal"]{--acc:#0E8A8A;--acc-soft:rgba(14,138,138,.12)}
+[data-accent="amber"]{--acc:#B7700B;--acc-soft:rgba(183,112,11,.13)}
+[data-theme="dark"][data-accent="violet"]{--acc:#A898F0;--acc-soft:rgba(168,152,240,.14)}
+[data-theme="dark"][data-accent="teal"]{--acc:#4FC9C9;--acc-soft:rgba(79,201,201,.14)}
+[data-theme="dark"][data-accent="amber"]{--acc:#F0B24A;--acc-soft:rgba(240,178,74,.14)}
+[data-textsize="large"] body{font-size:15.5px}
 [data-density="compact"]{--pad:12px;--rowh:36px}
 
 *{box-sizing:border-box}
@@ -323,7 +330,142 @@ h2.pt{font-family:var(--disp);font-size:24px;font-weight:600;letter-spacing:-.01
 .tok div{padding:6px 8px}
 .tok small{display:block;font-family:var(--mono);color:var(--text-3);font-size:10.5px}
 
+/* ═════════════════════ Fixes: wrapping, no overlap ═════════════════════ */
+.row .trail{display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:wrap;max-width:62%}
+.row .grow .t1,.row .grow .t2{overflow-wrap:anywhere}
+.card .ch{flex-wrap:wrap}
+.phead > div:last-child{justify-content:flex-end}
+.content{scrollbar-gutter:stable}
+.lbl:first-child{margin-top:0}
+[data-theme="light"] .stage-wall{background:radial-gradient(60% 80% at 78% 30%,#CBD9E6,transparent 60%),radial-gradient(70% 70% at 10% 90%,#E8D9C8,transparent 60%),linear-gradient(160deg,#EEF1F4,#DCE3EA 55%,#E9E2D9)}
+[data-theme="dark"] .stage-wall{background:radial-gradient(60% 80% at 78% 25%,#2A3A4E,transparent 60%),radial-gradient(70% 70% at 10% 95%,#3A2E27,transparent 60%),linear-gradient(160deg,#15181D,#1B2129 55%,#1E1A17)}
+
+/* ═════════════════════ Added components ═════════════════════ */
+.alert{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--panel);font-size:13px}
+.alert .ai{width:18px;height:18px;flex:none;margin-top:1px}
+.alert.info{border-color:color-mix(in srgb,var(--acc) 35%,transparent);background:var(--acc-soft)}.alert.info .ai{color:var(--acc)}
+.alert.ok{border-color:color-mix(in srgb,var(--ok) 35%,transparent);background:color-mix(in srgb,var(--ok) 9%,transparent)}.alert.ok .ai{color:var(--ok)}
+.alert.warn{border-color:color-mix(in srgb,var(--warn) 40%,transparent);background:color-mix(in srgb,var(--warn) 10%,transparent)}.alert.warn .ai{color:var(--warn)}
+.alert.err{border-color:color-mix(in srgb,var(--danger) 40%,transparent);background:color-mix(in srgb,var(--danger) 9%,transparent)}.alert.err .ai{color:var(--danger)}
+.alert b{display:block}
+.chk{display:inline-flex;align-items:center;gap:8px;font-size:13px;cursor:pointer}
+.chk i{width:18px;height:18px;border-radius:5px;border:1.5px solid var(--line-2);display:grid;place-items:center;background:var(--panel);flex:none}
+.chk.on i{background:var(--acc);border-color:transparent}
+.chk.on i::after{content:"";width:8px;height:4px;border-left:2px solid #fff;border-bottom:2px solid #fff;transform:rotate(-45deg) translate(1px,-1px)}
+.rad{display:inline-flex;align-items:center;gap:8px;font-size:13px;cursor:pointer}
+.rad i{width:18px;height:18px;border-radius:50%;border:1.5px solid var(--line-2);display:grid;place-items:center;background:var(--panel)}
+.rad.on i{border-color:var(--acc)}.rad.on i::after{content:"";width:8px;height:8px;border-radius:50%;background:var(--acc)}
+.select{height:34px;border:1px solid var(--line-2);border-radius:var(--r-ctl);background:var(--panel);padding:0 10px;display:inline-flex;align-items:center;gap:8px;min-width:180px;justify-content:space-between;font-size:13px}
+.select svg:last-child{transform:rotate(90deg);color:var(--text-3)}
+input[type=range].rng{width:100%;accent-color:var(--acc)}
+.hotkey{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 6px 0 10px;border:1px dashed var(--line-2);border-radius:var(--r-ctl);background:var(--panel)}
+.hotkey.rec{border-style:solid;border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-soft);padding-right:10px}
+.hotkey .ph{font-size:12.5px;color:var(--acc)}
+.swatches{display:flex;gap:8px;flex-wrap:wrap}
+.swatches button{width:26px;height:26px;border-radius:50%;border:0;padding:0;position:relative;box-shadow:0 0 0 1px var(--line-2) inset}
+.swatches button[aria-pressed="true"]::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:2px solid var(--text)}
+.swatches .custom{background:conic-gradient(#f44,#fd4,#4f8,#4df,#66f,#f4d,#f44)}
+.recbtn{width:64px;height:64px;border-radius:50%;border:0;background:var(--ink);color:var(--ink-fg);display:grid;place-items:center;position:relative;flex:none}
+.recbtn svg{width:24px;height:24px}
+.recbtn.live{background:var(--danger);color:#fff}
+.recbtn.live::before{content:"";position:absolute;inset:-6px;border-radius:50%;border:2px solid var(--danger);opacity:.5;animation:pulse 1.4s var(--out) infinite}
+@keyframes pulse{0%{transform:scale(.92);opacity:.6}100%{transform:scale(1.25);opacity:0}}
+.lvl{display:flex;gap:3px;align-items:center;height:32px}
+.lvl i{width:4px;border-radius:2px;background:var(--acc);height:6px;animation:lv 1s ease-in-out infinite}
+@keyframes lv{50%{height:26px}}
+.validator{display:flex;gap:3px}
+.validator i{flex:1;height:6px;border-radius:3px;background:var(--line-2)}
+.validator.good i{background:var(--ok)}.validator.fair i:nth-child(-n+2){background:var(--warn)}.validator.risky i:first-child{background:var(--danger)}
+.budget{position:relative;height:8px;border-radius:8px;background:var(--hover)}
+.budget span{position:absolute;left:0;top:0;bottom:0;border-radius:8px;background:var(--acc)}
+.budget em{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--text-3);border-radius:2px}
+.skel{border-radius:6px;background:linear-gradient(90deg,var(--hover),var(--panel-2),var(--hover));background-size:200% 100%;animation:sk 1.3s linear infinite}
+@keyframes sk{to{background-position:-200% 0}}
+.tip{position:relative;display:inline-block;margin-top:34px}
+.tip .tt{position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:var(--ink);color:var(--ink-fg);font-size:12px;padding:5px 8px;border-radius:6px;white-space:nowrap}
+.tip .tt::after{content:"";position:absolute;top:100%;left:50%;margin-left:-4px;border:4px solid transparent;border-top-color:var(--ink)}
+.menu{width:220px;background:var(--panel);border:1px solid var(--line-2);border-radius:10px;padding:4px;box-shadow:var(--shadow);font-size:13px}
+.menu .mi{display:flex;align-items:center;gap:10px;height:30px;padding:0 10px;border-radius:6px}
+.menu .mi:hover{background:var(--hover)}
+.menu .mi .k{margin-left:auto;font-size:11px;color:var(--text-3)}
+.menu hr{border:0;border-top:1px solid var(--line);margin:4px 0}
+.palette{width:100%;background:var(--panel);border:1px solid var(--line-2);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
+.palette .pin{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);color:var(--text-3)}
+.palette .pin input{border:0;outline:0;background:transparent;flex:1;color:var(--text);font-size:15px;min-width:0}
+.palette .pg{font-size:11.5px;font-weight:600;color:var(--text-3);padding:8px 14px 4px}
+.palette .pi{display:flex;align-items:center;gap:10px;padding:8px 14px;font-size:13px}
+.palette .pi.sel{background:var(--acc-soft)}
+.palette .pi .k{margin-left:auto;font-size:11.5px;color:var(--text-3)}
+.sheetpanel{width:100%;background:var(--win);border:1px solid var(--line-2);border-radius:12px 0 0 12px;box-shadow:var(--shadow);padding:16px}
+.qr{width:120px;height:120px;border-radius:12px;background:var(--panel);border:1px solid var(--line);padding:10px;display:grid;grid-template-columns:repeat(9,1fr);gap:2px;flex:none}
+.qr i{background:var(--text);border-radius:1.5px}.qr i.o{background:transparent}
+.scope{display:flex;flex-wrap:wrap;gap:6px}
+.scope button{height:26px;padding:0 10px;border-radius:999px;border:1px solid var(--line-2);background:var(--panel);font-size:12px}
+.scope button[aria-pressed="true"]{background:var(--ink);color:var(--ink-fg);border-color:transparent}
+.orbstate{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:11.5px;color:var(--text-2)}
+.orbstate .o{width:28px;height:28px;border-radius:50%;background:#000;display:grid;place-items:center}
+.orbstate .o::after{content:"";width:12px;height:12px;border-radius:50%;background:#7FB2FF}
+.orbstate .o.listen::after{background:#fff;box-shadow:0 0 10px #fff}
+.orbstate .o.think::after{background:conic-gradient(#7FB2FF,transparent);animation:spin 1s linear infinite}
+.orbstate .o.speak::after{background:#9AD3FF;animation:breathe2 1s ease-in-out infinite}
+.orbstate .o.err::after{background:#F06A61}
+.orbstate .o.pause::after{background:#777}
+@keyframes breathe2{50%{transform:scale(1.25)}}
+.gsec{font-family:var(--disp);font-size:17px;font-weight:600;margin:30px 0 10px;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.gsec small{font-family:var(--sys);font-size:12.5px;font-weight:400;color:var(--text-3)}
+.dl{display:flex;gap:12px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--panel);width:100%}
+.provrow{display:flex;gap:10px;align-items:center;width:100%;padding:8px 0;border-top:1px solid var(--line)}
+.provrow:first-child{border-top:0}
+.useind{display:inline-flex;gap:4px;align-items:center;height:24px;padding:0 8px;border-radius:999px;background:#000;color:#fff;font-size:11.5px;white-space:nowrap}
+.useind svg{width:13px;height:13px}
+.tray-mini{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:10px;background:var(--panel-2);border:1px solid var(--line);font-size:12px;color:var(--text-2)}
+.tray-mini .k{width:18px;height:18px;border-radius:50%;background:#000;display:grid;place-items:center;flex:none}
+.tray-mini .k::after{content:"";width:8px;height:8px;border-radius:50%;background:#7FB2FF}
+
+/* ═════════════════════ Onboarding v2 ═════════════════════ */
+.ob{border-radius:var(--r-win);overflow:hidden;border:1px solid var(--line-2);background:var(--win);box-shadow:0 30px 70px -30px rgba(0,0,0,.45);display:flex;flex-direction:column;height:760px}
+.ob .prog{display:flex;gap:6px;padding:14px 28px 0}
+.ob .prog .ph{flex:1;display:flex;flex-direction:column;gap:6px;font-size:11.5px;color:var(--text-3);font-weight:500}
+.ob .prog .ph i{height:4px;border-radius:4px;background:var(--hover);overflow:hidden;display:block}
+.ob .prog .ph i b{display:block;height:100%;background:var(--ink);border-radius:4px;transition:width .4s var(--out)}
+.ob .prog .ph.on{color:var(--text)}
+.ob .stage2{flex:1;overflow:auto;display:flex;justify-content:center;padding:32px 28px 24px}
+.ob .col{width:100%;max-width:600px;display:flex;flex-direction:column}
+.ob .eyebrow{font-size:12px;font-weight:600;color:var(--acc);margin-bottom:8px}
+.ob h2{font-family:var(--disp);font-size:30px;font-weight:600;letter-spacing:-.02em;margin:0 0 8px;line-height:1.15}
+.ob .sub{color:var(--text-2);margin:0 0 24px;font-size:15px;line-height:1.5}
+.ob .foot{display:flex;align-items:center;gap:10px;padding:14px 28px;border-top:1px solid var(--line)}
+.ob .foot .sp{flex:1}
+.ob .choice{display:flex;gap:14px;align-items:flex-start;text-align:left;border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:var(--panel);width:100%;transition:border-color .15s,box-shadow .15s}
+.ob .choice + .choice{margin-top:8px}
+.ob .choice[aria-pressed="true"]{border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-soft)}
+.ob .choice .rd{width:18px;height:18px;border-radius:50%;border:1.5px solid var(--line-2);flex:none;margin-top:2px;display:grid;place-items:center}
+.ob .choice[aria-pressed="true"] .rd{border-color:var(--acc)}
+.ob .choice[aria-pressed="true"] .rd::after{content:"";width:8px;height:8px;border-radius:50%;background:var(--acc)}
+.ob .choice .ct{flex:1;min-width:0}
+.ob .choice .ct b{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.ob .choice .ct span{display:block;font-size:13px;color:var(--text-2);margin-top:2px}
+.ob .choice .ct b .chip{margin:0}
+.ob .promise{display:flex;flex-direction:column;gap:14px;margin:4px 0 0}
+.ob .promise > div{display:flex;gap:12px;align-items:flex-start}
+.ob .promise b{display:block}
+.ob .promise span:not(.ic-box){font-size:13.5px;color:var(--text-2)}
+.ob .hero{height:130px;border-radius:14px;margin-bottom:24px;display:grid;place-items:center;position:relative;overflow:hidden;background:radial-gradient(80% 120% at 50% 0%,var(--acc-soft),transparent 70%),var(--panel-2);border:1px solid var(--line)}
+.ob .hero .island{position:static;transform:none}
+.ob .mini{position:relative;height:210px;border-radius:12px;overflow:hidden;border:1px solid var(--line);container-type:inline-size;flex:none}
+.ob .mini .wall{position:absolute;inset:0}
+.ob .card-lite{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:14px 16px}
+.ob .kvrow{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line);flex-wrap:wrap}
+.ob .kvrow:first-child{border-top:0;padding-top:0}.ob .kvrow:last-child{padding-bottom:0}
+.ob .kvrow > div:first-child{flex:1;min-width:200px}
+.ob .kvrow b{display:block;font-weight:500}.ob .kvrow span{font-size:12.5px;color:var(--text-2)}
+.ob .kvrow .kbd,.ob .kvrow .select,.ob .kvrow .hotkey span{font-size:11px}
+.ob .kvrow .select{font-size:13px;color:var(--text)}
+.lang{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text-2)}
+
 @media (max-width:900px){
+  .row .trail{max-width:100%}
+  .ob{height:auto;min-height:680px}.ob .prog .ph span{display:none}
   .g2,.g3,.g4,.g-7-5{grid-template-columns:1fr}
   .nav{width:64px}.nav .srch,.nav .grp,.nav a span.txt,.nav a .badge,.nav .foot .st{display:none}.nav a{justify-content:center;padding:0}
   .chatwrap{grid-template-columns:1fr}.threads{display:none}
@@ -351,9 +493,12 @@ h2.pt{font-family:var(--disp);font-size:24px;font-weight:600;letter-spacing:-.01
       <label class="vopt">Density <select id="oDensity"><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></label>
       <span class="vopt">Accent <span class="sw" id="oAccent">
         <button data-acc="blue" style="background:#2F6BFF" aria-label="Blue"></button>
+        <button data-acc="violet" style="background:#6E56CF" aria-label="Violet"></button>
+        <button data-acc="teal" style="background:#0E8A8A" aria-label="Teal"></button>
         <button data-acc="green" style="background:#12925E" aria-label="Green"></button>
+        <button data-acc="amber" style="background:#B7700B" aria-label="Amber"></button>
         <button data-acc="coral" style="background:#E2572F" aria-label="Coral"></button>
-        <button data-acc="mono" style="background:#6B6B6B" aria-label="Mono"></button></span></span>
+        <button data-acc="mono" style="background:#6B6B6B" aria-label="Graphite"></button></span></span>
     </div>
   </div>
 </div>
@@ -394,17 +539,21 @@ const I = (n, cls='') => `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden=
 
 /* ═════════════════════ State ═════════════════════ */
 const root = document.documentElement;
-const S = { sec:'overlay', page:'home', theme:'light', layout:'sidebar', home:'dash', density:'comfortable', accent:'blue', onb:0 };
-try { Object.assign(S, JSON.parse(localStorage.getItem('kivo-mock') || '{}')); } catch(e) {}
-const save = () => { try { localStorage.setItem('kivo-mock', JSON.stringify(S)); } catch(e) {} };
-const applyRoot = () => { root.dataset.theme = S.theme; root.dataset.accent = S.accent; root.dataset.layout = S.layout; root.dataset.density = S.density; };
+// Defaults = owner choices so far: Sidebar (A), Minimal home (B), Comfortable, Blue + ink buttons.
+const S = { sec:'overlay', page:'home', theme:'light', layout:'sidebar', home:'min', density:'comfortable', accent:'blue', textsize:'normal', onb:0 };
+try { Object.assign(S, JSON.parse(localStorage.getItem('kivo-mock-v2') || '{}')); } catch(e) {}
+const save = () => { try { localStorage.setItem('kivo-mock-v2', JSON.stringify(S)); } catch(e) {} };
+const applyRoot = () => { root.dataset.theme = S.theme; root.dataset.accent = S.accent; root.dataset.layout = S.layout; root.dataset.density = S.density; root.dataset.textsize = S.textsize; };
+const ACCENTS = [['blue','#2F6BFF','Blue'],['violet','#6E56CF','Violet'],['teal','#0E8A8A','Teal'],['green','#12925E','Green'],['amber','#B7700B','Amber'],['coral','#E2572F','Coral'],['mono','#6B6B6B','Graphite']];
+const swatches = () => `<div class="swatches" role="group" aria-label="Accent color">${ACCENTS.map(([k,c,n]) => `<button data-acc="${k}" style="background:${c}" aria-pressed="${S.accent===k}" aria-label="${n}" title="${n}"></button>`).join('')}<button class="custom" aria-label="Custom color" title="Custom…"></button></div>`;
 
 /* ═════════════════════ Helpers ═════════════════════ */
 const tog = (on, label) => `<button class="tog" role="switch" aria-checked="${!!on}" aria-label="${label||'Toggle'}" data-act="tog"></button>`;
 const seg = (opts, cur, name) => `<div class="seg" role="group" ${name?`aria-label="${name}"`:''}>${opts.map(o => `<button aria-pressed="${o===cur}" data-act="seg">${o}</button>`).join('')}</div>`;
 const chip = (t, c='') => `<span class="chip ${c}">${t}</span>`;
 const card = (title, body, right='', flush=false) => `<div class="card">${title?`<div class="ch"><h3>${title}</h3>${right}</div>`:''}${flush?body:`<div class="cb">${body}</div>`}</div>`;
-const row = (ic, t1, t2='', right='') => `<div class="row">${ic}<div class="grow"><div class="t1">${t1}</div>${t2?`<div class="t2">${t2}</div>`:''}</div>${right}</div>`;
+const row = (ic, t1, t2='', right='') => `<div class="row">${ic}<div class="grow"><div class="t1">${t1}</div>${t2?`<div class="t2">${t2}</div>`:''}</div>${right?`<div class="trail">${right}</div>`:''}</div>`;
+const alertBox = (kind, title, text, icon) => `<div class="alert ${kind}">${I(icon || {info:'info',ok:'check',warn:'alert',err:'alert'}[kind], 'ai')}<div><b>${title}</b>${text}</div></div>`;
 const icb = n => `<span class="ic-box">${I(n)}</span>`;
 const logo = (txt, bg) => `<span class="mono-logo" style="background:${bg}">${txt}</span>`;
 const head = (t, s, right='') => `<div class="phead"><div><h2 class="pt">${t}</h2>${s?`<p class="ps">${s}</p>`:''}</div><div style="display:flex;gap:8px;flex-wrap:wrap">${right}</div></div>`;
@@ -659,7 +808,24 @@ performance(){
     ${row(icb('wave'),'Kokoro (voice out)','unloaded · loads in ~0.4 s', chip('Off'))}</div>`)}</div>`;
 },
 settings(){
-  return head('Settings','') + card('General', `<div class="rows" style="margin:-16px">
+  const live = (opts, cur, key) => `<div class="seg" role="group">${opts.map(([v,l]) => `<button aria-pressed="${cur===v}" data-set="${key}" data-val="${v}">${l}</button>`).join('')}</div>`;
+  return head('Settings','Changes apply immediately.') +
+  card('Appearance', `<div class="rows" style="margin:-16px">
+    ${row(icb('sparkle'),'Theme','Follows Windows by default', live([['light','Light'],['dark','Dark']], S.theme, 'theme') + `<button class="btn sm ghost">Follow Windows</button>`)}
+    ${row(icb('eye'),'Accent color','Used for selection, focus and status. Buttons stay black/white', swatches())}
+    ${row(icb('sliders'),'Density','', live([['comfortable','Comfortable'],['compact','Compact']], S.density, 'density'))}
+    ${row(icb('info'),'Text size','', live([['normal','Default'],['large','Large']], S.textsize, 'textsize'))}
+    ${row(icb('window'),'Transparency effects','Mica window background on Windows 11', tog(true,'Transparency'))}
+    ${row(icb('refresh'),'Motion','', seg(['Follow Windows','Full','Reduced'],'Follow Windows'))}
+    ${row(icb('eye'),'High contrast','Uses Windows contrast themes when on', chip('Follows Windows'))}</div>`) + `<div style="height:12px"></div>` +
+  card('Island', `<div class="rows" style="margin:-16px">
+    ${row(icb('window'),'Position','', seg(['Top center','Bottom center','Remember drag'],'Top center'))}
+    ${row(icb('sliders'),'Size','', seg(['Compact','Standard','Large'],'Standard'))}
+    ${row(icb('chat'),'Show live transcript','See your words while you speak', tog(true,'Transcript'))}
+    ${row(icb('music'),'Live activities','Music, timers, downloads, tasks', tog(true,'Live activities'))}
+    ${row(icb('sparkle'),'Wake glow','', tog(false,'Wake glow'))}
+    ${row(icb('clock'),'Hide after answer','', seg(['2 s','4 s','8 s','Until dismissed'],'4 s'))}</div>`) + `<div style="height:12px"></div>` +
+  card('General', `<div class="rows" style="margin:-16px">
     ${row(icb('power'),'Start KIVO when I sign in','', tog(false,'Start at sign in'))}
     ${row(icb('window'),'Keep KIVO running when I close the window','It stays in the system tray so “Hey Kivo” keeps working', tog(true,'Keep running'))}
     ${row(icb('globe'),'Language','English · Hindi (alpha) · Punjabi (alpha)', `<button class="btn sm">Change</button>`)}
@@ -668,9 +834,12 @@ settings(){
     ${row(icb('refresh'),'Update channel','', seg(['Stable','Beta','Experimental'],'Stable'))}
     ${row(icb('download'),'Install updates','', seg(['Ask me','When idle'],'Ask me'))}
     ${row(icb('info'),'KIVO 0.1.0','You’re up to date', `<button class="btn sm">Check now</button>`)}</div>`) + `<div style="height:12px"></div>` +
-  card('Appearance', `<div class="rows" style="margin:-16px">
-    ${row(icb('sparkle'),'Theme','', seg(['System','Light','Dark'],'System'))}
-    ${row(icb('eye'),'Reduce motion','Follows Windows animation settings', seg(['Follow Windows','On','Off'],'Follow Windows'))}</div>`);
+  card('Keyboard shortcuts', `<div class="rows" style="margin:-16px">
+    ${row(icb('mic'),'Hold to talk','', `<span class="hotkey"><span class="kbd">Ctrl</span><span class="kbd">Space</span><button class="btn sm ghost">Change</button></span>`)}
+    ${row(icb('chat'),'Type to KIVO','', `<span class="hotkey"><span class="kbd">Ctrl</span><span class="kbd">Shift</span><span class="kbd">Space</span><button class="btn sm ghost">Change</button></span>`)}
+    ${row(icb('search'),'Search the Control Center','', `<span class="hotkey"><span class="kbd">Ctrl</span><span class="kbd">K</span></span>`)}
+    ${row(icb('stop'),'Stop everything','', `<span class="hotkey"><span class="kbd">Ctrl</span><span class="kbd">Alt</span><span class="kbd">Shift</span><span class="kbd">Esc</span></span>`)}
+    ${row(icb('pause'),'Pause listening','', `<span class="hotkey rec"><span class="ph">Press keys…</span></span>`)}</div>`);
 },
 diagnostics(){
   return head('Diagnostics','Check that everything works, and create a report if something doesn’t.', `<button class="btn">${I('refresh')}Run checks</button><button class="btn ink">${I('download')}Create report</button>`) + card('', `<div class="rows">
@@ -763,40 +932,101 @@ const overlayHTML = () => `
   <div class="sheet">${[...OV_STATES,...OV_LIVE.slice(0,4)].map(([k,l]) => `<div class="cell"><div class="island isl show" data-sheet="${k}"></div><div class="cap">${l}</div></div>`).join('')}</div>`;
 
 /* ═════════════════════ Onboarding ═════════════════════ */
+const PHASES = ['Welcome','Voice','Brain','Control','Ready'];
+const choice = (title, desc, on, extra='') => `<button class="choice" aria-pressed="${!!on}" data-act="choice"><span class="rd"></span><span class="ct"><b>${title}${extra}</b><span>${desc}</span></span></button>`;
 const ONB = [
-  ['Welcome', () => `<h2>Meet KIVO</h2><p class="sub">Talk to your PC. KIVO opens apps, finds files, answers questions and handles tasks, and it always asks before anything risky.</p>
-    <div class="grid g3">${[['mic','Voice first','Say “Hey Kivo”, or hold Ctrl + Space'],['shield','You stay in control','Clear permissions, and an instant stop'],['lock','Private by default','Wake word and speech run on your PC']].map(([i,a,b]) => card('', `<span class="ic-box">${I(i)}</span><div style="margin-top:10px;font-weight:600">${a}</div><div style="color:var(--text-2);font-size:12.5px">${b}</div>`)).join('')}</div>`],
-  ['Your PC', () => `<h2>We checked your PC</h2><p class="sub">KIVO picks settings that stay fast on your hardware. You can change them any time.</p>
-    ${card('', `<div class="rows" style="margin:-16px">${row(icb('cpu'),'Processor','AMD Ryzen 7 · 8 cores',chip('Good','local'))}${row(icb('memory'),'Memory','16 GB',chip('Good','local'))}${row(icb('gauge'),'Graphics','NVIDIA RTX 3060 · 12 GB',chip('Great','local'))}${row(icb('power'),'Power','Plugged in',chip('—'))}</div>`)}
-    <div class="note" style="margin-top:12px">Recommended profile: <b>Balanced</b>. Fast local speech, and the GPU only when it helps.</div>`],
-  ['Microphone', () => `<h2>Check your microphone</h2><p class="sub">Say something. The bars should move.</p>
-    <div class="input" style="max-width:360px">${I('mic')}<input value="USB Headset (default)"></div>
-    <div class="levelm" style="margin:18px 0">${[6,12,20,26,18,10,22,28,14,8,16,24,12,6].map(h=>`<i style="height:${h}px"></i>`).join('')}</div>${chip('<span class="dotc"></span>Sounds good','local')}`],
-  ['Voice in', () => `<h2>How should KIVO understand you?</h2><p class="sub">Everything except Cloud runs on your PC. We recommend <b>Fast</b> for your hardware.</p>
-    <div class="grid g4">${[['Fast','Moonshine · 190 MB',true],['Balanced','Parakeet · 640 MB'],['Accurate','Whisper Turbo · GPU · 1.6 GB'],['Cloud','Deepgram · internet']].map(([n,d,r]) => `<button class="tier" aria-pressed="${!!r}" data-act="tier"><span class="nm">${n}</span><span class="d">${d}</span>${r?chip('Recommended','local'):''}</button>`).join('')}</div>
-    <div style="margin-top:16px"><div class="kv"><span>Downloading Moonshine</span><span>62%</span></div><div class="meter"><span style="width:62%"></span></div></div>`],
-  ['Voice out', () => `<h2>How should KIVO sound?</h2><p class="sub">Tap Preview to hear each one.</p>
-    <div class="grid g4">${[['Instant','Fastest'],['Natural','Balanced · recommended',true],['System','Windows voices'],['Cloud','Most expressive']].map(([n,d,r]) => `<button class="tier" aria-pressed="${!!r}" data-act="tier"><span class="nm">${n}</span><span class="d">${d}</span><span class="btn sm" style="align-self:flex-start">${I('play')}Preview</span></button>`).join('')}</div>`],
-  ['Activation', () => `<h2>How do you want to start KIVO?</h2><p class="sub">You can use both.</p>
-    ${card('', `<div class="rows" style="margin:-16px">${row(icb('kbd'),'Hold to talk','Works everywhere, even in noisy rooms', `<span class="kbd">Ctrl</span><span class="kbd">Space</span>` + chip('No conflicts','local'))}${row(icb('mic'),'“Hey Kivo” wake word','Listens on your PC only. Nothing is sent until you say it', tog(true,'Wake word'))}</div>`)}`],
-  ['Your voice', () => `<h2>Teach KIVO your voice</h2><p class="sub">8 short phrases help KIVO recognize you and your accent. Stored encrypted on this PC only. You can delete them any time.</p>
-    <div class="phrase">“Hey Kivo, open my projects folder”</div>
-    <div style="display:flex;justify-content:space-between;align-items:center"><div class="recs">${[1,2,3,4,5,6,7,8].map(i=>`<span class="${i<4?'done':''}">${i<4?'✓':i}</span>`).join('')}</div><button class="btn ink">${I('mic')}Record phrase 4</button></div>`],
-  ['Brain', () => `<h2>Choose how KIVO thinks</h2><p class="sub">Sign in with something you already use. No API keys needed. You can also skip this and only use local commands.</p>
-    ${card('', `<div class="rows" style="margin:-16px">${row(logo('CC','#C96442'),'Claude Code','Found on this PC · use your Claude sign-in',`<button class="btn sm ink">Connect</button>`)}${row(logo('OR','#4B4BD6'),'OpenRouter','One sign-in, many models',`<button class="btn sm ink">Connect</button>`)}${row(logo('OL','#222'),'Ollama','Found on this PC · fully local',chip('Detected','local') + `<button class="btn sm">Use</button>`)}${row(icb('clock'),'Decide later','Local commands still work','<button class="btn sm ghost">Skip</button>')}</div>`)}`],
-  ['Permissions', () => `<h2>How careful should KIVO be?</h2><p class="sub">High-risk actions, such as deleting, sending or paying, always ask, whichever you pick.</p>
-    <div class="grid g3">${[['Maximum safety','Asks before any change'],['Balanced','Asks before changes it hasn’t done before',true],['Power user','Asks only for risky actions']].map(([n,d,r]) => `<button class="tier" aria-pressed="${!!r}" data-act="tier"><span class="nm">${n}</span><span class="d">${d}</span></button>`).join('')}</div>`],
-  ['Look & sounds', () => `<h2>The Island</h2><p class="sub">It appears at the top of your screen when you talk to KIVO, and disappears when it’s done.</p>
-    <div style="display:flex;justify-content:center;padding:18px;background:var(--panel-2);border-radius:12px;border:1px solid var(--line)"><div class="island isl show" data-sheet="speaking" style="position:static;transform:none"></div></div>
-    ${card('', `<div class="rows" style="margin:-16px">${row(icb('wave'),'Listening sounds','',tog(true,'Sounds'))}${row(icb('sparkle'),'Wake glow','',tog(false,'Glow'))}</div>`)}`],
-  ['Startup', () => `<h2>Starting and closing</h2><p class="sub">For “Hey Kivo” to work, KIVO needs to keep running in the background. It uses about 1% CPU.</p>
-    ${card('', `<div class="rows" style="margin:-16px">${row(icb('power'),'Start KIVO when I sign in','',tog(false,'Start'))}${row(icb('window'),'Keep running when I close the window','KIVO stays in the system tray. Quit from the tray icon',tog(true,'Keep running'))}</div>`)}`],
-  ['Try it', () => `<h2>You’re all set</h2><p class="sub">Try it now. Say:</p><div class="phrase">“Hey Kivo, what time is it?”</div>
-    <div style="display:flex;justify-content:center"><div class="island isl show" data-sheet="listening" style="position:static;transform:none"></div></div>`]
+  [0,'Welcome', () => `
+    <div class="hero"><div class="island isl show" data-sheet="listening"></div></div>
+    <h2>Talk to your PC.</h2>
+    <p class="sub">KIVO opens apps, finds files, answers questions and handles tasks when you ask. Setup takes about two minutes.</p>
+    <div class="promise">
+      <div><span class="ic-box">${I('mic')}</span><div><b>Just say “Hey Kivo”</b><span>Or hold Ctrl + Space. It appears at the top of your screen, then gets out of the way.</span></div></div>
+      <div><span class="ic-box">${I('shield')}</span><div><b>You stay in control</b><span>KIVO asks before anything risky, and one shortcut stops everything.</span></div></div>
+      <div><span class="ic-box">${I('lock')}</span><div><b>Private by default</b><span>Listening and speech run on this PC. Nothing is sent until you talk to KIVO.</span></div></div>
+    </div>`],
+  [1,'Microphone', () => `
+    <div class="eyebrow">Step 1 of 4 · Voice</div><h2>Let’s check your microphone</h2><p class="sub">Say anything, like “Hello Kivo”. The bars should move.</p>
+    <div class="card-lite"><div class="kvrow"><div><b>Microphone</b><span>Change it if your headset isn’t selected</span></div><span class="select">USB Headset (default)${I('chev')}</span></div>
+      <div class="kvrow"><div><b>Input level</b><span>Speak at a normal volume</span></div><div class="lvl">${Array.from({length:14},(_,i)=>`<i style="animation-delay:${(i*83)%700}ms"></i>`).join('')}</div></div></div>
+    <div style="margin-top:14px">${alertBox('ok','Sounds great','KIVO can hear you clearly. Background noise is low.')}</div>`],
+  [1,'Activation', () => `
+    <div class="eyebrow">Step 2 of 4 · Voice</div><h2>How do you want to call KIVO?</h2><p class="sub">You can use both. Change them any time in Settings.</p>
+    <div class="card-lite">
+      <div class="kvrow"><div><b>Hold to talk</b><span>Hold the keys while you speak. Works in noisy rooms.</span></div><span class="hotkey"><span class="kbd">Ctrl</span><span class="kbd">Space</span><button class="btn sm ghost">Change</button></span></div>
+      <div class="kvrow"><div><b>“Hey Kivo”</b><span>Hands-free. Listening happens only on this PC, and nothing is recorded or sent until you say it.</span></div>${tog(true,'Wake word')}</div></div>
+    <div style="margin-top:12px">${alertBox('info','No shortcut conflicts found','Ctrl + Space isn’t used by any app on this PC.')}</div>`],
+  [1,'Hearing & speaking', () => `
+    <div class="eyebrow">Step 3 of 4 · Voice</div><h2>Choose how KIVO hears and speaks</h2><p class="sub">We picked what runs best on your PC. Everything except Cloud runs on this PC, with no internet needed.</p>
+    <div class="lbl" style="margin-top:0">Understanding you</div>
+    ${choice('Fast','Instant results, light on your PC. Moonshine · 190 MB', true, chip('Recommended','local'))}
+    ${choice('Most accurate','Better with accents and long speech. Uses your graphics card. Whisper Turbo · 1.6 GB', false)}
+    ${choice('Cloud','Best accuracy, needs internet, small cost. Deepgram', false, chip('Cloud','cloud'))}
+    <div class="lbl">KIVO’s voice</div>
+    <div class="card-lite">${[['Natural · Aria','Warm, clear'],['Natural · Kai','Calm, lower'],['Windows voice','Built in, no download']].map(([a,b],i)=>`<div class="kvrow"><div><b>${a}</b><span>${b}</span></div><div style="display:flex;gap:8px;align-items:center"><button class="btn sm">${I('play')}Preview</button><span class="rad ${i===0?'on':''}"><i></i></span></div></div>`).join('')}</div>
+    <div class="dl" style="margin-top:12px">${I('download')}<div style="flex:1"><div class="kv" style="padding:0"><span>Downloading voice models · 212 MB</span><span>64%</span></div><div class="meter"><span style="width:64%"></span></div></div></div>`],
+  [1,'Your voice', () => `
+    <div class="eyebrow">Step 4 of 4 · Voice · optional</div><h2>Teach KIVO your voice</h2><p class="sub">Read 8 short phrases. KIVO learns your accent and responds mainly to you. Recordings stay encrypted on this PC, and you can delete them any time.</p>
+    <div class="card-lite" style="text-align:center;padding:26px 16px">
+      <div style="font-size:12.5px;color:var(--text-3);margin-bottom:8px">Phrase 4 of 8 · read it naturally</div>
+      <div style="font-family:var(--disp);font-size:22px;font-weight:600;margin-bottom:18px">“Hey Kivo, open my projects folder”</div>
+      <div style="display:flex;justify-content:center;align-items:center;gap:18px"><div class="lvl">${Array.from({length:8},(_,i)=>`<i style="animation-delay:${i*90}ms"></i>`).join('')}</div><button class="recbtn live" aria-label="Recording">${I('mic')}</button><div class="lvl">${Array.from({length:8},(_,i)=>`<i style="animation-delay:${(8-i)*90}ms"></i>`).join('')}</div></div>
+      <div class="recs" style="justify-content:center;margin-top:18px">${[1,2,3,4,5,6,7,8].map(i=>`<span class="${i<4?'done':''}" style="width:26px;height:26px;font-size:11px">${i<4?'✓':i}</span>`).join('')}</div></div>
+    <label class="chk on" style="margin-top:14px"><i></i>I agree that KIVO stores a voiceprint on this PC for recognition</label>`],
+  [2,'Brain', () => `
+    <div class="eyebrow">Brain</div><h2>Connect a brain for bigger questions</h2><p class="sub">Simple commands like “mute” or “open Chrome” never need one. Sign in with something you already use; no API keys.</p>
+    <div class="card-lite">
+      <div class="provrow">${logo('CC','#C96442')}<div style="flex:1"><b>Claude Code</b><div style="font-size:12.5px;color:var(--text-2)">Found on this PC · use your Claude account</div></div><button class="btn sm ink">Connect</button></div>
+      <div class="provrow">${logo('CX','#10A37F')}<div style="flex:1"><b>Codex</b><div style="font-size:12.5px;color:var(--text-2)">Sign in with ChatGPT</div></div><button class="btn sm">Connect</button></div>
+      <div class="provrow">${logo('GC','#4285F4')}<div style="flex:1"><b>Gemini</b><div style="font-size:12.5px;color:var(--text-2)">Sign in with Google</div></div><button class="btn sm">Connect</button></div>
+      <div class="provrow">${logo('OR','#4B4BD6')}<div style="flex:1"><b>OpenRouter</b><div style="font-size:12.5px;color:var(--text-2)">One sign-in, hundreds of models</div></div><button class="btn sm">Connect</button></div>
+      <div class="provrow">${logo('OL','#222')}<div style="flex:1"><b>Ollama</b><div style="font-size:12.5px;color:var(--text-2)">Found on this PC · runs fully offline</div></div>${chip('Detected','local')}<button class="btn sm">Use</button></div></div>`],
+  [3,'Safety', () => `
+    <div class="eyebrow">Control</div><h2>How careful should KIVO be?</h2><p class="sub">Deleting, sending, paying and security changes <b>always</b> ask, whichever you choose.</p>
+    ${choice('Balanced','Asks before changes it hasn’t done for you before.', true, chip('Recommended','local'))}
+    ${choice('Maximum safety','Asks before every change, however small.', false)}
+    ${choice('Power user','Asks only for risky actions. Turns on shell commands and screen awareness.', false)}
+    <div style="margin-top:14px">${alertBox('info','Fine-tune later','Settings → Capabilities has a switch for everything KIVO can do, including “use my screen”, which stays off unless you turn it on.')}</div>`],
+  [3,'Look & feel', () => `
+    <div class="eyebrow">Control</div><h2>Make it yours</h2><p class="sub">This is the Island. It shows up when you talk to KIVO.</p>
+    <div class="mini"><div class="wall stage-wall"></div><div class="dapp" style="left:12%;top:24%;width:76%;height:60%"><div class="tb"><i></i></div></div><div class="island show isl" data-sheet="speaking" style="position:absolute;left:50%;transform:translateX(-50%);top:10px"></div></div>
+    <div class="card-lite" style="margin-top:14px">
+      <div class="kvrow"><div><b>Theme</b></div><div class="seg">${[['light','Light'],['dark','Dark']].map(([v,l])=>`<button aria-pressed="${S.theme===v}" data-set="theme" data-val="${v}">${l}</button>`).join('')}</div></div>
+      <div class="kvrow"><div><b>Accent color</b></div>${swatches()}</div>
+      <div class="kvrow"><div><b>Island position</b></div>${seg(['Top','Bottom'],'Top')}</div>
+      <div class="kvrow"><div><b>Sounds</b><span>A soft chime when KIVO starts and stops listening</span></div>${tog(true,'Sounds')}</div></div>`],
+  [3,'Startup', () => `
+    <div class="eyebrow">Control</div><h2>Keep KIVO ready</h2><p class="sub">For “Hey Kivo” to work, KIVO keeps running quietly in the background, using about 1% of your processor.</p>
+    <div class="card-lite">
+      <div class="kvrow"><div><b>Start KIVO when I sign in</b><span>So it’s always ready</span></div>${tog(false,'Start at sign in')}</div>
+      <div class="kvrow"><div><b>Keep running when I close the window</b><span>Closing the window won’t turn KIVO off</span></div>${tog(true,'Keep running')}</div></div>
+    <div class="tray-mini" style="margin-top:14px"><span class="k"></span>KIVO lives in the system tray, next to the clock. Right-click it to pause or quit.</div>`],
+  [4,'Try it', () => `
+    <div class="eyebrow">Ready</div><h2>You’re all set. Try it.</h2><p class="sub">Say <b>“Hey Kivo, what time is it?”</b>, or press the button to see what happens.</p>
+    <div class="mini" style="height:240px"><div class="wall stage-wall"></div><div class="dapp" style="left:12%;top:26%;width:76%;height:58%"><div class="tb"><i></i></div></div><div class="island" id="obIsland" style="position:absolute"></div></div>
+    <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap"><button class="btn ink" data-obtry>${I('play')}Show me</button><span class="lang">${I('kbd')}Try Ctrl + Space, or Ctrl + Shift + Space to type</span></div>`]
 ];
-const onbHTML = () => `<div class="intro"><div><div class="tagline">ONBOARDING · FIRST LAUNCH</div><h1>Setup, in 12 short steps</h1><p>Every step has a recommended default and can be skipped. Click the steps on the left, or use Back and Continue.</p></div></div>
-  <div class="onb"><div class="steps">${ONB.map(([n],i) => `<div class="s ${i<S.onb?'done':i===S.onb?'on':''}" data-onb="${i}"><span class="n">${i<S.onb?'✓':i+1}</span>${n}</div>`).join('')}</div>
-  <div class="main"><div class="oc">${ONB[S.onb][1]()}</div><div class="of"><button class="btn ghost" data-onbnav="-1" ${S.onb===0?'disabled':''}>Back</button><span class="meta-line">${S.onb+1} / ${ONB.length}</span><div style="display:flex;gap:8px"><button class="btn ghost" data-onbnav="1">Skip</button><button class="btn ink" data-onbnav="1">${S.onb===ONB.length-1?'Finish':'Continue'}</button></div></div></div></div>`;
+const onbHTML = () => {
+  const cur = ONB[S.onb], ph = cur[0];
+  const inPh = i => ONB.filter(s => s[0] === i), idxIn = ONB.slice(0, S.onb + 1).filter(s => s[0] === ph).length;
+  const bars = PHASES.map((p, i) => { const w = i < ph ? 100 : i > ph ? 0 : Math.round(idxIn / inPh(i).length * 100);
+    return `<div class="ph ${i===ph?'on':''}"><i><b style="width:${w}%"></b></i><span>${p}</span></div>`; }).join('');
+  const optional = ['Your voice','Brain'].includes(cur[1]);
+  return `<div class="intro"><div><div class="tagline">ONBOARDING · FIRST LAUNCH · v2</div><h1>Setup, calm and quick</h1><p>Ten short screens in five phases, one decision per screen, with a recommended choice already selected. Optional steps can be skipped. Use Continue and Back.</p></div></div>
+  <div class="ob"><div class="titlebar"><div class="tl"><span class="orb" style="width:12px;height:12px"></span>Set up KIVO</div><div class="wctl"><span>—</span><span>✕</span></div></div>
+    <div class="prog">${bars}</div>
+    <div class="stage2"><div class="col">${cur[2]()}</div></div>
+    <div class="foot">${S.onb===0?`<span class="lang">${I('globe')}English (United States) ${I('chev')}</span>`:`<button class="btn ghost" data-onbnav="-1">Back</button>`}<span class="sp"></span>
+      ${optional?`<button class="btn ghost" data-onbnav="1">Skip for now</button>`:''}<button class="btn ink" data-onbnav="1">${S.onb===0?'Get started':S.onb===ONB.length-1?'Finish':'Continue'}</button></div></div>`;
+};
+let obTimers = [];
+const playMini = () => {
+  obTimers.forEach(clearTimeout); obTimers = [];
+  const el = document.getElementById('obIsland'); if (!el) return;
+  const st = { state:'idle', partial:'' }, go = (ms, s, p='') => obTimers.push(setTimeout(() => { st.state = s; st.partial = p; const e = document.getElementById('obIsland'); e && renderIsland(e, st); }, ms));
+  go(0,'listening',''); go(500,'listening','Hey Kivo, what'); go(900,'listening','Hey Kivo, what time is it?'); go(1700,'thinking');
+  obTimers.push(setTimeout(() => { const e = document.getElementById('obIsland'); if (!e) return; renderIsland(e, {state:'speaking'}); e.querySelector('.ibody').innerHTML = '<div class="q">What time is it?</div><div class="a">It’s 4:42 PM.</div>'; e.style.height = '100px'; }, 2400));
+  go(5200,'idle');
+};
 
 /* ═════════════════════ System surfaces ═════════════════════ */
 const sysHTML = () => `<div class="intro"><div><div class="tagline">SYSTEM SURFACES</div><h1>Tray, notifications and safety prompts</h1><p>What KIVO shows outside its own window.</p></div></div>
@@ -813,28 +1043,91 @@ const sysHTML = () => `<div class="intro"><div><div class="tagline">SYSTEM SURFA
 
 /* ═════════════════════ Components ═════════════════════ */
 const compHTML = () => {
-  const tk = [['--ink','Ink (primary)'],['--acc','Accent'],['--island','Island'],['--panel','Panel'],['--win','Window'],['--side','Sidebar'],['--ok','Success'],['--warn','Warning'],['--danger','Danger']];
+  const tk = [['--ink','Ink · primary buttons'],['--acc','Accent · status/selection'],['--island','Island'],['--panel','Panel'],['--panel-2','Panel 2'],['--win','Window'],['--side','Sidebar'],['--line-2','Line'],['--ok','Success'],['--warn','Warning'],['--danger','Danger']];
   const c = (t, body, spec) => `<div class="card"><div class="ch"><h3>${t}</h3></div><div class="cb">${body}</div><div class="spec">${spec}</div></div>`;
-  return `<div class="intro"><div><div class="tagline">COMPONENT LIBRARY</div><h1>Every building block</h1><p>These re-theme with the options at the top. Each block says which base it comes from: shadcn/ui on Base UI, custom, or adapted from ElevenLabs UI.</p></div></div>
-  <div class="lbl" style="margin-top:0">Color tokens</div><div class="tokens">${tk.map(([v,n]) => `<div class="tok"><i style="background:var(${v})"></i><div>${n}<small>${v}</small></div></div>`).join('')}</div>
-  <div class="lbl">Type</div>${card('', `<div style="font-family:var(--disp);font-size:28px;font-weight:600;letter-spacing:-.015em">Display 28 · Segoe UI Variable Display</div><div style="font-family:var(--disp);font-size:20px;font-weight:600">Title 20</div><div style="font-size:14px">Body 14 · Segoe UI Variable Text. The quick brown fox, खुश रहो, ਸਤ ਸ੍ਰੀ ਅਕਾਲ</div><div style="font-size:12.5px;color:var(--text-2)">Secondary 12.5</div><div style="font-family:var(--mono);font-size:12px;color:var(--text-3)">Mono 12 · Cascadia Mono · 142 ms</div>`)}
-  <div class="lbl">Controls</div><div class="gal">
-    ${c('Buttons', `<button class="btn ink">${I('mic')}Primary</button><button class="btn">Secondary</button><button class="btn ghost">Ghost</button><button class="btn danger">Danger</button><button class="btn sm">Small</button><button class="btn icon" aria-label="Add">${I('plus')}</button>`, 'shadcn Button · pill radius · ink = primary')}
-    ${c('Toggle', `${tog(true,'On')} ${tog(false,'Off')}`, 'Base UI Switch · spring thumb')}
+  const sec = (t, s) => `<div class="gsec">${t}<small>${s}</small></div>`;
+  const qr = () => `<div class="qr">${Array.from({length:81},(_,i)=>{const x=i%9,y=(i/9)|0,f=(x<3&&y<3)||(x>5&&y<3)||(x<3&&y>5);return `<i class="${f?((x%2&&y%2)?'o':''):(((i*7)%5)<2?'':'o')}"></i>`}).join('')}</div>`;
+  return `<div class="intro"><div><div class="tagline">COMPONENT LIBRARY · v2</div><h1>Every building block</h1><p>Grouped by feature. Every block re-themes with the options at the top, and says where it comes from: <b>Base UI/shadcn</b>, <b>custom</b>, or <b>adapted from ElevenLabs UI</b>.</p></div></div>
+
+  ${sec('Foundations','tokens, type, shape, icons')}
+  <div class="tokens">${tk.map(([v,n]) => `<div class="tok"><i style="background:var(${v})"></i><div>${n}<small>${v}</small></div></div>`).join('')}</div>
+  <div class="grid g2" style="margin-top:12px">
+    ${c('Type scale', `<div style="display:flex;flex-direction:column;gap:6px;width:100%"><div style="font-family:var(--disp);font-size:30px;font-weight:600;letter-spacing:-.02em;line-height:1.1">Display 30</div><div style="font-family:var(--disp);font-size:24px;font-weight:600">Page title 24</div><div style="font-family:var(--disp);font-size:17px;font-weight:600">Section 17</div><div>Body 14 · Hindi खुश रहो · Punjabi ਸਤ ਸ੍ਰੀ ਅਕਾਲ · 日本語 · العربية</div><div style="font-size:12.5px;color:var(--text-2)">Secondary 12.5</div><div style="font-family:var(--mono);font-size:12px;color:var(--text-3)">Mono 12 · 142 ms</div></div>`, 'Segoe UI Variable (system) · Cascadia Mono · Noto fallbacks per language')}
+    ${c('Shape, spacing, elevation', `<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">${[['8','Control'],['12','Card'],['14','Dialog'],['22','Island']].map(([r,n])=>`<div style="text-align:center;font-size:11px;color:var(--text-3)"><div style="width:56px;height:40px;border:1px solid var(--line-2);background:var(--panel-2);border-radius:${r}px"></div>${n} ${r}</div>`).join('')}<div style="text-align:center;font-size:11px;color:var(--text-3)"><div style="width:56px;height:40px;border-radius:10px;background:var(--panel);box-shadow:var(--shadow)"></div>Raised</div></div><div style="display:flex;gap:4px;align-items:flex-end;margin-top:12px">${[4,8,12,16,20,24,32,40].map(s=>`<div style="text-align:center;font-size:10px;color:var(--text-3)"><div style="width:${s}px;height:${s}px;background:var(--acc-soft);border:1px solid var(--acc)"></div>${s}</div>`).join('')}</div>`, 'Radius 8/12/14/22 · spacing 4-based · two elevations')}
+  </div>
+  ${c('Icons', `<div style="display:flex;flex-wrap:wrap;gap:14px;color:var(--text-2)">${Object.keys(P).map(k=>`<span title="${k}">${I(k)}</span>`).join('')}</div>`, 'Lucide-style 1.6 px outline, 16/20 px · final set: Lucide (ISC)')}
+
+  ${sec('Actions','buttons and commands')}
+  <div class="gal">
+    ${c('Buttons', `<button class="btn ink">${I('mic')}Primary</button><button class="btn">Secondary</button><button class="btn ghost">Ghost</button><button class="btn danger">Danger</button><button class="btn" disabled style="opacity:.5">Disabled</button><button class="btn sm">Small</button><button class="btn icon" aria-label="Add">${I('plus')}</button>`, 'Base UI Button · pill · primary = ink (black / white)')}
+    ${c('Emergency stop', `<button class="btn" style="background:var(--danger);color:#fff;border:0">${I('stop')}Stop everything</button><span class="kbd">Ctrl</span><span class="kbd">Alt</span><span class="kbd">Shift</span><span class="kbd">Esc</span>`, 'custom · also in the tray and Island')}
+    ${c('Command palette', `<div class="palette"><div class="pin">${I('search')}<input value="wake"></div><div class="pg">Settings</div><div class="pi sel">${I('mic')}Wake words<span class="k">Voice</span></div><div class="pi">${I('plus')}Add wake word<span class="k">Action</span></div><div class="pg">Routines</div><div class="pi">${I('routine')}Morning brief<span class="k">Run</span></div></div>`, 'custom · Ctrl + K in the Control Center: search settings, run routines')}
+  </div>
+
+  ${sec('Inputs','forms and pickers')}
+  <div class="gal">
+    ${c('Text fields', `<div class="input" style="width:100%">${I('search')}<input placeholder="Search"></div><div class="input" style="width:140px">$<input value="10.00"></div><textarea class="input" rows="2">Describe a routine…</textarea>`, 'Base UI Input / Textarea')}
+    ${c('Select & device picker', `<span class="select">USB Headset (default)${I('chev')}</span><span class="select">${I('globe')}English (US)${I('chev')}</span>`, 'Base UI Select')}
+    ${c('Toggle · checkbox · radio', `${tog(true,'On')} ${tog(false,'Off')} <label class="chk on"><i></i>Checked</label><label class="chk"><i></i>Unchecked</label><span class="rad on"><i></i>Selected</span><span class="rad"><i></i>Option</span>`, 'Base UI Switch / Checkbox / Radio')}
     ${c('Segmented', seg(['Stable','Beta','Experimental'],'Stable'), 'Base UI ToggleGroup')}
-    ${c('Inputs', `<div class="input" style="width:100%">${I('search')}<input placeholder="Search"></div><div class="input" style="width:140px">$<input value="10.00"></div>`, 'shadcn Input')}
-    ${c('Keyboard keys', `<span class="kbd">Ctrl</span><span class="kbd">Space</span> <span class="kbd">Ctrl</span><span class="kbd">Alt</span><span class="kbd">Shift</span><span class="kbd">Esc</span>`, 'custom · also used for shortcut recorder')}
-    ${c('Chips / badges', chip('Local','local')+chip('Cloud','cloud')+chip('Costly','costly')+chip('Sensitive','sens')+chip('Risky','bad')+chip('Neutral'), 'custom · always text + color')}
-    ${c('Status', `<span class="spin"></span> Running &nbsp; <span class="okdot">${I('check')}</span> Done &nbsp; <div class="meter" style="width:120px"><span style="width:62%"></span></div>`, 'custom spinner · Base UI Progress')}
-    ${c('Selection card (tier)', `<div class="grid g2" style="width:100%"><button class="tier" aria-pressed="true" data-act="tier"><span class="nm">Fast</span><span class="d">Moonshine · local</span></button><button class="tier" aria-pressed="false" data-act="tier"><span class="nm">Cloud</span><span class="d">Deepgram</span></button></div>`, 'Base UI RadioGroup styled as cards')}
-    ${c('List row', `<div class="rows" style="width:100%;margin:-16px">${row(icb('mic'),'Hey Kivo','Built-in · trained model',chip('Good','local')+tog(true,'x'))}</div>`, 'custom Row: icon · title · subtitle · trailing')}
-    ${c('Connector tile', `<div style="display:flex;gap:10px;align-items:center;width:100%">${logo('GC','#1A73E8')}<div style="flex:1"><b>Google Calendar</b><div style="font-size:12px;color:var(--text-2)">Sign in with Google</div></div><button class="btn sm ink">Connect</button></div>`, 'custom Card')}
-    ${c('Confirmation (in app)', `<div class="note" style="width:100%;border-color:color-mix(in srgb,var(--warn) 45%,transparent)"><b style="color:var(--warn)">Needs your OK · Medium risk</b><br>Edit src/main.rs<div style="display:flex;gap:6px;margin-top:8px"><button class="btn sm ink">Allow once</button><button class="btn sm">Always…</button><button class="btn sm danger">Deny</button></div></div>`, 'custom · never auto-dismisses')}
-    ${c('Island', `<div class="island isl show" data-sheet="listening" style="position:static;transform:none"></div>`, 'custom Island shell · the waveform is adapted from ElevenLabs bar-visualizer')}
-    ${c('Chat bubbles', `<div style="display:flex;flex-direction:column;gap:8px;width:100%"><div class="m-you" style="max-width:90%">Why is my build failing?</div><div class="toolrow">${I('term')}Ran cargo check · 1 error</div></div>`, 'adapted from ElevenLabs message/conversation')}
-    ${c('Empty state', `<div class="empty" style="width:100%"><span class="ic-box">${I('routine')}</span><b>No routines yet</b><div style="font-size:12.5px">Say “Kivo, create a routine…” or start from a template.</div></div>`, 'custom')}
-    ${c('Dialog', `<button class="btn" data-modal="wake">Open “Add wake word”</button> <button class="btn" data-modal="routine">Open “New routine”</button>`, 'Base UI Dialog')}
-    ${c('Toast', `<div class="toast" style="width:100%"><div class="th"><span class="ik"></span>KIVO</div><b>Tests fixed</b>All 48 tests pass.</div>`, 'Windows toast (system) · in-app Sonner-style')}
+    ${c('Slider', `<div style="width:100%"><input class="rng" type="range" value="50" aria-label="Sensitivity"><div class="kv" style="font-size:12px"><span>Fewer false wakes</span><span>Wakes more easily</span></div></div>`, 'Base UI Slider · wake sensitivity, volume')}
+    ${c('Shortcut recorder', `<span class="hotkey"><span class="kbd">Ctrl</span><span class="kbd">Space</span><button class="btn sm ghost">Change</button></span><span class="hotkey rec"><span class="ph">Press keys…</span></span><div style="width:100%">${alertBox('warn','Ctrl + Alt + W is used by Slack','Pick another combination, or keep it and let KIVO win.')}</div>`, 'custom · detects conflicts')}
+    ${c('Accent picker', swatches(), 'custom · Settings → Appearance · live preview')}
+    ${c('Selection cards', `<div class="grid g2" style="width:100%"><button class="tier" aria-pressed="true" data-act="tier"><span class="nm">Fast</span><span class="d">Moonshine · local</span>${chip('Recommended','local')}</button><button class="tier" aria-pressed="false" data-act="tier"><span class="nm">Cloud</span><span class="d">Deepgram</span>${chip('Costly','costly')}</button></div>`, 'Base UI RadioGroup as cards')}
+  </div>
+
+  ${sec('Feedback & status','badges, alerts, progress, loading')}
+  <div class="gal">
+    ${c('Badges', chip('Local','local')+chip('Cloud','cloud')+chip('Costly','costly')+chip('Sensitive','sens')+chip('Risky','bad')+chip('Neutral')+chip('Supported','local')+chip('Alpha','costly')+chip('Planned'), 'custom · text + color, never color alone')}
+    ${c('Risk levels', chip('Safe','local')+chip('Low','local')+chip('Medium','costly')+chip('High','bad'), 'custom · matches the permission engine tiers')}
+    ${c('Alerts', `<div style="display:flex;flex-direction:column;gap:8px;width:100%">${alertBox('info','Update ready','KIVO 0.2 installs when you’re idle.')}${alertBox('ok','Connected','Google Calendar is ready.')}${alertBox('warn','Browser extension missing','Page actions won’t work until it’s installed.')}${alertBox('err','Claude Code signed out','Sign in again to use the Coding profile.')}</div>`, 'custom inline alert')}
+    ${c('Progress & loading', `<div style="width:100%;display:flex;flex-direction:column;gap:10px"><div class="meter"><span style="width:62%"></span></div><div style="display:flex;gap:10px;align-items:center"><span class="spin"></span>Running <span class="okdot">${I('check')}</span>Done</div><div class="skel" style="height:12px;width:80%"></div><div class="skel" style="height:12px;width:55%"></div></div>`, 'Base UI Progress · custom spinner · skeleton')}
+    ${c('Tooltip', `<span class="tip"><button class="btn icon" aria-label="Stop">${I('stop')}</button><span class="tt">Stop everything · Ctrl Alt Shift Esc</span></span>`, 'Base UI Tooltip')}
+    ${c('Empty state', `<div class="empty" style="width:100%"><span class="ic-box">${I('routine')}</span><b>No routines yet</b><div style="font-size:12.5px">Say “Kivo, create a routine…” or start from a template.</div><button class="btn sm" style="margin-top:10px">Browse templates</button></div>`, 'custom')}
+    ${c('KIVO status orb', `<div style="display:flex;gap:16px;flex-wrap:wrap">${[['','Idle'],['listen','Listening'],['think','Thinking'],['speak','Speaking'],['pause','Paused'],['err','Error']].map(([k,l])=>`<div class="orbstate"><span class="o ${k}"></span>${l}</div>`).join('')}</div>`, 'custom · used in the nav footer, tray and Home')}
+    ${c('Active-use indicators', `<span class="useind">${I('eye')}Seeing screen</span><span class="useind">${I('hand')}Controlling</span><span class="useind">${I('term')}Shell</span><span class="useind">${I('mic')}Recording</span>`, 'custom · shown in the Island and tray while in use')}
+    ${c('Budget meter', `<div style="width:100%"><div class="kv" style="padding:0 0 6px"><span>$8.02 of $10.00 this month</span><b>80%</b></div><div class="budget"><span style="width:80%"></span><em style="left:50%"></em><em style="left:80%"></em><em style="left:95%"></em></div><div style="font-size:11.5px;color:var(--text-3);margin-top:6px">Markers show your warning thresholds</div></div>`, 'custom')}
+  </div>
+
+  ${sec('Voice','Island, wake words, recording, engines')}
+  <div class="gal">
+    ${c('Island · states', `<div style="display:flex;flex-direction:column;gap:8px;align-items:center;width:100%">${['listening','thinking','confirm','error'].map(k=>`<div class="island isl show" data-sheet="${k}"></div>`).join('')}</div>`, 'custom Island shell · waveform adapted from ElevenLabs bar-visualizer')}
+    ${c('Island · live activities', `<div style="display:flex;flex-direction:column;gap:8px;align-items:center;width:100%">${['media','timer','download','agent'].map(k=>`<div class="island isl show" data-sheet="${k}"></div>`).join('')}</div>`, 'custom · compact state after a request')}
+    ${c('Wake word validator', `<div style="width:100%;display:flex;flex-direction:column;gap:12px">${[['good','Good','“Okay Jarvis” · 4 syllables · distinctive'],['fair','Fair','“Hey Max” · short, may trigger on “hey man”'],['risky','Risky','“Computer” · common word, frequent false wakes']].map(([k,n,d])=>`<div><div class="kv" style="padding:0 0 4px"><b>${n}</b><span style="font-size:12px">${d}</span></div><div class="validator ${k}"><i></i><i></i><i></i></div></div>`).join('')}</div>`, 'custom · phoneme-based quality score')}
+    ${c('Recording control', `<button class="recbtn" aria-label="Record">${I('mic')}</button><button class="recbtn live" aria-label="Recording">${I('mic')}</button><div class="lvl">${Array.from({length:10},(_,i)=>`<i style="animation-delay:${i*80}ms"></i>`).join('')}</div><div class="recs">${[1,2,3,4,5].map(i=>`<span class="${i<3?'done':''}">${i<3?'✓':i}</span>`).join('')}</div>`, 'custom · adapted from ElevenLabs live-waveform')}
+    ${c('Voice preview row', `<div class="rows" style="width:100%;margin:-16px">${row(`<button class="btn icon" aria-label="Play">${I('play')}</button>`,'Natural · Aria','Kokoro · English · warm', `<span class="rad on"><i></i></span>`)}${row(`<button class="btn icon" aria-label="Play">${I('play')}</button>`,'Hindi · Priya','Cloud · needs internet', chip('Alpha','costly') + `<span class="rad"><i></i></span>`)}</div>`, 'custom')}
+    ${c('Model download', `<div class="dl">${I('download')}<div style="flex:1"><div class="kv" style="padding:0"><b>Whisper Turbo</b><span>1.1 of 1.6 GB</span></div><div class="meter"><span style="width:68%"></span></div><div style="font-size:11.5px;color:var(--text-3);margin-top:4px">MIT license · verified · pause anytime</div></div><button class="btn sm ghost" aria-label="Pause">${I('pause')}</button></div>`, 'custom · resumable, license shown')}
+    ${c('Language row', `<div class="rows" style="width:100%;margin:-16px">${row(icb('globe'),'English','Speech in/out, commands', chip('Supported','local'))}${row(icb('globe'),'हिन्दी Hindi · ਪੰਜਾਬੀ Punjabi','Testing, help us improve', chip('Alpha','costly'))}${row(icb('globe'),'日本語 Japanese','Coming later', chip('Planned'))}</div>`, 'custom · status per language pack')}
+  </div>
+
+  ${sec('AI & agents','conversation, confirmations, tasks, providers')}
+  <div class="gal">
+    ${c('Messages', `<div style="display:flex;flex-direction:column;gap:8px;width:100%"><div class="m-you" style="max-width:90%">Why is my build failing?</div><div class="toolrow">${I('term')}Ran <b>cargo check</b> · 1 error<span style="margin-left:auto" class="okdot">${I('check')}</span></div><div class="m-k"><div class="orb"></div><div class="bub"><p>Line 3 returns a Result. Add “?”.</p><div class="meta-line">Coding profile · software task · 2.1 s · $0.004</div></div></div></div>`, 'adapted from ElevenLabs message / conversation')}
+    ${c('Confirmation · medium', `<div class="note" style="width:100%;border-color:color-mix(in srgb,var(--warn) 45%,transparent)"><b style="color:var(--warn)">Needs your OK · Medium risk</b><br>Edit <b>src/main.rs</b> and run <b>cargo check</b><div style="font-size:12px;color:var(--text-3);margin-top:6px">Allow for</div><div class="scope" style="margin-top:4px"><button aria-pressed="true">Once</button><button>This session</button><button>24 hours</button><button>Always in this folder</button></div><div style="display:flex;gap:6px;margin-top:10px"><button class="btn sm ink">Allow</button><button class="btn sm danger">Deny</button></div></div>`, 'custom · grant scope picker · never auto-dismisses')}
+    ${c('Confirmation · high', `<div class="note" style="width:100%;border-color:color-mix(in srgb,var(--danger) 45%,transparent)"><b style="color:var(--danger)">High risk · confirm with Windows Hello</b><br>Send email to <b>maya@studio.com</b><div style="font-size:12px;color:var(--text-3);margin-top:6px">Requested after reading a web page · the address came from you ✓</div><div style="display:flex;gap:6px;margin-top:10px"><button class="btn sm ink">${I('shield')}Confirm</button><button class="btn sm">Cancel</button></div></div>`, 'custom · shows provenance · voice “yes” not enough')}
+    ${c('Task progress', `<div style="width:100%;display:flex;flex-direction:column;gap:6px;font-size:13px"><div class="kv" style="padding:0"><b>Fix failing tests</b><span>step 3/5</span></div><div class="meter"><span style="width:55%"></span></div>${[['ok','Inspect project'],['ok','Run tests: 2 failing'],['run','Analyze failure'],['','Modify code (needs approval)']].map(([s,t])=>`<div style="display:flex;gap:8px;align-items:center;color:var(--text-2);${s?'':'opacity:.55'}">${s==='ok'?`<span class="okdot">${I('check')}</span>`:s==='run'?'<span class="spin"></span>':'<span class="ic-box" style="width:16px;height:16px"></span>'}${t}</div>`).join('')}</div>`, 'custom · task graph view')}
+    ${c('Provider states', `<div style="width:100%">${[['CC','#C96442','Claude Code','Ready',chip('<span class="dotc"></span>Ready','local')],['CX','#10A37F','Codex','Signing in…','<span class="spin"></span>'],['GC','#4285F4','Gemini CLI','Signed out',`<button class="btn sm ink">Sign in</button>`],['OR','#4B4BD6','OpenRouter','Rate limited · retry in 20 s',chip('Busy','costly')]].map(([m,co,n,d,r])=>`<div class="provrow">${logo(m,co)}<div style="flex:1"><b>${n}</b><div style="font-size:12px;color:var(--text-2)">${d}</div></div>${r}</div>`).join('')}</div>`, 'custom')}
+    ${c('Routing reason', `<div style="display:flex;flex-direction:column;gap:6px;width:100%">${chip('Coding · Claude Code','cloud')}<div class="meta-line">Used Coding profile because this looked like a software task. Private files were excluded.</div></div>`, 'custom · plan §145 explainability')}
+  </div>
+
+  ${sec('Control & data','capabilities, permissions, routines, connectors, memory')}
+  <div class="gal">
+    ${c('Capability row', `<div class="rows" style="width:100%;margin:-16px">${row(icb('hand'),'Computer use','AI uses your mouse and keyboard. Last resort', chip('Cloud','cloud')+chip('Costly','costly')+tog(false,'Computer use'))}${row(icb('eye'),'Screen awareness','Used 3 min ago', `<span class="useind">${I('eye')}In use</span>` + tog(true,'Screen'))}</div>`, 'custom')}
+    ${c('Grant row', `<div class="rows" style="width:100%;margin:-16px">${row(icb('term'),'Run cargo commands','D:\\work\\kivo · always', `<button class="btn sm">Revoke</button>`)}</div>`, 'custom')}
+    ${c('Audit row', `<div class="rows" style="width:100%;margin:-16px">${row(`<span class="meta">08:47</span>`,'Send email to x@unknown.io','Denied: the address came from a web page (untrusted)', chip('Denied','bad'))}</div>`, 'custom · provenance shown')}
+    ${c('Routine steps', `<div style="width:100%"><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${chip('“work mode”')}${chip('Ctrl+Alt+W')}${chip('Weekdays 9:00')}</div><div class="step"><span class="n">1</span>${I('grip')}${I('window')}<div style="flex:1">Open <b>VS Code</b></div>${chip('Low','local')}</div><div class="connector"></div><div class="step"><span class="n">2</span>${I('grip')}${I('sparkle')}<div style="flex:1">Ask AI: summarize unread mail</div>${chip('AI · $','costly')}</div></div>`, 'custom · drag to reorder')}
+    ${c('Connector tile', `<div style="width:100%;display:flex;flex-direction:column;gap:10px"><div style="display:flex;gap:10px;align-items:center">${logo('GC','#1A73E8')}<div style="flex:1"><b>Google Calendar</b><div style="font-size:12px;color:var(--text-2)">Sign in with Google · no keys</div></div><button class="btn sm ink">Connect</button></div><div style="display:flex;gap:10px;align-items:center">${logo('GH','#24292F')}<div style="flex:1"><b>GitHub</b><div style="font-size:12px;color:var(--text-2)">Connected as MadBlast0</div></div>${chip('<span class="dotc"></span>Connected','local')}</div></div>`, 'custom')}
+    ${c('Memory item', `<div class="rows" style="width:100%;margin:-16px">${row(icb('lock'),'Maya’s birthday is 12 March','Personal · never sent to cloud AI', chip('Sensitive','sens') + `<button class="btn sm ghost" aria-label="Edit">${I('edit')}</button>`)}</div>`, 'custom')}
+    ${c('Plugin / connector consent', `<div style="width:100%"><b>“Recipe Helper” wants to:</b><div style="display:flex;flex-direction:column;gap:6px;margin:8px 0;font-size:13px">${[['globe','Access api.recipes.com'],['folder','Read Documents\\Recipes'],['plus','Add 2 tools (Low risk)']].map(([i,t])=>`<div style="display:flex;gap:8px;align-items:center">${I(i)}${t}</div>`).join('')}</div><div style="display:flex;gap:6px"><button class="btn sm ink">Allow and install</button><button class="btn sm">Cancel</button></div></div>`, 'custom · like mobile app permissions')}
+    ${c('Phone pairing', `<div style="display:flex;gap:14px;align-items:center">${qr()}<div><b>Pair your phone</b><div style="font-size:12.5px;color:var(--text-2)">Scan with the KIVO app. Single-use code, expires in 1:48. End-to-end encrypted.</div></div></div>`, 'custom · post-MVP (KIVO Remote)')}
+  </div>
+
+  ${sec('Overlays','dialogs, sheets, menus, toasts')}
+  <div class="gal">
+    ${c('Dialog', `<button class="btn" data-modal="wake">Open “Add wake word”</button><button class="btn" data-modal="routine">Open “New routine”</button>`, 'Base UI Dialog')}
+    ${c('Side sheet', `<div class="sheetpanel"><div style="display:flex;justify-content:space-between;align-items:center"><b>Claude Code</b><button class="btn icon ghost" aria-label="Close">${I('x')}</button></div><div class="kv"><span>Account</span><span>signed in</span></div><div class="kv"><span>Used by profiles</span><span>Default, Coding</span></div><div class="kv"><span>This month</span><span>$1.12</span></div></div>`, 'Base UI Dialog as a sheet · details without leaving the page')}
+    ${c('Context menu', `<div class="menu"><div class="mi">${I('play')}Run now</div><div class="mi">${I('edit')}Edit<span class="k">Enter</span></div><div class="mi">${I('link')}Duplicate</div><hr><div class="mi" style="color:var(--danger)">${I('trash')}Delete<span class="k">Del</span></div></div>`, 'Base UI Menu')}
+    ${c('Toast', `<div class="toast" style="width:100%"><div class="th"><span class="ik"></span>KIVO</div><b>Tests fixed</b>All 48 tests pass.<div class="ta"><button class="btn">View</button><button class="btn">Dismiss</button></div></div>`, 'Windows toast (system) · in-app toast for Control Center')}
   </div>`;
 };
 
@@ -892,6 +1185,9 @@ document.addEventListener('click', e => {
   if (d.onbnav) { S.onb = Math.max(0, Math.min(ONB.length-1, S.onb + +d.onbnav)); render(); return; }
   if (d.modal) { document.getElementById('modal').innerHTML = MODALS[d.modal](); document.getElementById('scrim').classList.add('on'); return; }
   if (d.close !== undefined) { document.getElementById('scrim').classList.remove('on'); return; }
+  if (d.set) { S[d.set] = d.val; render(); return; }
+  if (d.obtry !== undefined) { playMini(); return; }
+  if (d.act === 'choice') { el.parentElement.querySelectorAll('.choice').forEach(b => b.setAttribute('aria-pressed', b === el)); return; }
   if (d.act === 'tog') { el.setAttribute('aria-checked', el.getAttribute('aria-checked') !== 'true'); return; }
   if (d.act === 'seg') { el.parentElement.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b === el)); return; }
   if (d.act === 'tier') { el.parentElement.querySelectorAll('.tier').forEach(b => b.setAttribute('aria-pressed', b === el)); return; }
