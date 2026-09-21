@@ -18,6 +18,17 @@ subsystem, and update the plan when a decision changes it.
   company identity here.
 - Default branch: `main`.
 
+Decisions made so far are logged in [docs/DECISIONS.md](docs/DECISIONS.md). Research
+behind them lives in `docs/research/<topic>/` (a `REPORT.md` plus source notes).
+Check the log before re-opening a settled question, and add to it when a new
+decision is made.
+
+## Platform
+
+Windows 11 first and most polished; Windows 10 supported with fallbacks; macOS and
+Linux planned. Keep every OS-specific call behind a platform trait in the runtime —
+never call Win32 (or any OS API) directly from core logic.
+
 ## Status
 
 Phase 0 (specification). No source code yet. Update this section as phases land.
