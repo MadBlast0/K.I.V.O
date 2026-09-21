@@ -48,6 +48,48 @@ Windows 11 desktop: [mockups/kivo-wake-concepts.html](mockups/kivo-wake-concepts
 
 The sections below record how the design got here.
 
+### Icon rules
+
+- **One meaning per icon, and one icon per meaning.** The same concept always uses the same icon
+  everywhere: Island settings → `island`, money and budgets → `coin`, documents → `file`,
+  agents → `bot`, summarizing/condensing → `compress`.
+- `sparkle` means **AI-generated or AI step** only. It is never used for settings like Theme or
+  Wake glow.
+- `eye` means **seeing/visibility** only (screen awareness, preview, highlight).
+- `refresh` means **update/retry/retrain** only.
+- The icon set is Lucide-style (ISC): 1.6 stroke, 16 px in lists, 13 px inside the Island.
+
+### Voice-hint rule
+
+The Island's "Say …" hint always lists **the words on its buttons**, in the same order (for
+example Approve plan / Edit / Cancel → *Say "approve", "edit" or "cancel"*). "Wait" and "why?"
+work everywhere, and are explained in Voice settings instead of being repeated in every hint.
+
+### Motion spec
+
+The mockup uses CSS; production uses **Motion** (motion.dev) with the same values.
+
+| Token | Value | Used for |
+|---|---|---|
+| `fast` | 150 ms, ease-out | Hover, press, color changes |
+| `base` | 250 ms, ease-out | Segments, toggles, options, list rows |
+| `slow` | 400 ms | Sheets, page content |
+| `spring` | `cubic-bezier(.32,1.28,.54,1)` | Island morphing, tab indicator, dialogs, palette, toggle thumb |
+| `out` | `cubic-bezier(.2,.8,.2,1)` | Everything else |
+
+| Element | Behavior |
+|---|---|
+| Island | Width and height morph with the spring; the content cross-fades 120 ms after the shape; the waveform animates only while audible (zero frames at rest) |
+| Page / tab change | Content rises 8 px and fades in, staggered 30 ms per block (max 12); the tab underline slides to the new tab |
+| Onboarding | Steps slide 18 px in the direction of travel; progress dots stretch; the welcome screen's Island demonstrates itself in a loop |
+| Dialogs | Scrim fades in; the dialog scales 0.96 → 1 with the spring |
+| Command palette | Drops 12 px from the top with the spring, like the Island expanding |
+| Side sheet | Slides from the right (350 ms), then its content staggers in |
+| Menus / toasts / notifications | Scale 0.96 → 1 from their anchor; submenus slide 6 px after a 120 ms delay |
+| Buttons | Press scale 0.97; hover background 150 ms |
+| System surfaces (mockup) | Reveal on scroll |
+| Reduced motion | All of the above become instant; this follows Windows "Animation effects" and the in-app Motion setting |
+
 ## 0.1 Full app mockup (v1, for finalization)
 
 [mockups/kivo-app.html](mockups/kivo-app.html) is one file with five sections:

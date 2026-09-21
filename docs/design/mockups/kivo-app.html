@@ -45,7 +45,39 @@ button,input,select,textarea{font:inherit;color:inherit;letter-spacing:inherit}
 button{cursor:pointer}
 svg.i{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
 :focus-visible{outline:2px solid var(--acc);outline-offset:2px}
-@media (prefers-reduced-motion: reduce){*{transition-duration:0s!important;animation:none!important}}
+/* ── Motion ── (production: Motion for React; same timings) */
+:root{--t-fast:.15s;--t-base:.25s;--t-slow:.4s}
+@keyframes kIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes kPop{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
+@keyframes kDrop{from{opacity:0;transform:translateY(-12px) scale(.97)}to{opacity:1;transform:none}}
+@keyframes kFade{from{opacity:0}to{opacity:1}}
+@keyframes kFwd{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:none}}
+@keyframes kBack{from{opacity:0;transform:translateX(-18px)}to{opacity:1;transform:none}}
+@keyframes kSub{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:none}}
+@keyframes kBreathe{50%{transform:scale(1.06);filter:brightness(1.15)}}
+.anim-in > *{animation:kIn .34s var(--out) both;animation-delay:calc(var(--i,0) * 30ms)}
+.btn,.select,.ctl .c,.tags button,.scope button{transition:background var(--t-fast),color var(--t-fast),opacity var(--t-fast),transform .12s var(--out),box-shadow var(--t-fast)}
+.btn:active,.select:active,.ctl .c:active{transform:scale(.97)}
+.seg button{transition:background var(--t-base),color var(--t-base),box-shadow var(--t-base)}
+.option{transition:box-shadow var(--t-base),transform .12s var(--out)}.option:active{transform:scale(.995)}
+.rad,.chk i{transition:background var(--t-base)}.rad::after,.chk.on i::after{animation:kPop .2s var(--spring)}
+.li.click,.side a,.threads a,.tree a,.wmenu .mi,.xmenu .mi,.jump .mi,.palette .pi{transition:background var(--t-fast),color var(--t-fast)}
+.scrim.on{animation:kFade .2s var(--out)}
+.scrim.on .modal{animation:kPop .3s var(--spring) both}
+.scrim.on .palette{animation:kDrop .32s var(--spring) both}
+.side-sheet .sb > *{animation:kIn .3s var(--out) both}
+.wmenu,.xmenu,.jump,.hello,.sheetwin,.wtoast,.ttip{animation:kPop .28s var(--out) both;transform-origin:top left}
+.wmenu .subm{animation:kSub .28s .12s var(--out) both}
+.ob .col.fwd{animation:kFwd .36s var(--out) both}.ob .col.back{animation:kBack .36s var(--out) both}
+.ob .welcome > *{animation:kIn .6s var(--out) both}.ob .welcome > *:nth-child(2){animation-delay:.12s}.ob .welcome > *:nth-child(3){animation-delay:.2s}.ob .welcome > *:nth-child(4){animation-delay:.28s}
+.home .big .orb{animation:kBreathe 4.5s ease-in-out infinite}
+.sf{opacity:0;transform:translateY(12px);transition:opacity .5s var(--out),transform .5s var(--out)}
+.sf.shown{opacity:1;transform:none}
+.ptabs{position:relative}
+.ptabs button[aria-selected="true"]{border-bottom-color:transparent}
+.ptabs .ind{position:absolute;bottom:0;height:2px;border-radius:2px;background:var(--ink);transition:left .38s var(--spring),width .38s var(--spring)}
+.tog::after{will-change:transform}
+@media (prefers-reduced-motion: reduce){*{transition-duration:0s!important;animation:none!important}.sf{opacity:1;transform:none}}
 
 /* ── Viewer chrome (not part of the product) ── */
 .viewer{position:sticky;top:0;z-index:40;background:color-mix(in srgb,var(--page) 90%,transparent);backdrop-filter:blur(14px);border-bottom:1px solid var(--sep)}
@@ -548,7 +580,37 @@ const P = {
   code:'M8 7l-5 5 5 5M16 7l5 5-5 5', power:'M12 3v9M6.3 6.3a8 8 0 1 0 11.4 0', grip:'M9 6h.01M9 12h.01M9 18h.01M15 6h.01M15 12h.01M15 18h.01',
   refresh:'M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6', window:'M3 5h18v14H3zM3 9h18', ext:'M14 4h6v6M20 4l-9 9M18 14v6H4V6h6',
   undo:'M9 14L4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3', help:'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17h.01',
-  list:'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01', zap:'M13 2L4 14h7l-1 8 9-12h-7z', cursor:'M5 3l14 7-6 2-2 6z'
+  list:'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01', zap:'M13 2L4 14h7l-1 8 9-12h-7z', cursor:'M5 3l14 7-6 2-2 6z',
+  skill:'M4 7h4a2 2 0 1 1 4 0h4v4a2 2 0 1 1 0 4v4H4z',
+  bulb:'M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0 0 12 3z',
+  contrast:'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 3v18M12 7h4M12 11h5M12 15h4',
+  glow:'M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4',
+  headset:'M4 14v-2a8 8 0 0 1 16 0v2M4 14h3v5H5a1 1 0 0 1-1-1zM20 14h-3v5h2a1 1 0 0 0 1-1z',
+  palette:'M12 21a9 9 0 1 1 9-9c0 2-1.5 3-3 3h-2a2 2 0 0 0-1 3.7c.4.3.3 2.3-3 2.3zM7.5 11h.01M9.5 7h.01M14.5 7h.01M16.5 11h.01',
+  file:'M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 16h6',
+  island:'M7 9h10a3 3 0 0 1 0 6H7a3 3 0 0 1 0-6zM9 12h.01',
+  tray:'M3 13h5l2 3h4l2-3h5M5 5h14l2 8v6H3v-6z',
+  compass:'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM15 9l-2 5-4 1 2-5z',
+  frame:'M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4',
+  layers:'M12 3l9 5-9 5-9-5zM3 13l9 5 9-5',
+  repeat:'M17 2l3 3-3 3M4 11V9a4 4 0 0 1 4-4h12M7 22l-3-3 3-3M20 13v2a4 4 0 0 1-4 4H4',
+  merge:'M6 3v6a6 6 0 0 0 6 6h6M15 12l3 3-3 3M6 21v-6',
+  motion:'M3 8h6M2 12h5M3 16h6M14 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10z',
+  compress:'M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7',
+  book:'M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 19V5',
+  rows:'M4 6h16M4 12h16M4 18h16',
+  resize:'M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7',
+  volume:'M11 5L6 9H3v6h3l5 4zM15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13',
+  type:'M4 7V5h16v2M12 5v14M9 19h6',
+  key:'M8 15a4 4 0 1 1 3.5-6H21v3h-2v3h-3v-3h-4.5A4 4 0 0 1 8 15z',
+  coin:'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM15 9.5c-.5-1-1.6-1.5-3-1.5-1.7 0-3 .8-3 2s1.3 1.7 3 2 3 .8 3 2-1.3 2-3 2c-1.4 0-2.5-.5-3-1.5M12 6v2M12 16v2',
+  mouse:'M12 3a6 6 0 0 1 6 6v6a6 6 0 0 1-12 0V9a6 6 0 0 1 6-6zM12 7v4',
+  bot:'M5 9h14v10H5zM12 5v4M9 14h.01M15 14h.01M3 13v3M21 13v3M10 5h4',
+  phone:'M7 3h10v18H7zM11 18h2',
+  upload:'M12 16V5M7 10l5-5 5 5M5 20h14',
+  moon:'M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z',
+  send:'M4 12l16-8-6 16-2-7z',
+  more:'M6 12h.01M12 12h.01M18 12h.01'
 };
 const I = (n, c='') => `<svg class="i ${c}" viewBox="0 0 24 24" aria-hidden="true"><path d="${P[n]}"/></svg>`;
 
@@ -590,7 +652,8 @@ const REQ = 'Play something calm on Spotify and remind me at five to call Maya';
 const ANS = 'Playing Lo-fi Focus on Spotify. I’ll remind you to call Maya at 5 PM.';
 const APPI = (t,bg,fg='#fff') => `<span class="appi" style="background:${bg};color:${fg}">${t}</span>`;
 const DOT = c => `<span style="width:18px;height:18px;border-radius:50%;background:${c};flex:none"></span>`;
-const VH = () => `<div class="vh"><span class="mic">${I('mic')}</span>Say <b>“approve”</b>, <b>“cancel”</b> or <b>“wait”</b></div>`;
+const VH = (...w) => `<div class="vh"><span class="mic">${I('mic')}</span>Say ${w.map((x,i)=>`<b>“${x}”</b>${i<w.length-2?', ':i===w.length-2?' or ':''}`).join('')}</div>`;
+const VH0 = () => `<div class="vh"><span class="mic">${I('mic')}</span>Say <b>“approve”</b>, <b>“cancel”</b> or <b>“wait”</b></div>`;
 const modeChip = () => S.mode==='bypass' ? '<span class="mchip r">BYPASS</span>' : S.mode==='auto' ? '' : `<span class="mchip">${{ask:'ASK',edits:'EDITS',plan:'PLAN'}[S.mode]}</span>`;
 const ISL = st => {
   const p = st.partial ?? '';
@@ -602,10 +665,10 @@ const ISL = st => {
     speaking:{w:480,h:112,lab:'KIVO',right:'wave',body:`<div class="q">${REQ}</div><div class="a">${ANS}</div>`},
     undo:{w:400,h:36,lab:'Moved 3 files to Archive',lead:APPI('▣','#3B82F6'),right:'<span class="btns" style="margin:0"><span class="p" data-undo>Undo</span></span><span class="ring t"></span>'},
     help:{w:480,h:210,lab:'What you can say',lead:APPI('VS','#2F80ED'),right:keys('Esc'),body:`<div class="q">In VS Code, try:</div><div class="ex"><div>“Open the terminal and run the tests”</div><div>“Find where Config is defined”</div><div>“Explain this error”</div><div>“Commit with message ‘fix config’”</div></div>`},
-    plan:{w:490,h:240,lab:'Plan ready',right:'<span class="mchip">PLAN</span>',body:`<div class="q">Clean up Downloads</div><div class="plan"><div><i>1</i>Find files older than 90 days (212 files)</div><div><i>2</i>Move installers to Downloads\\Installers</div><div><i>3</i>Move the rest to Archive\\2026</div><div><i>4</i>Show a summary</div></div><div class="btns"><span class="p">Approve plan</span><span>Edit</span><span class="d">Cancel</span></div>${VH()}`},
-    confirm:{w:490,h:190,lab:'Needs your OK',lead:DOT('#FFC857'),body:`<div class="warn">${I('alert')}MEDIUM RISK</div><div>Edit <b>src/main.rs</b> (1 line) and run <b>cargo check</b> in D:\\work\\kivo</div><div class="btns"><span class="p">Allow once</span><span>Allow for this project</span><span class="d">Deny</span></div>${VH()}`},
-    high:{w:490,h:194,lab:'Confirm with Windows Hello',lead:DOT('#FF5147'),body:`<div class="warn r">${I('shield')}HIGH RISK</div><div>Send email to <b>maya@studio.com</b>: “Design review moved to Thursday”</div><div class="btns"><span class="p">Confirm</span><span class="d">Cancel</span></div><div class="vh"><span class="mic">${I('mic')}</span>Say <b>“confirm”</b> and look at your camera (Windows Hello)</div>`},
-    draft:{w:500,h:226,lab:'Prompt for Claude<small>terminal · K.I.V.O</small>',lead:APPI('CC','#C96442'),right:'<span class="mic" style="background:rgba(255,255,255,.12)"></span>',body:`<div class="draft">Why are the runtime tests failing? Fix the cause, then re-run <b>cargo test</b>. <ins>Also add a test for the config loader.</ins></div><div class="btns"><span class="p">Send</span><span>Edit</span><span class="d">Cancel</span></div><div class="vh"><span class="mic">${I('mic')}</span>Say <b>“send”</b>, <b>“add …”</b>, <b>“read it back”</b> or <b>“cancel”</b></div>`},
+    plan:{w:490,h:240,lab:'Plan ready',right:'<span class="mchip">PLAN</span>',body:`<div class="q">Clean up Downloads</div><div class="plan"><div><i>1</i>Find files older than 90 days (212 files)</div><div><i>2</i>Move installers to Downloads\\Installers</div><div><i>3</i>Move the rest to Archive\\2026</div><div><i>4</i>Show a summary</div></div><div class="btns"><span class="p">Approve plan</span><span>Edit</span><span class="d">Cancel</span></div>${VH('approve','edit','cancel')}`},
+    confirm:{w:490,h:190,lab:'Needs your OK',lead:DOT('#FFC857'),body:`<div class="warn">${I('alert')}MEDIUM RISK</div><div>Edit <b>src/main.rs</b> (1 line) and run <b>cargo check</b> in D:\\work\\kivo</div><div class="btns"><span class="p">Allow once</span><span>Allow for this project</span><span class="d">Deny</span></div>${VH('allow','allow for this project','deny')}`},
+    high:{w:490,h:194,lab:'Confirm with Windows Hello',lead:DOT('#FF5147'),body:`<div class="warn r">${I('shield')}HIGH RISK</div><div>Send email to <b>maya@studio.com</b>: “Design review moved to Thursday”</div><div class="btns"><span class="p">Confirm</span><span class="d">Cancel</span></div><div class="vh"><span class="mic">${I('mic')}</span>Say <b>“confirm”</b> or <b>“cancel”</b>. Confirm opens Windows Hello</div>`},
+    draft:{w:500,h:226,lab:'Prompt for Claude<small>terminal · K.I.V.O</small>',lead:APPI('CC','#C96442'),right:'<span class="mic" style="background:rgba(255,255,255,.12)"></span>',body:`<div class="draft">Why are the runtime tests failing? Fix the cause, then re-run <b>cargo test</b>. <ins>Also add a test for the config loader.</ins></div><div class="btns"><span class="p">Send</span><span>Edit</span><span class="d">Cancel</span></div>${VH('send','edit','cancel')}<div class="vh" style="margin-top:4px;padding-left:25px">or “add …”, “read it back”</div>`},
     waiting:{w:330,h:36,lab:'Waiting for you<small>take your time</small>',lead:DOT('#FFC857'),right:keys('Esc')},
     error:{w:460,h:120,lab:'Can’t hear you',lead:DOT('#FF5147'),body:`<div>USB Headset was disconnected.</div><div class="btns"><span class="p">Use laptop mic</span><span>Settings</span></div>`},
     typing:{w:480,h:88,lab:'Type to KIVO',right:keys('Esc'),body:`<div class="inp">${I('chat')}<span>Summarize this page in 3 bullets</span><span style="margin-left:auto;opacity:.5">↵</span></div>`},
@@ -683,7 +746,7 @@ const overlayHTML = () => `
 /* ════════ Control Center ════════ */
 const NAV = [
   [null,[['home','Home','home'],['chat','Chat','chat'],['tasks','Tasks','tasks','2'],['activity','Activity','activity'],['routines','Routines','routine']]],
-  ['Intelligence',[['brains','Brains','brain'],['agents','Agents','term','1'],['voice','Voice','mic'],['extensions','Extensions','plug']]],
+  ['Intelligence',[['brains','Brains','brain'],['agents','Agents','bot','1'],['voice','Voice','mic'],['extensions','Extensions','plug']]],
   ['Control',[['permissions','Permissions','shield'],['memory','Memory','memory'],['usage','Usage','chart']]],
   ['System',[['settings','Settings','gear']]]
 ];
@@ -702,7 +765,7 @@ const pageBody = () => {
   if (!TABS[pg]) { TABMODE = false; return PAGES[pg](); }
   const cur = S.tabs[pg] && TABS[pg].some(t => t[0]===S.tabs[pg]) ? S.tabs[pg] : TABS[pg][0][0];
   TABMODE = true; const body = PAGES[cur](); TABMODE = false;
-  return `<div class="ph"><div><h2>${TITLES[pg]}</h2>${SUBS[pg]?`<p>${SUBS[pg]}</p>`:''}</div></div><div class="ptabs" role="tablist">${TABS[pg].map(([t,l]) => `<button role="tab" aria-selected="${t===cur}" data-tab="${t}">${l}</button>`).join('')}</div>${body}`;
+  return `<div class="ph"><div><h2>${TITLES[pg]}</h2>${SUBS[pg]?`<p>${SUBS[pg]}</p>`:''}</div></div><div class="ptabs" role="tablist">${TABS[pg].map(([t,l]) => `<button role="tab" aria-selected="${t===cur}" data-tab="${t}">${l}</button>`).join('')}<i class="ind"></i></div>${body}`;
 };
 const TITLES = Object.fromEntries(NAV.flatMap(g => g[1]).map(x => [x[0], x[1]]));
 const editDel = () => `<button class="btn sm ic plain" aria-label="Edit">${I('edit')}</button><button class="btn sm ic plain" aria-label="Delete">${I('trash')}</button>`;
@@ -721,7 +784,7 @@ chat: () => `<div class="chat">
     <div class="threads"><button class="btn new">${I('plus')}New conversation</button><div class="field" style="margin-bottom:4px">${I('search')}<input placeholder="Search conversations"></div>
       <div class="tg">Pinned</div><a><b>Hindi practice</b><small>Sun · Realtime</small></a>
       <div class="tg">Recent</div><a class="on"><b>Why is my build failing?</b><small>Today · Coding · K.I.V.O</small></a><a><b>Plan Q4 goals</b><small>Yesterday</small></a><a><b>Summarize contract.pdf</b><small>Mon · Private</small></a></div>
-    <div class="conv"><div class="ch"><b style="flex:1;min-width:0">Why is my build failing?</b>${tag('Coding · Claude Code','a')}<span class="cmeter" title="Context used"><span class="m"><span style="width:18%"></span></span>18% of context</span><span class="meta">$0.004</span><button class="btn sm ic plain" aria-label="More">${I('grip')}</button></div>
+    <div class="conv"><div class="ch"><b style="flex:1;min-width:0">Why is my build failing?</b>${tag('Coding · Claude Code','a')}<span class="cmeter" title="Context used"><span class="m"><span style="width:18%"></span></span>18% of context</span><span class="meta">$0.004</span><button class="btn sm ic plain" aria-label="More">${I('more')}</button></div>
       <div class="msgs">
         <div class="you">Why is my build failing?</div>
         <div class="kv"><span class="orb"></span><div>
@@ -770,7 +833,7 @@ brains: () => ph('Brains','How KIVO thinks. Sign in with something you already u
     li(mono('GC','#4285F4'),'Gemini CLI','Sign in with Google · about 1,000 requests a day', pill('Free','g')+'<button class="btn sm pri">Connect</button>'),
     li(mono('CX','#10A37F'),'Codex','Sign in with ChatGPT · works on the Free plan with a small limit', pill('Free tier','g')+'<button class="btn sm pri">Connect</button>'),
     li(mono('LM','#6B4BD6'),'LM Studio','Not running','<button class="btn sm">Detect</button>'),
-    li('lock','Use your own API key','Optional, for advanced users','<button class="btn sm">Add key</button>')) +
+    li('key','Use your own API key','Optional, for advanced users','<button class="btn sm">Add key</button>')) +
   sect('Profiles') + group(...[['Default','Claude Code','OpenRouter · Claude Sonnet'],['Fast','OpenRouter · Gemini Flash','Ollama · llama3.2'],['Coding','Claude Code','Codex'],['Private','Ollama · qwen2.5','none, stays local'],['Offline','Ollama · llama3.2','none']].map(([n,a,b]) => li('', n, `${a} · fallback: ${b}`, chev,'click'))) +
   `<p class="note">KIVO never charges for AI. Free options are marked; paid ones use your own account.</p><p class="note">KIVO picks a profile from what you asked, how sensitive the data is, whether you’re online, and cost. Every answer says which one it used.</p>`,
 agents: () => ph('Agents','Other AIs KIVO can run and talk to for you: coding agents, terminals and desktop AI apps.', `<button class="btn pri" data-modal="launch">${I('plus')}Start an agent</button>`) +
@@ -790,39 +853,39 @@ agents: () => ph('Agents','Other AIs KIVO can run and talk to for you: coding ag
   sect('Safety') + group(
     li('shield','Starting an agent in bypass mode','Always asks first, because the agent can then change anything', pill('High','r')),
     li('check','Review prompts before sending','Show a draft in the Island first', tog(true)),
-    li('memory','Share my workspace notes with agents','Read-only, through KIVO’s MCP server', tog(true))),
+    li('bot','Share my workspace notes with agents','Read-only, through KIVO’s MCP server', tog(true))),
 skills: () => ph('Skills','Instructions and scripts KIVO can use when a task needs them. Only their names use context until one is needed.', `<button class="btn">${I('folder')}Open skills folder</button><button class="btn pri">${I('plus')}Add skill</button>`) +
   sect('Enabled') + group(
-    li('sparkle','release-notes','Turns commits into release notes · from a folder', '<span class="meta">~40 tokens</span>'+tog(true)),
-    li('sparkle','meeting-brief','Prepares a brief from your calendar and notes · made from a routine', '<span class="meta">~35 tokens</span>'+tog(true)),
-    li('sparkle','pdf-tools','Fill, merge and split PDFs · includes scripts', pill('Runs scripts','o')+'<span class="meta">~45 tokens</span>'+tog(true))) +
+    li('skill','release-notes','Turns commits into release notes · from a folder', '<span class="meta">~40 tokens</span>'+tog(true)),
+    li('skill','meeting-brief','Prepares a brief from your calendar and notes · made from a routine', '<span class="meta">~35 tokens</span>'+tog(true)),
+    li('skill','pdf-tools','Fill, merge and split PDFs · includes scripts', pill('Runs scripts','o')+'<span class="meta">~45 tokens</span>'+tog(true))) +
   sect('Available') + group(
-    li('sparkle','frontend-design','Shared by Claude Code in K.I.V.O', '<button class="btn sm">Review</button>'),
-    li('sparkle','data-cleanup','Imported from a zip · not checked yet', pill('Untrusted','o')+'<button class="btn sm">Review</button>')) +
+    li('skill','frontend-design','Shared by Claude Code in K.I.V.O', '<button class="btn sm">Review</button>'),
+    li('skill','data-cleanup','Imported from a zip · not checked yet', pill('Untrusted','o')+'<button class="btn sm">Review</button>')) +
   `<p class="note">Skills use the open Agent Skills format (SKILL.md), so skills made for Claude, Codex or Gemini work here too. KIVO shows what a skill contains before you enable it.</p>`,
 context: () => ph('Context','What the AI starts with in each new conversation. The defaults work; change them only if you want to.', `<button class="btn" data-sheet="preview">${I('eye')}Preview what the AI sees</button>`) +
   `<div class="tile"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap"><b>≈ 1,480 tokens to start a conversation</b><span style="font-size:12px;color:var(--text-2)">≈ $0.004 with Claude Sonnet · about 90% cheaper after the first message (cached)</span></div>
     <div class="ctxbar" style="margin-top:10px">${[['var(--text)',40],['var(--acc)',27],['#8E8E93',7],['#32D74B',18],['#FF9F0A',8]].map(([c,w]) => `<i style="width:${w}%;background:${c}"></i>`).join('')}</div>
     <div class="ctxleg">${[['var(--text)','System 600'],['var(--acc)','About me 400'],['#8E8E93','Live context 100'],['#32D74B','Memory up to 260'],['#FF9F0A','Skills 120']].map(([c,t]) => `<span><b style="background:${c}"></b>${t}</span>`).join('')}</div></div>` +
   sect('Always included') + group(
-    li('shield','System prompt','KIVO’s core rules and voice style', '<span class="meta">600</span><button class="btn sm plain">View</button>'),
+    li('file','System prompt','KIVO’s core rules and voice style', '<span class="meta">600</span><button class="btn sm plain">View</button>'),
     li('user','About me','Your instructions from Memory', '<span class="meta">400</span><button class="btn sm plain" data-go="memory">Edit</button>'+tog(true)),
-    li('window','Live context','Active app, time, permission mode', '<span class="meta">100</span><button class="btn sm plain">Choose</button>'+tog(true))) +
+    li('compass','Live context','Active app, time, permission mode', '<span class="meta">100</span><button class="btn sm plain">Choose</button>'+tog(true))) +
   sect('Only when relevant') + group(
     li('folder','Workspace notes','Your notes and the project’s CLAUDE.md / AGENTS.md', '<span class="meta">up to 800</span>'+tog(true)),
     li('memory','Memories','The most relevant items only', '<span class="meta">up to 600</span>'+seg(['3','5','10'],'5')),
-    li('sparkle','Skills','Names only; the full skill loads when used', '<span class="meta">~40 each</span><button class="btn sm plain" data-go="skills">Manage</button>'),
+    li('skill','Skills','Names only; the full skill loads when used', '<span class="meta">~40 each</span><button class="btn sm plain" data-go="skills">Manage</button>'),
     li('plug','Tools, connectors, MCP','Only the tools a request needs', '<span class="meta">0–2,000</span><button class="btn sm plain" data-go="capabilities">Manage</button>')) +
   sect('Conversation') + group(
     li('chat','Conversation budget','How much recent conversation to send', seg(['Small','Balanced','Large'],'Balanced')),
-    li('refresh','Summarize older messages automatically','Keeps long conversations fast and cheap', tog(true)),
+    li('compress','Summarize older messages automatically','Keeps long conversations fast and cheap', tog(true)),
     li('clock','New conversation after','', seg(['30 min','2 hours','Never'],'30 min'))),
 voice: () => ph('Voice','Wake words, how KIVO hears you, and how it sounds.') +
   sect('Wake words', `<button class="btn sm" data-modal="wake">${I('plus')}Add</button>`) + group(
     li('mic','Hey Kivo','Built in · trained model', tag('Good','g')+tog(true,'Hey Kivo')),
     li('mic','Okay Jarvis','Custom · 0.2 false wakes/hour in testing', tag('Good','g')+tog(true,'Okay Jarvis'),'click'),
     li('mic','Computer','Custom · common word, may wake by mistake', tag('Risky','r')+tog(false,'Computer'),'click')) +
-  sect('Conversation') + group(li('refresh','Follow-up without wake word','Keep talking for a few seconds after an answer', seg(['Off','5 s','8 s','15 s'],'8 s')), li('help','“What can I say?”','Say it anytime for commands that work in the current app', tog(true,'Help')), li('undo','Undo after actions','“Undo that” or the Undo button in the Island', tog(true,'Undo')), li('mic','Answer questions by voice','Say “approve”, “cancel”, “wait” or “why?” when KIVO asks', tog(true,'Voice answers'))) +
+  sect('Conversation') + group(li('repeat','Follow-up without wake word','Keep talking for a few seconds after an answer', seg(['Off','5 s','8 s','15 s'],'8 s')), li('help','“What can I say?”','Say it anytime for commands that work in the current app', tog(true,'Help')), li('undo','Undo after actions','“Undo that” or the Undo button in the Island', tog(true,'Undo')), li('mic','Answer by voice','Say what’s on the buttons, like “approve” or “cancel”. “Wait” and “why?” always work', tog(true,'Voice answers'))) +
   sect('Understanding you') + group(
     li('', 'Fast','Moonshine · on this PC · recommended', `<span class="rad on"></span>`,'click'), li('', 'Most accurate','Whisper Turbo · uses your graphics card', '<span class="rad"></span>','click'), li('', 'Cloud','Deepgram · needs internet · small cost', '<span class="rad"></span>','click')) +
   sect('KIVO’s voice') + group(
@@ -832,12 +895,12 @@ voice: () => ph('Voice','Wake words, how KIVO hears you, and how it sounds.') +
     li('download','Kokoro','Text to speech · 330 MB · in use', tag('Installed','g')+`<button class="btn sm ic plain" aria-label="Delete">${I('trash')}</button>`),
     li('download','Whisper Turbo','Speech to text · 1.6 GB · more accurate', '<div class="meter" style="width:80px"><span style="width:68%"></span></div><span class="meta">68%</span>'),
     li('download','Parakeet v3','Speech to text · 640 MB · 25 languages', '<button class="btn sm">Download</button>')) +
-  sect('Your voice') + group(li('user','Voice recognition','Trained Sep 21 · improves as you use KIVO', seg(['Off','Prefer me','Only me'],'Prefer me')), li('list','Words KIVO should know','Maya, Tauri, cargo, Punjabi, D:\\work…', chev,'click'), li('refresh','Retrain','','<button class="btn sm">Retrain</button>'), li('trash','Delete voice data','Removes recordings and voiceprint', '<button class="btn sm destr">Delete</button>')),
+  sect('Your voice') + group(li('user','Voice recognition','Trained Sep 21 · improves as you use KIVO', seg(['Off','Prefer me','Only me'],'Prefer me')), li('book','Words KIVO should know','Maya, Tauri, cargo, Punjabi, D:\\work…', chev,'click'), li('refresh','Retrain','','<button class="btn sm">Retrain</button>'), li('trash','Delete voice data','Removes recordings and voiceprint', '<button class="btn sm destr">Delete</button>')),
 connectors: () => ph('Connectors','Connect apps with one sign-in. No keys, ever.', `<div class="field" style="width:200px">${I('search')}<input placeholder="Search"></div><button class="btn">${I('link')}Custom</button>`) +
   sect('Works without connecting') + group(
     li('music','Media','Spotify, YouTube Music and any player, via Windows media controls', tag('Built in','g')),
     li('globe','Your browser','Chrome and Edge tabs, through the KIVO extension', '<button class="btn sm">Install</button>'),
-    li('term','Developer tools','git, GitHub CLI, VS Code, Terminal', tag('Detected','g'))) +
+    li('code','Developer tools','git, GitHub CLI, VS Code, Terminal', tag('Detected','g'))) +
   sect('Connected') + group(li(mono('GH','#24292F'),'GitHub','Signed in as MadBlast0 · 12 tools', chev,'click')) +
   sect('Available') + `<div class="grid g3">${[['GC','#1A73E8','Google Calendar','Events and scheduling'],['GD','#0F9D58','Google Drive','Files you choose'],['GM','#EA4335','Gmail','Coming later'],['OL','#0078D4','Outlook','Mail and calendar'],['TM','#5B5FC7','Teams','Chats and meetings'],['NO','#191919','Notion','Pages and databases'],['LI','#5E6AD2','Linear','Issues and projects'],['SL','#4A154B','Slack','Messages and channels'],['AS','#F06A6A','Asana','Tasks and projects']].map(([m,c,n,d]) => `<div class="tile" style="display:flex;gap:12px;align-items:center">${mono(m,c,1)}<div style="flex:1;min-width:0"><b>${n}</b><div style="font-size:12px;color:var(--text-2)">${d}</div></div>${d==='Coming later'?'':'<button class="btn sm">Connect</button>'}</div>`).join('')}</div>`,
 mcp: () => ph('MCP servers','Extra tools from MCP servers, each with its own permissions.', `<button class="btn pri">${I('plus')}Add server</button>`) +
@@ -852,20 +915,20 @@ permissions: () => ph('Permissions','How much KIVO can do without asking.') +
     li('sliders','Capabilities you turned off stay off'),
     li('lock','Password fields are never typed into'),
     li('shield','Blocked apps are never touched','1Password, Bitwarden, Windows Security, banking sites', chev,'click'),
-    li('globe','Nothing is sent to addresses that came from web pages or files','Protects against prompt injection')) +
+    li('send','Nothing is sent to addresses that came from web pages or files','Protects against prompt injection')) +
   sect('What each mode asks about') + `<div class="group">${li('', '<span style="color:var(--text-3);font-weight:500">Action</span>', '', ['Ask','Edits','Plan','Auto'].map(x => `<span style="width:46px;text-align:center;font-size:11.5px;font-weight:600;color:var(--text-3)">${x}</span>`).join(''))}${[['Read and look','—','—','—','—'],['Open apps, media, windows','Ask','Auto','Plan','Auto'],['Edit files in allowed folders','Ask','Auto','Plan','Auto'],['Run commands, change settings','Ask','Ask','Plan','Auto'],['Delete, send, pay, security','Ask','Ask','Plan','Ask']].map(([a,...v]) => li('', a, '', v.map(x=>`<span style="width:46px;text-align:center;font-size:12px;color:${x==='Ask'?'var(--orange)':x==='Auto'?'var(--green)':'var(--text-3)'}">${x}</span>`).join(''))).join('')}</div>` +
   `<p class="note">Bypass runs everything, within the hard limits above.</p>` +
   sect('Things you’ve allowed') + group(li('term','Run cargo commands','D:\\work\\kivo · always','<button class="btn sm">Revoke</button>'), li('folder','Edit files','D:\\work\\kivo · this session','<button class="btn sm">Revoke</button>')),
 capabilities: () => ph('Capabilities','What KIVO is allowed to do at all. If something is off, no AI, routine or agent can use it.', seg(['Minimal','Balanced','Power user','Custom'],'Balanced')) +
-  sect('Listening and speaking') + group(li('mic','Wake word listening','On this PC only', tag('Local','g')+tog(true)), li('wave','Speak answers','', tog(true)), li('sparkle','Realtime conversation','Natural speech-to-speech', tag('Cloud · costs','o')+tog(false))) +
+  sect('Listening and speaking') + group(li('mic','Wake word listening','On this PC only', tag('Local','g')+tog(true)), li('wave','Speak answers','', tog(true)), li('headset','Realtime conversation','Natural speech-to-speech', tag('Cloud · costs','o')+tog(false))) +
   sect('Your computer') + group(li('window','Apps and windows','', tog(true)), li('folder','Files','Allowed folders · deletes go to the Recycle Bin', tog(true)), li('clip','Clipboard','', tog(false)), li('term','Shell commands','', tog(false)), li('power','Restart and shut down','', tog(true))) +
   sect('Screen') + group(li('eye','Screen awareness','On request: “what’s on my screen?”', tog(false)), li('hand','Computer use','AI uses your mouse and keyboard when nothing else works', tag('Cloud · costs','o')+`<button class="btn sm" data-sheet="cu">Options</button>`+tog(false)), li('globe','Browser pages','Your open tabs, through the extension', tog(true))) +
-  sect('Intelligence and data') + group(li('cloud','Cloud AI','', tog(true)), li('code','Coding agents','In allowed project folders', tog(true)), li('memory','Memory','Only what you ask it to remember', tog(true)), li('user','Voice recognition','Biometric data, stored on this PC', tog(true)), li('link','Remote access','From your paired phone', tog(false))),
+  sect('Intelligence and data') + group(li('cloud','Cloud AI','', tog(true)), li('code','Coding agents','In allowed project folders', tog(true)), li('memory','Memory','Only what you ask it to remember', tog(true)), li('user','Voice recognition','Biometric data, stored on this PC', tog(true)), li('phone','Remote access','From your paired phone', tog(false))),
 privacy: () => ph('Privacy','What can leave your PC.') + group(li('cloud','Mode','Strict private blocks all cloud AI and speech unless you approve each use', seg(['Cloud allowed','Prefer local','Strict private'],'Cloud allowed'))) +
-  sect('Data') + group(li('chat','Keep conversations','', seg(['7 days','30 days','Forever','Never'],'30 days')), li('folder','Private folders','Files here never go to cloud AI', chev,'click'), li('eye','Save transcripts in logs','For troubleshooting only', tog(false)), li('download','Export my data','Settings, memories, routines, history','<button class="btn sm">Export</button>')),
+  sect('Data') + group(li('chat','Keep conversations','', seg(['7 days','30 days','Forever','Never'],'30 days')), li('folder','Private folders','Files here never go to cloud AI', chev,'click'), li('file','Save transcripts in logs','For troubleshooting only', tog(false)), li('upload','Export my data','Settings, memories, routines, history','<button class="btn sm">Export</button>')),
 memory: () => ph('Memory','What KIVO knows about you and your work: Markdown notes on this PC, organized by folders and tags.', `<div class="field" style="width:200px">${I('search')}<input placeholder="Search notes"></div><button class="btn">${I('folder')}Open folder</button><button class="btn">${I('ext')}Open in Obsidian</button>`) +
   group(
-    li('sparkle','Suggest things to remember','KIVO asks before keeping something', tog(true)),
+    li('bulb','Suggest things to remember','KIVO asks before keeping something', tog(true)),
     li('folder','Keep workspace notes','Notes for projects KIVO works on with you, kept short and tidy', tog(true)),
     li('list','Note detail','', seg(['Brief','Standard','Detailed'],'Standard'))) +
   sect('Tags') + `<div class="tags">${[['all','All',1],['person'],['workspace'],['decision'],['preference'],['rust'],['design'],['sensitive']].map(([t,l,on]) => `<button data-act="seg" aria-pressed="${!!on}">${l||'#'+t}</button>`).join('')}</div>` +
@@ -884,42 +947,42 @@ memory: () => ph('Memory','What KIVO knows about you and your work: Markdown not
       <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap"><button class="btn sm">${I('edit')}Edit</button><button class="btn sm plain">3 linked notes</button><button class="btn sm plain">History</button></div>
     </div></div>` +
   sect('Keeping memory tidy') + group(
-    li('refresh','Merge duplicate notes','', tog(true)),
-    li('clock','Condense logs older than 14 days','Into the workspace overview and decisions', tog(true)),
+    li('merge','Merge duplicate notes','', tog(true)),
+    li('compress','Condense logs older than 14 days','Into the workspace overview and decisions', tog(true)),
     li('lock','Never send sensitive notes to cloud AI','', tog(true)),
-    li('term','Let agents use my memory','Claude Code, Codex and others, through KIVO’s memory MCP', tog(true)),
+    li('bot','Let agents use my memory','Claude Code, Codex and others, through KIVO’s memory MCP', tog(true)),
     li('trash','Forget everything','Deletes all notes', '<button class="btn sm destr">Forget</button>')),
 usage: () => { const d=[.3,.5,.2,.8,.6,.4,.9,.7,.3,.2,.6,1,.5,.4]; return ph('Usage','Estimated cost of cloud AI and speech. Work done on this PC is free.', seg(['Week','Month','All'],'Month')+`<button class="btn">${I('download')}CSV</button>`) +
   `<div class="grid g4">${[['$1.84','this month'],['$0.06','today'],['68%','handled for free'],['No limit','budget']].map(([v,l]) => `<div class="tile stat"><div class="v">${v}</div><div class="l">${l}</div></div>`).join('')}</div>` +
   `<div class="grid g2" style="margin-top:var(--gap)"><div class="tile"><div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-2);margin-bottom:10px"><b style="color:var(--text)">By day</b><span>AI · <span style="opacity:.55">Speech</span></span></div><div class="chart">${d.map((v,i)=>`<div class="b"><i class="s" style="height:${v*22}%"></i><i style="height:${v*62}%"></i><span>${i+8}</span></div>`).join('')}</div></div>
   ${group(...[['Claude Code','$1.12',60],['OpenRouter','$0.58',32],['Deepgram','$0.14',8],['Ollama','$0.00',0]].map(([n,v,p]) => li('', n, `<div class="meter" style="margin-top:6px"><span style="width:${p}%"></span></div>`, `<span class="meta">${v}</span>`)))}</div>` +
-  sect('Limits') + group(li('chart','Monthly budget','All cloud AI and speech', `<div class="field" style="width:96px">$<input value="10.00"></div>`+tog(false)), li('bell','Warn me at','', seg(['50%','80%','95%'],'80%')), li('alert','At the limit','', seg(['Ask','Use cheaper','Local only','Stop'],'Ask')), li('hand','Per-task limits','Computer use $0.50 · agents $2 · realtime 30 min', chev,'click')); },
+  sect('Limits') + group(li('coin','Monthly budget','All cloud AI and speech', `<div class="field" style="width:96px">$<input value="10.00"></div>`+tog(false)), li('bell','Warn me at','', seg(['50%','80%','95%'],'80%')), li('alert','At the limit','', seg(['Ask','Use cheaper','Local only','Stop'],'Ask')), li('coin','Per-task limits','Computer use $0.50 · agents $2 · realtime 30 min', chev,'click')); },
 companion: () => ph('Companion','How KIVO looks and sounds.') +
   `<div class="grid g4">${[['Island','Default','<div style="width:92px;height:22px;border-radius:12px;background:#000;display:flex;align-items:center;gap:6px;padding:0 6px"><span class="orb" style="width:11px;height:11px"></span><span style="flex:1;height:3px;border-radius:2px;background:#fff;opacity:.8"></span></div>'],['Orb','Floats and points','<span class="orb" style="width:36px;height:36px"></span>'],['Character','Animated mascot','<div style="width:36px;height:36px;border-radius:12px;background:var(--fill);display:grid;place-items:center;font-size:10px;color:var(--text-3)">TBD</div>'],['Hidden','Sounds only','<div style="width:36px;height:36px;border-radius:50%;box-shadow:0 0 0 1.5px var(--border) inset"></div>']].map(([n,d,v],i) => `<button class="option" data-act="opt" aria-pressed="${i===0}" style="flex-direction:column;align-items:center;text-align:center"><div style="height:44px;display:grid;place-items:center;width:100%">${v}</div><span class="ot"><b style="justify-content:center">${n}</b><span>${d}</span></span></button>`).join('')}</div>` +
   sect('Personality') + group(li('','Calm','Concise and neutral','<span class="rad on"></span>','click'), li('','Friendly','Warm, a little chattier','<span class="rad"></span>','click'), li('','Witty','Light humour, serious when it matters','<span class="rad"></span>','click'), li('','Custom','Describe it yourself',chev,'click')) +
   sect('Sound set') + `<div class="soundset">${[['Soft','Rounded, gentle',1],['Glass','Bright bells'],['Pulse','Short blips'],['Wood','Warm, percussive'],['Minimal','Quiet clicks'],['Custom','Your own files']].map(([n,d,on]) => `<button class="option" data-act="opt" aria-pressed="${!!on}"><span class="rad ${on?'on':''}"></span><span class="ot"><b>${n}</b><span>${d}</span></span><span class="btn sm ic plain" aria-label="Preview ${n}">${I('play')}</span></button>`).join('')}</div>` +
-  sect('Sounds') + group(li('wave','Start and stop listening','', `<button class="btn sm ic plain" aria-label="Preview">${I('play')}</button>`+tog(true)), li('help','Needs your answer','Plays when KIVO asks you something', `<button class="btn sm ic plain" aria-label="Preview">${I('play')}</button>`+tog(true)), li('check','Approved and done','', `<button class="btn sm ic plain" aria-label="Preview">${I('play')}</button>`+tog(true)), li('alert','Error','', `<button class="btn sm ic plain" aria-label="Preview">${I('play')}</button>`+tog(true)), li('bell','Notifications','When a task finishes or something needs you', `<span class="select">Soft · chime${chev}</span>`+tog(true)), li('clock','Thinking','A quiet pulse while waiting', tog(false)), li('sliders','Volume','Relative to system volume', '<input class="rng" type="range" value="70" style="width:140px" aria-label="Sound volume">')),
+  sect('Sounds') + group(li('volume','Start and stop listening','', `<button class="btn sm ic plain" aria-label="Preview">${I('play')}</button>`+tog(true)), li('help','Needs your answer','Plays when KIVO asks you something', `<button class="btn sm ic plain" aria-label="Preview">${I('play')}</button>`+tog(true)), li('check','Approved and done','', `<button class="btn sm ic plain" aria-label="Preview">${I('play')}</button>`+tog(true)), li('alert','Error','', `<button class="btn sm ic plain" aria-label="Preview">${I('play')}</button>`+tog(true)), li('bell','Notifications','When a task finishes or something needs you', `<span class="select">Soft · chime${chev}</span>`+tog(true)), li('clock','Thinking','A quiet pulse while waiting', tog(false)), li('volume','Volume','Relative to system volume', '<input class="rng" type="range" value="70" style="width:140px" aria-label="Sound volume">')),
 performance: () => ph('Performance','How much of your PC KIVO uses.', seg(['Battery','Balanced','Performance','Gaming'],'Balanced')) +
   `<div class="grid g4">${[['1.3%','CPU while idle'],['132 MB','memory'],['0%','GPU while idle'],['142 ms','wake → chime']].map(([v,l]) => `<div class="tile stat"><div class="v">${v}</div><div class="l">${l}</div></div>`).join('')}</div>` +
   sect('Response times · median') + group(li('','Wake → chime','','<span class="meta">142 ms</span>'), li('','End of speech → text','','<span class="meta">260 ms</span>'), li('','Simple command → done','','<span class="meta">180 ms</span>'), li('','Question → first spoken word','','<span class="meta">1.1 s</span>')) +
   sect('Loaded models') + group(li('mic','Wake word and voice detection','Always loaded · 18 MB', tag('Loaded','g')), li('wave','Moonshine','Unloads after 10 min idle · 190 MB', tag('Warm','a')), li('wave','Kokoro','Loads in about 0.4 s', tag('Unloaded'))),
 settings: () => { const live = (opts, key) => seg(opts, S[key], v => `data-set="${key}" data-val="${v}"`); return ph('Settings','') +
   sect('Appearance') + group(
-    li('sparkle','Theme','', live([['light','Light'],['dark','Dark']],'theme') + '<button class="btn sm plain">Match Windows</button>'),
-    li('eye','Accent color','Selection, focus and status. Buttons stay black and white.', swatches()),
-    li('sliders','Density','', live([['comfortable','Comfortable'],['compact','Compact']],'density')),
-    li('info','Text size','', live([['normal','Default'],['large','Large']],'textsize')),
-    li('window','Transparency','Mica background on Windows 11', tog(true)),
-    li('refresh','Motion','', seg(['Match Windows','Full','Reduced'],'Match Windows'))) +
-  sect('Island') + group(li('window','Position','', seg(['Top','Bottom','Where I drag it'],'Top')), li('sliders','Size','', seg(['Compact','Standard','Large'],'Standard')), li('chat','Live transcript','', tog(true)), li('music','Live activities','Music, timers, downloads, tasks', tog(true)), li('undo','Undo after changes','Show Undo for a few seconds', tog(true)), li('sparkle','Wake glow','', tog(false)), li('clock','Hide after answer','', seg(['2 s','4 s','8 s','Never'],'4 s'))) +
-  sect('General') + group(li('power','Open KIVO when Windows starts','Adds KIVO to Windows startup apps', tog(false)), li('window','Keep running when closed','KIVO stays in the system tray so “Hey Kivo” keeps working', tog(true)), li('globe','Language','English · हिन्दी (alpha) · ਪੰਜਾਬੀ (alpha)', chev,'click'), li('users','People','Separate profiles for each person on this PC', pill('Later'))) +
+    li('contrast','Theme','', live([['light','Light'],['dark','Dark']],'theme') + '<button class="btn sm plain">Match Windows</button>'),
+    li('palette','Accent color','Selection, focus and status. Buttons stay black and white.', swatches()),
+    li('rows','Density','', live([['comfortable','Comfortable'],['compact','Compact']],'density')),
+    li('type','Text size','', live([['normal','Default'],['large','Large']],'textsize')),
+    li('layers','Transparency','Mica background on Windows 11', tog(true)),
+    li('motion','Motion','', seg(['Match Windows','Full','Reduced'],'Match Windows'))) +
+  sect('Island') + group(li('island','Position','', seg(['Top','Bottom','Where I drag it'],'Top')), li('resize','Size','', seg(['Compact','Standard','Large'],'Standard')), li('chat','Live transcript','', tog(true)), li('island','Live activities','Music, timers, downloads, tasks', tog(true)), li('undo','Undo after changes','Show Undo for a few seconds', tog(true)), li('glow','Wake glow','', tog(false)), li('clock','Hide after answer','', seg(['2 s','4 s','8 s','Never'],'4 s'))) +
+  sect('General') + group(li('power','Open KIVO when Windows starts','Adds KIVO to Windows startup apps', tog(false)), li('tray','Keep running when closed','KIVO stays in the system tray so “Hey Kivo” keeps working', tog(true)), li('globe','Language','English · हिन्दी (alpha) · ਪੰਜਾਬੀ (alpha)', chev,'click'), li('users','People','Separate profiles for each person on this PC', pill('Later'))) +
   sect('Shortcuts') + group(li('mic','Hold to talk','', keys('Ctrl','Space')), li('chat','Type to KIVO','', keys('Ctrl','Shift','Space')), li('search','Search KIVO','', keys('Ctrl','K')), li('shield','Switch permission mode','', keys('Ctrl','Shift','M')), li('stop','Stop everything','', keys('Ctrl','Alt','Shift','Esc'))) +
   sect('Updates') + group(li('refresh','Channel','', seg(['Stable','Beta','Experimental'],'Stable')), li('info','KIVO 0.1.0','Up to date','<button class="btn sm">Check</button>')); },
 diagnostics: () => ph('Diagnostics','Check that everything works.', `<button class="btn">${I('refresh')}Run checks</button><button class="btn pri">Create report</button>`) +
   group(...[['Microphone','USB Headset · good level',1],['Wake word','No false wakes today',1],['Speech in and out','Moonshine, Kokoro',1],['Echo cancellation','Windows echo cancellation active',1],['Brains','Claude Code, OpenRouter, Ollama',1],['Browser extension','Not installed',0],['Audit log','1,204 entries · verified',1]].map(([a,b,ok]) => li(ok?`<span class="ok">${I('check')}</span>`:`<span style="color:var(--orange);display:inline-flex">${I('alert')}</span>`, a, b, ok?'':'<button class="btn sm">Fix</button>'))) +
   `<p class="note">Reports never include passwords, sign-in tokens or what you said. You review them before sharing.</p>`,
 about: () => `<div style="display:flex;flex-direction:column;align-items:center;text-align:center;padding:30px 0 22px"><div class="home" style="padding:0"><div class="big" style="width:72px;height:72px"><span class="orb" style="width:28px;height:28px"></span></div></div><h2 style="font-family:var(--disp);margin:0;font-size:22px">KIVO</h2><p style="color:var(--text-2);margin:4px 0 0">Knowledge · Intelligence · Voice · Operations<br>Version 0.1.0 · Stable</p></div>` +
-  `<div class="narrow" style="margin:0 auto">${group(li('info','Licenses','Open-source components and model attributions', chev,'click'), li('shield','Security policy','', I('ext')), li('code','Source code','github.com/MadBlast0/K.I.V.O', I('ext')))}</div>`
+  `<div class="narrow" style="margin:0 auto">${group(li('file','Licenses','Open-source components and model attributions', chev,'click'), li('shield','Security policy','', I('ext')), li('code','Source code','github.com/MadBlast0/K.I.V.O', I('ext')))}</div>`
 };
 
 const ccHTML = () => `
@@ -957,17 +1020,17 @@ const ONB = [
   [2,'Brain', () => `<div class="eb">Brain · optional</div><h2>Connect a brain</h2><p class="sub">For questions and bigger tasks. Commands like “mute” never need one. Sign in; no keys.</p>
     ${group(li(mono('CC','#C96442'),'Claude Code','Found on this PC','<button class="btn sm pri">Connect</button>'), li(mono('CX','#10A37F'),'Codex','Sign in with ChatGPT','<button class="btn sm">Connect</button>'), li(mono('GC','#4285F4'),'Gemini','Sign in with Google · free daily allowance', pill('Free','g')+'<button class="btn sm">Connect</button>'), li(mono('OR','#4B4BD6'),'OpenRouter','Many models, one sign-in','<button class="btn sm">Connect</button>'), li(mono('OL','#1D1D1F'),'Ollama','Found on this PC · works offline', tag('Detected','g')+'<button class="btn sm">Use</button>'))}`],
   [2,'Apps & tools', () => `<div class="eb">Brain · optional</div><h2>Connect your apps and tools</h2><p class="sub">Let KIVO work with the apps you use. Skip this and add them anytime in Connectors.</p>
-    ${sect('Works right away')}${group(li('music','Media controls','Spotify, YouTube Music and other players', tag('On','g')), li('term','Developer tools','git, VS Code, Terminal · found on this PC', tag('On','g')))}
+    ${sect('Works right away')}${group(li('music','Media controls','Spotify, YouTube Music and other players', tag('On','g')), li('code','Developer tools','git, VS Code, Terminal · found on this PC', tag('On','g')))}
     ${sect('Connect with one sign-in')}${group(li(mono('GC','#1A73E8'),'Google Calendar','“What’s next today?”','<button class="btn sm">Connect</button>'), li(mono('GH','#24292F'),'GitHub','Issues and pull requests','<button class="btn sm">Connect</button>'), li(mono('NO','#191919'),'Notion','Pages and notes','<button class="btn sm">Connect</button>'), li('globe','Browser extension','Read and act on your open tabs','<button class="btn sm">Install</button>'))}
-    ${sect('Advanced')}${group(li('server','MCP server','Add tools from any MCP server','<button class="btn sm plain">Add</button>'), li('sparkle','Skills','Import skills made for Claude, Codex or Gemini','<button class="btn sm plain">Import</button>'))}`],
+    ${sect('Advanced')}${group(li('server','MCP server','Add tools from any MCP server','<button class="btn sm plain">Add</button>'), li('skill','Skills','Import skills made for Claude, Codex or Gemini','<button class="btn sm plain">Import</button>'))}`],
   [3,'Permissions', () => `<div class="eb">Control · 1 of 3</div><h2>How much can KIVO do on its own?</h2><p class="sub">Switch anytime from the Island or the tray.</p>
     <div style="display:flex;flex-direction:column;gap:8px">${MODES.filter(m=>m[0]!=='bypass').map(([k,n,d,x]) => option(n, d, S.mode===k, x==='Recommended'?pill('Recommended','a'):'', `data-set="mode" data-val="${k}"`)).join('')}</div>
     <p class="note">Deleting, sending, paying and security changes always ask. Bypass mode, which skips even that, can be turned on later in Settings.</p>`],
   [3,'Look & feel', () => `<div class="eb">Control · 2 of 3</div><h2>Make it yours</h2><p class="sub">This is the Island. It appears when you talk to KIVO.</p>
     <div class="mini"><div class="wallp"></div><div class="dapp"><div class="tb">Notes</div></div><div class="island show" data-isl="speaking"></div></div>
-    <div style="margin-top:12px">${group(li('sparkle','Theme','', seg([['light','Light'],['dark','Dark']], S.theme, v => `data-set="theme" data-val="${v}"`)), li('eye','Accent','', swatches()), li('window','Island position','', seg(['Top','Bottom'],'Top')), li('wave','Chimes','When KIVO starts and stops listening', tog(true)))}</div>`],
+    <div style="margin-top:12px">${group(li('contrast','Theme','', seg([['light','Light'],['dark','Dark']], S.theme, v => `data-set="theme" data-val="${v}"`)), li('palette','Accent','', swatches()), li('island','Island position','', seg(['Top','Bottom'],'Top')), li('volume','Chimes','When KIVO starts and stops listening', tog(true)))}</div>`],
   [3,'Startup', () => `<div class="eb">Control · 3 of 3</div><h2>Keep KIVO ready</h2><p class="sub">For “Hey Kivo” to work, KIVO runs quietly in the background, using about 1% of your processor. You can also open it with Windows.</p>
-    ${group(li('power','Open KIVO when Windows starts','Adds KIVO to Windows startup apps', tog(false)), li('window','Keep running when I close the window','Quit anytime from the tray icon', tog(true)))}
+    ${group(li('power','Open KIVO when Windows starts','Adds KIVO to Windows startup apps', tog(false)), li('tray','Keep running when I close the window','Quit anytime from the tray icon', tog(true)))}
     <div class="tile" style="margin-top:12px;display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--text-2)"><span class="mark"></span>KIVO lives in the system tray, next to the clock.</div>`],
   [4,'Try it', () => `<div class="eb">Ready</div><h2>You’re all set</h2><p class="sub">Say <b>“Hey Kivo, what time is it?”</b>, or watch it here.</p>
     <div class="mini" style="height:240px"><div class="wallp"></div><div class="dapp"><div class="tb">Notes</div></div><div class="island" id="obIsland"></div></div>
@@ -1083,7 +1146,7 @@ const compHTML = () => {
     ${c('Plan approval', `<div class="stack"><div class="island static" data-isl="plan"></div></div>`, 'custom · Plan-first mode')}
     ${c('Task steps', `<div style="width:100%">${[['ok','Inspect project'],['run','Analyze failure'],['','Change code']].map(([s,x]) => `<div class="step-row" style="${s?'':'opacity:.5'}">${s==='ok'?`<span class="ok">${I('check')}</span>`:s==='run'?'<span class="spin"></span>':'<span class="rad"></span>'}${x}</div>`).join('')}</div>`, 'custom · task graph')}
     ${c('Context meter', `<div style="width:100%"><div class="ctxbar">${[['var(--text)',40],['var(--acc)',27],['#8E8E93',7],['#32D74B',18],['#FF9F0A',8]].map(([col,w]) => `<i style="width:${w}%;background:${col}"></i>`).join('')}</div><div style="margin-top:10px"><span class="cmeter"><span class="m"><span style="width:18%"></span></span>18% of context</span></div></div>`, 'custom · Context page and chat header')}
-    ${c('Skill row', group(li('sparkle','pdf-tools','Fill, merge and split PDFs', pill('Runs scripts','o')+tog(true))), 'custom · Agent Skills (SKILL.md)')}
+    ${c('Skill row', group(li('skill','pdf-tools','Fill, merge and split PDFs', pill('Runs scripts','o')+tog(true))), 'custom · Agent Skills (SKILL.md)')}
     ${c('Provider row', group(li(mono('CC','#C96442'),'Claude Code','Ready', tag('Ready','g')), li(mono('CX','#10A37F'),'Codex','Signing in…','<span class="spin"></span>'), li(mono('GC','#4285F4'),'Gemini CLI','Signed out','<button class="btn sm pri">Sign in</button>')), 'custom')}
   </div>
   ${gs('Overlays')}
@@ -1107,7 +1170,7 @@ const MODALS = {
     <div class="mf"><button class="btn" data-close>Cancel</button><button class="btn pri" data-close data-toast="Wake word added">Add</button></div></div>`,
   routine: () => `<div class="modal"><div class="mh"><div><h3>New routine</h3><p>Describe it, or start from a template.</p></div><button class="btn sm ic plain" data-close aria-label="Close">${I('x')}</button></div>
     <div class="mb"><div class="field">${I('sparkle')}<input value="When I say work mode, open VS Code and Slack and turn on Focus"></div><p class="note" style="margin:6px 2px 0">KIVO drafts the steps; you review them before saving.</p>
-    ${sect('Templates')}${group(li('routine','Work mode','Open apps and turn on Focus',chev,'click'), li('clock','Focus timer','Timer and Do Not Disturb',chev,'click'), li('users','Meeting','Mute, headset, calendar link',chev,'click'), li('power','Goodnight','Close apps, then sleep (asks first)',chev,'click'))}</div>
+    ${sect('Templates')}${group(li('routine','Work mode','Open apps and turn on Focus',chev,'click'), li('clock','Focus timer','Timer and Do Not Disturb',chev,'click'), li('users','Meeting','Mute, headset, calendar link',chev,'click'), li('moon','Goodnight','Close apps, then sleep (asks first)',chev,'click'))}</div>
     <div class="mf"><button class="btn" data-close>Cancel</button><button class="btn pri" data-close>Continue</button></div></div>`,
   launch: () => `<div class="modal"><div class="mh"><div><h3>Start an agent</h3><p>Or just say “Hey Kivo, open Claude in K.I.V.O with auto mode”.</p></div><button class="btn sm ic plain" data-close aria-label="Close">${I('x')}</button></div>
     <div class="mb">${group(li(mono('CC','#C96442'),'Agent','', `<span class="select">Claude Code${chev}</span>`), li('folder','Folder','', `<span class="select">K.I.V.O${chev}</span>`), li('window','Where','', seg(['Background','Terminal'],'Terminal')), li('shield','Permission mode','', seg(['Ask','Auto','Bypass'],'Auto')))}
@@ -1123,9 +1186,9 @@ const SHEETS = {
   cu: () => `<div class="sh"><h3>Computer use</h3><button class="btn sm ic plain" data-closesheet aria-label="Close">${I('x')}</button></div><div class="sb">
     <p style="color:var(--text-2);margin:0 0 14px">When nothing else works, KIVO can look at your screen and use the mouse and keyboard. It’s slower and costs more, so it stays off until you turn it on.</p>
     ${group(li('hand','Allow computer use','', tog(false)))}
-    ${sect('While it’s working')}${group(li('window','Screen frame','', seg(['Off','Subtle','Full'],'Subtle')), li('cursor','Show KIVO’s cursor','A second pointer shows where it acts', tog(true)), li('eye','Highlight the target','A ring around what it’s about to click', tog(true)), li('refresh','Island controls','Pause and Stop while it works', tog(true)))}
-    ${sect('Control')}${group(li('check','Approve each step','', seg(['Always','First 10 tasks','Never'],'First 10 tasks')), li('hand','Pause when I use the mouse','Waits, then resumes when you stop', tog(true)), li('zap','Speed','', seg(['Careful','Normal','Fast'],'Normal')))}
-    ${sect('Limits')}${group(li('list','Max steps per task','', `<div class="field" style="width:70px"><input value="25"></div>`), li('chart','Max cost per task','', `<div class="field" style="width:80px">$<input value="0.50"></div>`), li('clock','Time limit','', seg(['1 min','2 min','5 min'],'2 min')))}
+    ${sect('While it’s working')}${group(li('frame','Screen frame','', seg(['Off','Subtle','Full'],'Subtle')), li('cursor','Show KIVO’s cursor','A second pointer shows where it acts', tog(true)), li('eye','Highlight the target','A ring around what it’s about to click', tog(true)), li('island','Island controls','Pause and Stop while it works', tog(true)))}
+    ${sect('Control')}${group(li('check','Approve each step','', seg(['Always','First 10 tasks','Never'],'First 10 tasks')), li('mouse','Pause when I use the mouse','Waits, then resumes when you stop', tog(true)), li('zap','Speed','', seg(['Careful','Normal','Fast'],'Normal')))}
+    ${sect('Limits')}${group(li('list','Max steps per task','', `<div class="field" style="width:70px"><input value="25"></div>`), li('coin','Max cost per task','', `<div class="field" style="width:80px">$<input value="0.50"></div>`), li('clock','Time limit','', seg(['1 min','2 min','5 min'],'2 min')))}
     ${sect('Apps')}${group(li('check','Allowed apps','Notes, Photoshop, Figma', chev,'click'), li('lock','Never touch','Password managers, banking, Windows Security', chev,'click'))}
     <p class="note">Screenshots stay in memory and are never saved.</p></div>`,
   preview: () => `<div class="sh"><h3>What the AI sees</h3><button class="btn sm ic plain" data-closesheet aria-label="Close">${I('x')}</button></div><div class="sb">
@@ -1145,7 +1208,7 @@ release-notes, meeting-brief, pdf-tools</div>
     <div style="display:flex;flex-direction:column;gap:8px">${MODES.map(([k,n,d,x]) => option(n, d, S.mode===k, x==='Recommended'?pill('Recommended','a'):k==='bypass'?pill('Use with care','r'):'', k==='bypass'&&S.mode!=='bypass'?'data-modal="bypass"':`data-set="mode" data-val="${k}"`)).join('')}</div>
     <p class="note">${keys('Ctrl','Shift','M')} cycles modes. The Island shows the current mode while KIVO acts.</p></div>`
 };
-const PAL = [['Settings','mic','Wake words','go:voice'],['Settings','shield','Permission mode','sheet:mode'],['Settings','hand','Computer use options','sheet:cu'],['Settings','eye','Accent color','go:settings'],['Settings','chart','Usage and limits','go:usage'],['Routines','routine','Run “Work mode”','toast:Work mode started'],['Routines','routine','Run “Morning brief”','toast:Morning brief started'],['Actions','plus','Add wake word','modal:wake'],['Actions','pause','Pause listening','toast:Listening paused'],['Actions','stop','Stop everything','toast:Stopped everything']];
+const PAL = [['Settings','mic','Wake words','go:voice'],['Settings','shield','Permission mode','sheet:mode'],['Settings','hand','Computer use options','sheet:cu'],['Settings','palette','Accent color','go:settings'],['Settings','chart','Usage and limits','go:usage'],['Routines','routine','Run “Work mode”','toast:Work mode started'],['Routines','routine','Run “Morning brief”','toast:Morning brief started'],['Actions','plus','Add wake word','modal:wake'],['Actions','pause','Pause listening','toast:Listening paused'],['Actions','stop','Stop everything','toast:Stopped everything']];
 const palList = q => { const r = PAL.filter(x => x[2].toLowerCase().includes(q.toLowerCase())); let g = '';
   return r.length ? r.map((x,i) => { const h = x[0] !== g ? `<div class="pg">${(g = x[0])}</div>` : ''; return h + `<div class="pi ${i===0?'sel':''}" data-pal="${x[3]}">${I(x[1])}${x[2]}<span class="k">${x[3].startsWith('go')||x[3].startsWith('sheet')?'Open':x[3].startsWith('toast')?'Run':'Action'}</span></div>`; }).join('')
     : `<div class="pg">Ask KIVO</div><div class="pi sel">${I('sparkle')}“${q.replace(/[<>&]/g,'')}”<span class="k">↵</span></div>`; };
@@ -1154,6 +1217,7 @@ const paletteHTML = () => `<div class="palette" role="dialog" aria-label="Search
 
 /* ════════ Render + events ════════ */
 const page = document.getElementById('page'), scrim = document.getElementById('scrim'), box = document.getElementById('overlayBox'), sheet = document.getElementById('sheet'), toastEl = document.getElementById('ktoast');
+let tabChanged = false, lastInd = null, onbDir = 0, welcomeTimer;
 const render = () => {
   R.dataset.theme = S.theme; R.dataset.accent = S.accent; R.dataset.density = S.density; R.dataset.textsize = S.textsize; save();
   document.querySelectorAll('#secTabs button').forEach(b => b.setAttribute('aria-pressed', b.dataset.sec === S.sec));
@@ -1164,6 +1228,20 @@ const render = () => {
   page.innerHTML = { overlay:overlayHTML, cc:ccHTML, onb:onbHTML, sys:sysHTML, comp:compHTML }[S.sec]();
   page.dataset.k = S.sec + S.page;
   const cc = document.getElementById('cc'); if (cc && samePage) cc.scrollTop = ccScroll; window.scrollTo(0, y);
+  // motion: stagger content when the page (not just a setting) changes
+  if (!samePage || tabChanged) ['#cc','.gal','.sgrid','.sheet-grid','.tokens','#page > .intro'].forEach(sel => document.querySelectorAll(sel).forEach(c => { [...c.children].forEach((ch,i) => ch.style.setProperty('--i', Math.min(i, 12))); c.classList.add('anim-in'); }));
+  tabChanged = false;
+  // sliding tab indicator
+  const ind = document.querySelector('.ptabs .ind'), act = document.querySelector('.ptabs [aria-selected="true"]');
+  if (ind && act) { const to = {l: act.offsetLeft, w: act.offsetWidth}; if (lastInd && lastInd.pg === S.page) { ind.style.left = lastInd.l + 'px'; ind.style.width = lastInd.w + 'px'; ind.getBoundingClientRect(); } ind.style.left = to.l + 'px'; ind.style.width = to.w + 'px'; lastInd = {pg: S.page, ...to}; }
+  // onboarding direction
+  const col = document.querySelector('.ob .col'); if (col && onbDir) col.classList.add(onbDir > 0 ? 'fwd' : 'back'); onbDir = 0;
+  // reveal system surfaces as they scroll in
+  const sfs = document.querySelectorAll('.sf'); if (sfs.length) { const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('shown'); io.unobserve(e.target); } }), {threshold:.15}); sfs.forEach((el,i) => { el.style.transitionDelay = (i % 3) * 60 + 'ms'; io.observe(el); }); }
+  // onboarding welcome: the Island demonstrates itself
+  clearInterval(welcomeTimer); const w = document.querySelector('.welcome [data-isl]');
+  if (w) { const seq = [{state:'listening',partial:'“Hey Kivo, what’s on my calendar today?”'},{state:'thinking'},{state:'speaking'}]; let k = 0;
+    welcomeTimer = setInterval(() => { k = (k + 1) % seq.length; const st = seq[k]; drawIsland(w, st); if (st.state === 'speaking') { w.querySelector('.body').innerHTML = '<div class="q">What’s on my calendar today?</div><div class="a">Design review with Maya at 3, then gym at 6.</div>'; w.style.height = (w.querySelector('.row').offsetHeight + w.querySelector('.body').scrollHeight) + 'px'; } staticWave(w); }, 2600); }
   const isl = document.getElementById('ovIsland'); if (isl) { drawIsland(isl, OV, 'ovWave'); kick(); }
   document.querySelectorAll('[data-isl]').forEach(el => { const k = el.dataset.isl;
     if (k === 'welcome') { drawIsland(el, {state:'listening', partial:'“Hey Kivo, what’s on my calendar today?”'}); staticWave(el); return; }
@@ -1198,7 +1276,7 @@ document.addEventListener('click', e => {
   if (d.set) { const was = S[d.set]; S[d.set] = d.val; if (d.set==='mode') { closeSheet(); if (was !== d.val) toast(`${modeName(d.val)} mode`); } render(); return; }
   if (d.bypass !== undefined) { S.mode = 'bypass'; closeOverlay(); closeSheet(); render(); toast('Bypass is on for 1 hour'); return; }
   if (d.go) { closeSheet(); goTo(d.go); render(); return; }
-  if (d.tab) { S.tabs[S.page] = d.tab; render(); return; }
+  if (d.tab) { S.tabs[S.page] = d.tab; tabChanged = true; render(); return; }
   if (d.palette !== undefined) { openPalette(); return; }
   if (d.pal) { runPal(d.pal); return; }
   if (d.sheet) { openSheet(d.sheet); return; }
@@ -1211,7 +1289,7 @@ document.addEventListener('click', e => {
   if (d.ovo) { OV[d.ovo] = d.ovo==='pos' ? (OV.pos==='top'?'bottom':'top') : !OV[d.ovo]; render(); if (d.ovo==='glow' && OV.glow) playReq(); return; }
   if (d.ovf) { OV.frame = d.ovf; OV.cu = true; render(); return; }
   if (el.id === 'ovPlay') { playReq(); return; }
-  if (d.onbnav) { S.onb = Math.max(0, Math.min(ONB.length-1, S.onb + +d.onbnav)); render(); return; }
+  if (d.onbnav) { onbDir = +d.onbnav; S.onb = Math.max(0, Math.min(ONB.length-1, S.onb + +d.onbnav)); render(); return; }
   if (d.finish !== undefined) { S.onb = 0; S.sec = 'cc'; S.page = 'home'; render(); window.scrollTo(0,0); toast('KIVO is ready. Say “Hey Kivo”'); return; }
   if (d.obtry !== undefined) { playMini(); return; }
   if (d.act === 'tog') { el.setAttribute('aria-checked', el.getAttribute('aria-checked') !== 'true'); return; }
