@@ -1,5 +1,10 @@
 # Memory and context storage
 
+> **Superseded in part (2026-09-21):** the knowledge-graph memory, the Markdown mirror, capture
+> modes (Only when I ask / **Suggest** / Workspace notes), workspaces, instructions, and the
+> context budgets per model class are specified in [CONVERSATION.md](CONVERSATION.md) §2, §4 and
+> §6. This file still defines the base tables and retention.
+
 Status: Draft v1, 2026-09-21. Implements plan §62–65. Research:
 [architecture-and-platform/REPORT.md §6](../research/architecture-and-platform/REPORT.md).
 

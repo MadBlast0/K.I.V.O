@@ -113,6 +113,23 @@ WakeWord { id, phrase, phonetic_spelling?, engine: Trained|Kws, model_path?, ena
 - **Echo handling:** capture continues during an earcon. AEC removes it, and the VAD/STT input is
   additionally gated for the earcon's duration plus 50 ms.
 - **Placeholders:** the Kenney CC0 packs, replaced by a custom KIVO motif before beta.
+- **Conversational cues** (added 2026-09-21): `question` (a rising 2-note "needs your answer"
+  cue), `approved` (a soft tick) and `cancelled` (a short descending tone). See
+  [CONVERSATION.md §7](CONVERSATION.md).
+- **Sound sets:** the user picks a set, and each set covers every cue plus a **notification**
+  sound for proactive messages:
+
+  | Set | Character |
+  |---|---|
+  | **Soft** (default) | Rounded marimba-like tones |
+  | Glass | Bright, airy bells |
+  | Pulse | Short electronic blips |
+  | Wood | Warm, percussive |
+  | Minimal | Single quiet clicks |
+  | Custom | User-imported `.wav`/`.ogg` per cue |
+
+  Settings → Sounds offers a set picker with preview, per-cue on/off and override, and volume
+  relative to the system. The notification sound can be set separately.
 
 ## 7. Barge-in and cancellation
 

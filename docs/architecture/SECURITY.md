@@ -79,6 +79,11 @@ Context = { session: owner|guest, speaker_confidence, profile: MaxSafety|Balance
   revoke them.
 - **Task grants:** permissions granted when a background task is created. The task cannot exceed
   them.
+- **Voice confirmations:** Medium can be approved by voice when speaker recognition says it's
+  the owner (or the device user is signed in with recognition off). For High, a voice approval
+  triggers Windows Hello (face recognition is hands-free), and voice alone is never enough.
+  Guests can't approve, and speech heard during KIVO's own TTS is ignored
+  ([CONVERSATION.md §7](CONVERSATION.md)).
 - **Confirmation UX:** the card shows the exact action in plain words, the target, why it is
   needed, and its provenance (for example "requested after reading example.com"). Buttons are
   Allow once / Always for… / Deny. Confirmations never auto-dismiss.

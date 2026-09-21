@@ -33,6 +33,15 @@ decision changes, update the entry and note the date. Do not silently rewrite it
 | **Conversation conveniences** | Undo in the Island, "What can I say?", follow-up without the wake word, target-app icon, Ctrl+K palette ([UX.md §8.1](architecture/UX.md)) |
 | **People profiles** | Planned for after the MVP. Data is scoped by `profile_id` from M0 |
 | **Mockup v3** | One Island-based theme: system font, macOS-style grouped lists, ink buttons, black Island surfaces (palette, toasts, onboarding welcome), accent only for state. Onboarding Finish opens the Control Center. [kivo-app.html](design/mockups/kivo-app.html) |
+| **Startup wording** | "Open KIVO when Windows starts" (matches Windows' "Startup apps"), not "Start when I sign in" |
+| **Voice confirmations** | Every Island decision can be answered by voice ("approve / cancel / wait / change it / why?"), with a local grammar (EN + HI), a listen window without the wake word, and a question earcon. High risk: voice triggers Windows Hello ([CONVERSATION.md §7](architecture/CONVERSATION.md)) |
+| **Sound sets** | Soft (default), Glass, Pulse, Wood, Minimal, Custom; per-cue toggles; a separate notification sound |
+| **Context** | A per-model context budget, with running-summary compaction, recall, and prompt caching; full history kept locally ([CONVERSATION.md §2](architecture/CONVERSATION.md)) |
+| **Instructions** | KIVO keeps global and per-workspace instructions in its own data folder as editable Markdown. It reads project `CLAUDE.md`/`AGENTS.md` but never writes them unless asked |
+| **Memory v2** | Built-in local knowledge graph (SQLite) with a Markdown mirror. Capture defaults to **Suggest**, with opt-in automatic workspace notes; no passive PC monitoring. KIVO shares memory with the agents it launches through its MCP server (with permission). Third-party memory MCPs are optional connectors, not bundled |
+| **Driving other AIs** | ACP sessions (preferred), visible terminal agents (Windows Terminal + UIA typing), desktop AI apps (Claude Desktop, ChatGPT) via UIA, all with a voice-editable prompt draft before sending. Launching an agent in bypass/yolo mode is High risk |
+| **Free options** | Local models, Gemini CLI (free Google sign-in, about 1,000/day), Codex with ChatGPT Free (small), OpenRouter free models. Labelled "Free" in the UI; KIVO never pays for users' AI |
+| **Local model manager** | Download and delete speech-to-text, text-to-speech and embedding models in-app (Voice → Models on this PC) |
 | **GitHub repo** | Applied: private vulnerability reporting, Dependabot alerts + security updates, secret scanning + push protection, description/topics, wiki off, squash-only merges + delete branch on merge, Discussions on, a ruleset on `main` (no force-push, no deletion) |
 
 ## 2026-09-21 — Owner answers (pre-M0)

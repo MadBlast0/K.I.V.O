@@ -182,6 +182,13 @@ Specs: [architecture/](architecture/ARCHITECTURE.md) · Decisions: [DECISIONS.md
 | "What can I say?" + Ctrl+K palette | same | M5 (needs the app registry), M7 (palette) |
 | Computer-use controller UI and options | [CAPABILITIES.md §4.1](architecture/CAPABILITIES.md) | M8 |
 | People profiles | [UX.md §8.2](architecture/UX.md) | Post-M9 (`profile_id` scoping from M0) |
+| Voice confirmations and question/approved/cancelled cues | [CONVERSATION.md §7](architecture/CONVERSATION.md) | M2 (grammar and listen window); Hello hand-off in M4 |
+| Sound sets | [VOICE.md §6](architecture/VOICE.md) | M2 (Soft set); other sets in M8 |
+| Threads, context budgets, compaction, prompt caching | [CONVERSATION.md §1–2](architecture/CONVERSATION.md) | M3 |
+| Instructions + workspaces | same §4 | M5 |
+| Memory v2 (graph, Markdown mirror, capture modes, MCP sharing) | same §6 | M7 (explicit + Suggest), M8 (workspace notes, graph view) |
+| Driving other AIs (ACP sessions, terminal agents, desktop AI apps, prompt drafts) | same §5 | M3 (ACP), M5 (terminal + draft), M8 (desktop apps) |
+| Model manager (download/delete) | [DISTRIBUTION.md §4](architecture/DISTRIBUTION.md) | M1 |
 | KIVO Remote (phone) | same §4 | Post-M9 track |
 
 ## Owner inputs (answered 2026-09-21)
