@@ -3,6 +3,8 @@
 use crate::harness::{Plan, Suite};
 
 #[cfg(windows)]
+mod audio;
+#[cfg(windows)]
 mod idle;
 mod ipc;
 #[cfg(windows)]
@@ -13,6 +15,10 @@ pub const ALL: &[(&str, &str)] = &[
     (
         "ipc",
         "runtime ↔ UI channel: connect, ping and state round trips",
+    ),
+    (
+        "audio",
+        "microphone held open and playback: CPU, packet timing, dropped frames, start latency",
     ),
     (
         "idle",
@@ -27,6 +33,8 @@ pub const ALL: &[(&str, &str)] = &[
 pub fn create(name: &str, plan: Plan) -> Result<Box<dyn Suite>, String> {
     match name {
         "ipc" => Ok(Box::new(ipc::Ipc::start()?)),
+        #[cfg(windows)]
+        "audio" => Ok(Box::new(audio::Audio::start()?)),
         #[cfg(windows)]
         "idle" => Ok(Box::new(idle::Idle::start(plan.runs, plan.warmup)?)),
         #[cfg(windows)]

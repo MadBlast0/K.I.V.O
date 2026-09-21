@@ -202,7 +202,7 @@ Status marks and the build protocol: [docs/README.md](../README.md). Engine choi
 
 **Pipeline (§1)**
 
-- [ ] **VOICE-01** · M0 · Capture through `AudioIo` (WASAPI via windows-rs, cpal fallback) and playback, measured for idle CPU in the audio spike (§1)
+- [x] **VOICE-01** · M0 · Capture through `AudioIo` (WASAPI via windows-rs, cpal fallback) and playback, measured for idle CPU in the audio spike (§1) → done: `crates/kivo-platform-windows/src/audio.rs` (`WindowsAudio`: device lists with friendly names and defaults; WASAPI shared mode, event-driven, 32-bit float at the device rate with AUTOCONVERTPCM, stream thread under MMCSS "Audio", stops on drop) · verified: tests capture 24 000 frames in 500 ms at 48 kHz from the Realtek mic array and play to the default output; `kivo-bench audio`: holding the mic open costs 0.05% of the machine, 10 ms packets (p99 11.2 ms), 100% of frames delivered, playback starts in 39 ms · note: no cpal fallback: on Windows cpal is itself WASAPI, and AUTOCONVERTPCM accepts float on every device (DECISIONS)
 - [ ] **VOICE-02** · M1 · Resample to 16 kHz mono (`rubato`); 10 ms internal frames batched to 80 ms for models (§1)
 - [ ] **VOICE-03** · M1 · Capture on an MMCSS "Audio" thread writing a lock-free ring buffer of ≥ 3 s; detection on one worker thread with EcoQoS while idle (§1)
 - [ ] **VOICE-04** · M1 · Energy gate → Silero v6 VAD (`ort`) (§1, §3)
