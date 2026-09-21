@@ -108,7 +108,7 @@ The mockup uses CSS; production uses **Motion** (motion.dev) with the same value
 | Navigation | A · sidebar with groups / B · icon rail / C · top tabs |
 | Home | A · overview dashboard / B · minimal |
 | Accent | Blue / Green / Coral / Mono |
-| Density | Comfortable / Compact |
+| Density | Comfortable only (the Compact option was removed; 2026-09-21) |
 | Default theme | Follow system (both themes are designed) |
 
 **Proposed structure changes from the plan** (all reflected in the mockup):
