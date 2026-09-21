@@ -78,6 +78,27 @@ impl Core {
         self.request(SessionInput::Resume, "KIVO isn't paused")
     }
 
+    /// Push-to-talk pressed: start listening (VOICE-41).
+    pub fn start_listening(&self) -> Result<SessionState, Refused> {
+        self.request(
+            SessionInput::Activate,
+            "KIVO can listen only when it isn't busy or paused",
+        )
+    }
+
+    /// Push-to-talk released. Speech recognition joins in M1; until then there is nothing to do
+    /// with what was heard, so the turn ends as cancelled instead of pretending to think.
+    pub fn stop_listening(&self) -> Result<SessionState, Refused> {
+        if self.state.borrow().session != SessionState::Listening {
+            return Err(Refused("KIVO isn't listening".into()));
+        }
+        self.request(SessionInput::Cancel, "KIVO isn't listening")?;
+        self.request(
+            SessionInput::InterruptionHandled { listen: false },
+            "KIVO isn't stopping",
+        )
+    }
+
     /// Asks the app to show the Control Center, optionally on a page. If the app isn't running,
     /// the supervisor launches it for this.
     pub fn open_control_center(&self, page: Option<&str>) {
@@ -145,6 +166,27 @@ mod tests {
         assert!(core.pause().is_err());
         assert_eq!(core.session(), SessionState::Paused);
         assert_eq!(core.state().borrow().revision, 1);
+    }
+
+    #[test]
+    fn push_to_talk_listens_while_held() {
+        let core = Core::new();
+        let mut state = core.state();
+        assert_eq!(core.start_listening(), Ok(SessionState::Listening));
+        assert!(core.start_listening().is_err(), "already listening");
+        assert_eq!(core.stop_listening(), Ok(SessionState::Idle));
+        assert!(core.stop_listening().is_err(), "not listening any more");
+        assert_eq!(
+            state.borrow_and_update().revision,
+            3,
+            "listening, stopping, idle"
+        );
+
+        core.pause().unwrap();
+        assert!(
+            core.start_listening().is_err(),
+            "a paused KIVO doesn't listen"
+        );
     }
 
     #[tokio::test]

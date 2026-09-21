@@ -14,6 +14,8 @@ mod machine;
 mod report;
 mod stats;
 mod suites;
+#[cfg(windows)]
+mod win;
 
 use harness::Plan;
 use machine::Machine;
@@ -66,6 +68,8 @@ fn parse(args: impl IntoIterator<Item = String>) -> Result<Options, String> {
 }
 
 fn main() -> ExitCode {
+    #[cfg(windows)]
+    win::dpi_aware();
     let options = match parse(std::env::args().skip(1)) {
         Ok(o) => o,
         Err(e) => {
@@ -119,7 +123,7 @@ fn run(options: &Options) -> Result<(), String> {
         root: options.out.clone(),
     };
     for name in &options.suites {
-        let mut suite = suites::create(name)?;
+        let mut suite = suites::create(name, options.plan)?;
         println!(
             "\n{name}: {} runs after {} warmup…",
             options.plan.runs, options.plan.warmup

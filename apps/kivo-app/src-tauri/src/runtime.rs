@@ -65,6 +65,10 @@ impl Runtime {
             update(link);
             link.clone()
         };
+        let session = (link.status == LinkStatus::Connected)
+            .then(|| link.snapshot.as_ref().map(|s| s.session))
+            .flatten();
+        crate::overlay::apply(app, session);
         let _ = app.emit(LINK_EVENT, link);
     }
 

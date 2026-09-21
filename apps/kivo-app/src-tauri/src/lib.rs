@@ -1,7 +1,8 @@
-//! KIVO's desktop app: the Control Center window (and, from M1, the overlay). It holds no state
+//! KIVO's desktop app: the Control Center window and the Island overlay. It holds no state
 //! of its own: everything comes from `kivo-runtime` over IPC (ARCHITECTURE §1, §8), and closing
 //! its window only hides it while KIVO keeps running (UX §1).
 
+mod overlay;
 mod runtime;
 
 use kivo_ipc::Link;
@@ -62,12 +63,19 @@ struct Boot {
     page: Option<String>,
 }
 
-/// Called by the webview once its listeners are registered, so nothing is missed.
+/// Called by a webview once its listeners are registered, so nothing is missed. Only the main
+/// window gets the startup page.
 #[tauri::command]
-fn ui_ready(runtime: tauri::State<'_, Runtime>, pending: tauri::State<'_, PendingPage>) -> Boot {
+fn ui_ready(
+    window: tauri::Window,
+    runtime: tauri::State<'_, Runtime>,
+    pending: tauri::State<'_, PendingPage>,
+) -> Boot {
     Boot {
         link: runtime.link(),
-        page: pending.0.lock().unwrap_or_else(|e| e.into_inner()).take(),
+        page: (window.label() == MAIN)
+            .then(|| pending.0.lock().unwrap_or_else(|e| e.into_inner()).take())
+            .flatten(),
     }
 }
 
@@ -107,6 +115,7 @@ pub fn run() {
             }
         }))
         .manage(Runtime::default())
+        .manage(overlay::Overlay::default())
         .manage(PendingPage(Mutex::new(launch.page.clone())))
         .invoke_handler(tauri::generate_handler![
             ui_ready,
@@ -124,6 +133,8 @@ pub fn run() {
             }
         })
         .setup(move |app| {
+            // Preloaded hidden, so the Island appears without loading anything (ARCHITECTURE §1).
+            overlay::create(app.handle())?;
             if !launch.background {
                 show_main_window(app.handle(), None);
             }

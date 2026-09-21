@@ -4,10 +4,12 @@
 #![cfg(windows)]
 
 mod capabilities;
+pub mod hotkeys;
 pub mod instance;
 mod system;
 pub mod tray;
 
 pub use capabilities::detect as detect_capabilities;
+pub use hotkeys::WindowsHotkeys;
 pub use system::WindowsSystemInfo;
 pub use tray::{TrayEvent, WindowsTray};

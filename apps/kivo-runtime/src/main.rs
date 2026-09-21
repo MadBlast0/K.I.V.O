@@ -8,6 +8,8 @@
 mod app;
 mod args;
 mod core;
+#[cfg(windows)]
+mod hotkeys;
 mod rpc;
 #[cfg(windows)]
 mod tray;
@@ -162,6 +164,12 @@ async fn run(args: Args, paths: &Paths, config: &kivo_core::KivoConfig) -> ExitC
         .tray_icon
         .then(|| tokio::spawn(tray::run(Arc::clone(&core), config.permissions.mode)));
 
+    #[cfg(windows)]
+    let push_to_talk = tokio::spawn(hotkeys::run(
+        Arc::clone(&core),
+        config.voice.push_to_talk.clone(),
+    ));
+
     let supervisor = (!args.no_app).then(|| {
         let initial = if args.from_app {
             None
@@ -205,8 +213,11 @@ async fn run(args: Args, paths: &Paths, config: &kivo_core::KivoConfig) -> ExitC
         Err(e) => tracing::error!(%e, "the IPC server panicked"),
     }
     #[cfg(windows)]
-    if let Some(tray) = tray {
-        let _ = tray.await;
+    {
+        if let Some(tray) = tray {
+            let _ = tray.await;
+        }
+        let _ = push_to_talk.await;
     }
     if let Some(supervisor) = supervisor {
         let _ = supervisor.await;

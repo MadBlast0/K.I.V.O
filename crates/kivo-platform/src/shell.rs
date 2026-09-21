@@ -20,7 +20,14 @@ impl fmt::Display for Chord {
 #[serde(transparent)]
 pub struct HotkeyId(pub u32);
 
-/// Global shortcuts. Presses and releases are delivered to the channel given at creation.
+/// A registered hotkey went down or came back up (push-to-talk needs both).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HotkeyEvent {
+    Pressed(HotkeyId),
+    Released(HotkeyId),
+}
+
+/// Global shortcuts. Presses and releases are delivered to the callback given at creation.
 pub trait Hotkeys: Send + Sync {
     /// Fails with `PlatformError::Conflict` when another app owns the combination.
     fn register(&self, id: HotkeyId, chord: &Chord) -> PlatformResult<()>;

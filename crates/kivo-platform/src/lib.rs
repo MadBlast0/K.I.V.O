@@ -29,8 +29,8 @@ pub use paths::Paths;
 pub use screen::{CaptureTarget, Image, Ocr, Screen, TextLine};
 pub use secrets::{SecretHandle, Secrets};
 pub use shell::{
-    Chord, HotkeyId, Hotkeys, Notification, NotificationAction, Notifications, Tray, TrayIcon,
-    TrayMenuItem,
+    Chord, HotkeyEvent, HotkeyId, Hotkeys, Notification, NotificationAction, Notifications, Tray,
+    TrayIcon, TrayMenuItem,
 };
 pub use system::{GpuInfo, SystemInfo, SystemSnapshot};
 pub use types::{DeviceId, Point, Rect, WindowId};

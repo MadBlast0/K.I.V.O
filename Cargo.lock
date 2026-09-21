@@ -1986,6 +1986,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tokio-util",
+ "windows 0.62.2",
 ]
 
 [[package]]
