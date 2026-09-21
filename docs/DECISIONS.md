@@ -47,6 +47,9 @@ decision changes, update the entry and note the date. Do not silently rewrite it
 | **Skills** | Support the open Agent Skills standard (`SKILL.md`), with progressive loading. Skills from outside are reviewed before they're enabled ([CONVERSATION.md §9](architecture/CONVERSATION.md)) |
 | **Onboarding** | Adds an optional "Connect your apps and tools" step (connectors, browser extension, MCP, skills), for 11 steps in total |
 | **Releases** | GitHub Actions: release-please + Conventional Commits → tags → `tauri-action` matrix producing a Windows NSIS `.exe` + `.msi` (x64 and ARM64), a macOS universal `.dmg`, and Linux `.AppImage`/`.deb`/`.rpm`. Stable/Beta/Experimental channels, SBOM, smoke-install tests. Mac/Linux ship as previews until the ports land ([RELEASE.md](architecture/RELEASE.md)) |
+| **Memory defaults** | **Suggest + Workspace notes both on** (each can be switched off). An Obsidian-compatible Markdown vault (front-matter tags, wikilinks, folders per type), a note detail level (Brief/Standard/Detailed), and an automatic tidy job (merge, condense, cap). A built-in memory MCP serves the vault to agents ([CONVERSATION.md §6](architecture/CONVERSATION.md)) |
+| **Mac/Linux releases** | Built in CI, not published until the ports are done |
+| **Navigation** | Grouped into 13 items with in-page tabs: Home, Chat, Tasks, Activity, Routines · Brains (Brains/Context), Agents, Voice, Extensions (Connectors/MCP/Skills) · Permissions (Mode/Capabilities/Privacy), Memory, Usage · Settings (General/Island & sounds/Performance/Diagnostics/About) |
 | **GitHub repo** | Applied: private vulnerability reporting, Dependabot alerts + security updates, secret scanning + push protection, description/topics, wiki off, squash-only merges + delete branch on merge, Discussions on, a ruleset on `main` (no force-push, no deletion) |
 
 ## 2026-09-21 — Owner answers (pre-M0)

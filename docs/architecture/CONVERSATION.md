@@ -221,6 +221,52 @@ KIVO borrows the good ideas, with its own implementation:
 **KIVO never passively records everything the user does on the PC.** Memory only comes from
 conversations and tasks KIVO took part in.
 
+**Owner decision (2026-09-21): Suggest *and* Workspace notes are both on by default**, and both
+can be switched off. Notes must be *smart*, meaning small, organized and non-duplicating:
+
+**Vault format (Obsidian-compatible):**
+
+```text
+%APPDATA%\KIVO\memory\            ← a plain Markdown "vault"; open it in Obsidian for graph view
+├─ about-me.md
+├─ people/maya.md
+├─ workspaces/k-i-v-o/
+│   ├─ overview.md                ← condensed, always-current summary of the project
+│   ├─ decisions.md               ← dated decisions
+│   └─ log/2026-09-21.md          ← session notes (auto-condensed later)
+├─ topics/rust-testing.md
+└─ .kivo/                         ← index, embeddings, graph cache (not for editing)
+```
+
+- **Format:** each note is plain Markdown with YAML front-matter (`type`, `tags`, `workspace`,
+  `sensitivity`, `created`, `updated`, `valid_until`) and `[[wikilinks]]` between notes. Obsidian
+  (or any Markdown tool) shows the **graph, tags and backlinks** with no plugin.
+- **The Memory page** navigates the vault by **tags and folders**, and has **Open folder** and
+  **Open in Obsidian** (the `obsidian://open?path=…` URI) buttons.
+- **SQLite:** stays the index (FTS, embeddings, graph edges) and is rebuilt from the files, so
+  the Markdown files are the source of truth and user edits always win.
+
+**Note detail level** (Memory settings): **Brief** · **Standard** (default) · **Detailed**.
+
+- **Session log entries:** Brief is 1–3 bullets, Standard ≤ 10 bullets, Detailed a full summary
+  with commands and outcomes.
+
+**Staying small** (a background "tidy" job, local model preferred, shown in Activity):
+
+| Rule | Default |
+|---|---|
+| Merge duplicates and near-duplicates (embedding similarity + same entity) | On |
+| Condense daily logs older than 14 days into `overview.md` / `decisions.md`, then archive the logs | On |
+| Mark superseded facts (`valid_until`) instead of deleting them | On |
+| Per-workspace size cap: after 50 KB of notes, condense harder | On |
+| Never keep secrets, credentials or content from password fields; flag personal data as `sensitivity: personal` | Always |
+| Ask before creating a new workspace or person note | On (Suggest) |
+
+**Built-in memory MCP:** KIVO's MCP server exposes `memory.search`, `memory.read`,
+`memory.write_note` (permission-gated) and `memory.tags`. That makes KIVO's vault the memory
+backend for Claude Code, Codex or any MCP client the user allows, so a separate memory server
+isn't needed.
+
 **Sharing memory with other AIs:**
 
 - The KIVO MCP server exposes read-only `memory.search` / `memory.get`, and optionally

@@ -300,6 +300,26 @@ code{font-family:var(--mono);font-size:12px;background:var(--fill);padding:1px 5
 .soundset .option{align-items:center}
 .code-edit{font-family:var(--mono);font-size:12px;line-height:1.6;background:var(--group);box-shadow:0 0 0 1px var(--border);border-radius:var(--r-m);padding:12px 14px;white-space:pre-wrap;color:var(--text)}
 .code-edit .c{color:var(--text-3)}
+.ptabs{display:flex;gap:22px;border-bottom:1px solid var(--sep);margin:-6px 0 22px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
+.ptabs button{border:0;background:transparent;padding:0 0 10px;font-size:13px;font-weight:500;color:var(--text-2);border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.ptabs button:hover{color:var(--text)}
+.ptabs button[aria-selected="true"]{color:var(--text);border-bottom-color:var(--ink)}
+.ph.sub{margin:0 0 18px;align-items:center}.ph.sub p{margin:0}
+.tags{display:flex;flex-wrap:wrap;gap:6px}
+.tags button{height:24px;padding:0 9px;border-radius:999px;border:0;background:var(--fill);font-size:12px;color:var(--text-2)}
+.tags button[aria-pressed="true"]{background:var(--ink);color:var(--ink-fg)}
+.vault{display:grid;grid-template-columns:220px 1fr;gap:var(--gap);align-items:start}
+.tree{background:var(--group);box-shadow:0 0 0 1px var(--border);border-radius:var(--r-m);padding:8px;font-size:13px}
+.tree a{display:flex;align-items:center;gap:8px;height:28px;padding:0 8px;border-radius:6px;cursor:pointer;color:var(--text)}
+.tree a .i{color:var(--text-2)}.tree a:hover{background:var(--fill)}.tree a.on{background:var(--fill-2)}
+.tree a .n{margin-left:auto;font-size:11px;color:var(--text-3)}
+.tree .in{padding-left:18px}
+.note-prev{background:var(--group);box-shadow:0 0 0 1px var(--border);border-radius:var(--r-m);padding:16px 18px}
+.note-prev .fm{font-family:var(--mono);font-size:11.5px;color:var(--text-3);line-height:1.6;margin-bottom:10px}
+.note-prev h4{font-family:var(--disp);font-size:17px;margin:0 0 8px}
+.note-prev ul{margin:0;padding-left:18px;line-height:1.7}
+.note-prev .wl{color:var(--acc)}
+@media (max-width:980px){.vault{grid-template-columns:1fr}}
 .ctxbar{display:flex;height:8px;border-radius:6px;overflow:hidden;background:var(--fill-2);gap:1px}
 .ctxbar i{display:block;height:100%}
 .ctxleg{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:11.5px;color:var(--text-2);margin-top:8px}
@@ -536,7 +556,8 @@ const mono = (t, bg, lg) => `<span class="mono ${lg?'lg':''}" style="background:
 const li = (ic, t, s='', end='', cls='') => `<div class="li ${ic?'hasic':''} ${cls}">${ic?(ic.startsWith('<')?ic:I(ic)):''}<div class="tx"><div class="t">${t}</div>${s?`<div class="s">${s}</div>`:''}</div>${end?`<div class="end">${end}</div>`:''}</div>`;
 const group = (...rows) => `<div class="group">${rows.join('')}</div>`;
 const sect = (t, right='') => `<div class="sect"><span>${t}</span>${right}</div>`;
-const ph = (t, s='', acts='') => `<div class="ph"><div><h2>${t}</h2>${s?`<p>${s}</p>`:''}</div>${acts?`<div class="acts">${acts}</div>`:''}</div>`;
+let TABMODE = false;
+const ph = (t, s='', acts='') => TABMODE ? ((s||acts) ? `<div class="ph sub"><div>${s?`<p>${s}</p>`:''}</div>${acts?`<div class="acts">${acts}</div>`:''}</div>` : '') : `<div class="ph"><div><h2>${t}</h2>${s?`<p>${s}</p>`:''}</div>${acts?`<div class="acts">${acts}</div>`:''}</div>`;
 const alertB = (k, t, s, ic) => `<div class="alert t-${k}">${I(ic || {info:'info',ok:'check',warn:'alert',err:'alert',danger:'alert'}[k])}<div style="min-width:0"><b>${t}</b>${s}</div></div>`;
 const swatches = () => `<div class="sw" role="group" aria-label="Accent">${ACC.map(([k,c,n]) => `<button data-set="accent" data-val="${k}" style="background:${c}" aria-pressed="${S.accent===k}" title="${n}" aria-label="${n}"></button>`).join('')}<button class="custom" title="Custom" aria-label="Custom color"></button></div>`;
 const chev = `<svg class="i chev" viewBox="0 0 24 24" aria-hidden="true"><path d="${P.chev}"/></svg>`;
@@ -640,11 +661,28 @@ const overlayHTML = () => `
 
 /* ════════ Control Center ════════ */
 const NAV = [
-  [null,[['home','Home','home'],['chat','Chat','chat'],['activity','Activity','activity'],['tasks','Tasks','tasks','2'],['routines','Routines','routine']]],
-  ['Intelligence',[['brains','Brains','brain'],['agents','Agents','term','1'],['skills','Skills','sparkle'],['context','Context','list'],['voice','Voice','mic'],['connectors','Connectors','plug'],['mcp','MCP servers','server']]],
-  ['Control',[['permissions','Permissions','shield'],['capabilities','Capabilities','sliders'],['privacy','Privacy','lock'],['memory','Memory','memory'],['usage','Usage','chart']]],
-  ['System',[['companion','Companion','sparkle'],['performance','Performance','gauge'],['settings','Settings','gear'],['diagnostics','Diagnostics','diag'],['about','About','info']]]
+  [null,[['home','Home','home'],['chat','Chat','chat'],['tasks','Tasks','tasks','2'],['activity','Activity','activity'],['routines','Routines','routine']]],
+  ['Intelligence',[['brains','Brains','brain'],['agents','Agents','term','1'],['voice','Voice','mic'],['extensions','Extensions','plug']]],
+  ['Control',[['permissions','Permissions','shield'],['memory','Memory','memory'],['usage','Usage','chart']]],
+  ['System',[['settings','Settings','gear']]]
 ];
+const TABS = {
+  brains:[['brains','Brains'],['context','Context']],
+  extensions:[['connectors','Connectors'],['mcp','MCP servers'],['skills','Skills']],
+  permissions:[['permissions','Mode'],['capabilities','Capabilities'],['privacy','Privacy']],
+  settings:[['settings','General'],['companion','Island & sounds'],['performance','Performance'],['diagnostics','Diagnostics'],['about','About']]
+};
+const PARENT = {}; Object.entries(TABS).forEach(([pg, ts]) => ts.forEach(([t]) => PARENT[t] = pg));
+S.tabs = S.tabs || {};
+const goTo = id => { const pg = PARENT[id] || id; S.sec = 'cc'; S.page = pg; if (TABS[pg]) S.tabs[pg] = id; };
+const SUBS = {extensions:'Connect apps, add MCP servers and skills.', permissions:'What KIVO may do, and how much it asks first.', brains:'How KIVO thinks, and what it starts each conversation with.', settings:''};
+const pageBody = () => {
+  const pg = NAV.flatMap(g => g[1]).some(x => x[0]===S.page) ? S.page : 'home';
+  if (!TABS[pg]) { TABMODE = false; return PAGES[pg](); }
+  const cur = S.tabs[pg] && TABS[pg].some(t => t[0]===S.tabs[pg]) ? S.tabs[pg] : TABS[pg][0][0];
+  TABMODE = true; const body = PAGES[cur](); TABMODE = false;
+  return `<div class="ph"><div><h2>${TITLES[pg]}</h2>${SUBS[pg]?`<p>${SUBS[pg]}</p>`:''}</div></div><div class="ptabs" role="tablist">${TABS[pg].map(([t,l]) => `<button role="tab" aria-selected="${t===cur}" data-tab="${t}">${l}</button>`).join('')}</div>${body}`;
+};
 const TITLES = Object.fromEntries(NAV.flatMap(g => g[1]).map(x => [x[0], x[1]]));
 const editDel = () => `<button class="btn sm ic plain" aria-label="Edit">${I('edit')}</button><button class="btn sm ic plain" aria-label="Delete">${I('trash')}</button>`;
 
@@ -804,28 +842,32 @@ capabilities: () => ph('Capabilities','What KIVO is allowed to do at all. If som
   sect('Intelligence and data') + group(li('cloud','Cloud AI','', tog(true)), li('code','Coding agents','In allowed project folders', tog(true)), li('memory','Memory','Only what you ask it to remember', tog(true)), li('user','Voice recognition','Biometric data, stored on this PC', tog(true)), li('link','Remote access','From your paired phone', tog(false))),
 privacy: () => ph('Privacy','What can leave your PC.') + group(li('cloud','Mode','Strict private blocks all cloud AI and speech unless you approve each use', seg(['Cloud allowed','Prefer local','Strict private'],'Cloud allowed'))) +
   sect('Data') + group(li('chat','Keep conversations','', seg(['7 days','30 days','Forever','Never'],'30 days')), li('folder','Private folders','Files here never go to cloud AI', chev,'click'), li('eye','Save transcripts in logs','For troubleshooting only', tog(false)), li('download','Export my data','Settings, memories, routines, history','<button class="btn sm">Export</button>')),
-memory: () => ph('Memory','What KIVO knows about you and your work. Stored on this PC as files you can read and edit.', `<div class="field" style="width:200px">${I('search')}<input placeholder="Search memory"></div><button class="btn">${I('folder')}Open folder</button>`) +
-  group(li('sparkle','How KIVO remembers','', seg(['Only when I ask','Suggest','Workspace notes'],'Suggest'))) +
-  `<p class="note">Suggest: KIVO proposes things to remember and you choose. Workspace notes: it also keeps notes for projects it works on with you. It never watches everything you do.</p>` +
-  sect('Instructions', '<button class="btn sm plain">Edit</button>') + `<div class="code-edit"><span class="c"># About me</span>
-Call me Sam. I use Windows 11, VS Code and PowerShell.
-Keep answers short. Use metric units.
-<span class="c"># Languages</span>
-English and Hindi. Reply in the language I speak.</div>` +
-  sect('Workspaces', '<button class="btn sm plain">'+I('plus')+'Add</button>') + group(
-    li('folder','K.I.V.O','D:\\Storage\\Coding\\K.I.V.O · 14 notes · reads CLAUDE.md', chev,'click'),
-    li('folder','kivo-runtime','D:\\work\\kivo-runtime · 6 notes · uses cargo nextest', chev,'click'),
-    li('folder','Photos','D:\\Photos · 2 notes', chev,'click')) +
-  sect('Memories') + group(
-    li('user','Sam','Person · prefers short answers · birthday 4 May', `<span class="meta">3 links</span>`+chev,'click'),
-    li('user','Maya','Person · designer · design reviews on Thursdays', pill('Sensitive')+chev,'click'),
-    li('code','Tests use cargo nextest','kivo-runtime · learned 2 days ago', editDel()),
-    li('memory','Projects live in D:\\work','Everywhere · used 14 times', editDel())) +
-  sect('Sharing') + group(
-    li('term','Let agents read my memory','Agents KIVO starts can search your workspace notes', tog(true)),
-    li('lock','Never share sensitive memories with cloud AI','', tog(true)),
-    li('plug','External memory services','Mem0, Graphiti and others, as connectors', '<button class="btn sm" data-go="connectors">Browse</button>'),
-    li('trash','Forget everything','Deletes all memories and notes', '<button class="btn sm destr">Forget</button>')),
+memory: () => ph('Memory','What KIVO knows about you and your work: Markdown notes on this PC, organized by folders and tags.', `<div class="field" style="width:200px">${I('search')}<input placeholder="Search notes"></div><button class="btn">${I('folder')}Open folder</button><button class="btn">${I('ext')}Open in Obsidian</button>`) +
+  group(
+    li('sparkle','Suggest things to remember','KIVO asks before keeping something', tog(true)),
+    li('folder','Keep workspace notes','Notes for projects KIVO works on with you, kept short and tidy', tog(true)),
+    li('list','Note detail','', seg(['Brief','Standard','Detailed'],'Standard'))) +
+  sect('Tags') + `<div class="tags">${[['all','All',1],['person'],['workspace'],['decision'],['preference'],['rust'],['design'],['sensitive']].map(([t,l,on]) => `<button data-act="seg" aria-pressed="${!!on}">${l||'#'+t}</button>`).join('')}</div>` +
+  `<div class="vault" style="margin-top:12px">
+    <div class="tree">
+      <a class="on">${I('user')}About me</a>
+      <a>${I('users')}People<span class="n">4</span></a><div class="in"><a>${I('user')}Maya</a></div>
+      <a>${I('folder')}Workspaces<span class="n">3</span></a><div class="in"><a class="on">${I('folder')}K.I.V.O<span class="n">14</span></a><a>${I('folder')}kivo-runtime<span class="n">6</span></a></div>
+      <a>${I('list')}Topics<span class="n">9</span></a>
+      <a>${I('clock')}Archive<span class="n">31</span></a>
+    </div>
+    <div class="note-prev">
+      <div class="fm">workspaces/k-i-v-o/overview.md · tags: workspace, rust, design · updated today</div>
+      <h4>K.I.V.O</h4>
+      <ul><li>Voice-first assistant for Windows; Rust runtime + Tauri UI</li><li>Overlay concept: <span class="wl">[[Island]]</span>, top center</li><li>Tests: cargo nextest (see <span class="wl">[[kivo-runtime]]</span>)</li><li>Design reviews with <span class="wl">[[Maya]]</span> on Thursdays</li></ul>
+      <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap"><button class="btn sm">${I('edit')}Edit</button><button class="btn sm plain">3 linked notes</button><button class="btn sm plain">History</button></div>
+    </div></div>` +
+  sect('Keeping memory tidy') + group(
+    li('refresh','Merge duplicate notes','', tog(true)),
+    li('clock','Condense logs older than 14 days','Into the workspace overview and decisions', tog(true)),
+    li('lock','Never send sensitive notes to cloud AI','', tog(true)),
+    li('term','Let agents use my memory','Claude Code, Codex and others, through KIVO’s memory MCP', tog(true)),
+    li('trash','Forget everything','Deletes all notes', '<button class="btn sm destr">Forget</button>')),
 usage: () => { const d=[.3,.5,.2,.8,.6,.4,.9,.7,.3,.2,.6,1,.5,.4]; return ph('Usage','Estimated cost of cloud AI and speech. Work done on this PC is free.', seg(['Week','Month','All'],'Month')+`<button class="btn">${I('download')}CSV</button>`) +
   `<div class="grid g4">${[['$1.84','this month'],['$0.06','today'],['68%','handled for free'],['No limit','budget']].map(([v,l]) => `<div class="tile stat"><div class="v">${v}</div><div class="l">${l}</div></div>`).join('')}</div>` +
   `<div class="grid g2" style="margin-top:var(--gap)"><div class="tile"><div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-2);margin-bottom:10px"><b style="color:var(--text)">By day</b><span>AI · <span style="opacity:.55">Speech</span></span></div><div class="chart">${d.map((v,i)=>`<div class="b"><i class="s" style="height:${v*22}%"></i><i style="height:${v*62}%"></i><span>${i+8}</span></div>`).join('')}</div></div>
@@ -868,8 +910,8 @@ const ccHTML = () => `
       ${NAV.map(([g, items]) => (g?`<div class="g">${g}</div>`:'') + items.map(([id,tl,ic,n]) => `<a class="${S.page===id?'on':''}" data-go="${id}" tabindex="0">${I(ic)}<span>${tl}</span>${n?`<span class="n">${n}</span>`:''}</a>`).join('')).join('')}
       <div class="me"><span class="mark" style="width:26px;height:26px"></span><div class="l"><b>Listening</b><br><span>${modeName(S.mode)} mode</span></div></div>
     </nav>
-    <div class="main"><div class="bar"><span class="crumb">${TITLES[S.page]}</span><div class="wc"><span>—</span><span>▢</span><span>✕</span></div></div>
-      <main class="content" id="cc">${PAGES[S.page]()}</main></div>
+    <div class="main"><div class="bar"><span class="crumb">${TITLES[S.page] || ''}</span><div class="wc"><span>—</span><span>▢</span><span>✕</span></div></div>
+      <main class="content" id="cc">${pageBody()}</main></div>
   </div>`;
 
 /* ════════ Onboarding ════════ */
@@ -1114,7 +1156,7 @@ const closeOverlay = () => { scrim.className = 'scrim'; box.innerHTML = ''; };
 const openSheet = k => { sheet.innerHTML = SHEETS[k](); sheet.classList.add('on'); };
 const closeSheet = () => sheet.classList.remove('on');
 const runPal = a => { const i = a.indexOf(':'), k = a.slice(0,i), v = a.slice(i+1); closeOverlay();
-  if (k==='go') { S.sec='cc'; S.page=v; render(); } else if (k==='sheet') openSheet(v); else if (k==='modal') openModal(v); else toast(v); };
+  if (k==='go') { goTo(v); render(); } else if (k==='sheet') openSheet(v); else if (k==='modal') openModal(v); else toast(v); };
 
 document.addEventListener('click', e => {
   const el = e.target.closest('button,a,[data-go],[data-palette],[data-sheet],[data-pal],[data-undo]'); if (!el) return;
@@ -1122,7 +1164,8 @@ document.addEventListener('click', e => {
   if (d.sec) { stopT(); closeSheet(); S.sec = d.sec; render(); window.scrollTo(0,0); return; }
   if (d.set) { const was = S[d.set]; S[d.set] = d.val; if (d.set==='mode') { closeSheet(); if (was !== d.val) toast(`${modeName(d.val)} mode`); } render(); return; }
   if (d.bypass !== undefined) { S.mode = 'bypass'; closeOverlay(); closeSheet(); render(); toast('Bypass is on for 1 hour'); return; }
-  if (d.go) { closeSheet(); S.sec = 'cc'; S.page = d.go; render(); return; }
+  if (d.go) { closeSheet(); goTo(d.go); render(); return; }
+  if (d.tab) { S.tabs[S.page] = d.tab; render(); return; }
   if (d.palette !== undefined) { openPalette(); return; }
   if (d.pal) { runPal(d.pal); return; }
   if (d.sheet) { openSheet(d.sheet); return; }
@@ -1150,6 +1193,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Enter' && e.target.id === 'palIn') { const s = document.querySelector('.pi.sel[data-pal]'); if (s) runPal(s.dataset.pal); else closeOverlay(); }
   if (e.key === 'Enter' && e.target.matches('.side a, [data-palette]')) e.target.click();
 });
+if (PARENT[S.page]) goTo(S.page);
 render();
 })();
 </script>
