@@ -46,6 +46,7 @@ struct PendingPage(Mutex<Option<String>>);
 /// launch, "Settings" in the tray).
 pub(crate) fn show_main_window(app: &AppHandle, page: Option<&str>) {
     if let Some(window) = app.get_webview_window(MAIN) {
+        let _ = window.as_ref().show();
         let _ = window.show();
         let _ = window.unminimize();
         let _ = window.set_focus();
@@ -120,7 +121,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             ui_ready,
             runtime_request,
-            runtime_start
+            runtime_start,
+            overlay::overlay_fit
         ])
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
@@ -128,6 +130,10 @@ pub fn run() {
                 // is no tray to bring it back, so then the app really closes.
                 if window.label() == MAIN && window.app_handle().state::<Runtime>().connected() {
                     api.prevent_close();
+                    // A hidden Control Center renders nothing (WebView2 invisible too).
+                    if let Some(webview) = window.app_handle().get_webview_window(MAIN) {
+                        let _ = webview.as_ref().hide();
+                    }
                     let _ = window.hide();
                 }
             }

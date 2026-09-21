@@ -2,7 +2,9 @@
 //! loading anything: transparent, borderless, always on top, never focusable (`WS_EX_NOACTIVATE`),
 //! click-through and absent from the taskbar. It is shown at the top center of the monitor under
 //! the pointer while the session is active, and hidden otherwise, with WebView2 set invisible so a
-//! hidden Island costs no frames (UX §3 idle rule).
+//! hidden Island costs no frames (UX §3 idle rule). The window is only as tall as the Island needs
+//! (the page reports it): compositing a large transparent window every frame cost ~12 W of package
+//! power while animating (`kivo-bench overlay`).
 
 use kivo_core::SessionState;
 use std::sync::Mutex;
@@ -13,6 +15,8 @@ use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize, WebviewUrl, Webv
 pub const LABEL: &str = "overlay";
 /// Wide enough for the largest card (520 px) plus its shadow.
 const WIDTH: f64 = 560.0;
+/// Before the page reports its size: the collapsed Island (36 px) and its shadow.
+const INITIAL_HEIGHT: f64 = 84.0;
 /// The Island sits 8 px below the top edge (UX §2).
 const TOP: f64 = 8.0;
 /// The Island's exit animation runs before the window is hidden.
@@ -37,7 +41,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
         .focusable(false)
         .focused(false)
         .visible(false)
-        .inner_size(WIDTH, 400.0)
+        .inner_size(WIDTH, INITIAL_HEIGHT)
         .build()?;
     window.set_ignore_cursor_events(true)?;
     window.as_ref().hide()?;
@@ -92,8 +96,31 @@ fn hide(app: &AppHandle) {
     }
 }
 
-/// Top center of the monitor under the pointer, 8 px down; half the monitor tall so the card
-/// can grow to 50% of the screen (UX §2).
+/// The page's Island (with its shadow) is `height` CSS px tall: fit the window to it, up to half
+/// the monitor (UX §2: the card grows to at most 50% of the screen).
+#[tauri::command]
+pub fn overlay_fit(window: tauri::WebviewWindow, height: f64) {
+    if window.label() != LABEL || !height.is_finite() {
+        return;
+    }
+    let Ok(Some(monitor)) = window.current_monitor() else {
+        return;
+    };
+    let scale = monitor.scale_factor();
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "window sizes in physical pixels"
+    )]
+    let (width, height) = (
+        (WIDTH * scale).round() as u32,
+        ((height.max(1.0) * scale).ceil() as u32).min(monitor.size().height / 2),
+    );
+    let _ = window.set_size(PhysicalSize::new(width, height));
+}
+
+/// Top center of the monitor under the pointer, 8 px down. The height follows the Island
+/// (`overlay_fit`).
 fn place(app: &AppHandle, window: &tauri::WebviewWindow) {
     let monitor = app
         .cursor_position()
@@ -108,13 +135,9 @@ fn place(app: &AppHandle, window: &tauri::WebviewWindow) {
         clippy::cast_sign_loss,
         reason = "window sizes in physical pixels"
     )]
-    let (width, height) = (
-        (WIDTH * scale).round() as u32,
-        area.height / 2 + (40.0 * scale).round() as u32,
-    );
+    let width = (WIDTH * scale).round() as u32;
     #[allow(clippy::cast_possible_truncation, reason = "a pixel offset")]
     let top = (TOP * scale).round() as i32;
     let left = origin.x + i32::try_from(area.width.saturating_sub(width) / 2).unwrap_or(0);
-    let _ = window.set_size(PhysicalSize::new(width, height));
     let _ = window.set_position(PhysicalPosition::new(left, origin.y + top));
 }

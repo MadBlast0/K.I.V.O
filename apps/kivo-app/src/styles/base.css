@@ -120,12 +120,6 @@ code {
     height: 22px;
   }
 }
-@keyframes k-breathe {
-  50% {
-    transform: scale(1.06);
-    filter: brightness(1.15);
-  }
-}
 
 /* Page content rises and fades in, 30 ms apart per block, capped at 12 blocks. */
 .k-stagger > *,

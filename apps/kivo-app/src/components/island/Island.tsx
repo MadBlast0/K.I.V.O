@@ -103,8 +103,14 @@ export function Island({
 const W = 88;
 const H = 36;
 const SCALE = 0.5;
+/** A level meter needs no more than 30 frames a second. Tied to requestAnimationFrame it redrew at
+ * the display's rate (165 Hz on high-refresh laptops), and every frame of a transparent window
+ * costs WebView2 CPU and power (`kivo-bench overlay`). */
+const FPS = 30;
+/** Smoothing toward the target level per frame (0.12 per frame at 60 fps, the same speed). */
+const EASE = 1 - (1 - 0.12) ** (60 / FPS);
 
-/** Five rounded bars. Runs requestAnimationFrame only while `active`, then eases to rest and stops. */
+/** Five rounded bars, redrawn at 30 fps only while `active`, then eased to rest and stopped. */
 export function Waveform({
   active,
   voice = "user",
@@ -144,22 +150,22 @@ export function Waveform({
 
     let amp = 0,
       t = 0,
-      raf = 0;
+      timer = 0;
     const tick = () => {
-      t += 1 / 60;
+      t += 1 / FPS;
       // Real input comes from the runtime's level meter; the fallback is a plausible speech envelope.
       const target = active
         ? level
           ? level()
           : 0.35 + 0.65 * Math.abs(Math.sin(t * 3.1) * Math.sin(t * 1.7 + 1) + 0.25 * Math.sin(t * 9))
         : 0;
-      amp += (target - amp) * 0.12;
+      amp += (target - amp) * EASE;
       draw(amp, t);
       if (!active && amp < 0.003) return; // at rest: stop scheduling frames
-      raf = requestAnimationFrame(tick);
+      timer = window.setTimeout(tick, 1000 / FPS);
     };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    tick();
+    return () => window.clearTimeout(timer);
   }, [active, voice, level, reduce]);
 
   return <canvas ref={canvas} style={{ width: W * SCALE, height: H * SCALE, flex: "none" }} aria-hidden />;

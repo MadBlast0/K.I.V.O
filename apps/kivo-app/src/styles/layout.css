@@ -338,6 +338,7 @@
   box-shadow: 0 18px 40px -18px rgba(0, 0, 0, 0.6);
 }
 .k-home__orb > span {
+  position: relative;
   width: 34px;
   height: 34px;
   border-radius: 50%;
@@ -345,11 +346,27 @@
   box-shadow: 0 0 24px rgba(120, 170, 255, 0.7);
   transition:
     opacity 200ms var(--ease-out),
-    filter 200ms var(--ease-out);
+    filter 200ms var(--ease-out),
+    transform 400ms var(--ease-out);
 }
-/* Animated only while KIVO listens or speaks: nothing runs at idle (UX §3). */
+/* A brighter copy of the orb, shown while KIVO listens or speaks. */
+.k-home__orb > span::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff 0 18%, #b8e0ff 40%, #5a86ff 78%);
+  opacity: 0;
+  transition: opacity 400ms var(--ease-out);
+}
+/* Listening or speaking: the orb grows and brightens once and holds. No endless loop: the Island
+   already animates, and a looping animation here redrew the page on every display refresh (165
+   times a second on high-refresh laptops; kivo-bench overlay). */
 .k-home__orb.is-live > span {
-  animation: k-breathe 4.5s ease-in-out infinite;
+  transform: scale(1.08);
+}
+.k-home__orb.is-live > span::after {
+  opacity: 1;
 }
 .k-home__orb.is-dim > span {
   filter: grayscale(1);

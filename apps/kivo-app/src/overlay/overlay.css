@@ -9,7 +9,7 @@ body,
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  height: 100%;
+  min-height: 100%;
   /* Room for the Island's shadow inside the window. */
   padding-block-start: 1px;
 }
