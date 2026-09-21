@@ -177,6 +177,11 @@ Specs: [architecture/](architecture/ARCHITECTURE.md) · Decisions: [DECISIONS.md
 | Integrations: local paths (media, CLIs, UIA, extension) | [INTEGRATIONS_AND_PLUGINS.md](architecture/INTEGRATIONS_AND_PLUGINS.md) | M4 |
 | Integrations: OAuth connectors (Google, Microsoft, Spotify, GitHub) | same | M8+ |
 | WASM plugins | same §3 | Post-M9 (interfaces drafted in M4) |
+| Permission modes (Ask / Accept edits / Plan / Auto / Bypass) | [SECURITY.md §1.1](architecture/SECURITY.md) | Engine in M1 (Ask/Auto); Accept edits + Plan in M4; Bypass in M5 |
+| Undo, follow-up listening, target-app icon | [UX.md §8.1](architecture/UX.md) | M2 (follow-up), M4 (undo, icon) |
+| "What can I say?" + Ctrl+K palette | same | M5 (needs the app registry), M7 (palette) |
+| Computer-use controller UI and options | [CAPABILITIES.md §4.1](architecture/CAPABILITIES.md) | M8 |
+| People profiles | [UX.md §8.2](architecture/UX.md) | Post-M9 (`profile_id` scoping from M0) |
 | KIVO Remote (phone) | same §4 | Post-M9 track |
 
 ## Owner inputs (answered 2026-09-21)

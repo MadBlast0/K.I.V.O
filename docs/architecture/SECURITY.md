@@ -19,6 +19,36 @@ Status: Draft v1, 2026-09-21. Implements plan §56–61, §69–70, §104–106 
 **Out of scope:** an attacker with admin or the same user's full code execution (they already own
 the account), and physical access.
 
+## 1.1 Permission modes (owner decision, 2026-09-21)
+
+The mode model is borrowed from Claude Code. The user picks **how much KIVO may do without
+asking**, and can switch at any time from the Island, the tray, chat, Home, or **Ctrl+Shift+M**.
+The Island shows the current mode while KIVO acts (hidden for Auto).
+
+| Mode | Behavior |
+|---|---|
+| **Ask every time** | Every non-read action asks |
+| **Accept edits** | File edits and app/window actions in allowed places run automatically; commands, settings and anything High ask |
+| **Plan first** | Read-only. KIVO produces a plan (shown in the Island/card), and nothing changes until the user approves the plan. Approval grants exactly the planned steps |
+| **Auto** (default) | Safe/Low/Medium run automatically; **High still asks** |
+| **Bypass permissions** | Everything runs without asking, **including High**. Explicit opt-in dialog (optional Windows Hello), **auto-expires** (15 min / 1 h default / until turned off), red **BYPASS** chip in the Island and tray, every action audited. Not available to guest sessions or remote clients |
+
+**Hard limits, enforced in every mode including Bypass** (these are not permissions, and the
+brain can never change them):
+
+1. The emergency stop.
+2. Capabilities that are turned off ([CAPABILITIES.md](CAPABILITIES.md)).
+3. The blocked-apps list.
+4. Never typing into password fields.
+5. **Destination binding:** no outbound sends to recipients or hosts that came from untrusted
+   content ([§4](#4-prompt-injection-defense-camel-lite-v1)).
+6. Per-task cost caps.
+
+The **"High always confirms"** rule below applies to every mode except Bypass. Bypass is the
+user's explicit, time-limited override, and invariant 4 still holds: *AI output* can never lower
+the mode, because only the user can, through UI or hotkey, never through a tool call or voice
+alone.
+
 ## 2. Permission engine
 
 ```text
@@ -28,7 +58,12 @@ Context = { session: owner|guest, speaker_confidence, profile: MaxSafety|Balance
             task_grants, tool_overrides }
 ```
 
-**Default policy (Balanced):**
+> **Note:** the permission *modes* in §1.1 replace the earlier Maximum Safety / Balanced / Power
+> User profiles. The mapping: Ask ≈ Maximum Safety, Auto ≈ Balanced (default), Accept edits and
+> Plan are new, and Bypass is the explicit override. The table below still describes how taint and
+> guest status tighten any mode.
+
+**Default policy (Auto mode):**
 
 | Risk | Clean turn, user-initiated | Tainted turn or brain-initiated | Guest session |
 |---|---|---|---|

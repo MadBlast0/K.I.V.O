@@ -86,3 +86,24 @@ Control Center → **Capabilities**. Each row has an on/off toggle, a short desc
   `ComputerUseProvider` trait. The estimated cost is shown before the task starts.
 - **Always true:** typing into password fields is blocked, the emergency stop works, and steps are
   audited.
+
+### 4.1 Computer-use experience and options (owner request, 2026-09-21)
+
+**While it's working:**
+
+- The Island becomes a **controller live activity**: "Controlling Notes · step 4/25 · ≈ $0.08",
+  with **Pause** and **Stop**.
+- A **target highlight** (a pulsing ring) marks the element it's about to act on.
+- A black **callout** says what it will do ("Click *Export*"). In watch mode the callout has
+  **Allow / Skip**.
+- An optional second **KIVO cursor** shows where it acts, without taking over the user's pointer
+  until the action runs.
+
+**Options** (Capabilities → Computer use → Options):
+
+| Group | Options |
+|---|---|
+| Visibility | Screen frame: Off / Subtle (default) / Full · Show KIVO's cursor · Highlight the target · Island controls |
+| Control | Approve each step: Always / First 10 tasks (default) / Never · Pause when I use the mouse (default on) · Speed: Careful / Normal / Fast |
+| Limits | Max steps per task (25) · Max cost per task ($0.50) · Time limit (2 min) |
+| Apps | Allowed apps list · Never-touch list (password managers, banking, Windows Security by default) |

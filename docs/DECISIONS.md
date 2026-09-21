@@ -28,6 +28,11 @@ decision changes, update the entry and note the date. Do not silently rewrite it
 | **Control Center layout** | **Sidebar with groups (A)**, **minimal Home (B)**, **Comfortable** density, **Blue** accent, with **ink primary buttons** (black in light mode, white in dark mode). The accent is for status, selection and focus only ([kivo-app.html](design/mockups/kivo-app.html)) |
 | **Appearance settings** | Settings → Appearance lets users change the theme, the accent color (7 presets + custom), density, text size, transparency effects and motion. Settings → Island covers position, size, live transcript, live activities, wake glow and auto-hide |
 | **Onboarding v2** | 10 screens in 5 phases (Welcome · Voice · Brain · Control · Ready), one decision per screen, recommended choices preselected, optional steps skippable, and an interactive "Try it" finish |
+| **Permission modes** | Ask every time / Accept edits / Plan first / **Auto (default)** / Bypass permissions (explicit, time-limited, audited, BYPASS chip). Hard limits apply in every mode ([SECURITY.md §1.1](architecture/SECURITY.md)) |
+| **Computer use UX** | Island controller (Pause/Stop, step and cost), target highlight, action callout with Allow/Skip in watch mode, optional KIVO cursor, and a configurable frame (Off/Subtle/Full) and limits ([CAPABILITIES.md §4.1](architecture/CAPABILITIES.md)) |
+| **Conversation conveniences** | Undo in the Island, "What can I say?", follow-up without the wake word, target-app icon, Ctrl+K palette ([UX.md §8.1](architecture/UX.md)) |
+| **People profiles** | Planned for after the MVP. Data is scoped by `profile_id` from M0 |
+| **Mockup v3** | One Island-based theme: system font, macOS-style grouped lists, ink buttons, black Island surfaces (palette, toasts, onboarding welcome), accent only for state. Onboarding Finish opens the Control Center. [kivo-app.html](design/mockups/kivo-app.html) |
 | **GitHub repo** | Applied: private vulnerability reporting, Dependabot alerts + security updates, secret scanning + push protection, description/topics, wiki off, squash-only merges + delete branch on merge, Discussions on, a ruleset on `main` (no force-push, no deletion) |
 
 ## 2026-09-21 — Owner answers (pre-M0)

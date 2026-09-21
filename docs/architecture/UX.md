@@ -189,6 +189,25 @@ or a budget warning. Rules:
   Translate" offers quick actions. It uses the clipboard or UIA TextPattern, and requires the
   Clipboard or UIA capability.
 
+## 8.1 Conversation conveniences (owner decision, 2026-09-21)
+
+| Feature | Behavior |
+|---|---|
+| **Undo** | After reversible changes (file move, rename, edit, window arrangement, setting change), the Island shows **Undo** with a countdown ring (about 8 s). "Kivo, undo that" works too, and so does the Control Center toast. Each tool declares an `undo` handler, or `irreversible: true`; irreversible actions never show Undo, and they confirm up front in Ask/Accept-edits/Plan/Auto |
+| **"What can I say?"** | Saying "Kivo, what can I say?" / "help", or pressing F1 while the Island is open, shows 3–5 example commands **for the foreground app** (from the App Capability Registry), plus general ones |
+| **Follow-up without wake word** | After KIVO answers, the Island stays in *Listening for a follow-up* for N s (Off / 5 / **8** / 15). A ring shows the time left. It is VAD-gated, and the command spotter still works |
+| **Target-app icon** | When acting, the Island's leading icon is the target app's icon (for example Spotify), so it's always clear where actions go |
+| **Command palette (Ctrl+K)** | Search every setting, run routines, trigger actions, or type a question to KIVO. It uses the black Island material and appears top-center |
+
+## 8.2 Multi-person profiles (planned, post-MVP)
+
+- **Profiles:** separate **people profiles** on one PC, each with its own voiceprint, memory,
+  preferences, routines, brain sign-ins, permission mode and usage.
+- **Selection:** KIVO picks the active person by speaker recognition, or by the Windows account.
+  Unknown voices fall back to Guest.
+- **MVP:** one owner plus Guest mode. The data model scopes everything by `profile_id` from M0,
+  so adding people later needs no migration of meaning.
+
 ## 9. Internationalization (plan §119)
 
 - **UI strings:** from day one, every UI string goes through i18n (`i18next` / ICU message
