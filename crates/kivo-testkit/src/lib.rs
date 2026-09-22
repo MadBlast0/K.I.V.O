@@ -8,5 +8,5 @@ pub mod platform;
 pub use audio::FakeAudio;
 pub use platform::{
     FakeApps, FakeAutostart, FakeHotkeys, FakeNotifications, FakeSecrets, FakeSystemControl,
-    FakeSystemInfo, FakeTray, FakeWindows, WindowAction,
+    FakeSystemInfo, FakeThreadQos, FakeTray, FakeWindows, WindowAction,
 };

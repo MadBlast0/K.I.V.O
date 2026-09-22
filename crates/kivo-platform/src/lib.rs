@@ -36,6 +36,6 @@ pub use shell::{
 pub use speech::{SpeechSynth, SynthAudio, SystemVoice};
 pub use system::{
     Attention, Autostart, GpuInfo, MediaAction, NowPlaying, PowerAction, SystemControl, SystemInfo,
-    SystemSnapshot, VolumeState,
+    SystemSnapshot, ThreadQos, VolumeState,
 };
 pub use types::{DeviceId, Point, Rect, WindowId};

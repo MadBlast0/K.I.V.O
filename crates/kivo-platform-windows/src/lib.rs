@@ -30,6 +30,39 @@ pub use system::WindowsSystemInfo;
 pub use toast::{ToastAnswer, WindowsNotifications};
 pub use tray::{TrayEvent, WindowsTray};
 
+/// EcoQoS for the calling thread (VOICE-03): Windows runs it on efficient cores at low clocks.
+#[derive(Default)]
+pub struct WindowsThreadQos;
+
+impl kivo_platform::ThreadQos for WindowsThreadQos {
+    fn efficiency_mode(&self, on: bool) {
+        use windows::Win32::System::Threading::{
+            GetCurrentThread, SetThreadInformation, THREAD_POWER_THROTTLING_CURRENT_VERSION,
+            THREAD_POWER_THROTTLING_EXECUTION_SPEED, THREAD_POWER_THROTTLING_STATE,
+            ThreadPowerThrottling,
+        };
+        let state = THREAD_POWER_THROTTLING_STATE {
+            Version: THREAD_POWER_THROTTLING_CURRENT_VERSION,
+            ControlMask: THREAD_POWER_THROTTLING_EXECUTION_SPEED,
+            StateMask: if on {
+                THREAD_POWER_THROTTLING_EXECUTION_SPEED
+            } else {
+                0
+            },
+        };
+        // SAFETY: the struct outlives the call and its size is passed; a failure (older Windows)
+        // just leaves the thread as it was.
+        let _ = unsafe {
+            SetThreadInformation(
+                GetCurrentThread(),
+                ThreadPowerThrottling,
+                (&raw const state).cast(),
+                u32::try_from(size_of::<THREAD_POWER_THROTTLING_STATE>()).unwrap_or(0),
+            )
+        };
+    }
+}
+
 /// Makes this process see physical pixels on every monitor, so window positions, sizes and
 /// captures agree (without it Windows scales them on high-DPI screens). Call once at start.
 pub fn dpi_aware() {

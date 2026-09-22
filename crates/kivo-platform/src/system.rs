@@ -102,6 +102,12 @@ pub trait SystemControl: Send + Sync {
     fn reveal(&self, folder: &std::path::Path) -> PlatformResult<()>;
 }
 
+/// How the OS should run the calling thread (VOICE-03): efficiency mode (EcoQoS on Windows) for
+/// a thread that only waits, full speed while it works on audio.
+pub trait ThreadQos: Send + Sync {
+    fn efficiency_mode(&self, on: bool);
+}
+
 /// Starting KIVO when the user signs in (ARCH-06, "Open KIVO when Windows starts").
 pub trait Autostart: Send + Sync {
     /// Registers `command` to run at sign-in, or removes it.

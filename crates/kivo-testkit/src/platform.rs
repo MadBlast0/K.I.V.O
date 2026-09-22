@@ -113,6 +113,18 @@ impl Apps for FakeApps {
     }
 }
 
+/// Thread QoS: records each switch (the detection thread's efficiency mode).
+#[derive(Default)]
+pub struct FakeThreadQos {
+    pub switches: Mutex<Vec<bool>>,
+}
+
+impl kivo_platform::ThreadQos for FakeThreadQos {
+    fn efficiency_mode(&self, on: bool) {
+        lock(&self.switches).push(on);
+    }
+}
+
 /// System controls: in-memory volume, microphone and media state; power actions are recorded,
 /// never performed.
 pub struct FakeSystemControl {

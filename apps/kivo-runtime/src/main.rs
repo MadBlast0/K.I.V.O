@@ -250,6 +250,7 @@ async fn run(args: Args, paths: &Paths, config: kivo_core::KivoConfig, writable:
         speaker: Arc::clone(&speaker),
         levels,
         signals,
+        qos: Arc::new(kivo_platform_windows::WindowsThreadQos),
     }));
     engine.set_listener(Arc::clone(&listener));
 

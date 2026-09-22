@@ -130,6 +130,8 @@ pub struct Pipeline {
     /// The Island's level (0–1).
     pub levels: watch::Sender<f32>,
     pub signals: mpsc::UnboundedSender<VoiceSignal>,
+    /// Efficiency mode for the detection thread while it only waits (VOICE-03).
+    pub qos: Arc<dyn kivo_platform::ThreadQos>,
 }
 
 /// Starts the detection thread and returns its controller.
@@ -166,7 +168,13 @@ struct Utterance {
     /// (the models load when the request starts, so the first words are never lost).
     ready: bool,
     pending: Vec<f32>,
+    /// Audio on its way to the worker, sent in 80 ms batches (VOICE-02).
+    outbound: Vec<f32>,
 }
+
+/// Audio goes to the speech worker in 80 ms batches: 10 ms frames inside, fewer messages out
+/// (VOICE-02).
+const MODEL_BATCH: usize = kivo_audio::capture::RATE as usize * 80 / 1000;
 
 /// The most audio held while the speech worker starts (one long utterance).
 const PENDING_LIMIT: usize = kivo_audio::capture::RATE as usize * 45;
@@ -184,7 +192,10 @@ fn run(pipeline: Pipeline, commands: &Receiver<Command>, listening: &Arc<Mutex<O
         speaker,
         levels,
         signals,
+        qos,
     } = pipeline;
+    // Efficient while waiting, full speed while listening (VOICE-03).
+    let mut eco = false;
     let mut vad = match SileroVad::load(&vad_model) {
         Ok(vad) => Some(vad),
         Err(e) => {
@@ -224,6 +235,10 @@ fn run(pipeline: Pipeline, commands: &Receiver<Command>, listening: &Arc<Mutex<O
                     utterance,
                     auto_end,
                 }) => {
+                    if eco {
+                        qos.efficiency_mode(false);
+                        eco = false;
+                    }
                     if mic.is_none() {
                         let (w, r) = capture_ring(RING_SECONDS);
                         writer = w;
@@ -246,6 +261,7 @@ fn run(pipeline: Pipeline, commands: &Receiver<Command>, listening: &Arc<Mutex<O
                             ending: false,
                             ready: false,
                             pending: Vec::new(),
+                            outbound: Vec::with_capacity(MODEL_BATCH * 2),
                         });
                     }
                 }
@@ -290,8 +306,9 @@ fn run(pipeline: Pipeline, commands: &Receiver<Command>, listening: &Arc<Mutex<O
                 // key, so dropping the chime's length would cut off their first word. Until the
                 // worker has started the utterance, the audio waits here.
                 if u.ready {
-                    if let Err(e) = infer.send_audio(u.id, &audio_buf) {
-                        tracing::debug!(%e, "audio dropped while the speech engine restarts");
+                    u.outbound.extend_from_slice(&audio_buf);
+                    if u.outbound.len() >= MODEL_BATCH {
+                        send_batch(&infer, u);
                     }
                 } else if u.pending.len() + audio_buf.len() <= PENDING_LIMIT {
                     u.pending.extend_from_slice(&audio_buf);
@@ -369,6 +386,10 @@ fn run(pipeline: Pipeline, commands: &Receiver<Command>, listening: &Arc<Mutex<O
             }
         });
         if let Some(signal) = ended {
+            // The last partial batch goes before the worker hears the utterance is over.
+            if let Some(u) = current.as_mut().filter(|u| u.ready) {
+                send_batch(&infer, u);
+            }
             finish(&mut current, &mut mic, listening, &levels);
             let _ = signals.send(signal);
         }
@@ -377,8 +398,16 @@ fn run(pipeline: Pipeline, commands: &Receiver<Command>, listening: &Arc<Mutex<O
         // no work at idle), waking only to pulse the Island while KIVO speaks or, once a
         // second, to close a speaker that has gone quiet.
         if current.is_some() {
+            if eco {
+                qos.efficiency_mode(false);
+                eco = false;
+            }
             reader.wait(Duration::from_millis(20));
         } else {
+            if !eco {
+                qos.efficiency_mode(true);
+                eco = true;
+            }
             let wait = if speaker.busy() {
                 Some(LEVEL_PERIOD)
             } else if speaker.is_open() {
@@ -401,6 +430,17 @@ fn run(pipeline: Pipeline, commands: &Receiver<Command>, listening: &Arc<Mutex<O
             parked = received;
         }
     }
+}
+
+/// Sends the batched audio to the speech worker.
+fn send_batch(infer: &Infer, u: &mut Utterance) {
+    if u.outbound.is_empty() {
+        return;
+    }
+    if let Err(e) = infer.send_audio(u.id, &u.outbound) {
+        tracing::debug!(%e, "audio dropped while the speech engine restarts");
+    }
+    u.outbound.clear();
 }
 
 /// Ends the utterance: the mic is released at once, so nothing is recorded after it.
@@ -480,6 +520,7 @@ mod tests {
         let (infer, _events, _tx) = Infer::new(PathBuf::from("kivo-infer"));
         let (levels, _levels_rx) = watch::channel(0.0);
         let (signals, mut rx) = mpsc::unbounded_channel();
+        let qos = Arc::new(kivo_testkit::FakeThreadQos::default());
         let listener = start(Pipeline {
             audio: audio.clone(),
             device: None,
@@ -489,7 +530,22 @@ mod tests {
             speaker: Arc::new(Speaker::new(audio, None)),
             levels,
             signals,
+            qos: qos.clone(),
         });
+        // Idle first: the thread waits in efficiency mode.
+        let until_switched = |n: usize| {
+            let qos = Arc::clone(&qos);
+            async move {
+                for _ in 0..200 {
+                    if qos.switches.lock().unwrap().len() >= n {
+                        return;
+                    }
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            }
+        };
+        until_switched(1).await;
+        assert_eq!(*qos.switches.lock().unwrap(), [true]);
         listener.listen(7, true);
         listener.stt_ready(7);
         let signal = tokio::time::timeout(Duration::from_secs(10), async {
@@ -508,5 +564,8 @@ mod tests {
             !listener.is_listening(),
             "the microphone is released when the utterance ends"
         );
+        // Full speed while listening, efficient again once idle (VOICE-03).
+        until_switched(3).await;
+        assert_eq!(*qos.switches.lock().unwrap(), [true, false, true]);
     }
 }

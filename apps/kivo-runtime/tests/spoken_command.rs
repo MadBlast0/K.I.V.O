@@ -150,6 +150,7 @@ fn rig(
         speaker,
         levels,
         signals,
+        qos: Arc::new(kivo_testkit::FakeThreadQos::default()),
     }));
     engine.set_listener(Arc::clone(&listener));
     core.set_speech_status(SpeechStatus::Ready);
