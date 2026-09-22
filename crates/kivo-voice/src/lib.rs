@@ -12,6 +12,16 @@ pub mod system_tts;
 pub mod traits;
 
 pub use engine::{Accel, EngineInfo, EngineKind, EngineSlot, ResourceEstimate};
+
+/// Every speech engine KIVO ships, for choosing one and for the privacy check (VOICE-07).
+pub fn engines() -> Vec<EngineInfo> {
+    vec![moonshine::info(), system_tts::info()]
+}
+
+/// The engine with this id, if KIVO has it.
+pub fn engine(id: &str) -> Option<EngineInfo> {
+    engines().into_iter().find(|e| e.id == id)
+}
 pub use error::{VoiceError, VoiceResult};
 pub use traits::{
     AudioSink, Embedding, SAMPLE_RATE, SpeakerVerifier, SttEngine, SttEvent, SttOptions, SttStream,

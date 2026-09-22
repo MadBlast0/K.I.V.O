@@ -16,25 +16,30 @@ pub struct SystemTts {
     synth: Arc<dyn SpeechSynth>,
 }
 
+/// The Windows voices, as an engine.
+pub fn info() -> EngineInfo {
+    EngineInfo {
+        id: ENGINE_ID.into(),
+        name: "Windows voices".into(),
+        slot: EngineSlot::Tts,
+        kind: EngineKind::System,
+        license: "System".into(),
+        languages: vec!["*".into()],
+        streaming: true,
+        accel: vec![Accel::Cpu],
+        resources: ResourceEstimate {
+            ram_mb: 30,
+            vram_mb: 0,
+            disk_mb: 0,
+        },
+        model: None,
+    }
+}
+
 impl SystemTts {
     pub fn new(synth: Arc<dyn SpeechSynth>) -> Self {
         Self {
-            info: EngineInfo {
-                id: ENGINE_ID.into(),
-                name: "Windows voices".into(),
-                slot: EngineSlot::Tts,
-                kind: EngineKind::System,
-                license: "System".into(),
-                languages: vec!["*".into()],
-                streaming: true,
-                accel: vec![Accel::Cpu],
-                resources: ResourceEstimate {
-                    ram_mb: 30,
-                    vram_mb: 0,
-                    disk_mb: 0,
-                },
-                model: None,
-            },
+            info: info(),
             synth,
         }
     }

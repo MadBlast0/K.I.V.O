@@ -3,6 +3,7 @@
 //! (`ConfirmSpec`, `Strength`, `ConfirmedBy`) live in `kivo_core::tool`.
 
 pub mod policy;
+pub mod privacy;
 
 pub use kivo_core::tool::{ConfirmSpec, ConfirmedBy, Strength};
 pub use policy::{

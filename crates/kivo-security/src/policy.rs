@@ -67,6 +67,8 @@ pub enum DenyCode {
     UntrustedDestination,
     GuestNotAllowed,
     NotConfirmed,
+    /// The privacy mode keeps this on the device (SECURITY §6).
+    Privacy,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, thiserror::Error)]

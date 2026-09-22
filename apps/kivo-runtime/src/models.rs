@@ -206,9 +206,21 @@ impl Models {
     /// UI whether KIVO can hear.
     pub fn apply_engines(&self, config: &KivoConfig) {
         let wanted = Self::wanted_stt(config);
-        let stt = self.installed_dir(&wanted).map(|dir| (wanted.clone(), dir));
+        let stt = self
+            .installed_dir(&wanted)
+            .map(|dir| (wanted.clone(), dir))
+            .filter(|(id, _)| speech_may_use(id, config));
         let ready = stt.is_some();
-        let tts = (!config.voice.tts_engine.is_empty()).then(|| config.voice.tts_engine.clone());
+        let tts = (!config.voice.tts_engine.is_empty())
+            .then(|| config.voice.tts_engine.clone())
+            .map(|id| {
+                if speech_may_use(&id, config) {
+                    id
+                } else {
+                    // A cloud voice the privacy mode rules out: the Windows voices speak instead.
+                    kivo_voice::system_tts::ENGINE_ID.to_owned()
+                }
+            });
         let warm_minutes = u64::from(
             config
                 .performance
@@ -267,9 +279,35 @@ fn threads_for(config: &KivoConfig) -> usize {
     (cores / 2).clamp(1, limit)
 }
 
+/// The privacy check for a speech engine (VOICE-07): audio and text go to a cloud engine only
+/// when the privacy mode and the Cloud AI capability allow it.
+fn speech_may_use(engine: &str, config: &KivoConfig) -> bool {
+    let cloud = kivo_voice::engine(engine).is_some_and(|e| e.kind == kivo_voice::EngineKind::Cloud);
+    match kivo_security::privacy::speech_egress(cloud, config.privacy.mode, &config.capabilities) {
+        Ok(()) => true,
+        Err(denied) => {
+            tracing::info!(engine, reason = %denied.message, "speech engine not used");
+            false
+        }
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_privacy_mode_never_blocks_local_speech_engines() {
+        let mut config = KivoConfig::default();
+        for mode in [
+            kivo_core::config::PrivacyMode::StrictPrivate,
+            kivo_core::config::PrivacyMode::Local,
+            kivo_core::config::PrivacyMode::Cloud,
+        ] {
+            config.privacy.mode = mode;
+            assert!(speech_may_use(kivo_voice::moonshine::MODEL_ID, &config));
+            assert!(speech_may_use(kivo_voice::system_tts::ENGINE_ID, &config));
+        }
+    }
 
     #[test]
     fn the_default_speech_model_follows_the_language_then_the_setting() {

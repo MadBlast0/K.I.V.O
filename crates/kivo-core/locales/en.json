@@ -186,7 +186,9 @@
       "brain": "Suggested by the AI",
       "task": "Part of a background task",
       "mcp": "Requested by a connected tool"
-    }
+    },
+    "privacyLocal": "Your privacy setting keeps this on your PC.",
+    "privacyCloudOff": "Cloud AI is off, so this stays on your PC."
   },
   "turn": {
     "notUnderstood": "I can’t do that yet.",
