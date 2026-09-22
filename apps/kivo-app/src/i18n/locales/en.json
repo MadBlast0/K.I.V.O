@@ -36,7 +36,16 @@
     "notNow": "Not now",
     "retry": "Try again",
     "say": "Say {words}",
-    "quoted": "“{word}”"
+    "quoted": "“{word}”",
+    "modeChip": {
+      "ask": "ASK",
+      "accept-edits": "EDITS",
+      "plan": "PLAN",
+      "bypass": "BYPASS"
+    },
+    "modeChipLabel": "Permission mode: {mode}. Change it in KIVO",
+    "allowAlwaysFor": "Always allow for {target}",
+    "target": "On: {target}"
   },
   "home": {
     "talk": "Talk",
@@ -49,13 +58,15 @@
     "missing": "Speech recognition isn't installed yet.",
     "failed": "Speech recognition couldn't be set up: {message}",
     "retry": "Try again",
-    "hotkeyTaken": "Another app uses {keys}, so push-to-talk can't use it. Change it in Settings → Shortcuts.",
+    "hotkeyTaken": "Another app also uses {keys}. KIVO takes it first, so that app won’t get it.",
     "recent": "Recent",
     "activity": "Activity",
     "nothingYet": "Nothing yet. Hold {ptt} and say “open Chrome”.",
     "version": "KIVO {version}",
     "incompatible": "Quit KIVO from the tray, then open it again.",
-    "downloadingSub": "{percent, number, ::percent scale/0.01}"
+    "downloadingSub": "{percent, number, ::percent scale/0.01}",
+    "stopEverything": "Stop everything",
+    "hotkeyRebind": "Pick other keys for push-to-talk:"
   },
   "activity": {
     "title": "Activity",

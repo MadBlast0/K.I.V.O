@@ -95,6 +95,13 @@ function Shell({ page, setPage }: { page: PageId; setPage: (page: PageId) => voi
     }
     if (session !== null) {
       actions.push({
+        id: "stop-everything",
+        group: t("palette.kivo"),
+        label: t("home.stopEverything"),
+        icon: "stop",
+        run: run(Method.sessionStopEverything),
+      });
+      actions.push({
         id: "quit",
         group: t("palette.kivo"),
         label: t("palette.quit"),

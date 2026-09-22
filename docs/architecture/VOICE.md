@@ -220,7 +220,7 @@ Status marks and the build protocol: [docs/README.md](../README.md). Engine choi
 
 **Activation**
 
-- [~] **VOICE-41** · M1 · Push-to-talk: hold Ctrl+Space to talk (`Hotkeys` trait: RegisterHotKey with a low-level-hook fallback), optional toggle mode, auto-end on silence; registration conflicts (e.g. IME switching on CJK layouts) detected with a rebind prompt (DECISIONS "Activation", UX §5) → partial: hold Ctrl+Space (`voice.push-to-talk`) to listen: `WindowsHotkeys` (RegisterHotKey on its own thread; release detected by a 15 ms key check only while held); the mic opens while held and closes on release; conflicts reported · verified: hotkey tests incl. real key presses, runtime tests, live · missing: toggle mode, auto-end on silence (VAD), the low-level-hook fallback, the rebind prompt on conflict
+- [x] **VOICE-41** · M1 · Push-to-talk: hold Ctrl+Space to talk (`Hotkeys` trait: RegisterHotKey with a low-level-hook fallback), optional toggle mode, auto-end on silence; registration conflicts (e.g. IME switching on CJK layouts) detected with a rebind prompt (DECISIONS "Activation", UX §5) → done: hold Ctrl+Space (setting `voice.push-to-talk`) to talk through `WindowsHotkeys` (RegisterHotKey on its own thread; release by a 15 ms key check only while held); when another app owns the keys a low-level keyboard hook catches them first (`Binding::Shared`) and Home says so with a rebind prompt that applies new keys at once; toggle mode; utterances end on silence (VAD) · verified: hotkey tests incl. the hook's key logic and a shared combination, `shared_push_to_talk_keys_work_and_are_reported`, `toggle_mode_starts_on_one_press_and_ends_on_the_next`, `silence_after_speech_ends_the_utterance`, live (2026-09-23)
 
 **Wake words (§4)**
 

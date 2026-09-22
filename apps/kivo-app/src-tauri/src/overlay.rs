@@ -273,6 +273,11 @@ pub async fn island_request(
         crate::show_main_window(window.app_handle(), Some("activity"));
         return Ok(serde_json::Value::Null);
     }
+    // The mode chip opens Home, where the mode is switched; the overlay never switches it.
+    if method == "island.openMode" {
+        crate::show_main_window(window.app_handle(), Some("home"));
+        return Ok(serde_json::Value::Null);
+    }
     let params = params.unwrap_or(serde_json::Value::Null);
     let capability = method == kivo_ipc::method::CAPABILITIES_SET
         && allowed_capability_change(

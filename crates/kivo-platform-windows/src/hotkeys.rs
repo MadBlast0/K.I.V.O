@@ -2,34 +2,143 @@
 //! its own message loop, so the hotkeys belong to that thread's queue. A press arrives as
 //! `WM_HOTKEY`; Windows reports no release, so while a key is held the thread checks it every
 //! 15 ms and reports `Released` when it comes up. Nothing runs while no key is held.
+//!
+//! Fallback: when another app already registered a combination, a low-level keyboard hook on the
+//! same thread catches it first (`Binding::Shared`). The hook sees the key go down and up, so
+//! press and release come from it; it takes those keys so the other app doesn't act too. The
+//! hook is installed only while such a combination exists.
 
-use kivo_platform::{Chord, HotkeyEvent, HotkeyId, Hotkeys, PlatformError, PlatformResult};
-use std::collections::HashMap;
+use kivo_platform::{
+    Binding, Chord, HotkeyEvent, HotkeyId, Hotkeys, PlatformError, PlatformResult,
+};
+use std::cell::RefCell;
+use std::collections::{HashMap, HashSet};
 use std::sync::mpsc;
 use std::thread::JoinHandle;
-use windows::Win32::Foundation::{ERROR_HOTKEY_ALREADY_REGISTERED, LPARAM, WPARAM};
+use windows::Win32::Foundation::{ERROR_HOTKEY_ALREADY_REGISTERED, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::Threading::GetCurrentThreadId;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     GetAsyncKeyState, HOT_KEY_MODIFIERS, MOD_ALT, MOD_CONTROL, MOD_NOREPEAT, MOD_SHIFT, MOD_WIN,
-    RegisterHotKey, UnregisterHotKey, VIRTUAL_KEY, VK_BACK, VK_DELETE, VK_DOWN, VK_END, VK_ESCAPE,
-    VK_F1, VK_HOME, VK_INSERT, VK_LEFT, VK_NEXT, VK_PAUSE, VK_PRIOR, VK_RETURN, VK_RIGHT, VK_SPACE,
-    VK_TAB, VK_UP,
+    RegisterHotKey, UnregisterHotKey, VIRTUAL_KEY, VK_BACK, VK_CONTROL, VK_DELETE, VK_DOWN, VK_END,
+    VK_ESCAPE, VK_F1, VK_HOME, VK_INSERT, VK_LEFT, VK_LWIN, VK_MENU, VK_NEXT, VK_PAUSE, VK_PRIOR,
+    VK_RETURN, VK_RIGHT, VK_RWIN, VK_SHIFT, VK_SPACE, VK_TAB, VK_UP,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetMessageW, KillTimer, MSG, PM_NOREMOVE, PeekMessageW, PostThreadMessageW, SetTimer, WM_APP,
-    WM_HOTKEY, WM_QUIT, WM_TIMER,
+    CallNextHookEx, GetMessageW, HHOOK, KBDLLHOOKSTRUCT, KillTimer, MSG, PM_NOREMOVE, PeekMessageW,
+    PostThreadMessageW, SetTimer, SetWindowsHookExW, UnhookWindowsHookEx, WH_KEYBOARD_LL, WM_APP,
+    WM_HOTKEY, WM_KEYDOWN, WM_KEYUP, WM_QUIT, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_TIMER,
 };
 
 /// Posted to the hotkey thread when a command is waiting.
 const WM_HOTKEY_COMMAND: u32 = WM_APP + 2;
+/// Posted by the keyboard hook: a shared combination went down / came up (`wParam` = its id).
+const WM_HOOKED_DOWN: u32 = WM_APP + 3;
+const WM_HOOKED_UP: u32 = WM_APP + 4;
+
+/// What the keyboard hook watches, on the hotkey thread (the hook runs there).
+#[derive(Default)]
+struct HookState {
+    thread_id: u32,
+    /// Shared combinations: id → (modifiers, key).
+    chords: HashMap<u32, (HOT_KEY_MODIFIERS, VIRTUAL_KEY)>,
+    /// Keys the hook took on the way down, so their release is taken too: key → id.
+    taken: HashMap<u16, u32>,
+}
+
+thread_local! {
+    static HOOK: RefCell<HookState> = RefCell::default();
+}
+
+/// The modifiers held right now, as `RegisterHotKey` flags.
+fn held_modifiers() -> HOT_KEY_MODIFIERS {
+    // SAFETY: plain key-state queries; the high bit is set while a key is down.
+    let down = |vk: VIRTUAL_KEY| unsafe { GetAsyncKeyState(i32::from(vk.0)) } < 0;
+    let mut mods = HOT_KEY_MODIFIERS(0);
+    if down(VK_CONTROL) {
+        mods |= MOD_CONTROL;
+    }
+    if down(VK_MENU) {
+        mods |= MOD_ALT;
+    }
+    if down(VK_SHIFT) {
+        mods |= MOD_SHIFT;
+    }
+    if down(VK_LWIN) || down(VK_RWIN) {
+        mods |= MOD_WIN;
+    }
+    mods
+}
+
+/// Decides what the hook does with a key event: `Some((id, message))` takes the key, and posts
+/// `message` when it is `Some` (a held key's repeats are taken without a message).
+fn hooked_key(
+    state: &mut HookState,
+    vk: u16,
+    down: bool,
+    mods: HOT_KEY_MODIFIERS,
+) -> Option<(u32, Option<u32>)> {
+    if down {
+        if let Some(&id) = state.taken.get(&vk) {
+            return Some((id, None));
+        }
+        let id = state
+            .chords
+            .iter()
+            .find(|(_, (m, k))| k.0 == vk && *m == mods)
+            .map(|(&id, _)| id)?;
+        state.taken.insert(vk, id);
+        Some((id, Some(WM_HOOKED_DOWN)))
+    } else {
+        state.taken.remove(&vk).map(|id| (id, Some(WM_HOOKED_UP)))
+    }
+}
+
+/// The low-level keyboard hook: takes the keys of shared combinations.
+unsafe extern "system" fn keyboard_hook(code: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "window messages fit in 32 bits"
+    )]
+    let message = wparam.0 as u32;
+    let down = message == WM_KEYDOWN || message == WM_SYSKEYDOWN;
+    let up = message == WM_KEYUP || message == WM_SYSKEYUP;
+    if code >= 0 && (down || up) {
+        // SAFETY: for WH_KEYBOARD_LL, lParam points to this event's KBDLLHOOKSTRUCT.
+        let key = unsafe { &*(lparam.0 as *const KBDLLHOOKSTRUCT) };
+        #[allow(
+            clippy::cast_possible_truncation,
+            reason = "virtual keys fit in 16 bits"
+        )]
+        let vk = key.vkCode as u16;
+        let mods = if down {
+            held_modifiers()
+        } else {
+            HOT_KEY_MODIFIERS(0)
+        };
+        let taken = HOOK.with(|state| {
+            let mut state = state.borrow_mut();
+            hooked_key(&mut state, vk, down, mods).map(|hit| (state.thread_id, hit))
+        });
+        if let Some((thread, (id, message))) = taken {
+            if let Some(message) = message {
+                // SAFETY: posting to the hotkey thread, which owns this hook.
+                let _ =
+                    unsafe { PostThreadMessageW(thread, message, WPARAM(id as usize), LPARAM(0)) };
+            }
+            return LRESULT(1);
+        }
+    }
+    // SAFETY: passing the event on, as every hook must.
+    unsafe { CallNextHookEx(None, code, wparam, lparam) }
+}
 /// How often a held key is checked for release.
 const RELEASE_POLL_MS: u32 = 15;
 
-type Reply = mpsc::Sender<PlatformResult<()>>;
+type Reply<T> = mpsc::Sender<PlatformResult<T>>;
 
 enum Command {
-    Register(HotkeyId, Chord, Reply),
-    Unregister(HotkeyId, Reply),
+    Register(HotkeyId, Chord, Reply<Binding>),
+    Unregister(HotkeyId, Reply<()>),
 }
 
 pub struct WindowsHotkeys {
@@ -58,7 +167,7 @@ impl WindowsHotkeys {
         })
     }
 
-    fn ask(&self, command: impl FnOnce(Reply) -> Command) -> PlatformResult<()> {
+    fn ask<T>(&self, command: impl FnOnce(Reply<T>) -> Command) -> PlatformResult<T> {
         let (reply, answer) = mpsc::channel();
         self.commands
             .send(command(reply))
@@ -71,7 +180,7 @@ impl WindowsHotkeys {
 }
 
 impl Hotkeys for WindowsHotkeys {
-    fn register(&self, id: HotkeyId, chord: &Chord) -> PlatformResult<()> {
+    fn register(&self, id: HotkeyId, chord: &Chord) -> PlatformResult<Binding> {
         self.ask(|reply| Command::Register(id, chord.clone(), reply))
     }
 
@@ -166,6 +275,10 @@ fn run(inbox: &mpsc::Receiver<Command>, ready: &mpsc::Sender<u32>, on_event: &dy
     let mut registered: HashMap<u32, VIRTUAL_KEY> = HashMap::new();
     let mut held: HashMap<u32, VIRTUAL_KEY> = HashMap::new();
     let mut timer = 0usize;
+    // Shared combinations caught by the hook, and the hook while there are any.
+    let mut hooked: HashSet<u32> = HashSet::new();
+    let mut hook: Option<HHOOK> = None;
+    HOOK.with(|state| state.borrow_mut().thread_id = thread_id);
 
     // SAFETY: standard message loop on this thread.
     while unsafe { GetMessageW(&raw mut msg, None, 0, 0) }.as_bool() {
@@ -174,13 +287,38 @@ fn run(inbox: &mpsc::Receiver<Command>, ready: &mpsc::Sender<u32>, on_event: &dy
                 for command in inbox.try_iter() {
                     match command {
                         Command::Register(id, chord, reply) => {
-                            let _ = reply.send(register(id, &chord, &mut registered));
+                            let result = if hooked.contains(&id.0) {
+                                Err(PlatformError::Conflict(format!("hotkey id {}", id.0)))
+                            } else {
+                                match register(id, &chord, &mut registered) {
+                                    Err(PlatformError::Conflict(ref taken))
+                                        if *taken == chord.to_string() =>
+                                    {
+                                        share(id, &chord, &mut hooked, &mut hook)
+                                    }
+                                    other => other.map(|()| Binding::System),
+                                }
+                            };
+                            let _ = reply.send(result);
                         }
                         Command::Unregister(id, reply) => {
                             let result = if registered.remove(&id.0).is_some() {
                                 held.remove(&id.0);
                                 // SAFETY: unregistering a hotkey this thread registered.
                                 let _ = unsafe { UnregisterHotKey(None, hotkey_id(id)) };
+                                Ok(())
+                            } else if hooked.remove(&id.0) {
+                                HOOK.with(|state| {
+                                    let mut state = state.borrow_mut();
+                                    state.chords.remove(&id.0);
+                                    state.taken.retain(|_, taken| *taken != id.0);
+                                });
+                                if hooked.is_empty()
+                                    && let Some(h) = hook.take()
+                                {
+                                    // SAFETY: removing the hook this thread installed.
+                                    let _ = unsafe { UnhookWindowsHookEx(h) };
+                                }
                                 Ok(())
                             } else {
                                 Err(PlatformError::NotFound(format!("hotkey {}", id.0)))
@@ -201,6 +339,17 @@ fn run(inbox: &mpsc::Receiver<Command>, ready: &mpsc::Sender<u32>, on_event: &dy
                         // SAFETY: a thread timer (no window); WM_TIMER arrives in this loop.
                         timer = unsafe { SetTimer(None, 0, RELEASE_POLL_MS, None) };
                     }
+                }
+            }
+            WM_HOOKED_DOWN | WM_HOOKED_UP => {
+                #[allow(clippy::cast_possible_truncation, reason = "ids are posted as u32")]
+                let id = HotkeyId(msg.wParam.0 as u32);
+                if hooked.contains(&id.0) {
+                    on_event(if msg.message == WM_HOOKED_DOWN {
+                        HotkeyEvent::Pressed(id)
+                    } else {
+                        HotkeyEvent::Released(id)
+                    });
                 }
             }
             WM_TIMER if msg.wParam.0 == timer => {
@@ -225,6 +374,32 @@ fn run(inbox: &mpsc::Receiver<Command>, ready: &mpsc::Sender<u32>, on_event: &dy
         // SAFETY: unregistering hotkeys this thread registered, before it ends.
         let _ = unsafe { UnregisterHotKey(None, hotkey_id(HotkeyId(*id))) };
     }
+    if let Some(h) = hook {
+        // SAFETY: removing the hook this thread installed, before it ends.
+        let _ = unsafe { UnhookWindowsHookEx(h) };
+    }
+}
+
+/// Catches a combination another app owns with the keyboard hook (installed on first use).
+fn share(
+    id: HotkeyId,
+    chord: &Chord,
+    hooked: &mut HashSet<u32>,
+    hook: &mut Option<HHOOK>,
+) -> PlatformResult<Binding> {
+    let (mods, vk) = parse(chord)?;
+    if hook.is_none() {
+        // SAFETY: a low-level hook calls back on this thread, which pumps messages.
+        let installed = unsafe { SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_hook), None, 0) }
+            .map_err(|e| PlatformError::Os {
+                code: i64::from(e.code().0),
+                message: e.message(),
+            })?;
+        *hook = Some(installed);
+    }
+    HOOK.with(|state| state.borrow_mut().chords.insert(id.0, (mods, vk)));
+    hooked.insert(id.0);
+    Ok(Binding::Shared)
 }
 
 #[allow(clippy::cast_possible_wrap, reason = "hotkey ids are small")]
@@ -291,16 +466,45 @@ mod tests {
         let first = WindowsHotkeys::start(|_| {}).unwrap();
         first.register(HotkeyId(1), &taken).unwrap();
         let second = WindowsHotkeys::start(|_| {}).unwrap();
-        assert_eq!(
-            second.register(HotkeyId(1), &taken),
-            Err(PlatformError::Conflict("Ctrl+Alt+Shift+F23".into()))
-        );
+        // Taken by the first: the second catches it with the keyboard hook instead.
+        assert_eq!(second.register(HotkeyId(1), &taken), Ok(Binding::Shared));
+        second.unregister(HotkeyId(1)).unwrap();
         first.unregister(HotkeyId(1)).unwrap();
-        second.register(HotkeyId(1), &taken).unwrap();
+        assert_eq!(second.register(HotkeyId(1), &taken), Ok(Binding::System));
         assert!(matches!(
             second.unregister(HotkeyId(2)),
             Err(PlatformError::NotFound(_))
         ));
+    }
+
+    #[test]
+    fn the_hook_takes_a_shared_combination_down_repeat_and_up() {
+        let mut state = HookState::default();
+        state.chords.insert(3, (MOD_CONTROL, VK_SPACE));
+        let space = VK_SPACE.0;
+        assert_eq!(
+            hooked_key(&mut state, space, true, MOD_ALT),
+            None,
+            "other modifiers"
+        );
+        assert_eq!(
+            hooked_key(&mut state, space, true, MOD_CONTROL),
+            Some((3, Some(WM_HOOKED_DOWN)))
+        );
+        assert_eq!(
+            hooked_key(&mut state, space, true, MOD_CONTROL),
+            Some((3, None)),
+            "a repeat is taken quietly"
+        );
+        assert_eq!(
+            hooked_key(&mut state, space, false, HOT_KEY_MODIFIERS(0)),
+            Some((3, Some(WM_HOOKED_UP)))
+        );
+        assert_eq!(
+            hooked_key(&mut state, space, false, HOT_KEY_MODIFIERS(0)),
+            None,
+            "a release nobody took passes through"
+        );
     }
 
     /// Presses a registered hotkey with synthetic input and checks press and release arrive.

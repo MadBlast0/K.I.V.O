@@ -418,3 +418,10 @@
 .k-home__hint .k-kbd {
   margin-inline: 2px;
 }
+.k-home__rebind {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-block-start: 6px;
+}

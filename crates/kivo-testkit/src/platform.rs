@@ -3,9 +3,10 @@
 
 use kivo_core::Secret;
 use kivo_platform::{
-    AppEntry, Apps, Chord, HotkeyId, Hotkeys, MediaAction, Notification, Notifications, NowPlaying,
-    PlatformError, PlatformResult, PowerAction, SecretHandle, Secrets, SystemControl, SystemInfo,
-    SystemSnapshot, Tray, TrayIcon, TrayMenuItem, VolumeState, WindowId, WindowInfo, Windows,
+    AppEntry, Apps, Binding, Chord, HotkeyId, Hotkeys, MediaAction, Notification, Notifications,
+    NowPlaying, PlatformError, PlatformResult, PowerAction, SecretHandle, Secrets, SystemControl,
+    SystemInfo, SystemSnapshot, Tray, TrayIcon, TrayMenuItem, VolumeState, WindowId, WindowInfo,
+    Windows,
 };
 use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
@@ -15,7 +16,7 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
-/// Hotkeys: combinations in `taken` fail with `Conflict`, like one another app registered.
+/// Hotkeys: combinations in `taken` bind as `Shared`, like one another app registered.
 #[derive(Default)]
 pub struct FakeHotkeys {
     pub taken: Mutex<HashSet<Chord>>,
@@ -23,12 +24,16 @@ pub struct FakeHotkeys {
 }
 
 impl Hotkeys for FakeHotkeys {
-    fn register(&self, id: HotkeyId, chord: &Chord) -> PlatformResult<()> {
-        if lock(&self.taken).contains(chord) {
-            return Err(PlatformError::Conflict(chord.to_string()));
+    fn register(&self, id: HotkeyId, chord: &Chord) -> PlatformResult<Binding> {
+        if lock(&self.registered).contains_key(&id) {
+            return Err(PlatformError::Conflict(format!("hotkey id {}", id.0)));
         }
         lock(&self.registered).insert(id, chord.clone());
-        Ok(())
+        Ok(if lock(&self.taken).contains(chord) {
+            Binding::Shared
+        } else {
+            Binding::System
+        })
     }
 
     fn unregister(&self, id: HotkeyId) -> PlatformResult<()> {
@@ -331,16 +336,18 @@ mod tests {
     }
 
     #[test]
-    fn hotkeys_report_conflicts_and_track_registrations() {
+    fn hotkeys_report_shared_combinations_and_track_registrations() {
         let hk = FakeHotkeys::default();
         lock(&hk.taken).insert(chord(&["Ctrl", "Alt", "W"]));
         assert_eq!(
             hk.register(HotkeyId(1), &chord(&["Ctrl", "Alt", "W"])),
-            Err(PlatformError::Conflict("Ctrl+Alt+W".into()))
+            Ok(Binding::Shared)
         );
-        hk.register(HotkeyId(2), &chord(&["Ctrl", "Space"]))
-            .unwrap();
-        assert_eq!(lock(&hk.registered).len(), 1);
+        assert_eq!(
+            hk.register(HotkeyId(2), &chord(&["Ctrl", "Space"])),
+            Ok(Binding::System)
+        );
+        assert_eq!(lock(&hk.registered).len(), 2);
         hk.unregister(HotkeyId(2)).unwrap();
         assert!(hk.unregister(HotkeyId(2)).is_err());
     }

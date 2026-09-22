@@ -30,8 +30,8 @@ pub use paths::Paths;
 pub use screen::{CaptureTarget, Image, Ocr, Screen, TextLine};
 pub use secrets::{SecretHandle, Secrets};
 pub use shell::{
-    Chord, HotkeyEvent, HotkeyId, Hotkeys, Notification, NotificationAction, Notifications, Tray,
-    TrayIcon, TrayMenuItem,
+    Binding, Chord, HotkeyEvent, HotkeyId, Hotkeys, Notification, NotificationAction,
+    Notifications, Tray, TrayIcon, TrayMenuItem,
 };
 pub use speech::{SpeechSynth, SynthAudio, SystemVoice};
 pub use system::{

@@ -27,10 +27,20 @@ pub enum HotkeyEvent {
     Released(HotkeyId),
 }
 
+/// How a hotkey was bound.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Binding {
+    /// The system's own hotkey registration.
+    System,
+    /// Another app owns the combination, so KIVO catches it first with a keyboard hook (the
+    /// VOICE-41 fallback). It works, but the clash is worth telling the user about.
+    Shared,
+}
+
 /// Global shortcuts. Presses and releases are delivered to the callback given at creation.
 pub trait Hotkeys: Send + Sync {
-    /// Fails with `PlatformError::Conflict` when another app owns the combination.
-    fn register(&self, id: HotkeyId, chord: &Chord) -> PlatformResult<()>;
+    /// Binds `chord`; when another app owns it, falls back to catching it first (`Shared`).
+    fn register(&self, id: HotkeyId, chord: &Chord) -> PlatformResult<Binding>;
     fn unregister(&self, id: HotkeyId) -> PlatformResult<()>;
 }
 

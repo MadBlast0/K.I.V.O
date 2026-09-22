@@ -102,6 +102,7 @@ export function Overlay() {
       stop: () => request(Method.sessionCancel),
       answer: (callId, allow, always) => request(Method.permissionsAnswer, { callId, allow, always }),
       openControlCenter: () => request("island.openControlCenter"),
+      openMode: () => request("island.openMode"),
       retry: (text) => request(Method.sessionSay, { text }),
       enable: (capability) => request(Method.capabilitiesSet, { capability, on: true }),
     }),

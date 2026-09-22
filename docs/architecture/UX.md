@@ -269,7 +269,7 @@ real runtime data over IPC, not mockup data.
 - [~] **UX-18** · M7 · Navigation: 13 items in the §3 groups with in-page tabs, plus Settings (§3) → partial: sidebar with all items and page tabs component (`components/layout/Shell.tsx`, `PageTabs`) · missing: the pages
 - [~] **UX-19** · M1 · Home: status orb and "Listening for Hey Kivo", Talk / Pause listening / mode picker, Running and Recent lists (mockup → partial: `pages/Home.tsx`: status orb, state title and detail, Pause/Resume listening, permission-mode picker, Start KIVO when disconnected, version; all from the runtime · missing: Talk button (VOICE-08/41 pipeline), Running and Recent lists (ARCH-23, M5)
 - [ ] **UX-20** · M1 · Activity: timeline of turns, tool calls and results from the Activity table (mockup → Activity) (§3, plan §83)
-- [ ] **UX-21** · M3 · Chat: threads list, conversation with brain switcher, attachments, tool activity, cancel, context meter, Compact now (mockup → Chat; CONVERSATION §0–1)
+- [ ] **UX-21** · M3 · Chat: threads list, conversation with brain switcher and permission-mode picker (SEC-04), attachments, tool activity, cancel, context meter, Compact now (mockup → Chat; CONVERSATION §0–1)
 - [ ] **UX-22** · M3 · Brains page (Brains / Context tabs): providers with found-on-this-PC, add/test/remove, profiles, free options labelled (mockup → Brains)
 - [ ] **UX-23** · M3 · Voice page: mic, speaker, wake words (add/edit), STT/TTS engine and voice, personality, models on this PC (download/delete) (mockup → Voice; plan §86)
 - [ ] **UX-24** · M5 · Tasks: running and past tasks with status, current step, elapsed time, tool activity, cancel, result (mockup → Tasks; plan §84)

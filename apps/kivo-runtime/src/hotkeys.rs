@@ -6,7 +6,7 @@
 use crate::core::Core;
 use crate::engine::Engine;
 use kivo_core::event::{CancelReason, TurnSource};
-use kivo_platform::{Chord, HotkeyEvent, HotkeyId, Hotkeys, PlatformError};
+use kivo_platform::{Binding, Chord, HotkeyEvent, HotkeyId, Hotkeys};
 use kivo_platform_windows::WindowsHotkeys;
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -72,6 +72,19 @@ async fn handle(core: &Core, engine: &Arc<Engine>, event: HotkeyEvent) {
     }
 }
 
+/// Binds push-to-talk; when another app also uses the keys, KIVO still takes them first (the
+/// keyboard-hook fallback) and says so, so the user can pick others (VOICE-41).
+fn bind_push_to_talk(core: &Core, hotkeys: &dyn Hotkeys, chord: &Chord) {
+    match hotkeys.register(PUSH_TO_TALK, chord) {
+        Ok(Binding::System) => tracing::info!(%chord, "push-to-talk ready"),
+        Ok(Binding::Shared) => {
+            tracing::warn!(%chord, "another app also uses the push-to-talk keys; KIVO takes them first");
+            core.set_hotkey_conflict(Some(chord.to_string()));
+        }
+        Err(e) => tracing::error!(%e, %chord, "couldn't register push-to-talk"),
+    }
+}
+
 /// Registers the hotkeys and handles them until KIVO quits.
 pub async fn run(
     core: Arc<Core>,
@@ -89,24 +102,17 @@ pub async fn run(
             return;
         }
     };
-    let chord = Chord(keys);
-    match hotkeys.register(PUSH_TO_TALK, &chord) {
-        Ok(()) => tracing::info!(%chord, "push-to-talk ready"),
-        // Another app owns the keys: KIVO says so and the user can rebind in Settings → Shortcuts.
-        Err(PlatformError::Conflict(_)) => {
-            tracing::warn!(%chord, "another app already uses the push-to-talk keys");
-            core.set_hotkey_conflict(Some(chord.to_string()));
-        }
-        Err(e) => tracing::error!(%e, %chord, "couldn't register push-to-talk"),
-    }
+    let mut push_to_talk = Chord(keys);
+    bind_push_to_talk(&core, &hotkeys, &push_to_talk);
     let mode_keys = Chord(vec!["Ctrl".into(), "Shift".into(), "M".into()]);
     if let Err(e) = hotkeys.register(SWITCH_MODE, &mode_keys) {
         tracing::warn!(%e, chord = %mode_keys, "couldn't register the mode hotkey");
     }
-    let type_keys = Chord(core.config().voice.type_to_kivo.clone());
+    let mut type_keys = Chord(core.config().voice.type_to_kivo.clone());
     if let Err(e) = hotkeys.register(TYPE_TO_KIVO, &type_keys) {
         tracing::warn!(%e, chord = %type_keys, "couldn't register the type-to-KIVO keys");
     }
+    let mut settings = core.settings_changed();
     let stop_keys = Chord(emergency_stop);
     if let Err(e) = hotkeys.register(EMERGENCY_STOP, &stop_keys) {
         tracing::error!(%e, chord = %stop_keys, "couldn't register the emergency stop");
@@ -120,7 +126,7 @@ pub async fn run(
         let busy = state.borrow_and_update().session.is_active();
         if busy != esc_registered {
             let result = if busy {
-                hotkeys.register(CANCEL, &esc)
+                hotkeys.register(CANCEL, &esc).map(drop)
             } else {
                 hotkeys.unregister(CANCEL)
             };
@@ -135,6 +141,26 @@ pub async fn run(
         tokio::select! {
             Some(event) = events.recv() => handle(&core, &engine, event).await,
             changed = state.changed() => if changed.is_err() { break },
+            // New keys chosen (the rebind prompt, Settings → Shortcuts): bind them now.
+            changed = settings.changed() => {
+                if changed.is_err() { break }
+                let voice = core.config().voice;
+                let wanted = Chord(voice.push_to_talk.clone());
+                if wanted != push_to_talk && !wanted.0.is_empty() {
+                    let _ = hotkeys.unregister(PUSH_TO_TALK);
+                    core.set_hotkey_conflict(None);
+                    bind_push_to_talk(&core, &hotkeys, &wanted);
+                    push_to_talk = wanted;
+                }
+                let wanted = Chord(voice.type_to_kivo.clone());
+                if wanted != type_keys && !wanted.0.is_empty() {
+                    let _ = hotkeys.unregister(TYPE_TO_KIVO);
+                    if let Err(e) = hotkeys.register(TYPE_TO_KIVO, &wanted) {
+                        tracing::warn!(%e, chord = %wanted, "couldn't register the type-to-KIVO keys");
+                    }
+                    type_keys = wanted;
+                }
+            }
             () = shutdown.cancelled() => break,
         }
     }
@@ -143,6 +169,38 @@ pub async fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shared_push_to_talk_keys_work_and_are_reported() {
+        let core = Core::default();
+        let hotkeys = kivo_testkit::FakeHotkeys::default();
+        let taken = Chord(vec!["Ctrl".into(), "Space".into()]);
+        hotkeys.taken.lock().unwrap().insert(taken.clone());
+        let mut settings = core.settings_changed();
+        bind_push_to_talk(&core, &hotkeys, &taken);
+        assert_eq!(
+            core.state().borrow().hotkey_conflict.as_deref(),
+            Some("Ctrl+Space"),
+            "the user is told, so they can pick other keys"
+        );
+        assert!(
+            hotkeys
+                .registered
+                .lock()
+                .unwrap()
+                .contains_key(&PUSH_TO_TALK)
+        );
+
+        // Picking new keys is a settings change the hotkey loop hears about.
+        core.update_config(|c| {
+            c.voice.push_to_talk = vec!["Ctrl".into(), "Alt".into(), "K".into()]
+        });
+        assert!(settings.has_changed().unwrap());
+        let _ = hotkeys.unregister(PUSH_TO_TALK);
+        core.set_hotkey_conflict(None);
+        bind_push_to_talk(&core, &hotkeys, &Chord(core.config().voice.push_to_talk));
+        assert_eq!(core.state().borrow().hotkey_conflict, None);
+    }
 
     #[test]
     fn holding_talks_and_releasing_ends_the_utterance() {

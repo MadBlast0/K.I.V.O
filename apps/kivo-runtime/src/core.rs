@@ -21,6 +21,8 @@ pub struct Core {
     /// Where the settings are saved; `None` keeps changes in memory (tests).
     config_file: Option<PathBuf>,
     state: watch::Sender<StateSnapshot>,
+    /// Bumped on every settings change, for parts that apply settings live (hotkeys).
+    settings: watch::Sender<u64>,
     shutdown: CancellationToken,
 }
 
@@ -54,6 +56,7 @@ impl Core {
                 hotkey_conflict: None,
                 revision: 0,
             }),
+            settings: watch::Sender::new(0),
             shutdown: CancellationToken::new(),
         }
     }
@@ -146,7 +149,13 @@ impl Core {
         {
             tracing::error!(%e, "couldn't save the settings");
         }
+        self.settings.send_modify(|n| *n += 1);
         updated
+    }
+
+    /// Changes whenever the settings do.
+    pub fn settings_changed(&self) -> watch::Receiver<u64> {
+        self.settings.subscribe()
     }
 
     /// Whether KIVO can hear right now (the speech model is a download, DIST-12).

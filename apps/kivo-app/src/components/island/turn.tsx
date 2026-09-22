@@ -4,7 +4,7 @@
  * for the user. Only what the runtime reports is shown.
  */
 import type { TFunction } from "i18next";
-import type { Capability, ConfirmSpec, StateSnapshot, StepView, TurnView } from "../../ipc/generated";
+import type { Capability, ConfirmSpec, PermissionMode, StateSnapshot, StepView, TurnView } from "../../ipc/generated";
 import {
   IslandActions,
   IslandApp,
@@ -21,6 +21,8 @@ export interface IslandHandlers {
   stop: () => void;
   answer: (callId: string, allow: boolean, always: boolean) => void;
   openControlCenter: () => void;
+  /** Opens where the permission mode is switched (the overlay itself can't switch it, SEC-04). */
+  openMode: () => void;
   /** Runs the same request again (PLAN-18). */
   retry: (text: string) => void;
   /** Turns on the capability a request needed (CAP-02): only the one it needed, only on. */
@@ -81,7 +83,13 @@ function confirmCard(confirm: ConfirmSpec, turn: TurnView, t: TFunction, on: Isl
       onClick: () => on.answer(confirm.callId, true, false),
     },
     ...(confirm.allowAlways
-      ? [{ label: t("island.allowAlways"), onClick: () => on.answer(confirm.callId, true, true) }]
+      ? [
+          {
+            // "Always for…" names what the grant covers (SEC-10).
+            label: confirm.target ? t("island.allowAlwaysFor", { target: confirm.target }) : t("island.allowAlways"),
+            onClick: () => on.answer(confirm.callId, true, true),
+          },
+        ]
       : []),
     { label: t("island.deny"), kind: "danger" as const, onClick: () => on.answer(confirm.callId, false, false) },
   ];
@@ -97,6 +105,9 @@ function confirmCard(confirm: ConfirmSpec, turn: TurnView, t: TFunction, on: Isl
         <div className="k-island__action">
           {confirm.plan ? t("island.planTitle", { action: confirm.action }) : confirm.action}
         </div>
+        {confirm.target && !confirm.action.includes(confirm.target) && (
+          <div className="k-island__meta">{t("island.target", { target: confirm.target })}</div>
+        )}
         <div className="k-island__meta">
           {t("island.why", { why: confirm.why })} · {confirm.provenance}
         </div>
@@ -105,6 +116,22 @@ function confirmCard(confirm: ConfirmSpec, turn: TurnView, t: TFunction, on: Isl
       </>
     ),
   };
+}
+
+/** The permission mode while KIVO acts (SEC-04): hidden in Auto; a click opens where it's switched. */
+function ModeChip({ mode, t, on }: { mode: PermissionMode; t: TFunction; on: IslandHandlers }) {
+  if (mode === "auto") return null;
+  return (
+    <button
+      type="button"
+      className={mode === "bypass" ? "k-island__chip k-island__chip--danger" : "k-island__chip"}
+      aria-label={t("island.modeChipLabel", { mode: t(`mode.${mode}`) })}
+      title={t("island.modeChipLabel", { mode: t(`mode.${mode}`) })}
+      onClick={on.openMode}
+    >
+      {t(`island.modeChip.${mode}`)}
+    </button>
+  );
 }
 
 /** The footer every card has while KIVO works (UX-09): Stop and Open in Control Center. */
@@ -208,7 +235,12 @@ export function islandForTurn(snapshot: StateSnapshot, t: TFunction, on: IslandH
         label: t("island.working"),
         sub: turn && turn.steps.length > 1 ? t("island.steps", { count: turn.steps.length }) : undefined,
         lead: appIcon(turn?.targetApp ?? null),
-        trail: <IslandSpin />,
+        trail: (
+          <>
+            <ModeChip mode={snapshot.mode} t={t} on={on} />
+            <IslandSpin />
+          </>
+        ),
         body: turn ? (
           <>
             <Heard turn={turn} />

@@ -5,13 +5,44 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Button, Group, Keys, Note, Row, Section, Select, Tag, useToast } from "../components/ui";
+import {
+  Alert,
+  Button,
+  Group,
+  Keys,
+  Note,
+  Row,
+  Section,
+  Select,
+  ShortcutRecorder,
+  Tag,
+  useToast,
+} from "../components/ui";
 import { Method, type ActivityItem, type PermissionMode, type SpeechStatus } from "../ipc/generated";
 import { withNodes } from "../i18n/nodes";
 import { useRuntime, useRuntimeEvents } from "../ipc/runtime";
 import { entries } from "../lib/activity";
 import { cn } from "../lib/cn";
 import { modes, viewLink } from "../lib/session";
+
+interface Shortcuts {
+  pushToTalk: string[];
+  typeToKivo: string[];
+}
+
+const DEFAULT_KEYS: Shortcuts = { pushToTalk: ["Ctrl", "Space"], typeToKivo: ["Ctrl", "Shift", "Space"] };
+
+/** The shortcuts from the settings' `voice` section. */
+function shortcutsOf(voice: Record<string, unknown>): Shortcuts {
+  return {
+    pushToTalk: keysOr(voice["push-to-talk"], DEFAULT_KEYS.pushToTalk),
+    typeToKivo: keysOr(voice["type-to-kivo"], DEFAULT_KEYS.typeToKivo),
+  };
+}
+
+function keysOr(value: unknown, fallback: string[]): string[] {
+  return Array.isArray(value) && value.every((k) => typeof k === "string") ? value : fallback;
+}
 
 /** How many recent requests Home shows. */
 const RECENT = 4;
@@ -56,6 +87,7 @@ export function Home({
   };
 
   const snapshot = link?.status === "connected" ? link.snapshot : null;
+  const [keys, setKeys] = useState<Shortcuts>(DEFAULT_KEYS);
   const session = view.session;
   const mode = snapshot?.mode;
   const connected = !!snapshot;
@@ -67,6 +99,20 @@ export function Home({
       .catch(() => {});
   }, [connected, request]);
   useEffect(loadRecent, [loadRecent]);
+
+  // The shortcuts as set, for the hint and the rebind prompt.
+  useEffect(() => {
+    if (!connected) return;
+    void request<{ voice: Record<string, unknown> }>(Method.settingsGet)
+      .then((settings) => setKeys(shortcutsOf(settings.voice)))
+      .catch(() => {});
+  }, [connected, request]);
+
+  const rebind = (next: string[]) =>
+    run(async () => {
+      await request(Method.settingsSet, { voice: { "push-to-talk": next } });
+      setKeys((current) => ({ ...current, pushToTalk: next }));
+    });
   useRuntimeEvents((event) => {
     if (event.group === "turn") loadRecent();
   });
@@ -95,8 +141,8 @@ export function Home({
         {connected ? (
           <span className="k-home__hint">
             {withNodes(t, "home.hint", {
-              ptt: <Keys keys={["Ctrl", "Space"]} />,
-              type: <Keys keys={["Ctrl", "Shift", "Space"]} />,
+              ptt: <Keys keys={keys.pushToTalk} />,
+              type: <Keys keys={keys.typeToKivo} />,
             })}
           </span>
         ) : (
@@ -128,6 +174,12 @@ export function Home({
             {t("home.pause")}
           </Button>
         ) : null}
+        {session !== null && session !== "idle" && session !== "paused" && (
+          // The emergency stop (SEC-25): the turn, KIVO's voice and (from M5) tasks.
+          <Button variant="stop" icon="stop" onClick={() => run(() => request(Method.sessionStopEverything))}>
+            {t("home.stopEverything")}
+          </Button>
+        )}
         {mode && (
           <Select label={t("home.mode")} icon="permissions" items={modes()} value={mode} onChange={chooseMode} />
         )}
@@ -145,7 +197,13 @@ export function Home({
             onRetry={() => run(() => request(Method.modelsInstall, { id: "moonshine-base-en" }))}
           />
           {snapshot.hotkeyConflict && (
-            <Alert kind="warning" title={t("home.hotkeyTaken", { keys: snapshot.hotkeyConflict })} />
+            // The rebind prompt (VOICE-41): the keys still work, but another app uses them too.
+            <Alert kind="warning" title={t("home.hotkeyTaken", { keys: snapshot.hotkeyConflict })}>
+              <div className="k-home__rebind">
+                {t("home.hotkeyRebind")}
+                <ShortcutRecorder value={keys.pushToTalk} onChange={rebind} />
+              </div>
+            </Alert>
           )}
         </div>
       )}

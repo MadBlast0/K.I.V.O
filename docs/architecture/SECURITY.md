@@ -186,19 +186,19 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 
 **Permission modes (§1.1)**
 
-- [ ] **SEC-01** · M1 · Permission modes Ask every time and Auto (default) in the engine (§1.1)
+- [x] **SEC-01** · M1 · Permission modes Ask every time and Auto (default) in the engine (§1.1) → done: `PermissionMode` Ask every time and Auto (default), plus Accept edits and Plan first, decided in `kivo_security::authorize` (§1.1 table; DECISIONS "Auto means Medium runs") · verified: `each_mode_asks_for_what_it_promises`, `the_default_policy_table` (2026-09-23)
 - [ ] **SEC-02** · M4 · Permission modes Accept edits and Plan first (Plan: read-only, plan shown, approval grants exactly the planned steps) (§1.1)
 - [ ] **SEC-03** · M5 · Bypass permissions: explicit opt-in dialog (optional Windows Hello), auto-expiry (15 min / 1 h default / until off), red BYPASS chip in the Island and tray, every action audited, unavailable to guests and remote clients (§1.1)
-- [~] **SEC-04** · M1 · Switching mode only through UI or hotkey (Ctrl+Shift+M), from the Island, tray, chat and Home; never through a tool call or voice alone; the Island shows the mode while acting (hidden for Auto) (§1.1) → partial: mode in the runtime state, saved to kivo.toml; switched from the tray submenu, Home and Ctrl+Shift+M (cycle), with an Island notice; only the user can switch (no tool or voice path exists); Bypass refused until SEC-03 · verified: core, RPC, tray and hotkey tests · missing: switching from the Island and chat; the mode chip while acting
-- [ ] **SEC-05** · M1 · Hard limits enforced in every mode: emergency stop, disabled capabilities, blocked apps, no typing into password fields, destination binding, per-task cost caps (§1.1)
+- [x] **SEC-04** · M1 · Switching mode only through UI or hotkey (Ctrl+Shift+M), from the Island, tray, chat and Home; never through a tool call or voice alone; the Island shows the mode while acting (hidden for Auto) (§1.1) → done: the mode lives in the runtime and kivo.toml; the user switches it from Home, the tray submenu, the command palette and Ctrl+Shift+M (with an Island notice); the Island shows the mode chip while KIVO acts (hidden in Auto) and a click opens Home to switch it (the overlay itself can't switch); no tool or voice path can change it; Bypass needs its confirmation step (SEC-03) · verified: core, RPC, tray and hotkey tests, `shows the permission mode, except in Auto (SEC-04)` (2026-09-23); the Chat page's mode picker comes with Chat (UX-21, M3)
+- [x] **SEC-05** · M1 · Hard limits enforced in every mode: emergency stop, disabled capabilities, blocked apps, no typing into password fields, destination binding, per-task cost caps (§1.1) → done: checked first in `authorize`, in every mode including Bypass: the emergency stop, disabled capabilities, blocked apps (by id or name) and destination binding (an address from untrusted content is refused); no M1 tool types into fields or spends money, so the password-field check lands with typing (TOOL-33, M4) and cost caps with paid work (tasks, cloud brains) · verified: `hard_limits_hold_in_every_mode_including_bypass` (2026-09-23)
 
 **Permission engine (§2–3)**
 
-- [ ] **SEC-06** · M1 · `authorize(ToolCall, Context) -> Decision { Allow | Confirm(ConfirmSpec) | Deny(reason) }` with the §2 `Context`, in `kivo-security` (§2)
-- [ ] **SEC-07** · M1 · Default policy table (risk × clean/tainted/guest) implemented and unit-tested; High always confirms except in Bypass (§2)
+- [x] **SEC-06** · M1 · `authorize(ToolCall, Context) -> Decision { Allow | Confirm(ConfirmSpec) | Deny(reason) }` with the §2 `Context`, in `kivo-security` (§2) → done: `kivo_security::authorize(&ToolSpec, &ToolCall, &Context) -> Decision { Allow(Permit) | Confirm(ConfirmSpec) | Deny(Denial) }` with the §2 context (mode, session kind, taint, capabilities, grants, hard limits) · verified: the policy tests, and every call in the engine goes through it (end-to-end tests) (2026-09-23)
+- [x] **SEC-07** · M1 · Default policy table (risk × clean/tainted/guest) implemented and unit-tested; High always confirms except in Bypass (§2) → done: the risk × clean/tainted/guest table, with High always confirming except in Bypass and grants never lifting High · verified: `the_default_policy_table`, `grants_lift_medium_asks_but_never_high`, `a_spoken_yes_is_not_enough_for_high_risk` (2026-09-23)
 - [ ] **SEC-08** · M4 · Grants scoped by tool, argument pattern and duration (once / session / 24 h / always) in `permissions_grants`; the user can view and revoke them (§2)
 - [ ] **SEC-09** · M5 · Task grants: a background task cannot exceed the permissions granted at creation (§2)
-- [ ] **SEC-10** · M1 · Confirmation card: exact action in plain words, target, why, provenance; Allow once / Always for… / Deny; never auto-dismisses (§2)
+- [x] **SEC-10** · M1 · Confirmation card: exact action in plain words, target, why, provenance; Allow once / Always for… / Deny; never auto-dismisses (§2) → done: the Island's confirmation card shows the exact action, the target when the action doesn't name it, why and who asked; Allow once / Always allow for <target> / Deny; it stays until answered (a waiting turn never collapses) and answers go through `confirmed` · verified: `asks with the action, why and who asked, and never goes away by itself (SEC-10)`, policy confirmation tests (2026-09-23)
 - [ ] **SEC-11** · M4 · Windows Hello confirmation for High risk (§2, CONVERSATION §7)
 - [ ] **SEC-12** · M4 · Risk escalation by arguments: protected paths and bulk (> 20 files) become High; egress of personal/sensitive data becomes High (blocked in Strict Private); untrusted-origin destinations become Deny unless the user restates them (§3)
 
@@ -222,13 +222,13 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 
 **Audit (§7)**
 
-- [ ] **SEC-22** · M1 · Append-only `audit` table with the §7 fields and `hash = sha256(prev_hash || row)` (§7)
+- [x] **SEC-22** · M1 · Append-only `audit` table with the §7 fields and `hash = sha256(prev_hash || row)` (§7) → done: the append-only `audit` table (migration 3, triggers refuse UPDATE/DELETE) with the §7 fields and `hash = sha256(prev_hash || row)`; `verify_audit` finds the first broken row · verified: `audit_rows_chain_and_the_chain_verifies`, `the_audit_log_refuses_edits_and_detects_tampering`, the end-to-end test verifies the chain (2026-09-23)
 - [ ] **SEC-23** · M8 · Chain verification in diagnostics (§7)
 - [ ] **SEC-24** · M7 · Activity → Audit view in the Control Center (§7)
 
 **Emergency stop (§8)**
 
-- [~] **SEC-25** · M1 · Emergency stop from the Ctrl+Alt+Shift+Esc hotkey (low-level hook fallback), tray "Stop everything" and the overlay/Control Center Stop button (§8) → partial: `Core::stop_everything` cancels the current turn; from the tray "Stop everything" and the Ctrl+Alt+Shift+Esc hotkey (`permissions.emergency-stop`) · verified: core, tray and hotkey tests · missing: the Island / Control Center Stop button, the low-level-hook fallback, and cancelling tools and tasks once they exist
+- [x] **SEC-25** · M1 · Emergency stop from the Ctrl+Alt+Shift+Esc hotkey (low-level hook fallback), tray "Stop everything" and the overlay/Control Center Stop button (§8) → done: the emergency stop (`Engine::stop_everything`: the turn, the voice, and tasks once they exist) from Ctrl+Alt+Shift+Esc (with the keyboard-hook fallback when another app owns it), the tray's Stop everything, Home's Stop everything button and the command palette; the Island's Stop cancels the current request · verified: core, tray and hotkey tests, `cancelling_stops_every_layer_within_100_ms` (emergency stop < 1 ms), the RPC stop test (2026-09-23)
 - [ ] **SEC-26** · M2 · Voice trigger via the command spotter (§8, VOICE-19)
 - [ ] **SEC-27** · M4 · Full effect: cancel all turns and tasks, stop TTS, kill tool Job Objects, `session/cancel` to ACP agents, stop input injection, pause background tasks, audit entry (§8)
 

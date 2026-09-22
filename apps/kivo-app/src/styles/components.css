@@ -1307,6 +1307,12 @@
   place-items: center;
   color: var(--isl-2);
 }
+button.k-island__chip {
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font-family: inherit;
+}
 .k-island__chip--danger {
   background: rgba(255, 81, 71, 0.22);
   color: #ff8a80;
