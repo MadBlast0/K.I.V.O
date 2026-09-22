@@ -148,6 +148,13 @@ impl Speaker {
         *lock(&self.speaking_level) = 0.0;
     }
 
+    /// True while KIVO's voice (not an earcon) still has audio to play.
+    pub fn speaking(&self) -> bool {
+        lock(&self.open)
+            .as_ref()
+            .is_some_and(|o| o.mixer.speech_queued() > 0)
+    }
+
     /// True while something is still to be heard.
     pub fn busy(&self) -> bool {
         lock(&self.open).as_ref().is_some_and(|o| o.mixer.busy())

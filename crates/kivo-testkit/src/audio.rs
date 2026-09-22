@@ -1,5 +1,6 @@
 //! A fake audio device: capture replays a scripted clip on a thread; playback pulls a fixed number
-//! of buffers from its source and records what it would have played.
+//! of buffers from its source and records what it would have played, or, in real-time mode, keeps
+//! pulling a 10 ms buffer every 10 ms like a speaker until the stream is dropped.
 
 use kivo_platform::{
     AudioDevice, AudioIo, AudioStream, DeviceId, FrameSink, FrameSource, PlatformResult,
@@ -25,7 +26,8 @@ pub struct FakeAudio {
     /// Everything playback streams produced.
     pub played: Arc<Mutex<Vec<f32>>>,
     /// Deliver the clip in real time, one 10 ms chunk every 10 ms, like a microphone (a virtual
-    /// mic for end-to-end tests, BENCH-08). Otherwise it is delivered as fast as possible.
+    /// mic for end-to-end tests, BENCH-08), and play like a speaker, one 10 ms buffer every 10 ms.
+    /// Otherwise the clip is delivered as fast as possible and playback pulls `playback_chunks`.
     pub realtime: bool,
 }
 
@@ -122,12 +124,34 @@ impl AudioIo for FakeAudio {
         })))
     }
 
-    /// Pulls `playback_chunks` buffers synchronously before returning, so tests are deterministic.
+    /// Pulls `playback_chunks` buffers synchronously before returning, so tests are deterministic;
+    /// in real-time mode a thread pulls a buffer every 10 ms until the stream is dropped.
     fn open_playback(
         &self,
         _device: Option<&DeviceId>,
         mut source: FrameSource,
     ) -> PlatformResult<Box<dyn AudioStream>> {
+        if self.realtime {
+            let played = Arc::clone(&self.played);
+            return Ok(Box::new(FakeStream::spawn(move |stop| {
+                let mut buffer = [0.0f32; CHUNK];
+                let started = std::time::Instant::now();
+                let mut n: u64 = 0;
+                while !stop.load(Ordering::SeqCst) {
+                    buffer.fill(0.0);
+                    source(&mut buffer, FAKE_FORMAT);
+                    played
+                        .lock()
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .extend_from_slice(&buffer);
+                    n += 1;
+                    let due = std::time::Duration::from_millis(10 * n);
+                    if let Some(wait) = due.checked_sub(started.elapsed()) {
+                        std::thread::sleep(wait);
+                    }
+                }
+            })));
+        }
         let mut buffer = [0.0f32; CHUNK];
         let mut played = self.played.lock().unwrap_or_else(PoisonError::into_inner);
         for _ in 0..self.playback_chunks {
@@ -211,6 +235,18 @@ mod tests {
             .unwrap();
         drop(stream);
         assert_eq!(*audio.played.lock().unwrap(), vec![0.25; CHUNK * 2]);
+    }
+
+    #[test]
+    fn a_realtime_speaker_keeps_playing_until_dropped() {
+        let audio = FakeAudio::microphone(Vec::new());
+        let stream = audio
+            .open_playback(None, Box::new(|buf, _| buf.fill(0.5)))
+            .unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        drop(stream);
+        let played = audio.played.lock().unwrap().len();
+        assert!((CHUNK * 5..=CHUNK * 15).contains(&played), "{played}");
     }
 
     #[test]

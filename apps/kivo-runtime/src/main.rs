@@ -229,6 +229,7 @@ async fn run(args: Args, paths: &Paths, config: kivo_core::KivoConfig, writable:
         app_catalog: Arc::clone(&app_catalog),
         router: IntentRouter::new(grammar),
         system: Arc::clone(&platform.system),
+        fallback_voice: Some(Arc::new(kivo_platform_windows::WindowsSpeech)),
     }));
     {
         // The app index is read once at startup, off the startup path.

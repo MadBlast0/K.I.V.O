@@ -69,6 +69,9 @@ pub struct Parts {
     pub router: IntentRouter,
     /// Whether a fullscreen app or Focus is on (UX-11).
     pub system: Arc<dyn kivo_platform::SystemInfo>,
+    /// Windows' own voice, in this process: speaks a failure when the speech worker is gone
+    /// (ARCH-09). `None` keeps failures on screen only.
+    pub fallback_voice: Option<Arc<dyn kivo_platform::SpeechSynth>>,
 }
 
 pub struct Engine {
@@ -81,6 +84,7 @@ pub struct Engine {
     windows: Arc<dyn Windows>,
     app_catalog: Arc<RwLock<Vec<kivo_platform::AppEntry>>>,
     system: Arc<dyn kivo_platform::SystemInfo>,
+    fallback_voice: Option<Arc<dyn kivo_platform::SpeechSynth>>,
     app_index: RwLock<(Index, Instant)>,
     router: Mutex<IntentRouter>,
     turn: Mutex<Option<Running>>,
@@ -100,6 +104,7 @@ impl Engine {
             windows: parts.windows,
             app_catalog: parts.app_catalog,
             system: parts.system,
+            fallback_voice: parts.fallback_voice,
             app_index: RwLock::new((Index::default(), Instant::now() - APPS_TTL * 2)),
             router: Mutex::new(parts.router),
             turn: Mutex::new(None),
@@ -700,6 +705,22 @@ impl Engine {
             self.finish_speaking();
             return;
         }
+        // A quick action can finish before the worker (warmed when the turn began) is up: wait
+        // for it, unless the turn is cancelled meanwhile.
+        if !self.infer.is_ready() {
+            let cancel = lock(&self.turn).as_ref().map(|t| t.cancel.clone());
+            let Some(cancel) = cancel else { return };
+            let ready = tokio::select! {
+                ready = self.infer.wait_ready(WORKER_START) => ready,
+                () = cancel.cancelled() => return,
+            };
+            if !ready {
+                // No worker: Windows' voice in this process says it instead.
+                self.say_in_process(text);
+                self.finish_speaking();
+                return;
+            }
+        }
         let id = self.infer.next_utterance();
         if let Some(running) = lock(&self.turn).as_mut() {
             running.speaking = Some(id);
@@ -822,6 +843,7 @@ impl Engine {
     /// The engine broke: tell the user and end the turn (ARCH-09).
     fn fail_turn(&self, message: &str) {
         self.show_error(message);
+        self.say_failure(message);
         self.recorder.answer(&self.turn_key(), message, "failed");
         if self.core.state().borrow().session.is_active() {
             self.core.advance(SessionInput::Fail);
@@ -854,7 +876,9 @@ impl Engine {
     pub fn cancel(&self, reason: CancelReason) {
         let Some(running) = lock(&self.turn).take() else {
             // Nothing running: stop whatever the session is doing and clear what the Island shows
-            // ("Not now" on a finished request's card).
+            // ("Not now" on a finished request's card). The reply may still be playing (it is
+            // synthesized faster than it is heard), so the voice stops too.
+            self.speaker.stop();
             let _ = self.core.cancel_turn();
             self.core.clear_turn();
             return;
@@ -883,6 +907,32 @@ impl Engine {
         self.speaker.stop();
         self.core.stop_everything();
         self.recorder.emergency_stop();
+    }
+
+    /// Speaks a failure with Windows' own voice in this process, since the speech worker (and its
+    /// voices) may be what failed. Follows "Speak responses" (CAP).
+    fn say_failure(&self, message: &str) {
+        if self
+            .core
+            .config()
+            .capabilities
+            .enabled(kivo_core::Capability::SpeakResponses)
+        {
+            self.say_in_process(message);
+        }
+    }
+
+    /// Windows' own voice, in this process, for when the speech worker can't speak.
+    fn say_in_process(&self, message: &str) {
+        let Some(voice) = self.fallback_voice.clone() else {
+            return;
+        };
+        let speaker = Arc::clone(&self.speaker);
+        let text = message.to_owned();
+        tokio::task::spawn_blocking(move || match voice.synthesize(&text, None) {
+            Ok(audio) => speaker.speak(&audio.samples, audio.rate),
+            Err(e) => tracing::warn!(%e, "couldn't speak the failure"),
+        });
     }
 
     /// The speech worker died mid-turn.

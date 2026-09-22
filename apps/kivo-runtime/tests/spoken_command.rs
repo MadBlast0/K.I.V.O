@@ -43,8 +43,32 @@ fn spoken(text: &str) -> Vec<f32> {
     clip
 }
 
+/// Windows' voice stand-in: records what KIVO says in-process (a failure, ARCH-09).
+#[derive(Default)]
+struct Heard(Mutex<Vec<String>>);
+
+impl SpeechSynth for Heard {
+    fn voices(&self) -> kivo_platform::PlatformResult<Vec<kivo_platform::SystemVoice>> {
+        Ok(Vec::new())
+    }
+    fn synthesize(
+        &self,
+        text: &str,
+        _voice: Option<&str>,
+    ) -> kivo_platform::PlatformResult<kivo_platform::SynthAudio> {
+        self.0.lock().unwrap().push(text.to_owned());
+        Ok(kivo_platform::SynthAudio {
+            rate: 16_000,
+            samples: vec![0.0; 160],
+        })
+    }
+}
+
 struct Rig {
     engine: Arc<Engine>,
+    infer: Infer,
+    heard: Arc<Heard>,
+    listener: Arc<voice::Listener>,
     core: Arc<Core>,
     apps: Arc<FakeApps>,
     recorder: activity::Recorder,
@@ -97,6 +121,7 @@ fn rig(
         screenshots: std::env::temp_dir(),
     });
     let registry = Arc::new(kivo_tools::Registry::new(kivo_tools::builtin(&env)));
+    let heard = Arc::new(Heard::default());
     let engine = Arc::new(Engine::new(engine::Parts {
         core: Arc::clone(&core),
         infer: infer.clone(),
@@ -108,6 +133,7 @@ fn rig(
         app_catalog: catalog,
         router: kivo_intent::IntentRouter::new(kivo_intent::Grammar::bundled("en").unwrap()),
         system: Arc::new(kivo_testkit::FakeSystemInfo::default()),
+        fallback_voice: Some(heard.clone()),
     }));
     engine.refresh_apps();
     let (signals, mut voice_signals) = tokio::sync::mpsc::unbounded_channel();
@@ -122,10 +148,10 @@ fn rig(
         levels,
         signals,
     }));
-    engine.set_listener(listener);
+    engine.set_listener(Arc::clone(&listener));
     core.set_speech_status(SpeechStatus::Ready);
 
-    let worker_task = tokio::spawn(infer::supervise(infer, sender, core.shutdown()));
+    let worker_task = tokio::spawn(infer::supervise(infer.clone(), sender, core.shutdown()));
     let pump = {
         let engine = Arc::clone(&engine);
         tokio::spawn(async move {
@@ -146,6 +172,9 @@ fn rig(
     (
         Rig {
             engine,
+            infer,
+            heard,
+            listener,
             core,
             apps,
             recorder,
@@ -298,6 +327,137 @@ async fn a_typed_command_is_treated_like_a_spoken_one() {
         rig.core.state().borrow().session == SessionState::Idle
     })
     .await;
+    rig.core.quit();
+    let _ = tokio::time::timeout(Duration::from_secs(5), worker_task).await;
+    pump.abort();
+}
+
+/// ARCH-09: the speech worker crashes in the middle of a turn. The turn fails with a message that
+/// is shown and spoken (in-process, since the worker's voices are gone), KIVO keeps running, and
+/// the worker comes back on the next use.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_crashed_speech_worker_fails_the_turn_aloud_and_comes_back() {
+    let paths = Paths::user().expect("per-user folders");
+    let Some(model) = ModelStore::new(paths.models()).installed(kivo_voice::moonshine::MODEL_ID)
+    else {
+        eprintln!("the speech model isn't installed on this machine; skipping");
+        return;
+    };
+    if !worker().is_file() {
+        eprintln!("kivo-infer isn't built beside the tests; skipping");
+        return;
+    }
+    // Twenty seconds of quiet: the turn is still listening when the worker dies.
+    let (rig, worker_task, pump) = rig(vec![0.0; 16_000 * 20], model.dir);
+    rig.engine
+        .talk(TurnSource::PushToTalk)
+        .await
+        .expect("KIVO starts listening");
+    assert!(
+        rig.infer.wait_ready(Duration::from_secs(30)).await,
+        "the worker started"
+    );
+    let first = rig.infer.worker_pid().expect("a worker is running");
+
+    // The crash: the worker process is killed from outside.
+    let killed = std::process::Command::new("taskkill")
+        .args(["/F", "/PID", &first.to_string()])
+        .output()
+        .expect("taskkill runs");
+    assert!(killed.status.success(), "{killed:?}");
+
+    let expected = kivo_core::text::t("turn.ttsLost");
+    until("the turn to fail", Duration::from_secs(10), || {
+        rig.core.turn_view().and_then(|t| t.error).as_deref() == Some(expected.as_str())
+    })
+    .await;
+    until("the failure to be spoken", Duration::from_secs(10), || {
+        rig.heard.0.lock().unwrap().contains(&expected)
+    })
+    .await;
+    assert_ne!(rig.core.state().borrow().session, SessionState::Listening);
+
+    // The next use starts a new worker.
+    rig.infer.warm();
+    assert!(
+        rig.infer.wait_ready(Duration::from_secs(30)).await,
+        "the worker came back"
+    );
+    assert_ne!(rig.infer.worker_pid(), Some(first));
+
+    rig.core.quit();
+    let _ = tokio::time::timeout(Duration::from_secs(5), worker_task).await;
+    pump.abort();
+}
+
+/// ARCH-26: Stop, Esc, the Island's X and the emergency stop all cancel the turn through
+/// `Engine::cancel`, and every layer has stopped within 100 ms: recognition and the microphone
+/// while listening, the voice while speaking. (The tool layer's own ≤ 100 ms check is in
+/// `kivo-tools`; barge-in (M2) takes the same path.)
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn cancelling_stops_every_layer_within_100_ms() {
+    const BUDGET: Duration = Duration::from_millis(100);
+    if !worker().is_file() {
+        eprintln!("kivo-infer isn't built beside the tests; skipping");
+        return;
+    }
+    let paths = Paths::user().expect("per-user folders");
+    let model = ModelStore::new(paths.models()).installed(kivo_voice::moonshine::MODEL_ID);
+
+    // While listening (needs the speech model): the mic closes and the session is idle.
+    if let Some(model) = model {
+        let (rig, worker_task, pump) = rig(vec![0.0; 16_000 * 20], model.dir);
+        for reason in [
+            kivo_core::event::CancelReason::Hotkey,
+            kivo_core::event::CancelReason::UserButton,
+            kivo_core::event::CancelReason::EmergencyStop,
+        ] {
+            rig.engine
+                .talk(TurnSource::PushToTalk)
+                .await
+                .expect("listening");
+            until("listening", Duration::from_secs(10), || {
+                rig.listener.is_listening()
+            })
+            .await;
+            let start = Instant::now();
+            if reason == kivo_core::event::CancelReason::EmergencyStop {
+                rig.engine.stop_everything();
+            } else {
+                rig.engine.cancel(reason);
+            }
+            until("everything to stop", BUDGET, || {
+                !rig.listener.is_listening()
+                    && rig.core.state().borrow().session == SessionState::Idle
+            })
+            .await;
+            eprintln!("{reason:?} while listening: {:?}", start.elapsed());
+        }
+        rig.core.quit();
+        let _ = tokio::time::timeout(Duration::from_secs(5), worker_task).await;
+        pump.abort();
+    } else {
+        eprintln!("the speech model isn't installed; skipping the listening half");
+    }
+
+    // While speaking: the voice stops.
+    let (rig, worker_task, pump) = rig(Vec::new(), PathBuf::from("no-model"));
+    // Typed requests are silent unless asked (UX §8); this one should speak.
+    rig.core
+        .update_config(|c| c.voice.speak_typed_replies = true);
+    rig.engine.say("mute").await.expect("accepted");
+    until("KIVO to speak", Duration::from_secs(20), || {
+        rig.engine.speaker.speaking()
+    })
+    .await;
+    let start = Instant::now();
+    rig.engine
+        .cancel(kivo_core::event::CancelReason::UserButton);
+    until("the voice to stop", BUDGET, || {
+        !rig.engine.speaker.speaking() && rig.core.state().borrow().session == SessionState::Idle
+    })
+    .await;
+    eprintln!("cancel while speaking: {:?}", start.elapsed());
     rig.core.quit();
     let _ = tokio::time::timeout(Duration::from_secs(5), worker_task).await;
     pump.abort();

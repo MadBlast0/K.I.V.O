@@ -85,6 +85,8 @@ pub struct Infer {
     used: watch::Sender<u64>,
     warm_for: Arc<Mutex<Duration>>,
     next_id: Arc<AtomicU64>,
+    /// The running worker's process id (0 while none runs).
+    pid: Arc<std::sync::atomic::AtomicU32>,
     program: PathBuf,
 }
 
@@ -107,6 +109,7 @@ impl Infer {
                 used: watch::Sender::new(0),
                 warm_for: Arc::new(Mutex::new(Duration::from_secs(10 * 60))),
                 next_id: Arc::new(AtomicU64::new(1)),
+                pid: Arc::default(),
                 program,
             },
             rx,
@@ -178,6 +181,11 @@ impl Infer {
     pub fn loaded(&self) -> bool {
         let e = self.engines.borrow();
         e.stt.is_some() || e.tts.is_some()
+    }
+
+    /// The worker's process id, if one is running (diagnostics and tests).
+    pub fn worker_pid(&self) -> Option<u32> {
+        Some(self.pid.load(Ordering::Relaxed)).filter(|&p| p != 0)
     }
 
     pub fn next_utterance(&self) -> u64 {
@@ -368,6 +376,7 @@ async fn run_worker(
         pid = welcome.pid,
         "speech worker started"
     );
+    infer.pid.store(welcome.pid, Ordering::Relaxed);
     *infer
         .peer
         .lock()
@@ -405,6 +414,7 @@ async fn run_worker(
         }
     };
     infer.ready.send_replace(false);
+    infer.pid.store(0, Ordering::Relaxed);
     *infer
         .peer
         .lock()

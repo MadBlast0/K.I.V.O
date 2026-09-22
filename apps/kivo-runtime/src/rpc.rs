@@ -293,6 +293,7 @@ mod tests {
             app_catalog: catalog,
             router: IntentRouter::new(Grammar::bundled("en").unwrap()),
             system: Arc::new(kivo_testkit::FakeSystemInfo::default()),
+            fallback_voice: None,
         }));
         let lifecycle = Arc::new(Lifecycle::new(
             Arc::clone(&core),
