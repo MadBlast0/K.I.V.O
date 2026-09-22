@@ -1,5 +1,5 @@
 //! Turning a transcript into matchable words (BRAINS §2): lower case, punctuation removed except
-//! inside web addresses and contractions, `%` spoken as "percent", fillers stripped.
+//! inside web addresses, apostrophes dropped, `%` spoken as "percent", fillers stripped.
 
 /// Words of `text`, normalized.
 pub fn words(text: &str) -> Vec<String> {
@@ -9,19 +9,20 @@ pub fn words(text: &str) -> Vec<String> {
         .replace(['’', '‘'], "'");
     let mut out = Vec::new();
     for raw in lower.split_whitespace() {
-        // Keep dots and apostrophes only between letters or digits ("youtube.com", "what's").
+        // Keep dots only between letters or digits ("youtube.com"). Apostrophes are dropped
+        // ("what's" → "whats"): people type contractions both ways.
         let chars: Vec<char> = raw.chars().collect();
         let mut word = String::new();
         for (i, &c) in chars.iter().enumerate() {
             let inner = |c: char| c.is_alphanumeric();
             let between =
                 i > 0 && i + 1 < chars.len() && inner(chars[i - 1]) && inner(chars[i + 1]);
-            if c.is_alphanumeric()
-                || ((c == '.' || c == '\'' || c == '/') && between)
-                || c == '-' && between
-            {
+            if c == '\'' {
+                continue;
+            }
+            if c.is_alphanumeric() || ((c == '.' || c == '/') && between) || c == '-' && between {
                 word.push(c);
-            } else if !word.is_empty() && !c.is_alphanumeric() && c != '.' && c != '\'' {
+            } else if !word.is_empty() && !c.is_alphanumeric() && c != '.' {
                 // A symbol inside a word splits it ("rock&roll" → "rock", "roll").
                 out.push(std::mem::take(&mut word));
             }
@@ -154,7 +155,8 @@ mod tests {
             words("Go to YouTube.com, please"),
             ["go", "to", "youtube.com", "please"]
         );
-        assert_eq!(words("What’s playing?"), ["what's", "playing"]);
+        assert_eq!(words("What’s playing?"), ["whats", "playing"]);
+        assert_eq!(words("whats playing"), words("what's playing"));
         assert_eq!(words("  --  "), Vec::<String>::new());
     }
 

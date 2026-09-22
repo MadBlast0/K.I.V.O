@@ -105,6 +105,12 @@ export function Overlay() {
       openMode: () => request("island.openMode"),
       retry: (text) => request(Method.sessionSay, { text }),
       enable: (capability) => request(Method.capabilitiesSet, { capability, on: true }),
+      edit: (text) => {
+        setDraft(text);
+        setTyping(true);
+        void invoke("overlay_focus");
+      },
+      talk: () => request(Method.sessionTalk),
     }),
     [],
   );
@@ -164,9 +170,16 @@ export function Overlay() {
       }
     : null;
 
-  // Typing wins; then what KIVO is doing; then a recent mode change for a moment.
-  const model =
+  // Typing wins; then what KIVO is doing; then a recent mode change for a moment; then, while the
+  // pointer is over it, the card the user is reading (UX-10: it doesn't collapse under the mouse).
+  const [held, setHeld] = useState<IslandModel | null>(null);
+  const live =
     typingModel ?? (snapshot ? islandForTurn(snapshot, t, handlers) : null) ?? (notice ? islandForMode(notice) : null);
+  const model = live ?? held;
+  const hover = (on: boolean) => {
+    setHeld(on ? live : null);
+    if (isTauri()) void invoke("overlay_hover", { hovering: on });
+  };
 
   // Clicks reach the window only while it has something to click (UX §2).
   const withButtons = !typing && hasButtons(model);
@@ -247,7 +260,17 @@ export function Overlay() {
     <MotionConfig reducedMotion="user">
       {/* The keys only act while the user asked for keyboard focus (Ctrl+Shift+Space). */}
       {/* oxlint-disable-next-line jsx-a11y/no-static-element-interactions */}
-      <div className="k-overlay" ref={root} onKeyDown={onIslandKey}>
+      <div
+        className="k-overlay"
+        ref={root}
+        // Half the screen, less the Island's row and shadow: the card scrolls beyond it (UX-09).
+        style={{
+          ["--island-body-max" as string]: `${Math.max(160, Math.round(window.screen.availHeight / 2) - 90)}px`,
+        }}
+        onKeyDown={onIslandKey}
+        onMouseEnter={() => hover(true)}
+        onMouseLeave={() => hover(false)}
+      >
         <Island
           model={model}
           level={readLevel}

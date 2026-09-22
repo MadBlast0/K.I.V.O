@@ -125,6 +125,8 @@ pub fn run() {
             overlay::overlay_fit,
             overlay::overlay_interactive,
             overlay::overlay_typing_done,
+            overlay::overlay_focus,
+            overlay::overlay_hover,
             overlay::island_request
         ])
         .on_window_event(|window, event| {

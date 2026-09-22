@@ -164,6 +164,19 @@ pub struct TurnView {
     /// A fullscreen app or Focus is on: the Island hides or shrinks to a dot, and KIVO only
     /// uses sounds (UX §2, UX-11).
     pub quiet: Option<QuietIsland>,
+    /// The centre of the window in front when the request began (physical pixels): the Island
+    /// appears on that window's monitor (UX-06).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub anchor: Option<ScreenPoint>,
+}
+
+/// A point on the desktop, in physical pixels.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ScreenPoint {
+    pub x: i32,
+    pub y: i32,
 }
 
 /// How the Island behaves over a fullscreen app or during Focus (Settings → Island).

@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "overlay",
-  "description": "The Island overlay: it receives the runtime link, fits its own window, takes clicks while it has buttons and focus while typing, and sends only its own buttons' requests (island_request allows cancel, say, talk, answer and stop everything). No general runtime requests (SECURITY §9).",
+  "description": "The Island overlay: it receives the runtime link, fits its own window, takes clicks while it has buttons (and while the pointer holds a finished card), takes focus while typing, and sends only its own buttons' requests (island_request allows cancel, say, talk, answer and stop everything). No general runtime requests (SECURITY §9).",
   "windows": [
     "overlay"
   ],
@@ -12,6 +12,8 @@
     "allow-overlay-fit",
     "allow-overlay-interactive",
     "allow-overlay-typing-done",
+    "allow-overlay-focus",
+    "allow-overlay-hover",
     "allow-island-request"
   ]
 }

@@ -197,6 +197,7 @@ impl Engine {
         self.infer.warm();
         let id = self.turn_id();
         self.core.begin_turn(&id, source, "").map_err(|e| e.0)?;
+        self.anchor_island();
         self.quiet_if_busy();
         let config = self.core.config();
         let utterance = self.infer.next_utterance();
@@ -321,6 +322,7 @@ impl Engine {
         self.core
             .begin_turn(&id, TurnSource::Typed, text)
             .map_err(|e| e.0)?;
+        self.anchor_island();
         self.quiet_if_busy();
         *lock(&self.turn) = Some(Running {
             id: id.clone(),
@@ -701,7 +703,9 @@ impl Engine {
             let capability_on = config
                 .capabilities
                 .enabled(kivo_core::Capability::SpeakResponses);
-            capability_on && (!typed || config.voice.speak_typed_replies)
+            // Over a fullscreen app or in Focus, KIVO uses sounds only (UX §2, UX-11).
+            let quiet = self.core.turn_view().is_some_and(|v| v.quiet.is_some());
+            capability_on && !quiet && (!typed || config.voice.speak_typed_replies)
         };
         let state = self.core.state().borrow().session;
         if state == SessionState::Thinking || state == SessionState::Acting {
@@ -907,6 +911,19 @@ impl Engine {
         let spans = running.spans.clone();
         self.recorder
             .turn_finished(&running.id, &running.transcript, "cancelled", None, &spans);
+    }
+
+    /// The Island appears on the monitor of the window the user is working in (UX-06).
+    fn anchor_island(&self) {
+        let Ok(Some(front)) = self.windows.foreground() else {
+            return;
+        };
+        let b = front.bounds;
+        let anchor = kivo_ipc::protocol::ScreenPoint {
+            x: b.x.saturating_add(i32::try_from(b.width / 2).unwrap_or(0)),
+            y: b.y.saturating_add(i32::try_from(b.height / 2).unwrap_or(0)),
+        };
+        self.core.update_turn(|view| view.anchor = Some(anchor));
     }
 
     /// How requests have been routed: the fast-path share and per-stage p95 (BRAIN-05).

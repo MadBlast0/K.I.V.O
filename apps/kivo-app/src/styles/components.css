@@ -1202,6 +1202,11 @@
   padding: 2px 16px 15px var(--isl-text);
   line-height: 1.45;
   white-space: normal;
+  /* The card grows to half the screen at most, then scrolls (UX §2). */
+  max-height: var(--island-body-max, 420px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
 }
 .k-island__quote {
   color: var(--isl-2);
@@ -1257,6 +1262,52 @@
   font-size: 12.5px;
   font-weight: 500;
   transition: background var(--t-fast);
+}
+/* A final transcript is a button: click to fix it and send again (UX-09). */
+.k-island__quote--edit {
+  display: block;
+  inline-size: 100%;
+  border: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
+  text-align: start;
+  cursor: text;
+}
+.k-island__quote--edit:hover {
+  color: var(--isl-fg);
+}
+/* The card's footer: a field for the next request and the mic. */
+.k-island__footer {
+  display: flex;
+  gap: 6px;
+  margin-block-start: 8px;
+}
+.k-island__field {
+  flex: 1;
+  height: 28px;
+  padding-inline: 12px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--isl-2);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: start;
+  cursor: text;
+}
+.k-island__mic-btn {
+  inline-size: 28px;
+  padding: 0;
+  justify-content: center;
+}
+.k-island__mic-btn svg {
+  width: 14px;
+  height: 14px;
+}
+.k-island__mic-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 /* The accent ring can vanish on black; the Island's focus ring is white. */
 .k-island :focus-visible {

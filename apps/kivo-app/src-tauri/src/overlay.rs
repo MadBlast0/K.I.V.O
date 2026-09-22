@@ -41,6 +41,10 @@ struct State {
     turn: bool,
     /// The user is typing to KIVO (UX-41): the Island stays and can take focus.
     typing: bool,
+    /// The pointer is over the Island: it stays until the pointer leaves (UX-10).
+    hovering: bool,
+    /// Where the current request began (the centre of the window in front), in physical pixels.
+    anchor: Option<(i32, i32)>,
 }
 
 #[derive(Default)]
@@ -69,16 +73,38 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
 
 /// The session changed (`None`: not connected, or the Island is set to hide right now): show the
 /// Island while it is active or has a turn to show.
-pub fn apply(app: &AppHandle, session: Option<SessionState>, turn: bool) {
+pub fn apply(
+    app: &AppHandle,
+    session: Option<SessionState>,
+    turn: bool,
+    anchor: Option<(i32, i32)>,
+) {
     let state = app.state::<Overlay>();
     let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
     guard.session = session;
     guard.turn = turn && session.is_some();
+    let moved = anchor.is_some() && anchor != guard.anchor;
+    if anchor.is_some() {
+        guard.anchor = anchor;
+    }
     update(app, &mut guard);
+    // The request's window is known a moment after the Island appears: move there if needed.
+    if moved
+        && guard.shown
+        && let Some(window) = app.get_webview_window(LABEL)
+    {
+        place(app, &window, guard.anchor);
+    }
 }
 
 /// Ctrl+Shift+Space (UX-41): open the Island with a text field that has focus.
 pub fn start_typing(app: &AppHandle) {
+    take_focus(app);
+    let _ = app.emit_to(LABEL, TYPE_EVENT, ());
+}
+
+/// The Island may take keyboard focus until it gives it back (`overlay_typing_done`).
+fn take_focus(app: &AppHandle) {
     {
         let state = app.state::<Overlay>();
         let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
@@ -90,7 +116,15 @@ pub fn start_typing(app: &AppHandle) {
         let _ = window.set_ignore_cursor_events(false);
         let _ = window.set_focus();
     }
-    let _ = app.emit_to(LABEL, TYPE_EVENT, ());
+}
+
+/// The user clicked into the Island to type (fix the transcript, a follow-up in the footer):
+/// the Island takes focus until the text is sent or dropped (UX-09).
+#[tauri::command]
+pub fn overlay_focus(window: tauri::WebviewWindow) {
+    if window.label() == LABEL {
+        take_focus(window.app_handle());
+    }
 }
 
 /// The Island asks to go back to never taking focus (typing finished or was cancelled).
@@ -129,13 +163,16 @@ fn update(app: &AppHandle, state: &mut State) {
     let active = state
         .session
         .is_some_and(|s| !matches!(s, SessionState::Idle | SessionState::Paused));
-    let visible =
-        active || state.turn || state.typing || (state.noticing && state.session.is_some());
+    let visible = active
+        || state.turn
+        || state.typing
+        || state.hovering
+        || (state.noticing && state.session.is_some());
     state.generation += 1;
     if visible {
         if !state.shown {
             state.shown = true;
-            show(app);
+            show(app, state.anchor);
         }
     } else if state.shown {
         let expected = state.generation;
@@ -152,11 +189,11 @@ fn update(app: &AppHandle, state: &mut State) {
     }
 }
 
-fn show(app: &AppHandle) {
+fn show(app: &AppHandle, anchor: Option<(i32, i32)>) {
     let Some(window) = app.get_webview_window(LABEL) else {
         return;
     };
-    place(app, &window);
+    place(app, &window, anchor);
     // Re-assert topmost so the Island also rises above other always-on-top windows (a video's
     // picture-in-picture, another app's floating toolbar). The window is still hidden here, and
     // setting the same value again is ignored, so it is turned off and on.
@@ -196,13 +233,20 @@ pub fn overlay_fit(window: tauri::WebviewWindow, height: f64) {
     let _ = window.set_size(PhysicalSize::new(width, height));
 }
 
-/// Top center of the monitor under the pointer, 8 px down. The height follows the Island
-/// (`overlay_fit`).
-fn place(app: &AppHandle, window: &tauri::WebviewWindow) {
-    let monitor = app
-        .cursor_position()
-        .ok()
-        .and_then(|p| app.monitor_from_point(p.x, p.y).ok().flatten())
+/// Top center of the monitor with the request's window (else the one under the pointer), 8 px
+/// down. The height follows the Island (`overlay_fit`).
+fn place(app: &AppHandle, window: &tauri::WebviewWindow, anchor: Option<(i32, i32)>) {
+    let monitor = anchor
+        .and_then(|(x, y)| {
+            app.monitor_from_point(f64::from(x), f64::from(y))
+                .ok()
+                .flatten()
+        })
+        .or_else(|| {
+            app.cursor_position()
+                .ok()
+                .and_then(|p| app.monitor_from_point(p.x, p.y).ok().flatten())
+        })
         .or_else(|| app.primary_monitor().ok().flatten());
     let Some(monitor) = monitor else { return };
     let scale = monitor.scale_factor();
@@ -226,6 +270,19 @@ pub fn overlay_interactive(window: tauri::WebviewWindow, interactive: bool) {
     if window.label() == LABEL {
         let _ = window.set_ignore_cursor_events(!interactive);
     }
+}
+
+/// The pointer entered or left the Island: while it is over it, the Island stays (UX-10).
+#[tauri::command]
+pub fn overlay_hover(window: tauri::WebviewWindow, hovering: bool) {
+    if window.label() != LABEL {
+        return;
+    }
+    let app = window.app_handle();
+    let state = app.state::<Overlay>();
+    let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    guard.hovering = hovering;
+    update(app, &mut guard);
 }
 
 /// The Island's text field closed: it no longer takes focus.

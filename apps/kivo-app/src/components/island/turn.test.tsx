@@ -35,6 +35,8 @@ function handlers(): IslandHandlers {
     openMode: vi.fn<IslandHandlers["openMode"]>(),
     retry: vi.fn<IslandHandlers["retry"]>(),
     enable: vi.fn<IslandHandlers["enable"]>(),
+    edit: vi.fn<IslandHandlers["edit"]>(),
+    talk: vi.fn<IslandHandlers["talk"]>(),
   };
 }
 
@@ -75,6 +77,17 @@ describe("Island while KIVO acts", () => {
     fireEvent.click(screen.getByRole("button", { name: "Always allow for Google Chrome" }));
     expect(on.answer).toHaveBeenCalledWith("c1", true, true);
     expect(hasButtons(model)).toBe(true);
+  });
+
+  it("lets the user fix what KIVO heard, type or talk again from the card (UX-09)", () => {
+    const on = handlers();
+    const model = islandForTurn(acting("auto"), i18n.t.bind(i18n), on);
+    render(<>{model?.body}</>);
+    fireEvent.click(screen.getByRole("button", { name: "open chrome" }));
+    expect(on.edit).toHaveBeenCalledWith("open chrome");
+    fireEvent.click(screen.getByRole("button", { name: i18n.t("island.typePlaceholder") }));
+    expect(on.edit).toHaveBeenLastCalledWith("");
+    expect(screen.getByRole("button", { name: i18n.t("island.talk") })).toHaveProperty("disabled", true);
   });
 
   it("takes clicks while it shows Stop", () => {

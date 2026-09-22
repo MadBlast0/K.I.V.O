@@ -85,6 +85,10 @@ impl Runtime {
             app,
             snapshot.map(|s| s.session).filter(|_| !island_hidden),
             snapshot.is_some_and(|s| s.turn.is_some()),
+            snapshot
+                .and_then(|s| s.turn.as_ref())
+                .and_then(|t| t.anchor)
+                .map(|p| (p.x, p.y)),
         );
         // A change of mode while connected (not the first state seen) shows the Island's notice.
         if let (Some(before), Some(now)) = (previous_mode, snapshot.map(|s| s.mode))

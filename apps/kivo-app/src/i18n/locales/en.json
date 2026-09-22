@@ -45,7 +45,9 @@
     },
     "modeChipLabel": "Permission mode: {mode}. Change it in KIVO",
     "allowAlwaysFor": "Always allow for {target}",
-    "target": "On: {target}"
+    "target": "On: {target}",
+    "editHint": "Click to fix and send again",
+    "talk": "Talk"
   },
   "home": {
     "talk": "Talk",

@@ -15,6 +15,7 @@ import {
   IslandSpin,
   type IslandModel,
 } from "./Island";
+import { Icon } from "../../icons";
 
 /** What the Island's buttons do (each goes to the runtime through `island_request`). */
 export interface IslandHandlers {
@@ -27,6 +28,10 @@ export interface IslandHandlers {
   retry: (text: string) => void;
   /** Turns on the capability a request needed (CAP-02): only the one it needed, only on. */
   enable: (capability: Capability) => void;
+  /** Opens the text field with `text` in it: fix what KIVO heard and send it again (UX-09). */
+  edit: (text: string) => void;
+  /** Listens for a new request (the footer's mic). */
+  talk: () => void;
 }
 
 /** The card width for text content (UX §2: up to 520 px). */
@@ -64,13 +69,26 @@ function Steps({ steps }: { steps: StepView[] }) {
   );
 }
 
-/** What the user said, as the Island quotes it (grey while it may still change). */
-function Heard({ turn }: { turn: TurnView }) {
+/** What the user said, as the Island quotes it (grey while it may still change). Once final, a
+ * click opens it in the text field to fix and send again (UX-09). */
+function Heard({ turn, t, on }: { turn: TurnView; t?: TFunction; on?: IslandHandlers }) {
   if (!turn.transcript) return null;
+  if (!turn.transcriptFinal || !on || !t) {
+    return (
+      <div className={turn.transcriptFinal ? "k-island__quote" : "k-island__quote k-island__quote--live"}>
+        {turn.transcript}
+      </div>
+    );
+  }
   return (
-    <div className={turn.transcriptFinal ? "k-island__quote" : "k-island__quote k-island__quote--live"}>
+    <button
+      type="button"
+      className="k-island__quote k-island__quote--edit"
+      title={t("island.editHint")}
+      onClick={() => on.edit(turn.transcript)}
+    >
       {turn.transcript}
-    </div>
+    </button>
   );
 }
 
@@ -134,16 +152,34 @@ function ModeChip({ mode, t, on }: { mode: PermissionMode; t: TFunction; on: Isl
   );
 }
 
-/** The footer every card has while KIVO works (UX-09): Stop and Open in Control Center. */
+/** The card's footer (UX-09): a text field and the mic for the next request, Stop while KIVO
+ * works, and Open in Control Center. */
 function Footer({ t, on, stop }: { t: TFunction; on: IslandHandlers; stop: boolean }) {
   return (
-    <IslandActions
-      hint={false}
-      actions={[
-        ...(stop ? [{ label: t("island.stop"), kind: "danger" as const, onClick: on.stop }] : []),
-        { label: t("island.openControlCenter"), onClick: on.openControlCenter },
-      ]}
-    />
+    <>
+      <div className="k-island__footer">
+        <button type="button" className="k-island__field" onClick={() => on.edit("")}>
+          {t("island.typePlaceholder")}
+        </button>
+        <button
+          type="button"
+          className="k-island__btn k-island__mic-btn"
+          aria-label={t("island.talk")}
+          title={t("island.talk")}
+          onClick={on.talk}
+          disabled={stop}
+        >
+          <Icon name="mic" />
+        </button>
+      </div>
+      <IslandActions
+        hint={false}
+        actions={[
+          ...(stop ? [{ label: t("island.stop"), kind: "danger" as const, onClick: on.stop }] : []),
+          { label: t("island.openControlCenter"), onClick: on.openControlCenter },
+        ]}
+      />
+    </>
   );
 }
 
@@ -178,7 +214,7 @@ export function islandForTurn(snapshot: StateSnapshot, t: TFunction, on: IslandH
       lead: <IslandDot color="#FF5147" />,
       body: (
         <>
-          <Heard turn={turn} />
+          <Heard turn={turn} t={t} on={on} />
           {turn.steps.length > 0 && <Steps steps={turn.steps} />}
           <div className="k-island__answer">{turn.error}</div>
           <IslandActions actions={actions} hint={false} />
@@ -243,7 +279,7 @@ export function islandForTurn(snapshot: StateSnapshot, t: TFunction, on: IslandH
         ),
         body: turn ? (
           <>
-            <Heard turn={turn} />
+            <Heard turn={turn} t={t} on={on} />
             <Steps steps={turn.steps} />
             <Footer t={t} on={on} stop />
           </>
@@ -259,7 +295,7 @@ export function islandForTurn(snapshot: StateSnapshot, t: TFunction, on: IslandH
         voice: "kivo",
         body: turn ? (
           <>
-            <Heard turn={turn} />
+            <Heard turn={turn} t={t} on={on} />
             {turn.answer && <div className="k-island__answer">{turn.answer}</div>}
             <Footer t={t} on={on} stop />
           </>
@@ -283,9 +319,10 @@ export function islandForTurn(snapshot: StateSnapshot, t: TFunction, on: IslandH
           trail: <IslandChip>{t("island.stepDone").toUpperCase()}</IslandChip>,
           body: (
             <>
-              <Heard turn={turn} />
+              <Heard turn={turn} t={t} on={on} />
               {turn.steps.length > 0 && <Steps steps={turn.steps} />}
               <div className="k-island__answer">{turn.answer}</div>
+              <Footer t={t} on={on} stop={false} />
             </>
           ),
         };
@@ -300,6 +337,8 @@ export function hasButtons(model: IslandModel | null): boolean {
   return (
     model.state.startsWith("confirm-") ||
     model.state.startsWith("error-") ||
+    model.state.startsWith("done-") ||
+    model.state.startsWith("capability-") ||
     model.state === "acting" ||
     model.state === "speaking"
   );

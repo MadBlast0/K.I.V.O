@@ -225,5 +225,12 @@
       "body": "A crash report was saved on this PC. It isn’t sent anywhere.",
       "folder": "Open folder"
     }
+  },
+  "refuse": {
+    "pause": "KIVO can pause only while it isn’t busy ({state})",
+    "resume": "KIVO isn’t paused ({state})",
+    "cancel": "KIVO isn’t busy ({state})",
+    "stopping": "KIVO isn’t stopping ({state})",
+    "listen": "KIVO can listen only when it isn’t busy or paused ({state})"
   }
 }

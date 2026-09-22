@@ -16,6 +16,8 @@ decision changes, update the entry and note the date. Do not silently rewrite it
 | **System voice first** | Spoken replies use the Windows voices (WinRT `SpeechSynthesizer`) through the same streaming `TtsEngine` trait and mixer; Kokoro joins as a second engine once its permissive phonemizer exists (VOICE-09) |
 | **Activity recorder** | Activity and Audit rows are written by a recorder the turn engine calls, not by an event-bus subscriber (ARCHITECTURE §4.1, ARCH-23): the rows need the permission decision, the step's arguments and the reply text, which the bus events don't carry, and writing in order with the turn keeps the audit hash chain simple |
 | **Failures are spoken in-process** | When the speech worker is what failed (crash, slow start), the failure message is spoken by Windows' voice inside the runtime, so a turn never fails silently (ARCH-09) |
+| **M1 scope moves** | Parts of M1 items that need later features moved to the items that build them: the first launch on onboarding (UX-01 → UX-33, M2), Home's "Listening for Hey Kivo" (the wake word, VOICE-13, M2), the running-task count and Home's Running list (UX-56/UX-19 → UX-24, M5), the Chat page's mode picker (SEC-04 → UX-21, M3) |
+| **Hotkeys: keyboard-hook fallback** | When another app owns a combination, KIVO catches it first with a low-level keyboard hook and takes those keys (so the other app doesn't act too), and Home says so with a rebind prompt (VOICE-41) |
 | **Auto means Medium runs** | SECURITY §1.1 (the owner's mode table) is authoritative over the older §2 profile table where they differ: in Auto, Safe/Low/Medium run on clean, user-initiated turns; tainted or AI-initiated Medium actions still ask; High always asks except in Bypass |
 
 ## 2026-09-21 — Implementation start

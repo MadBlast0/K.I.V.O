@@ -113,6 +113,25 @@ describe("Overlay keyboard access (UX-52)", () => {
     expect(result.violations.map((v) => v.id)).toEqual([]);
   });
 
+  it("keeps a finished card while the pointer is over it (UX-10)", async () => {
+    const done = snapshot(false);
+    done.session = "idle";
+    done.turn!.answer = "Muted.";
+    await mount(done);
+    expect(screen.getByText("Muted.")).toBeTruthy();
+    const overlay = document.querySelector(".k-overlay")!;
+    fireEvent.mouseEnter(overlay);
+    expect(invoked.some((c) => c.cmd === "overlay_hover")).toBe(true);
+    // The runtime clears the turn after 4 s; the card stays under the pointer.
+    act(() => handlers.get("runtime://link")?.({ payload: connected({ ...done, turn: null }) }));
+    expect(screen.getByText("Muted.")).toBeTruthy();
+    fireEvent.mouseLeave(overlay);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 400));
+    });
+    expect(screen.queryByText("Muted.")).toBeNull();
+  });
+
   it("opens the text field when the Island has no buttons", async () => {
     await mount(snapshot(false));
     act(() => handlers.get("island://type")?.({ payload: null }));

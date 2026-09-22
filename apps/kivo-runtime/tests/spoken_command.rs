@@ -69,6 +69,8 @@ struct Rig {
     infer: Infer,
     heard: Arc<Heard>,
     listener: Arc<voice::Listener>,
+    system: Arc<kivo_testkit::FakeSystemInfo>,
+    windows: Arc<FakeWindows>,
     core: Arc<Core>,
     apps: Arc<FakeApps>,
     recorder: activity::Recorder,
@@ -122,6 +124,7 @@ fn rig(
     });
     let registry = Arc::new(kivo_tools::Registry::new(kivo_tools::builtin(&env)));
     let heard = Arc::new(Heard::default());
+    let system = Arc::new(kivo_testkit::FakeSystemInfo::default());
     let engine = Arc::new(Engine::new(engine::Parts {
         core: Arc::clone(&core),
         infer: infer.clone(),
@@ -129,10 +132,10 @@ fn rig(
         registry,
         recorder: recorder.clone(),
         apps: apps.clone(),
-        windows,
+        windows: windows.clone(),
         app_catalog: catalog,
         router: kivo_intent::IntentRouter::new(kivo_intent::Grammar::bundled("en").unwrap()),
-        system: Arc::new(kivo_testkit::FakeSystemInfo::default()),
+        system: system.clone(),
         fallback_voice: Some(heard.clone()),
     }));
     engine.refresh_apps();
@@ -175,6 +178,8 @@ fn rig(
             infer,
             heard,
             listener,
+            system,
+            windows,
             core,
             apps,
             recorder,
@@ -311,10 +316,31 @@ async fn a_typed_command_is_treated_like_a_spoken_one() {
         c.capabilities.set(Capability::SpeakResponses, false);
     });
 
+    // The window in front, on a second monitor: the Island is anchored there (UX-06).
+    rig.windows
+        .windows
+        .lock()
+        .unwrap()
+        .push(kivo_platform::WindowInfo {
+            id: kivo_platform::WindowId(7),
+            title: "Notes".into(),
+            app_id: "notes".into(),
+            bounds: kivo_platform::Rect {
+                x: 1920,
+                y: 0,
+                width: 1600,
+                height: 900,
+            },
+            minimized: false,
+        });
     rig.engine
         .say("mute")
         .await
         .expect("the request is accepted");
+    assert_eq!(
+        rig.core.turn_view().and_then(|t| t.anchor),
+        Some(kivo_ipc::protocol::ScreenPoint { x: 2720, y: 450 })
+    );
     until("the sound to be muted", Duration::from_secs(10), || {
         rig.core.turn_view().and_then(|t| t.answer).is_some()
     })
@@ -462,6 +488,58 @@ async fn cancelling_stops_every_layer_within_100_ms() {
     })
     .await;
     eprintln!("cancel while speaking: {:?}", start.elapsed());
+    rig.core.quit();
+    let _ = tokio::time::timeout(Duration::from_secs(5), worker_task).await;
+    pump.abort();
+}
+
+/// UX-11: over a fullscreen app (or in Focus) the Island stays out of the way as the setting says
+/// (hidden by default, or a tiny pill) and KIVO answers with sounds only, never speech.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn over_a_fullscreen_app_kivo_stays_quiet() {
+    if !worker().is_file() {
+        eprintln!("kivo-infer isn't built beside the tests; skipping");
+        return;
+    }
+    let (rig, worker_task, pump) = rig(Vec::new(), PathBuf::from("no-model"));
+    rig.system.snapshot.lock().unwrap().fullscreen_app = true;
+    rig.core
+        .update_config(|c| c.voice.speak_typed_replies = true);
+    for (setting, quiet) in [
+        (
+            kivo_core::config::FullscreenBehavior::Hide,
+            kivo_ipc::protocol::QuietIsland::Hidden,
+        ),
+        (
+            kivo_core::config::FullscreenBehavior::TinyPill,
+            kivo_ipc::protocol::QuietIsland::Tiny,
+        ),
+    ] {
+        rig.core
+            .update_config(|c| c.overlay.in_fullscreen = setting);
+        rig.engine.say("mute").await.expect("accepted");
+        assert_eq!(rig.core.turn_view().and_then(|t| t.quiet), Some(quiet));
+        until("the answer", Duration::from_secs(20), || {
+            rig.core.turn_view().and_then(|t| t.answer).is_some()
+        })
+        .await;
+        until("the turn to end", Duration::from_secs(20), || {
+            rig.core.state().borrow().session == SessionState::Idle
+        })
+        .await;
+        rig.core.clear_turn();
+    }
+    // Neither turn produced spoken audio (t9 is the first audio of a spoken reply).
+    for turn in ["t1", "t2"] {
+        let spans = rig
+            .db
+            .lock()
+            .unwrap()
+            .turn_metrics(turn)
+            .unwrap()
+            .expect("the turn's timings were recorded");
+        assert!(spans.get("t9FirstAudio").is_none(), "{turn} spoke: {spans}");
+    }
     rig.core.quit();
     let _ = tokio::time::timeout(Duration::from_secs(5), worker_task).await;
     pump.abort();

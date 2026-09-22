@@ -77,13 +77,14 @@ impl Core {
     }
 
     /// Applies an input the user asked for. Unlike an internal transition, a request that doesn't
-    /// fit the current state is refused with a reason instead of being logged as a bug.
+    /// fit the current state is refused with a reason (`refuse.<refusal>` in the text catalog)
+    /// instead of being logged as a bug.
     fn request(&self, input: SessionInput, refusal: &str) -> Result<SessionState, Refused> {
         let mut session = self.session.lock().unwrap_or_else(|e| e.into_inner());
         if session.state().next(input).is_err() {
-            return Err(Refused(format!(
-                "{refusal} ({})",
-                describe(session.state())
+            return Err(Refused(kivo_core::text::tf(
+                &format!("refuse.{refusal}"),
+                &[("state", &describe(session.state()))],
             )));
         }
         let next = session.apply(input).map_err(|e| Refused(e.to_string()))?;
@@ -96,14 +97,11 @@ impl Core {
 
     /// "Pause listening": the mic is released until resumed (UX §1).
     pub fn pause(&self) -> Result<SessionState, Refused> {
-        self.request(
-            SessionInput::Pause,
-            "KIVO can pause only while it isn't busy",
-        )
+        self.request(SessionInput::Pause, "pause")
     }
 
     pub fn resume(&self) -> Result<SessionState, Refused> {
-        self.request(SessionInput::Resume, "KIVO isn't paused")
+        self.request(SessionInput::Resume, "resume")
     }
 
     /// Cancels whatever KIVO is doing now (Esc, the Island's Stop button, a hotkey release with
@@ -116,13 +114,13 @@ impl Core {
                 &[("state", &describe(state))],
             )));
         }
-        self.request(SessionInput::Cancel, "KIVO isn't busy")?;
+        self.request(SessionInput::Cancel, "cancel")?;
         let next = if state == SessionState::FollowUp {
             SessionState::Idle
         } else {
             self.request(
                 SessionInput::InterruptionHandled { listen: false },
-                "KIVO isn't stopping",
+                "stopping",
             )?
         };
         self.clear_turn();
@@ -208,10 +206,7 @@ impl Core {
         source: TurnSource,
         transcript: &str,
     ) -> Result<SessionState, Refused> {
-        let state = self.request(
-            SessionInput::Activate,
-            "KIVO can listen only when it isn't busy or paused",
-        )?;
+        let state = self.request(SessionInput::Activate, "listen")?;
         self.state.send_modify(|s| {
             s.turn = Some(TurnView {
                 id: id.to_owned(),
@@ -438,7 +433,7 @@ mod tests {
     fn requests_that_dont_fit_the_state_are_refused_without_changing_it() {
         let core = Core::default();
         let refused = core.resume().unwrap_err();
-        assert_eq!(refused, Refused("KIVO isn't paused (Ready)".into()));
+        assert_eq!(refused, Refused("KIVO isn’t paused (Ready)".into()));
         core.pause().unwrap();
         assert!(core.pause().is_err());
         assert_eq!(core.session(), SessionState::Paused);

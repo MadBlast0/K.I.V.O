@@ -8,6 +8,8 @@ fn main() {
         "overlay_fit",
         "overlay_interactive",
         "overlay_typing_done",
+        "overlay_focus",
+        "overlay_hover",
         "island_request",
     ]);
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(manifest))

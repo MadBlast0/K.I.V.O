@@ -176,7 +176,7 @@ mod tests {
         let hotkeys = kivo_testkit::FakeHotkeys::default();
         let taken = Chord(vec!["Ctrl".into(), "Space".into()]);
         hotkeys.taken.lock().unwrap().insert(taken.clone());
-        let mut settings = core.settings_changed();
+        let settings = core.settings_changed();
         bind_push_to_talk(&core, &hotkeys, &taken);
         assert_eq!(
             core.state().borrow().hotkey_conflict.as_deref(),

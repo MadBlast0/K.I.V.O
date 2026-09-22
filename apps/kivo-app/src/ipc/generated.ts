@@ -94,7 +94,12 @@ capabilityOff: Capability | null,
  * A fullscreen app or Focus is on: the Island hides or shrinks to a dot, and KIVO only
  * uses sounds (UX §2, UX-11).
  */
-quiet: QuietIsland | null, };
+quiet: QuietIsland | null, 
+/**
+ * The centre of the window in front when the request began (physical pixels): the Island
+ * appears on that window's monitor (UX-06).
+ */
+anchor?: ScreenPoint, };
 
 export type StepView = { 
 /**
@@ -113,6 +118,8 @@ detail: string | null, };
 export type SpeechStatus = { "state": "ready" } | { "state": "downloading", percent: number, } | { "state": "missing" } | { "state": "failed", message: string, };
 
 export type QuietIsland = "hidden" | "tiny";
+
+export type ScreenPoint = { x: number, y: number, };
 
 export type Residency = "unloaded" | "warming" | "warm" | "active" | "idle" | "unloading";
 
