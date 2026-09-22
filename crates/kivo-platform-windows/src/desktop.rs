@@ -330,6 +330,10 @@ impl Apps for WindowsApps {
         }
         Ok(windows.len())
     }
+
+    fn running(&self, app: &AppEntry) -> PlatformResult<bool> {
+        Ok(list_windows().iter().any(|w| belongs(w, app)))
+    }
 }
 
 #[derive(Default)]
@@ -405,6 +409,13 @@ impl Windows for WindowsWindows {
         let h = check(id)?;
         // SAFETY: plain window call.
         let _ = unsafe { ShowWindow(h, SW_MAXIMIZE) };
+        Ok(())
+    }
+
+    fn restore(&self, id: WindowId) -> PlatformResult<()> {
+        let h = check(id)?;
+        // SAFETY: plain window call.
+        let _ = unsafe { ShowWindow(h, SW_RESTORE) };
         Ok(())
     }
 

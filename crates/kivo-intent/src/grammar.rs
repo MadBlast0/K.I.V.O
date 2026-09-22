@@ -182,7 +182,8 @@ fn compile(pattern: &str) -> Result<Vec<Token>, GrammarError> {
         .split_whitespace()
         .map(|part| {
             let Some(inner) = part.strip_prefix('{').and_then(|p| p.strip_suffix('}')) else {
-                return Ok(Token::Word(part.to_lowercase()));
+                // Normalized like the words it's matched against ("what's" → "whats").
+                return Ok(Token::Word(part.to_lowercase().replace(['\'', '’'], "")));
             };
             let (name, optional) = inner
                 .strip_suffix('?')
@@ -294,6 +295,13 @@ mod tests {
         assert_eq!(open.args["app"]["id"], "chrome");
         assert_eq!(run("Mute").unwrap().tool, "audio.mute");
         assert_eq!(run("Take a screenshot.").unwrap().tool, "screen.screenshot");
+        assert_eq!(
+            run("Screenshot this window").unwrap().tool,
+            "screen.screenshot_window"
+        );
+        assert_eq!(run("Restart Chrome").unwrap().tool, "apps.restart");
+        assert_eq!(run("Restart").unwrap().tool, "system.restart");
+        assert_eq!(run("whats playing").unwrap().tool, "media.now_playing");
         assert_eq!(
             run("Hey Kivo, can you open Spotify for me please?")
                 .unwrap()

@@ -67,7 +67,8 @@
   "tool": {
     "apps": {
       "launch": "Open {app}",
-      "close": "Close {app}"
+      "close": "Close {app}",
+      "restart": "Restart {app}"
     },
     "windows": {
       "focus": "Switch to {window}",
@@ -91,7 +92,8 @@
       "now_playing": "Say what’s playing"
     },
     "screen": {
-      "screenshot": "Take a screenshot"
+      "screenshot": "Take a screenshot",
+      "screenshot_window": "Take a screenshot of {window}"
     },
     "system": {
       "lock": "Lock the computer",
@@ -132,7 +134,9 @@
     "shuttingDown": "Shutting down in a few seconds.",
     "done": "Done.",
     "searching": "Searching for {text}.",
-    "cancelled": "Cancelled."
+    "cancelled": "Cancelled.",
+    "restartingApp": "Restarting {name}.",
+    "undone": "Undone."
   },
   "error": {
     "notFound": "I couldn’t find {what}.",
@@ -145,7 +149,8 @@
       "number": "I didn’t get a number.",
       "title": "I didn’t get a title.",
       "address": "I didn’t get an address.",
-      "query": "I didn’t get what to search for."
+      "query": "I didn’t get what to search for.",
+      "region": "I didn’t get which part of the screen."
     },
     "screenshot": "I couldn’t save the screenshot.",
     "notApproved": "That action wasn’t approved.",
@@ -154,7 +159,9 @@
       "notFound": "{message} Try saying the name a different way.",
       "accessDenied": "{message} You may need to allow it in Windows.",
       "timeout": "{message} Try again."
-    }
+    },
+    "cantUndo": "That can’t be undone.",
+    "stillOpen": "{name} is still open. It may be asking you to save something."
   },
   "policy": {
     "stopped": "Stopped. KIVO won’t continue this request.",

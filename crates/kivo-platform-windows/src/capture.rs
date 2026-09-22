@@ -248,4 +248,28 @@ mod tests {
             .unwrap();
         assert_eq!((image.width, image.height), (200, 100));
     }
+
+    #[test]
+    fn one_window_is_captured_at_its_size() {
+        use kivo_platform::Windows as _;
+        crate::dpi_aware();
+        let windows = crate::WindowsWindows.list().unwrap();
+        let Some(window) = windows
+            .iter()
+            .find(|w| !w.minimized && w.bounds.width >= 200 && w.bounds.height >= 150)
+        else {
+            eprintln!("no open window to capture; skipping");
+            return;
+        };
+        let image = WindowsScreen
+            .capture(CaptureTarget::Window { id: window.id })
+            .unwrap();
+        // The captured frame is the window's client and frame, give or take its invisible borders.
+        assert!(image.width > 100 && image.height > 100, "{image:?}");
+        assert!(
+            image.width <= window.bounds.width + 32,
+            "{image:?} vs {window:?}"
+        );
+        assert_eq!(image.rgba.len(), (image.width * image.height * 4) as usize);
+    }
 }

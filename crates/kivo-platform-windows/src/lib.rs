@@ -29,3 +29,13 @@ pub use speech::WindowsSpeech;
 pub use system::WindowsSystemInfo;
 pub use toast::{ToastAnswer, WindowsNotifications};
 pub use tray::{TrayEvent, WindowsTray};
+
+/// Makes this process see physical pixels on every monitor, so window positions, sizes and
+/// captures agree (without it Windows scales them on high-DPI screens). Call once at start.
+pub fn dpi_aware() {
+    use windows::Win32::UI::HiDpi::{
+        DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetProcessDpiAwarenessContext,
+    };
+    // SAFETY: a process-wide setting; it fails harmlessly if already set.
+    let _ = unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
+}

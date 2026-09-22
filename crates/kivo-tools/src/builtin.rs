@@ -36,6 +36,8 @@ struct Builtin {
     spec: ToolSpec,
     env: Arc<Env>,
     run: Box<Run>,
+    /// Takes back what `run` did, from its result data (Undoable tools).
+    undo: Option<Box<Run>>,
 }
 
 impl Tool for Builtin {
@@ -44,6 +46,15 @@ impl Tool for Builtin {
     }
     fn run(&self, args: &Value) -> Result<Output, ToolError> {
         (self.run)(args, &self.env)
+    }
+    fn undo(&self, data: &Value) -> Result<Output, ToolError> {
+        match &self.undo {
+            Some(undo) => undo(data, &self.env),
+            None => Err(ToolError::new(
+                ToolErrorCode::Unsupported,
+                text::t("error.cantUndo"),
+            )),
+        }
     }
 }
 
@@ -209,10 +220,21 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
     use Reversibility::{Irreversible, NotApplicable, Undoable};
     use SideEffect::{Destructive, ExternalComms, LocalRead, LocalWrite, None as NoEffect};
     let tool = |d: Def, run: Box<Run>| -> Arc<dyn Tool> {
+        debug_assert!(d.reversibility != Undoable, "{} needs its undo", d.id);
         Arc::new(Builtin {
             spec: spec(&d),
             env: Arc::clone(env),
             run,
+            undo: None,
+        })
+    };
+    let undoable = |d: Def, run: Box<Run>, undo: Box<Run>| -> Arc<dyn Tool> {
+        debug_assert!(d.reversibility == Undoable, "{} isn't undoable", d.id);
+        Arc::new(Builtin {
+            spec: spec(&d),
+            env: Arc::clone(env),
+            run,
+            undo: Some(undo),
         })
     };
     let def = |id, description, params, risk, effects, capability, reversibility| Def {
@@ -266,6 +288,42 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
             }),
         ),
         tool(
+            Def {
+                timeout_ms: 20_000,
+                ..def(
+                    "apps.restart",
+                    "Close an app and open it again (it may ask to save first).",
+                    app_param(),
+                    Risk::Medium,
+                    &[LocalWrite],
+                    C::AppsAndWindows,
+                    NotApplicable,
+                )
+            },
+            Box::new(|args, env| {
+                let app = app_arg(args, env)?;
+                if env.apps.running(&app).map_err(platform_error)? {
+                    env.apps.close(&app).map_err(platform_error)?;
+                    // Wait for it to go (it may ask to save), then start it again.
+                    let deadline = std::time::Instant::now() + RESTART_WAIT;
+                    while env.apps.running(&app).map_err(platform_error)? {
+                        if std::time::Instant::now() > deadline {
+                            return Err(ToolError::new(
+                                ToolErrorCode::Timeout,
+                                text::tf("error.stillOpen", &[("name", &app.name)]),
+                            ));
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(250));
+                    }
+                }
+                env.apps.launch(&app, &[]).map_err(platform_error)?;
+                done(
+                    text::tf("reply.restartingApp", &[("name", &app.name)]),
+                    json!({ "app": app.name }),
+                )
+            }),
+        ),
+        tool(
             def(
                 "windows.focus",
                 "Bring a window to the front.",
@@ -284,7 +342,7 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
                 )
             }),
         ),
-        tool(
+        undoable(
             def(
                 "windows.minimize",
                 "Minimize a window (the one in front by default).",
@@ -297,10 +355,14 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
             Box::new(|args, env| {
                 let (id, title) = window_arg(args, env)?;
                 env.windows.minimize(id).map_err(platform_error)?;
-                done(text::t("reply.minimized"), json!({ "window": title }))
+                done(
+                    text::t("reply.minimized"),
+                    json!({ "window": title, "windowId": id.0.to_string() }),
+                )
             }),
+            Box::new(restore_window),
         ),
-        tool(
+        undoable(
             def(
                 "windows.maximize",
                 "Maximize a window (the one in front by default).",
@@ -313,8 +375,12 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
             Box::new(|args, env| {
                 let (id, title) = window_arg(args, env)?;
                 env.windows.maximize(id).map_err(platform_error)?;
-                done(text::t("reply.maximized"), json!({ "window": title }))
+                done(
+                    text::t("reply.maximized"),
+                    json!({ "window": title, "windowId": id.0.to_string() }),
+                )
             }),
+            Box::new(restore_window),
         ),
         tool(
             def(
@@ -332,7 +398,7 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
                 done(text::t("reply.closed"), json!({ "window": title }))
             }),
         ),
-        tool(
+        undoable(
             def(
                 "audio.mute",
                 "Mute the speakers.",
@@ -343,11 +409,16 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
                 Undoable,
             ),
             Box::new(|_, env| {
+                let was = env.control.volume().map_err(platform_error)?.muted;
                 env.control.set_muted(true).map_err(platform_error)?;
-                done(text::t("reply.muted"), json!({ "muted": true }))
+                done(
+                    text::t("reply.muted"),
+                    json!({ "muted": true, "wasMuted": was }),
+                )
             }),
+            Box::new(undo_mute),
         ),
-        tool(
+        undoable(
             def(
                 "audio.unmute",
                 "Unmute the speakers.",
@@ -358,11 +429,16 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
                 Undoable,
             ),
             Box::new(|_, env| {
+                let was = env.control.volume().map_err(platform_error)?.muted;
                 env.control.set_muted(false).map_err(platform_error)?;
-                done(text::t("reply.soundOn"), json!({ "muted": false }))
+                done(
+                    text::t("reply.soundOn"),
+                    json!({ "muted": false, "wasMuted": was }),
+                )
             }),
+            Box::new(undo_mute),
         ),
-        tool(
+        undoable(
             def(
                 "audio.volume_set",
                 "Set the speaker volume (0–100).",
@@ -377,15 +453,17 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
             ),
             Box::new(|args, env| {
                 let level = number_arg(args)?;
+                let before = env.control.volume().map_err(platform_error)?.level;
                 env.control.set_volume(level).map_err(platform_error)?;
                 let percent = (level * 100.0).round();
                 done(
                     text::tf("reply.volume", &[("percent", &percent)]),
-                    json!({ "volume": percent }),
+                    json!({ "volume": percent, "previous": (before * 100.0).round() }),
                 )
             }),
+            Box::new(undo_volume),
         ),
-        tool(
+        undoable(
             def(
                 "audio.volume_up",
                 "Raise the volume by 10%.",
@@ -396,8 +474,9 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
                 Undoable,
             ),
             Box::new(|_, env| step_volume(env, 0.1)),
+            Box::new(undo_volume),
         ),
-        tool(
+        undoable(
             def(
                 "audio.volume_down",
                 "Lower the volume by 10%.",
@@ -408,8 +487,9 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
                 Undoable,
             ),
             Box::new(|_, env| step_volume(env, -0.1)),
+            Box::new(undo_volume),
         ),
-        tool(
+        undoable(
             def(
                 "audio.mic_mute",
                 "Mute the default microphone for every app.",
@@ -420,11 +500,16 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
                 Undoable,
             ),
             Box::new(|_, env| {
+                let was = env.control.microphone().map_err(platform_error)?.muted;
                 env.control.set_mic_muted(true).map_err(platform_error)?;
-                done(text::t("reply.micMuted"), json!({ "micMuted": true }))
+                done(
+                    text::t("reply.micMuted"),
+                    json!({ "micMuted": true, "wasMuted": was }),
+                )
             }),
+            Box::new(undo_mic),
         ),
-        tool(
+        undoable(
             def(
                 "audio.mic_unmute",
                 "Unmute the default microphone.",
@@ -435,11 +520,16 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
                 Undoable,
             ),
             Box::new(|_, env| {
+                let was = env.control.microphone().map_err(platform_error)?.muted;
                 env.control.set_mic_muted(false).map_err(platform_error)?;
-                done(text::t("reply.micOn"), json!({ "micMuted": false }))
+                done(
+                    text::t("reply.micOn"),
+                    json!({ "micMuted": false, "wasMuted": was }),
+                )
             }),
+            Box::new(undo_mic),
         ),
-        tool(
+        undoable(
             def(
                 "media.play_pause",
                 "Play or pause whatever is playing.",
@@ -454,6 +544,13 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
                     .media(MediaAction::PlayPause)
                     .map_err(nothing_playing)?;
                 done(text::t("reply.okay"), json!({}))
+            }),
+            // Play/pause is its own undo.
+            Box::new(|_, env| {
+                env.control
+                    .media(MediaAction::PlayPause)
+                    .map_err(nothing_playing)?;
+                done(text::t("reply.undone"), json!({}))
             }),
         ),
         tool(
@@ -523,23 +620,40 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
         tool(
             def(
                 "screen.screenshot",
-                "Save a screenshot of the screen in front to Pictures\\Screenshots.",
-                none(),
+                "Save a screenshot to Pictures\\Screenshots: the screen in front, or a region of the desktop in physical pixels.",
+                object(
+                    json!({ "region": { "type": "object", "properties": {
+                        "x": {"type": "integer"}, "y": {"type": "integer"},
+                        "width": {"type": "integer", "minimum": 1}, "height": {"type": "integer", "minimum": 1}
+                    }, "required": ["x", "y", "width", "height"] } }),
+                    &[],
+                ),
                 Risk::Low,
                 &[LocalRead, LocalWrite],
                 C::SystemControls,
                 NotApplicable,
             ),
-            Box::new(|_, env| {
-                let image = env
-                    .screen
-                    .capture(CaptureTarget::ActiveMonitor)
-                    .map_err(platform_error)?;
-                let path = save_png(&env.screenshots, &image)?;
-                done(
-                    text::t("reply.screenshotSaved"),
-                    json!({ "path": path.to_string_lossy(), "width": image.width, "height": image.height }),
-                )
+            Box::new(|args, env| {
+                let target = match region_arg(args)? {
+                    Some(rect) => CaptureTarget::Region { rect },
+                    None => CaptureTarget::ActiveMonitor,
+                };
+                screenshot(env, target)
+            }),
+        ),
+        tool(
+            def(
+                "screen.screenshot_window",
+                "Save a screenshot of one window (the one in front by default) to Pictures\\Screenshots.",
+                window_param(false),
+                Risk::Low,
+                &[LocalRead, LocalWrite],
+                C::SystemControls,
+                NotApplicable,
+            ),
+            Box::new(|args, env| {
+                let (id, _) = window_arg(args, env)?;
+                screenshot(env, CaptureTarget::Window { id })
             }),
         ),
         tool(
@@ -698,6 +812,71 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
     ]
 }
 
+/// Captures `target` and saves it as a PNG.
+fn screenshot(env: &Env, target: CaptureTarget) -> Result<Output, ToolError> {
+    let image = env.screen.capture(target).map_err(platform_error)?;
+    let path = save_png(&env.screenshots, &image)?;
+    done(
+        text::t("reply.screenshotSaved"),
+        json!({ "path": path.to_string_lossy(), "width": image.width, "height": image.height }),
+    )
+}
+
+/// `{"region": {x, y, width, height}}`, when given.
+fn region_arg(args: &Value) -> Result<Option<kivo_platform::Rect>, ToolError> {
+    let region = &args["region"];
+    if region.is_null() {
+        return Ok(None);
+    }
+    let int = |k: &str| region[k].as_i64().ok_or_else(|| invalid("region"));
+    let size = |k: &str| {
+        int(k).and_then(|v| {
+            u32::try_from(v)
+                .ok()
+                .filter(|v| *v > 0)
+                .ok_or_else(|| invalid("region"))
+        })
+    };
+    Ok(Some(kivo_platform::Rect {
+        x: i32::try_from(int("x")?).map_err(|_| invalid("region"))?,
+        y: i32::try_from(int("y")?).map_err(|_| invalid("region"))?,
+        width: size("width")?,
+        height: size("height")?,
+    }))
+}
+
+/// How long `apps.restart` waits for the app to close (it may ask to save first).
+const RESTART_WAIT: std::time::Duration = std::time::Duration::from_secs(15);
+
+fn restore_window(data: &Value, env: &Env) -> Result<Output, ToolError> {
+    let id = data["windowId"]
+        .as_str()
+        .and_then(|s| s.parse().ok())
+        .ok_or_else(|| invalid("window"))?;
+    env.windows.restore(WindowId(id)).map_err(platform_error)?;
+    done(text::t("reply.undone"), json!({}))
+}
+
+fn undo_mute(data: &Value, env: &Env) -> Result<Output, ToolError> {
+    let was = data["wasMuted"].as_bool().unwrap_or(false);
+    env.control.set_muted(was).map_err(platform_error)?;
+    done(text::t("reply.undone"), json!({ "muted": was }))
+}
+
+fn undo_mic(data: &Value, env: &Env) -> Result<Output, ToolError> {
+    let was = data["wasMuted"].as_bool().unwrap_or(false);
+    env.control.set_mic_muted(was).map_err(platform_error)?;
+    done(text::t("reply.undone"), json!({ "micMuted": was }))
+}
+
+fn undo_volume(data: &Value, env: &Env) -> Result<Output, ToolError> {
+    let previous = data["previous"].as_f64().ok_or_else(|| invalid("number"))?;
+    #[allow(clippy::cast_possible_truncation, reason = "0–100")]
+    let level = (previous as f32 / 100.0).clamp(0.0, 1.0);
+    env.control.set_volume(level).map_err(platform_error)?;
+    done(text::t("reply.undone"), json!({ "volume": previous }))
+}
+
 fn nothing_playing(e: PlatformError) -> ToolError {
     match e {
         PlatformError::NotFound(_) => {
@@ -714,7 +893,7 @@ fn step_volume(env: &Env, delta: f32) -> Result<Output, ToolError> {
     let percent = (level * 100.0).round();
     done(
         text::tf("reply.volume", &[("percent", &percent)]),
-        json!({ "volume": percent }),
+        json!({ "volume": percent, "previous": (now.level * 100.0).round() }),
     )
 }
 
@@ -837,6 +1016,91 @@ mod tests {
             .find(|t| t.spec().id == id)
             .unwrap_or_else(|| panic!("no tool {id}"));
         tool.run(&args)
+    }
+
+    /// Runs `id`, then undoes it from the data it returned.
+    fn run_and_undo(rig: &Rig, id: &str, args: Value) -> Output {
+        let done = run(rig, id, args).unwrap();
+        let tools = builtin(&rig.env);
+        let tool = tools.iter().find(|t| t.spec().id == id).unwrap();
+        tool.undo(&done.data).unwrap()
+    }
+
+    #[test]
+    fn undoable_tools_take_back_what_they_did() {
+        let r = rig();
+        // Volume 50% → 20% → undo → 50%.
+        run_and_undo(&r, "audio.volume_set", json!({ "number": 20 }));
+        assert!((r.control.volume.lock().unwrap().level - 0.5).abs() < 1e-6);
+        run_and_undo(&r, "audio.volume_up", json!({}));
+        assert!((r.control.volume.lock().unwrap().level - 0.5).abs() < 1e-6);
+        // Muting from unmuted, undone, is unmuted again; unmuting an already-on sound stays on.
+        let said = run_and_undo(&r, "audio.mute", json!({}));
+        assert_eq!(said.say, "Undone.");
+        assert!(!r.control.volume.lock().unwrap().muted);
+        r.control.mic.lock().unwrap().muted = true;
+        run_and_undo(&r, "audio.mic_unmute", json!({}));
+        assert!(r.control.mic.lock().unwrap().muted, "back to muted");
+        // A minimized window is restored.
+        run_and_undo(&r, "windows.minimize", json!({}));
+        let actions = r.windows.actions.lock().unwrap();
+        assert_eq!(
+            actions.iter().map(|(_, a)| *a).collect::<Vec<_>>(),
+            [WindowAction::Minimize, WindowAction::Restore]
+        );
+    }
+
+    #[test]
+    fn every_undoable_tool_has_an_undo_and_no_other_does() {
+        let r = rig();
+        for tool in builtin(&r.env) {
+            let undoable = tool.spec().reversibility == Reversibility::Undoable;
+            let unsupported = matches!(
+                tool.undo(&json!({})),
+                Err(ToolError {
+                    code: ToolErrorCode::Unsupported,
+                    ..
+                })
+            );
+            assert_eq!(undoable, !unsupported, "{}", tool.spec().id);
+        }
+    }
+
+    #[test]
+    fn screenshots_of_the_screen_a_window_or_a_region() {
+        let r = rig();
+        for (id, args) in [
+            ("screen.screenshot", json!({})),
+            ("screen.screenshot_window", json!({})),
+            (
+                "screen.screenshot",
+                json!({ "region": { "x": 10, "y": 20, "width": 300, "height": 200 } }),
+            ),
+        ] {
+            let shot = run(&r, id, args).unwrap();
+            assert!(PathBuf::from(shot.data["path"].as_str().unwrap()).is_file());
+        }
+        let bad = run(
+            &r,
+            "screen.screenshot",
+            json!({ "region": { "x": 0, "y": 0, "width": 0, "height": 5 } }),
+        );
+        assert_eq!(bad.unwrap_err().code, ToolErrorCode::InvalidArgs);
+    }
+
+    #[test]
+    fn restarting_closes_then_opens_the_app() {
+        let r = rig();
+        let chrome = json!({"app": {"id": "Chrome", "name": "Google Chrome"}});
+        run(&r, "apps.launch", chrome.clone()).unwrap();
+        let out = run(&r, "apps.restart", chrome.clone()).unwrap();
+        assert_eq!(out.say, "Restarting Google Chrome.");
+        assert_eq!(*r.apps.closed.lock().unwrap(), ["Chrome"]);
+        assert_eq!(*r.apps.launched.lock().unwrap(), ["Chrome"]);
+        // Not running: it just starts.
+        r.apps.launched.lock().unwrap().clear();
+        run(&r, "apps.restart", chrome).unwrap();
+        assert_eq!(*r.apps.launched.lock().unwrap(), ["Chrome"]);
     }
 
     #[test]

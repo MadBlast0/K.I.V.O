@@ -108,6 +108,9 @@ impl Apps for FakeApps {
         lock(&self.closed).push(app.id.clone());
         Ok(1)
     }
+    fn running(&self, app: &AppEntry) -> PlatformResult<bool> {
+        Ok(lock(&self.launched).contains(&app.id))
+    }
 }
 
 /// System controls: in-memory volume, microphone and media state; power actions are recorded,
@@ -209,6 +212,7 @@ pub enum WindowAction {
     Focus,
     Minimize,
     Maximize,
+    Restore,
     Close,
 }
 
@@ -231,7 +235,7 @@ impl FakeWindows {
                 windows.insert(0, w);
             }
             WindowAction::Minimize => windows[pos].minimized = true,
-            WindowAction::Maximize => windows[pos].minimized = false,
+            WindowAction::Maximize | WindowAction::Restore => windows[pos].minimized = false,
             WindowAction::Close => {
                 windows.remove(pos);
             }
@@ -256,6 +260,9 @@ impl Windows for FakeWindows {
     }
     fn maximize(&self, id: WindowId) -> PlatformResult<()> {
         self.act(id, WindowAction::Maximize)
+    }
+    fn restore(&self, id: WindowId) -> PlatformResult<()> {
+        self.act(id, WindowAction::Restore)
     }
     fn close(&self, id: WindowId) -> PlatformResult<()> {
         self.act(id, WindowAction::Close)

@@ -32,6 +32,10 @@ tool = "apps.close"
 patterns = ["close {app}", "quit {app}", "exit {app}", "kill {app}", "shut {app}"]
 
 [[command]]
+tool = "apps.restart"
+patterns = ["restart {app}", "relaunch {app}", "reopen {app}", "reload {app}", "close and reopen {app}"]
+
+[[command]]
 tool = "windows.focus"
 patterns = ["switch to {window}", "go to {window}", "show {window}", "focus {window}", "bring {window} to the front"]
 
@@ -99,6 +103,13 @@ tool = "screen.screenshot"
 patterns = [
   "take a screenshot", "screenshot", "take screenshot", "capture the screen", "grab the screen",
   "take a screen shot", "screen shot", "capture my screen", "take a picture of the screen",
+]
+
+[[command]]
+tool = "screen.screenshot_window"
+patterns = [
+  "take a screenshot of this window", "screenshot this window", "screenshot the window",
+  "capture this window", "take a screenshot of {window}", "screenshot {window}",
 ]
 
 [[command]]

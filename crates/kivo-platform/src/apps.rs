@@ -23,6 +23,8 @@ pub trait Apps: Send + Sync {
     /// Asks every window of `app` to close (the app may still ask to save). Returns how many
     /// windows were asked; `NotFound` when the app isn't running.
     fn close(&self, app: &AppEntry) -> PlatformResult<usize>;
+    /// Whether `app` has a window open.
+    fn running(&self, app: &AppEntry) -> PlatformResult<bool>;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -43,5 +45,7 @@ pub trait Windows: Send + Sync {
     fn focus(&self, id: WindowId) -> PlatformResult<()>;
     fn minimize(&self, id: WindowId) -> PlatformResult<()>;
     fn maximize(&self, id: WindowId) -> PlatformResult<()>;
+    /// Back to its normal size and place (undoes minimize and maximize).
+    fn restore(&self, id: WindowId) -> PlatformResult<()>;
     fn close(&self, id: WindowId) -> PlatformResult<()>;
 }

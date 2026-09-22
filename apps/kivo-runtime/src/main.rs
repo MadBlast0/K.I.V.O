@@ -41,6 +41,8 @@ fn main() -> ExitCode {
     // Crashes of this process are written to the crashes folder from here on (ARCH-10).
     #[cfg(windows)]
     kivo_platform_windows::crash::install(&paths.crashes(), "kivo-runtime");
+    // Window positions and captures in physical pixels (TOOL-07, TOOL-14, the Island's anchor).
+    kivo_platform_windows::dpi_aware();
 
     // Startup order (plan §126): single instance, lightweight config, logging, the event bus and
     // state (`Core`), audio and voice detection, then OS registrations (tray, hotkeys). Speech

@@ -28,6 +28,14 @@ pub struct Output {
 pub trait Tool: Send + Sync {
     fn spec(&self) -> &ToolSpec;
     fn run(&self, args: &Value) -> Result<Output, ToolError>;
+    /// Takes back what `run` did, from the data it returned (UX §8.1). Only tools declared
+    /// `Reversibility::Undoable` have one.
+    fn undo(&self, _data: &Value) -> Result<Output, ToolError> {
+        Err(ToolError::new(
+            ToolErrorCode::Unsupported,
+            text::t("error.cantUndo"),
+        ))
+    }
 }
 
 #[derive(Default)]
@@ -85,6 +93,29 @@ pub async fn execute(
     permit: Permit,
     cancel: &CancellationToken,
 ) -> (ToolResult, Option<Output>) {
+    let args = call.args.clone();
+    run_permitted(tool, call, permit, cancel, move |t| t.run(&args)).await
+}
+
+/// Undoes an earlier run of `tool` from the data it returned. The undo is a call of its own
+/// (`call`: the same tool, `{"undo": <data>}`), authorized like any other.
+pub async fn undo(
+    tool: Arc<dyn Tool>,
+    call: &ToolCall,
+    permit: Permit,
+    cancel: &CancellationToken,
+) -> (ToolResult, Option<Output>) {
+    let data = call.args["undo"].clone();
+    run_permitted(tool, call, permit, cancel, move |t| t.undo(&data)).await
+}
+
+async fn run_permitted(
+    tool: Arc<dyn Tool>,
+    call: &ToolCall,
+    permit: Permit,
+    cancel: &CancellationToken,
+    work: impl FnOnce(&dyn Tool) -> Result<Output, ToolError> + Send + 'static,
+) -> (ToolResult, Option<Output>) {
     let started = Instant::now();
     let finish = |status: Result<Value, ToolError>, output: Option<Output>| {
         let duration_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
@@ -113,9 +144,8 @@ pub async fn execute(
         );
     }
     let timeout = Duration::from_millis(tool.spec().timeout_ms);
-    let args = call.args.clone();
     let runner = Arc::clone(&tool);
-    let job = tokio::task::spawn_blocking(move || runner.run(&args));
+    let job = tokio::task::spawn_blocking(move || work(runner.as_ref()));
     let outcome = tokio::select! {
         joined = job => match joined {
             Ok(result) => result,
@@ -235,6 +265,28 @@ mod tests {
         );
         caps.set(Capability::AppsAndWindows, false);
         assert!(ids(&caps).is_empty());
+    }
+
+    #[tokio::test]
+    async fn an_undo_is_a_permitted_call_of_its_own() {
+        let tool: Arc<dyn Tool> = Arc::new(Slow {
+            spec: spec("a.x", Capability::AppsAndWindows, 1000),
+            delay: Duration::ZERO,
+        });
+        let mut undo_call = call("c2", "a.x");
+        undo_call.args = json!({ "undo": { "ok": true } });
+        let p = permit(&tool, &undo_call);
+        let (result, _) = undo(Arc::clone(&tool), &undo_call, p, &CancellationToken::new()).await;
+        // `Slow` declares no undo: the executor reports that plainly.
+        assert_eq!(result.status.unwrap_err().code, ToolErrorCode::Unsupported);
+        let other = call("c3", "a.x");
+        let wrong = permit(&tool, &other);
+        let (result, _) = undo(tool, &undo_call, wrong, &CancellationToken::new()).await;
+        assert_eq!(
+            result.status.unwrap_err().code,
+            ToolErrorCode::AccessDenied,
+            "a permit for another call doesn't cover an undo"
+        );
     }
 
     #[tokio::test]

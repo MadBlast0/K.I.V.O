@@ -94,6 +94,8 @@ fn name_words(name: &str) -> Vec<String> {
         .to_lowercase()
         .replace("(x86)", " ")
         .replace("(x64)", " ")
+        // Apostrophes go, as in spoken words ("Tom's" → "toms").
+        .replace(['\'', '’'], "")
         .chars()
         .map(|c| {
             if c.is_alphanumeric() || c == '.' || c == '+' || c == '#' {
@@ -180,6 +182,7 @@ mod tests {
             e("calc", "Calculator", &[]),
             e("spotify", "Spotify", &[]),
             e("chromium", "Chromium", &[]),
+            e("toms", "Tom's Planner", &[]),
         ])
     }
 
@@ -196,6 +199,13 @@ mod tests {
         assert_eq!(index.find(&w("vs code")).unwrap().id, "code");
         assert_eq!(index.find(&w("word")).unwrap().id, "word");
         assert_eq!(index.find(&w("power point")).unwrap().id, "ppt");
+        assert_eq!(
+            index
+                .find(&crate::normalize::words("Tom's Planner"))
+                .unwrap()
+                .id,
+            "toms"
+        );
     }
 
     #[test]

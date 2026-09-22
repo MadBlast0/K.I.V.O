@@ -144,27 +144,27 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 
 **Tool schema and router (§1–2)**
 
-- [ ] **TOOL-01** · M1 · `ToolSpec` and `ToolResult` exactly as in §1 (namespaced id, JSON Schema params/result, risk, side effects, data egress, timeout, cancellable, capability tier, platforms), plus `undo` handler or `irreversible: true` (§1, UX §8.1)
-- [ ] **TOOL-02** · M1 · The executor API requires the `Decision` from `authorize()`; nothing executes without one (type-level) (§1, SECURITY §2)
-- [ ] **TOOL-03** · M1 · Errors carry a user-readable message and a machine code; raw HRESULTs are logged, never spoken (§1)
+- [x] **TOOL-01** · M1 · `ToolSpec` and `ToolResult` exactly as in §1 (namespaced id, JSON Schema params/result, risk, side effects, data egress, timeout, cancellable, capability tier, platforms), plus `undo` handler or `irreversible: true` (§1, UX §8.1) → done: `kivo_core::tool::ToolSpec` (namespaced id, JSON Schema params/result, risk, side effects, data egress, timeout, cancellable, capability tier, platforms, reversibility, capability) and `ToolResult`; every Undoable tool has an undo handler (`Tool::undo`, run through `registry::undo` with its own permit) that restores the recorded previous state, and restart/shutdown are Irreversible · verified: `every_undoable_tool_has_an_undo_and_no_other_does`, `undoable_tools_take_back_what_they_did`, `an_undo_is_a_permitted_call_of_its_own`, `every_tool_is_fully_declared` (2026-09-23); the Undo experience is UX-43 (M4)
+- [x] **TOOL-02** · M1 · The executor API requires the `Decision` from `authorize()`; nothing executes without one (type-level) (§1, SECURITY §2) → done: `registry::execute` and `registry::undo` take a `Permit`, which only `kivo_security::authorize`/`confirmed` can create and which must name the exact call; there is no other way to run a tool · verified: `a_permit_runs_only_its_own_call`, `an_undo_is_a_permitted_call_of_its_own` (2026-09-23)
+- [x] **TOOL-03** · M1 · Errors carry a user-readable message and a machine code; raw HRESULTs are logged, never spoken (§1) → done: `ToolError { code, message, detail }`: the message is plain words from the text catalog (spoken and shown), the OS detail (HRESULTs) goes to the log only; the engine adds what to do next (plan §146) · verified: `failures_are_worded_for_people`, `platform_error` tests (2026-09-23)
 - [ ] **TOOL-04** · M4 · Tool router with the capability ladder (Native/OS API → App CLI → UIA → Browser DOM → A11y → Vision → Input) and per-app overrides (§2)
 - [ ] **TOOL-05** · M4 · App Capability Registry as data files (`apps/*.toml`: exe/AUMID match, launch method, CLI verbs, UIA hints, quirks) for the core apps; users and plugins can add entries (§2)
 
 **Native Windows tools (§3)**
 
-- [ ] **TOOL-06** · M1 · Apps: launch, close, focus, restart, list installed (Start-menu `.lnk` + `shell:AppsFolder`, UWP via AUMID, fuzzy match with aliases) (§3)
-- [ ] **TOOL-07** · M1 · Windows: list, focus (foreground-lock rules), minimize, maximize, close; DWM cloaking check (§3)
+- [x] **TOOL-06** · M1 · Apps: launch, close, focus, restart, list installed (Start-menu `.lnk` + `shell:AppsFolder`, UWP via AUMID, fuzzy match with aliases) (§3) → done: `apps.launch`, `apps.close`, `apps.restart` (close, wait for it to go, open again) and the installed-app index from the Start menu `.lnk`s and `shell:AppsFolder` (UWP by AUMID), fuzzy-matched with aliases; focusing an app's window is `windows.focus` · verified: `the_start_menu_lists_real_apps_without_uninstallers`, `restarting_closes_then_opens_the_app`, index tests, the spoken end-to-end test (2026-09-23)
+- [x] **TOOL-07** · M1 · Windows: list, focus (foreground-lock rules), minimize, maximize, close; DWM cloaking check (§3) → done: `WindowsWindows`: list (visible, uncloaked via DWMWA_CLOAKED, front to back), focus (foreground-lock handled with AttachThreadInput), minimize, maximize, restore, close; the runtime is per-monitor DPI aware so positions are physical pixels · verified: `windows_are_listed_front_to_back_with_their_app`, window tool tests (2026-09-23)
 - [ ] **TOOL-08** · M4 · Windows: move to monitor, snap (§3)
-- [ ] **TOOL-09** · M1 · Audio: volume get/set, mute, mic mute (§3)
+- [x] **TOOL-09** · M1 · Audio: volume get/set, mute, mic mute (§3) → done: `audio.volume_set/up/down`, `audio.mute/unmute`, `audio.mic_mute/unmute` through `WindowsControl` (Core Audio endpoint volume), each undoable · verified: `the_speaker_and_microphone_levels_are_readable`, tool tests (tests never change the real volume) (2026-09-23)
 - [ ] **TOOL-10** · M4 · Audio: output device switch via documented APIs (§3)
-- [ ] **TOOL-11** · M1 · Media: play/pause/next/previous and now-playing via `GlobalSystemMediaTransportControlsSessionManager` (§3)
-- [ ] **TOOL-12** · M1 · System: lock and sleep; restart and shutdown as High risk with confirmation (§3)
+- [x] **TOOL-11** · M1 · Media: play/pause/next/previous and now-playing via `GlobalSystemMediaTransportControlsSessionManager` (§3) → done: `media.play_pause/next/previous/now_playing` through `GlobalSystemMediaTransportControlsSessionManager` · verified: tool tests with the fake, live "what's playing" (2026-09-22)
+- [x] **TOOL-12** · M1 · System: lock and sleep; restart and shutdown as High risk with confirmation (§3) → done: `system.lock` and `system.sleep` (Low risk), `system.restart` and `system.shutdown` (High risk, Irreversible, always confirmed, a spoken yes isn't enough) · verified: tool tests (power actions are recorded by the fake, never performed), policy tests (2026-09-23)
 - [ ] **TOOL-13** · M4 · System: brightness where supported, battery, Focus/DND state (§3)
-- [ ] **TOOL-14** · M1 · Screen: screenshot of screen, window or region (Windows.Graphics.Capture) (§3)
+- [x] **TOOL-14** · M1 · Screen: screenshot of screen, window or region (Windows.Graphics.Capture) (§3) → done: `screen.screenshot` (the monitor in front, or a region) and `screen.screenshot_window` via Windows.Graphics.Capture, one frame on request, saved as PNG to Pictures\Screenshots · verified: `captures_one_frame_of_the_active_monitor`, `a_region_is_cropped_from_its_monitor`, `one_window_is_captured_at_its_size`, `screenshots_of_the_screen_a_window_or_a_region` (2026-09-23)
 - [ ] **TOOL-15** · M4 · OCR via Windows.Media.Ocr (offline) (§3)
 - [ ] **TOOL-16** · M4 · Files: search (Windows Search `SystemIndex` + fallback walk), open, reveal, create, rename, move, copy; delete always to the Recycle Bin; path-traversal and protected-path guard (§3)
 - [ ] **TOOL-17** · M4 · Clipboard read/write; reads are tagged `Untrusted` (§3)
-- [ ] **TOOL-18** · M1 · Notifications: show a Windows toast (§3)
+- [x] **TOOL-18** · M1 · Notifications: show a Windows toast (§3) → done: `notifications.show` through `WindowsNotifications` (Windows toasts, AUMID KIVO.Desktop), gated by the Notifications capability · verified: `toast_xml_escapes_text_and_wires_buttons`, `notifications_respect_their_capability` (2026-09-23)
 
 **UI Automation (§4)**
 
@@ -175,7 +175,7 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 
 **Browser (§5)**
 
-- [ ] **TOOL-23** · M1 · Open URL and web search via the default browser (§5)
+- [x] **TOOL-23** · M1 · Open URL and web search via the default browser (§5) → done: `browser.open_url` (http/https only) and `browser.search` open the default browser; the address is a destination the hard limits check · verified: `only_web_addresses_are_opened`, tool and grammar tests (2026-09-23)
 - [ ] **TOOL-24** · M4 · KIVO Chromium MV3 extension (Chrome, Edge, Brave) + native messaging host (`kivo-runtime --native-messaging`): tabs, URL/title, selection, readable DOM excerpt (~4k tokens), click/type on elements (§5)
 - [ ] **TOOL-25** · M4 · CDP automation (`chromiumoxide`) only in a KIVO-managed profile (§5)
 - [ ] **TOOL-26** · M4 · UIA on the browser window as the fallback when the extension is absent; all page content is `Untrusted` (§5)
