@@ -47,6 +47,8 @@ pub struct Speaker {
     volume: Mutex<f32>,
     /// Called when sound starts, so a sleeping level loop wakes to pulse the Island.
     on_sound: Mutex<Option<Box<dyn Fn() + Send>>>,
+    /// Every cue, rendered once at full level (VOICE-24: pre-decoded, so a cue plays at once).
+    cues: Vec<(Cue, Vec<f32>)>,
 }
 
 impl Speaker {
@@ -60,6 +62,7 @@ impl Speaker {
             enabled: Mutex::new(true),
             volume: Mutex::new(0.7),
             on_sound: Mutex::new(None),
+            cues: ALL_CUES.iter().map(|&c| (c, earcon(c, 1.0))).collect(),
         }
     }
 
@@ -141,7 +144,12 @@ impl Speaker {
         }
         let volume = *lock(&self.volume);
         let Some(mixer) = self.mixer() else { return };
-        let samples = earcon(cue, volume);
+        let samples: Vec<f32> = self
+            .cues
+            .iter()
+            .find(|(c, _)| *c == cue)
+            .map(|(_, pcm)| pcm.iter().map(|s| s * volume).collect())
+            .unwrap_or_default();
         #[allow(clippy::cast_precision_loss, reason = "a short cue")]
         let length = Duration::from_secs_f32(samples.len() as f32 / CUE_RATE as f32);
         mixer.play_cue(&mixer.to_device(&samples, CUE_RATE));
@@ -249,6 +257,16 @@ fn silence(out: &mut Vec<f32>, seconds: f32) {
 
 /// KIVO's Soft sound set, generated rather than shipped as files (VOICE §6). Every cue is under
 /// 300 ms, so wake → audio stays inside the 150 ms budget.
+/// Every cue KIVO has.
+pub const ALL_CUES: [Cue; 6] = [
+    Cue::ListenStart,
+    Cue::ListenStop,
+    Cue::Done,
+    Cue::Error,
+    Cue::Thinking,
+    Cue::Hangup,
+];
+
 pub fn earcon(cue: Cue, gain: f32) -> Vec<f32> {
     let mut out = Vec::new();
     match cue {

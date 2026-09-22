@@ -32,6 +32,8 @@ use tokio_util::sync::CancellationToken;
 const APPS_TTL: Duration = Duration::from_secs(120);
 /// The Island stays up this long after the answer, then clears (UX-10).
 const COLLAPSE_AFTER: Duration = Duration::from_secs(4);
+/// The optional "thinking" cue plays once a request has taken this long (VOICE §6).
+const THINKING_CUE_AFTER: Duration = Duration::from_secs(1);
 /// How long a first request waits for the speech worker to come up.
 const WORKER_START: Duration = Duration::from_secs(8);
 /// What KIVO says when the grammar doesn't understand (the brain arrives in M3).
@@ -355,6 +357,7 @@ impl Engine {
         self.mark("t4EndOfSpeech");
         self.core.end_of_speech();
         self.speaker.cue(Cue::ListenStop);
+        self.thinking_cue_later();
         self.core
             .bus
             .publish(Event::new(EventKind::Voice(VoiceEvent::SpeechEnded)));
@@ -551,7 +554,6 @@ impl Engine {
                     view.confirm = Some(confirm.clone());
                     view.target_app = confirm.target.clone();
                 });
-                self.speaker.cue(Cue::Thinking);
                 let question = format!("{title}?");
                 self.speak(&question).await;
             }
@@ -911,6 +913,29 @@ impl Engine {
         let spans = running.spans.clone();
         self.recorder
             .turn_finished(&running.id, &running.transcript, "cancelled", None, &spans);
+    }
+
+    /// The "thinking" cue (VOICE §6, off by default): a quiet tick when KIVO is still working on
+    /// a request a second after the user stopped talking.
+    fn thinking_cue_later(self: &Arc<Self>) {
+        if !self.core.config().sounds.thinking_cue {
+            return;
+        }
+        let Some(turn) = lock(&self.turn).as_ref().map(|t| t.id.clone()) else {
+            return;
+        };
+        let engine = Arc::clone(self);
+        tokio::spawn(async move {
+            tokio::time::sleep(THINKING_CUE_AFTER).await;
+            let same_turn = lock(&engine.turn).as_ref().is_some_and(|t| t.id == turn);
+            let working = matches!(
+                engine.core.state().borrow().session,
+                SessionState::Thinking | SessionState::Acting
+            );
+            if same_turn && working {
+                engine.speaker.cue(Cue::Thinking);
+            }
+        });
     }
 
     /// The Island appears on the monitor of the window the user is working in (UX-06).

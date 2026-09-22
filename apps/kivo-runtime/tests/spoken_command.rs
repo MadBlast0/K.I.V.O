@@ -232,10 +232,17 @@ async fn a_spoken_command_opens_the_app_and_kivo_answers() {
         .try_init();
     let (rig, worker_task, pump) = rig(spoken("Open Chrome."), model.dir);
 
+    let pressed = Instant::now();
     rig.engine
         .talk(TurnSource::PushToTalk)
         .await
         .expect("KIVO starts listening");
+    // The listening cue is queued at once (VOICE-24: wake → audio ≤ 150 ms).
+    until("the listening cue", Duration::from_millis(150), || {
+        rig.engine.speaker.busy()
+    })
+    .await;
+    eprintln!("press → listening cue: {:?}", pressed.elapsed());
     let deadline = Instant::now() + Duration::from_secs(30);
     while rig.apps.launched.lock().unwrap().is_empty() {
         assert!(
