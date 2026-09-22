@@ -323,6 +323,10 @@ async fn a_typed_command_is_treated_like_a_spoken_one() {
         rig.core.turn_view().unwrap().answer.as_deref(),
         Some("Muted.")
     );
+    // Routed by the grammar, with no AI (BRAIN-05).
+    let metrics = rig.engine.router_metrics();
+    assert_eq!((metrics.requests, metrics.fast_path), (1, 1));
+    assert!((metrics.fast_path_ratio - 1.0).abs() < f64::EPSILON);
     until("the turn to end", Duration::from_secs(20), || {
         rig.core.state().borrow().session == SessionState::Idle
     })

@@ -224,11 +224,11 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 
 **Intent router (§1–2)**
 
-- [ ] **BRAIN-01** · M1 · Grammar stage: slot-based commands (`open {app}`, volume, `mute`, media, screenshot, window commands, `lock`) resolved against live app and window indexes, with phrasing loaded from per-language data files (§2)
-- [ ] **BRAIN-02** · M1 · Destructive commands (shutdown, restart) still go through the permission engine (§2)
+- [x] **BRAIN-01** · M1 · Grammar stage: slot-based commands (`open {app}`, volume, `mute`, media, screenshot, window commands, `lock`) resolved against live app and window indexes, with phrasing loaded from per-language data files (§2) → done: `kivo-intent` grammar from `grammar/en/commands.toml` (per-language data: fillers, patterns, slots `{app}`, `{window}`, `{number}`, `{url}`, `{text}`), normalized transcripts, slots resolved against the live app index (Start menu + AppsFolder, fuzzy with aliases) and window index; covers open/close app, window commands, volume, mute, mic, media, screenshot, lock, sleep, restart, shutdown, open URL and web search · verified: grammar/index/normalize unit tests (`the_m1_journeys_match`, `misheard_names_still_match_but_nonsense_does_not` …) and both end-to-end tests (2026-09-23)
+- [x] **BRAIN-02** · M1 · Destructive commands (shutdown, restart) still go through the permission engine (§2) → done: shutdown and restart are High-risk tools; the grammar only produces a call, which goes through `authorize` like any other and always asks (except in Bypass) · verified: `destructive_commands_are_recognized_like_any_other`, policy tests (High must confirm) (2026-09-23)
 - [ ] **BRAIN-03** · M3 · Semantic stage: a local embedding model + kNN over command exemplars, accepted only above a high threshold and with resolvable slots (§2)
 - [ ] **BRAIN-04** · M3 · Hybrid requests go to the brain, with the fast-path tools exposed as tools (§2)
-- [ ] **BRAIN-05** · M1 · Metrics `fast_path_ratio` and per-stage p95 latency (§2)
+- [x] **BRAIN-05** · M1 · Metrics `fast_path_ratio` and per-stage p95 latency (§2) → done: `IntentRouter::metrics` keeps the fast-path share and the grammar stage's p95 over the last requests; the engine logs them per turn and exposes `Engine::router_metrics` · verified: `the_fast_path_ratio_and_grammar_latency_are_tracked`, `p95_uses_the_nearest_rank`, and the typed end-to-end test asserts 1 of 1 routed without AI (2026-09-23)
 - [ ] **BRAIN-06** · M3 · A "That's not what I meant" misroute report in the card (§2)
 - [ ] **BRAIN-07** · M5 · Event tasks ("tell me when…", "watch…", "remind me…") classified by grammar first and by the brain when ambiguous, then turned into Tasks with watchers (§2)
 

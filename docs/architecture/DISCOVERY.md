@@ -114,10 +114,10 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 **Refresh and freshness (§2–3)**
 
 - [ ] **DISC-12** · M3 · Every discovery section shows "Checked … · Refresh"; Refresh re-runs only that section's detectors; new items get a New label until viewed (§2)
-- [ ] **DISC-13** · M1 · Live state (Island, Tasks, Activity, agent progress, usage) is pushed over IPC; nothing polls it (§3)
+- [x] **DISC-13** · M1 · Live state (Island, Tasks, Activity, agent progress, usage) is pushed over IPC; nothing polls it (§3) → done: state, the live turn, mic and voice levels and Activity changes are pushed over IPC (`runtime://link`, `runtime://level`, `runtime://event`); the UI has no timers polling the runtime · verified: no `setInterval` in the UI, Activity refreshes on the pushed event (2026-09-23); tasks, agents and usage join when they exist (M3–M7)
 - [ ] **DISC-14** · M3 · Brain health: on page open if older than 5 min, every 5 min while visible, immediately after errors, lazily before use (§3)
 - [ ] **DISC-15** · M3 · CLI/local-server re-detection: app start (after 30 s, low priority), `WM_SETTINGCHANGE` PATH changes, page open if older than 10 min (§3)
 - [ ] **DISC-16** · M6 · File watchers on other apps' MCP configs and skills folders; MCP `tools/list_changed` handling with description-hash comparison (§3)
 - [ ] **DISC-17** · M8 · Signed catalogs (connector directory, plugin index, model catalog, CLI install catalog) fetched daily with an offline cache (§3)
 - [ ] **DISC-18** · M8 · Performance metrics sampled every 2 s only while the Performance page is open (§3)
-- [ ] **DISC-19** · M1 · Zero background work while the Control Center is closed beyond what the runtime needs (§3)
+- [x] **DISC-19** · M1 · Zero background work while the Control Center is closed beyond what the runtime needs (§3) → done: with nothing to do the runtime sleeps: the detection thread blocks until a command arrives (it used to wake every 30 ms), the speech worker isn't running, and the speaker closes when quiet · verified: live runtime with the app running, 0 ms of CPU over 20 s idle, 67 MB working set (2026-09-23)

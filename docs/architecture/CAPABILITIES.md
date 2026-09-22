@@ -112,9 +112,9 @@ Control Center → Permissions → **Capabilities**. Each row has an on/off togg
 
 Status marks and the build protocol: [docs/README.md](../README.md).
 
-- [ ] **CAP-01** · M1 · Capability model in the runtime: every §1 capability with its default; a disabled capability's tools are **not registered** for any brain, routine, agent, MCP exposure or remote client (§1, §2)
-- [ ] **CAP-02** · M1 · A request that needs a disabled capability gets a plain answer ("Screen awareness is off. Turn it on?") with a one-tap link; toggles never turn on automatically (§2)
-- [ ] **CAP-03** · M1 · Every toggle change is written to the audit log (§2)
+- [x] **CAP-01** · M1 · Capability model in the runtime: every §1 capability with its default; a disabled capability's tools are **not registered** for any brain, routine, agent, MCP exposure or remote client (§1, §2) → done: `kivo_core::Capability` (all 27 §1 capabilities with their defaults) in the settings; the tool registry only hands out tools whose capability is on, so a disabled one's tools don't exist for any caller (brains, routines, agents, MCP and remote clients all go through the registry) · verified: `tools_of_a_disabled_capability_are_not_registered`, capability defaults test (2026-09-23)
+- [x] **CAP-02** · M1 · A request that needs a disabled capability gets a plain answer ("Screen awareness is off. Turn it on?") with a one-tap link; toggles never turn on automatically (§2) → done: a request needing a disabled capability gets "<Capability> is off. Turn it on?" on the Island with a Turn on button (the overlay may only switch on that one capability); nothing turns on by itself · verified: `the_island_may_only_turn_on_the_capability_the_request_needed`, the Island turn tests, policy `CapabilityOff` test (2026-09-23)
+- [x] **CAP-03** · M1 · Every toggle change is written to the audit log (§2) → done: `capabilities.set` writes an audit row (`capabilities.set`, "<Capability> = on/off") in the hash chain · verified: `capabilities_are_listed_toggled_and_audited` (2026-09-23)
 - [ ] **CAP-04** · M4 · Permissions → Capabilities page: each row with toggle, description, "used … ago" and Local / Cloud / Costly / Sensitive badges, plus the per-capability controls from §1 (§1)
 - [ ] **CAP-05** · M4 · Presets Minimal / Balanced (default) / Power user / Custom (§2)
 - [ ] **CAP-06** · M4 · Active-use indicators in the tray and the Island: screen (eye), input control (hand), shell (terminal) (§2)

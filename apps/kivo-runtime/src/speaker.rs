@@ -45,6 +45,8 @@ pub struct Speaker {
     speaking_level: Mutex<f32>,
     enabled: Mutex<bool>,
     volume: Mutex<f32>,
+    /// Called when sound starts, so a sleeping level loop wakes to pulse the Island.
+    on_sound: Mutex<Option<Box<dyn Fn() + Send>>>,
 }
 
 impl Speaker {
@@ -57,6 +59,18 @@ impl Speaker {
             speaking_level: Mutex::new(0.0),
             enabled: Mutex::new(true),
             volume: Mutex::new(0.7),
+            on_sound: Mutex::new(None),
+        }
+    }
+
+    /// Registers what to call when sound starts (the detection thread's wake-up).
+    pub fn on_sound(&self, wake: impl Fn() + Send + 'static) {
+        *lock(&self.on_sound) = Some(Box::new(wake));
+    }
+
+    fn sounded(&self) {
+        if let Some(wake) = lock(&self.on_sound).as_ref() {
+            wake();
         }
     }
 
@@ -132,12 +146,14 @@ impl Speaker {
         let length = Duration::from_secs_f32(samples.len() as f32 / CUE_RATE as f32);
         mixer.play_cue(&mixer.to_device(&samples, CUE_RATE));
         *lock(&self.gate_until) = Instant::now() + length + GATE_TAIL;
+        self.sounded();
     }
 
     /// Queues spoken audio (any rate, mono).
     pub fn speak(&self, pcm: &[f32], rate: u32) {
         let Some(mixer) = self.mixer() else { return };
         mixer.queue_speech(&mixer.to_device(pcm, rate));
+        self.sounded();
     }
 
     /// Stops speaking with a short fade (cancel → silence, VOICE §7).
@@ -153,6 +169,11 @@ impl Speaker {
         lock(&self.open)
             .as_ref()
             .is_some_and(|o| o.mixer.speech_queued() > 0)
+    }
+
+    /// Whether the playback stream is open (it closes after going quiet for a while).
+    pub fn is_open(&self) -> bool {
+        lock(&self.open).is_some()
     }
 
     /// True while something is still to be heard.

@@ -12,7 +12,7 @@ use kivo_platform::{AudioIo, DeviceId};
 use kivo_voice::silero::SileroVad;
 use kivo_voice::traits::VadEngine;
 use std::path::PathBuf;
-use std::sync::mpsc::{Receiver, Sender, TryRecvError, channel};
+use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, TryRecvError, channel};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, watch};
@@ -51,6 +51,8 @@ enum Command {
     },
     /// Drop the utterance without a result.
     Cancel,
+    /// KIVO started making sound: wake up to pulse the Island.
+    Wake,
     Quit,
 }
 
@@ -133,6 +135,10 @@ pub struct Pipeline {
 /// Starts the detection thread and returns its controller.
 pub fn start(pipeline: Pipeline) -> Listener {
     let (tx, rx) = channel();
+    let wake = tx.clone();
+    pipeline.speaker.on_sound(move || {
+        let _ = wake.send(Command::Wake);
+    });
     let listening = Arc::new(Mutex::new(None));
     let flag = Arc::clone(&listening);
     std::thread::Builder::new()
@@ -203,11 +209,17 @@ fn run(pipeline: Pipeline, commands: &Receiver<Command>, listening: &Arc<Mutex<O
     let (mut writer, mut reader) = capture_ring(1);
     let mut audio_buf: Vec<f32> = Vec::with_capacity(16_000);
     let mut last_level = Instant::now();
+    // A command received while waiting idle, handled at the top of the next pass.
+    let mut parked: Option<Command> = None;
 
     loop {
         // 1. Commands (non-blocking; the loop also wakes on audio).
         loop {
-            match commands.try_recv() {
+            let next = match parked.take() {
+                Some(command) => Ok(command),
+                None => commands.try_recv(),
+            };
+            match next {
                 Ok(Command::Listen {
                     utterance,
                     auto_end,
@@ -260,6 +272,7 @@ fn run(pipeline: Pipeline, commands: &Receiver<Command>, listening: &Arc<Mutex<O
                     mic = None;
                     let _ = levels.send_replace(0.0);
                 }
+                Ok(Command::Wake) => {}
                 Ok(Command::Quit) | Err(TryRecvError::Disconnected) => {
                     return;
                 }
@@ -360,12 +373,32 @@ fn run(pipeline: Pipeline, commands: &Receiver<Command>, listening: &Arc<Mutex<O
             let _ = signals.send(signal);
         }
 
-        // 5. Sleep until audio arrives (or briefly, when idle).
+        // 5. Sleep until audio arrives. Idle, the thread sleeps until a command comes (DISC-19:
+        // no work at idle), waking only to pulse the Island while KIVO speaks or, once a
+        // second, to close a speaker that has gone quiet.
         if current.is_some() {
             reader.wait(Duration::from_millis(20));
         } else {
-            std::thread::sleep(Duration::from_millis(30));
+            let wait = if speaker.busy() {
+                Some(LEVEL_PERIOD)
+            } else if speaker.is_open() {
+                Some(Duration::from_secs(1))
+            } else {
+                None
+            };
+            let received = match wait {
+                Some(wait) => match commands.recv_timeout(wait) {
+                    Ok(command) => Some(command),
+                    Err(RecvTimeoutError::Timeout) => None,
+                    Err(RecvTimeoutError::Disconnected) => return,
+                },
+                None => match commands.recv() {
+                    Ok(command) => Some(command),
+                    Err(_) => return,
+                },
+            };
             speaker.release_if_idle();
+            parked = received;
         }
     }
 }

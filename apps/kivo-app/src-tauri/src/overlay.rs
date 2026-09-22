@@ -249,15 +249,10 @@ const ISLAND_METHODS: [&str; 5] = [
 /// "Turn it on" (CAP-02) may only switch on the capability the current request needed, and only
 /// on: the Island can never switch a capability off or turn on anything else.
 fn allowed_capability_change(
-    runtime: &crate::runtime::Runtime,
+    needed: Option<kivo_core::Capability>,
     params: &serde_json::Value,
 ) -> bool {
-    let needed = runtime
-        .link()
-        .snapshot
-        .and_then(|s| s.turn)
-        .and_then(|t| t.capability_off)
-        .and_then(|c| serde_json::to_value(c).ok());
+    let needed = needed.and_then(|c| serde_json::to_value(c).ok());
     params.get("on") == Some(&serde_json::Value::Bool(true))
         && needed.is_some()
         && params.get("capability") == needed.as_ref()
@@ -280,9 +275,36 @@ pub async fn island_request(
     }
     let params = params.unwrap_or(serde_json::Value::Null);
     let capability = method == kivo_ipc::method::CAPABILITIES_SET
-        && allowed_capability_change(&runtime, &params);
+        && allowed_capability_change(
+            runtime
+                .link()
+                .snapshot
+                .and_then(|s| s.turn)
+                .and_then(|t| t.capability_off),
+            &params,
+        );
     if !capability && !ISLAND_METHODS.contains(&method.as_str()) {
         return Err(format!("the Island can't ask for {method}"));
     }
     runtime.request(&method, params).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::allowed_capability_change;
+    use kivo_core::Capability;
+    use serde_json::json;
+
+    #[test]
+    fn the_island_may_only_turn_on_the_capability_the_request_needed() {
+        let needed = Some(Capability::ScreenAwareness);
+        let on = |c: &str| json!({ "capability": c, "on": true });
+        assert!(allowed_capability_change(needed, &on("screen-awareness")));
+        assert!(!allowed_capability_change(needed, &on("computer-use")));
+        assert!(!allowed_capability_change(
+            needed,
+            &json!({ "capability": "screen-awareness", "on": false })
+        ));
+        assert!(!allowed_capability_change(None, &on("screen-awareness")));
+    }
 }

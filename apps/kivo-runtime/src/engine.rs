@@ -443,13 +443,21 @@ impl Engine {
         let windows = self.windows_index();
         let decision = {
             let mut router = lock(&self.router);
-            router.route(
+            let decision = router.route(
                 &text,
                 &GrammarContext {
                     apps: &apps,
                     windows: &windows,
                 },
-            )
+            );
+            let metrics = router.metrics();
+            tracing::debug!(
+                fast_path_ratio = metrics.fast_path_ratio,
+                grammar_p95_us = metrics.grammar_p95_micros,
+                requests = metrics.requests,
+                "intent routing (BRAIN-05)"
+            );
+            decision
         };
         self.mark("t6Intent");
         match decision.route {
@@ -899,6 +907,11 @@ impl Engine {
         let spans = running.spans.clone();
         self.recorder
             .turn_finished(&running.id, &running.transcript, "cancelled", None, &spans);
+    }
+
+    /// How requests have been routed: the fast-path share and per-stage p95 (BRAIN-05).
+    pub fn router_metrics(&self) -> kivo_intent::RouterMetrics {
+        lock(&self.router).metrics()
     }
 
     /// Stop everything (SEC-25): the turn, the voice and (from M5) tasks.
