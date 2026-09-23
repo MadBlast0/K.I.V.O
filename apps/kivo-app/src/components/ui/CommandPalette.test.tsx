@@ -3,12 +3,12 @@ import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { CommandPalette, type Command } from "./CommandPalette";
 
-function Harness({ commands }: { commands: Command[] }) {
+function Harness({ commands, onAsk }: { commands: Command[]; onAsk?: (text: string) => void }) {
   const [open, setOpen] = useState(true);
   return (
     <>
       <span data-testid="state">{open ? "open" : "closed"}</span>
-      <CommandPalette commands={commands} open={open} onOpenChange={setOpen} />
+      <CommandPalette commands={commands} open={open} onOpenChange={setOpen} onAsk={onAsk} />
     </>
   );
 }
@@ -57,11 +57,32 @@ describe("CommandPalette", () => {
     expect(voice).toHaveBeenCalledOnce();
   });
 
-  it("offers to ask KIVO when nothing matches", () => {
+  it("asks KIVO what nothing matches, on Enter (UX-47)", () => {
     const { commands } = make();
-    render(<Harness commands={commands} />);
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "what's the weather" } });
-    expect(screen.queryAllByRole("option")).toHaveLength(0);
+    const ask = vi.fn<(text: string) => void>();
+    render(<Harness commands={commands} onAsk={ask} />);
+    const input = screen.getByRole("combobox");
+    fireEvent.change(input, { target: { value: "what's the weather" } });
+    // The only choice is asking KIVO.
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["“what's the weather”↵"]);
+    expect(screen.getByText("Ask KIVO")).toBeTruthy();
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(ask).toHaveBeenCalledWith("what's the weather");
+    expect(screen.getByTestId("state").textContent).toBe("closed");
+  });
+
+  it("finds a command by its other words, all of them", () => {
+    const run = vi.fn<() => void>();
+    render(
+      <Harness
+        commands={[{ id: "t", group: "Settings", label: "Theme", icon: "theme", keywords: "dark light mode", run }]}
+      />,
+    );
+    const input = screen.getByRole("combobox");
+    fireEvent.change(input, { target: { value: "dark mode" } });
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["Theme"]);
+    fireEvent.change(input, { target: { value: "dark purple" } });
+    expect(screen.queryAllByRole("option")).toHaveLength(1);
     expect(screen.getByText("Ask KIVO")).toBeTruthy();
   });
 

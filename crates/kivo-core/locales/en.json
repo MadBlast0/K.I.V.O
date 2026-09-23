@@ -200,7 +200,9 @@
       "search": "Search your memory for “{query}”",
       "get": "Read a memory",
       "add": "Remember “{text}”",
-      "tags": "List memory topics"
+      "tags": "List memory tags",
+      "forget": "Forget a memory",
+      "propose": "Suggest remembering something"
     },
     "skills": {
       "load": "Use the {name} skill"
@@ -456,7 +458,11 @@
     "privacyCloudOff": "Cloud AI is off, so this stays on your PC.",
     "planTitle": "Plan:\n{steps}",
     "privateData": "Strict Private keeps personal data on this PC, so KIVO won’t send it.",
-    "taskNotGranted": "This task wasn’t given permission to {action}, so KIVO skipped it."
+    "taskNotGranted": "This task wasn’t given permission to {action}, so KIVO skipped it.",
+    "privacyCustomSpeech": "Cloud speech is off in your custom privacy settings, so KIVO uses a speech engine on this PC.",
+    "keptLocal": "This came from something private ({why}), so it stays on this PC and wasn’t shown to {brain}. Ask again with a brain on this PC.",
+    "whyFolder": "a folder you keep on this PC",
+    "whyLabel": "something you marked private"
   },
   "turn": {
     "notUnderstood": "I can’t do that yet.",
@@ -484,7 +490,9 @@
     "off": "off",
     "capabilitySet": "{capability} = {value}",
     "crashed": "{process} stopped unexpectedly",
-    "stoppedEverything": "Stopped everything"
+    "stoppedEverything": "Stopped everything",
+    "memoryForgotten": "Forgot everything in memory ({count, plural, one {# note} other {# notes}})",
+    "privacyKept": "Kept “{tool}” result on this PC: it was private"
   },
   "notice": {
     "firstClose": {
@@ -596,7 +604,7 @@
     "periodDaily": "daily",
     "periodWeekly": "weekly",
     "periodMonthly": "monthly",
-    "summarize": "Summarize this conversation so far for your own later reference, in under 200 words. Keep facts, names, decisions, preferences and open questions; drop small talk. Write plain sentences.",
+    "summarize": "Summarize this conversation so far for your own later reference, in under 200 words. Keep facts, names, decisions, preferences and open questions; drop small talk. Write plain sentences. Then, only if the user stated lasting facts about themselves or their work that are worth remembering (never small talk, never passwords or keys), add up to 3 lines, each starting with REMEMBER: and one short fact in the third person.",
     "agentWorking": "{name} is working on it.",
     "agentDone": "{name} finished.",
     "agentAsks": "{name} wants to {action}",
@@ -825,8 +833,25 @@
     "noText": "Say what to remember.",
     "aboutMe": "About me",
     "found": "Found {count} things.",
-    "added": "I’ll remember that.",
-    "topics": "{count} topics."
+    "added": "I'll remember that.",
+    "topics": "{count} topics.",
+    "replaced": "Got it. I've updated what I remembered.",
+    "already": "I already remember that.",
+    "forgotten": "Forgotten.",
+    "proposed": "I'll ask the user whether to remember it.",
+    "notProposed": "Not suggested: suggestions are off, or it's already known.",
+    "tooLong": "That's too long to remember as one note. Try a shorter version.",
+    "noSecrets": "I don't keep passwords, keys or tokens in memory.",
+    "offer": "Remember this? “{text}”",
+    "offerYes": "Remember",
+    "offerNo": "No thanks",
+    "decisions": "Decisions",
+    "tidied": "Tidied memory: {merged} merged, {superseded} updated, {logs} logs condensed",
+    "exported": "Saved your memory to {file}",
+    "fromConversation": "From a conversation",
+    "fromTask": "From a task",
+    "changedFiles": "Changed {files}",
+    "noAnswer": "There’s no answer from that request to remember."
   },
   "connectors": {
     "ghSignedIn": "gh is signed in as {account}",
@@ -846,5 +871,55 @@
     "exists": "A skill called {name} is already there.",
     "badZip": "The zip has a file that would land outside its folder, so KIVO didn’t open it.",
     "loaded": "Using the {name} skill."
+  },
+  "confirm": {
+    "sayOptions": "Say allow, deny, or wait."
+  },
+  "settings": {
+    "noExports": "There's no Downloads folder to save to.",
+    "importBad": "That isn't a KIVO settings file.",
+    "importNewer": "That file is from a newer KIVO. Update KIVO first.",
+    "importInvalid": "That settings file couldn't be read: {problem}"
+  },
+  "diagnostics": {
+    "microphone": "Microphone",
+    "noMic": "No microphone found",
+    "wake": "Wake word",
+    "wakeWords": "{count, plural, =0 {No wake word yet} one {# wake word ready} other {# wake words ready}}",
+    "noSpotter": "The wake-word model isn't downloaded",
+    "speech": "Speech in and out",
+    "speechEngines": "Recognition: {stt} · Voice: {tts}",
+    "noSpeech": "Speech recognition isn't ready",
+    "echo": "Echo cancellation",
+    "echoReady": "KIVO's echo cancellation is ready for hands-free use",
+    "brains": "Brains",
+    "noBrains": "No brain connected (commands still work)",
+    "brainsDown": "Can't reach: {names}",
+    "extension": "Browser extension",
+    "extensionOn": "Connected",
+    "extensionOff": "Not installed or not connected",
+    "audit": "Audit log",
+    "auditOk": "{count, plural, one {# entry} other {# entries}} · verified",
+    "auditBroken": "The chain is broken at entry {row}: something changed the log",
+    "auditUnread": "Couldn't read the audit log"
+  },
+  "setup": {
+    "reason": {
+      "brainConnected": "A brain is connected already.",
+      "localStrong": "{name} runs on this PC, and it has the memory and graphics for it.",
+      "localOffline": "This PC is offline, so {name} on this PC answers.",
+      "agent": "{name} is installed and signed in.",
+      "openRouter": "OpenRouter's free models need only a sign-in, no key.",
+      "noBrain": "This PC is offline and has no model of its own yet: the built-in commands still work.",
+      "offline": "Offline: everything stays on this PC.",
+      "lowMemory": "This PC has little memory, so KIVO uses the lighter profile.",
+      "metered": "The connection is metered, so downloads wait until you start them."
+    }
+  },
+  "chat": {
+    "branchTitle": "{title} (branch)"
+  },
+  "privacy": {
+    "localWords": "confidential|locally|privately|keep it private|keep this private|on this pc|on my pc|on this computer|offline|don't upload|do not upload|without the cloud|no cloud"
   }
 }

@@ -483,12 +483,7 @@ impl Models {
         let tts = (!config.voice.tts_engine.is_empty())
             .then(|| config.voice.tts_engine.clone())
             .map(|id| self.tts_engine(id, config));
-        let warm_minutes = u64::from(
-            config
-                .performance
-                .stt_warm_minutes
-                .max(config.performance.tts_warm_minutes),
-        );
+        let warm_minutes = warm_minutes(config);
         self.infer.configure(
             Engines {
                 stt,
@@ -578,7 +573,7 @@ fn default_stt(language: &str) -> String {
 
 /// True when the privacy mode lets speech go to a cloud engine.
 fn speech_may_leave(config: &KivoConfig) -> bool {
-    kivo_security::privacy::speech_egress(true, config.privacy.mode, &config.capabilities).is_ok()
+    kivo_security::privacy::speech_egress(true, &config.privacy, &config.capabilities).is_ok()
 }
 
 #[allow(clippy::cast_possible_truncation, reason = "0–100")]
@@ -608,7 +603,7 @@ fn threads_for(config: &KivoConfig) -> usize {
 /// when the privacy mode and the Cloud AI capability allow it.
 fn speech_may_use(engine: &str, config: &KivoConfig) -> bool {
     let cloud = kivo_voice::engine(engine).is_some_and(|e| e.kind == kivo_voice::EngineKind::Cloud);
-    match kivo_security::privacy::speech_egress(cloud, config.privacy.mode, &config.capabilities) {
+    match kivo_security::privacy::speech_egress(cloud, &config.privacy, &config.capabilities) {
         Ok(()) => true,
         Err(denied) => {
             tracing::info!(engine, reason = %denied.message, "speech engine not used");
@@ -616,9 +611,33 @@ fn speech_may_use(engine: &str, config: &KivoConfig) -> bool {
         }
     }
 }
+/// Minutes speech models stay loaded after use (VOICE §8); none in low-memory mode, which
+/// unloads them as soon as a request is done (UX §5, General).
+pub fn warm_minutes(config: &KivoConfig) -> u64 {
+    if config.general.low_memory_mode {
+        return 0;
+    }
+    u64::from(
+        config
+            .performance
+            .stt_warm_minutes
+            .max(config.performance.tts_warm_minutes),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn low_memory_mode_unloads_speech_models_after_use() {
+        let mut config = KivoConfig::default();
+        config.performance.stt_warm_minutes = 5;
+        config.performance.tts_warm_minutes = 10;
+        assert_eq!(warm_minutes(&config), 10);
+        config.general.low_memory_mode = true;
+        assert_eq!(warm_minutes(&config), 0);
+    }
 
     #[test]
     fn the_privacy_mode_never_blocks_local_speech_engines() {

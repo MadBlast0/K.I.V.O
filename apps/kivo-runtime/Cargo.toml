@@ -17,6 +17,7 @@ kivo-platform.workspace = true
 kivo-security = { path = "../../crates/kivo-security" }
 kivo-store.workspace = true
 kivo-mcp.workspace = true
+kivo-memory.workspace = true
 rmcp.workspace = true
 # The test rig's "browser" for connector sign-ins.
 reqwest.workspace = true

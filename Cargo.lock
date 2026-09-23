@@ -2589,6 +2589,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "kivo-memory"
+version = "0.0.0"
+dependencies = [
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "kivo-platform"
 version = "0.0.0"
 dependencies = [
@@ -2632,6 +2644,7 @@ dependencies = [
  "kivo-intent",
  "kivo-ipc",
  "kivo-mcp",
+ "kivo-memory",
  "kivo-platform",
  "kivo-platform-windows",
  "kivo-security",

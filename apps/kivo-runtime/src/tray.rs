@@ -244,6 +244,35 @@ fn handle(core: &Arc<Core>, engine: Option<&Arc<Engine>>, event: &TrayEvent) {
 
 /// Shows the tray icon and keeps it in step with the session until KIVO quits. The icon is
 /// removed when this returns.
+/// Keeps the tray icon as the settings say: shown, or removed (Settings → General "Show KIVO in
+/// the system tray"). Ending the icon's task drops it, which removes it from the tray.
+pub async fn supervise(core: Arc<Core>, engine: Arc<Engine>) {
+    let mut settings = core.settings_changed();
+    let shutdown = core.shutdown();
+    let mut running: Option<tokio::task::JoinHandle<()>> = None;
+    loop {
+        let wanted = core.config().general.tray_icon;
+        match (wanted, running.is_some()) {
+            (true, false) => {
+                running = Some(tokio::spawn(run(Arc::clone(&core), Arc::clone(&engine))));
+            }
+            (false, true) => {
+                if let Some(task) = running.take() {
+                    task.abort();
+                }
+            }
+            _ => {}
+        }
+        tokio::select! {
+            changed = settings.changed() => if changed.is_err() { break },
+            () = shutdown.cancelled() => break,
+        }
+    }
+    if let Some(task) = running {
+        let _ = task.await;
+    }
+}
+
 pub async fn run(core: Arc<Core>, engine: Arc<Engine>) {
     let mut state = core.state();
     let mut shown = Shown::from(&*state.borrow_and_update());

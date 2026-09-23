@@ -108,7 +108,15 @@ Gemini CLI that never touch the originals, KIVO's own MCP server (`--mcp-server 
 sharing memory tools with the agents the user allows, connectors with OAuth (PKCE + dynamic
 registration) and local detection, Agent Skills, file watchers, the hostile-server fixture
 (`testenv/mcp`) and the Extensions page. Still open in M6: a sign-in against a live publisher
-(needs the owner's accounts). **Next: M7.** Progress per milestone is in the
+(needs the owner's accounts). **M7 — Control Center and memory (MVP)** is built: the Markdown
+memory vault (`kivo-memory`, Obsidian-compatible, SQLite as its index) with recall, suggestions,
+workspace notes and tidying; the Memory, Usage and Settings (ten tabs) pages; Chat's continue,
+branch and export; Brains → Context (layer switches, compaction, preview); onboarding steps 7–11
+with setup recommendations; privacy by source and labels with Custom mode and a tool-result egress
+check; Mica, text-safe contrast tokens and Windows contrast themes; the Ctrl+K palette; and
+Playwright tests against the dev app over CDP (`pnpm dev:e2e`, then `pnpm --filter kivo-app e2e`).
+Still open in M7: the owner's side-by-side review of every screen against the mockup (DS-15,
+M7-X3). **Next: M8.** Progress per milestone is in the
 table at the top of [docs/ROADMAP.md](docs/ROADMAP.md).
 Update this section as milestones land.
 
@@ -131,6 +139,7 @@ Update this section as milestones land.
 | MCP fixture server (normal, `--hostile`, `--http [--no-auth]`) | `cargo run -p kivo-testenv-mcp -- --hostile` |
 | UIA journey on the dummy app (`testenv/app`, acts only on its own window) | `cargo test -p kivo-platform-windows --test uia_testenv` |
 | Security suite v1 (injection, shell strings, traversal, bypass attempts) | `cargo test -p kivo-tools --lib security_suite` · `cargo test -p kivo-runtime --test security_suite` |
+| Playwright UI tests on the dev app (start it with `pnpm dev:e2e`) | `pnpm --filter kivo-app e2e` |
 | Regenerate the UI's IPC types | `KIVO_WRITE_TS=1 cargo test -p kivo-ipc --features ts --test ts_bindings` |
 
 The tree must stay free of warnings from tsc, Vite, rustc and clippy. The native title

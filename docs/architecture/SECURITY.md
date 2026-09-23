@@ -136,7 +136,10 @@ Context = { session: owner|guest, speaker_confidence, profile: MaxSafety|Balance
 - **Data classes:** `public, normal, personal, sensitive, credential, highly_sensitive`.
 - **How items are classified:** by source (password fields → credential; documents in folders the
   user marks private → sensitive), plus lightweight local detectors (keys, card numbers, ID
-  patterns) and user labels.
+  patterns) and user labels. (Built in M7: folders under Privacy → "Keep on this PC" are sensitive
+  but readable; `tools.private-folders` are never touched at all; "Private words" are the labels. A
+  request that asks to stay local routes like sensitive data, and a private tool result is never
+  shown to a cloud brain. DECISIONS "M7 build".)
 - **Modes:** Cloud / Local / Strict Private / Custom. The router and the egress checks enforce the
   mode, and **privacy always overrides failover convenience**.
 - **Cloud STT/TTS** also count as egress, so they are subject to the same mode.
@@ -220,14 +223,14 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 
 **Privacy (§6)**
 
-- [ ] **SEC-20** · M7 · Data classes `public … highly_sensitive`, classified by source, local detectors (keys, card numbers, ID patterns) and user labels (§6)
-- [ ] **SEC-21** · M7 · Privacy modes Cloud / Local / Strict Private / Custom enforced in the router and egress checks (cloud STT/TTS included); privacy overrides failover (§6)
+- [x] **SEC-20** · M7 · Data classes `public … highly_sensitive`, classified by source, local detectors (keys, card numbers, ID patterns) and user labels (§6) → done: data classes public … highly_sensitive from the local detectors (keys, cards with Luhn, IDs, contacts), by source (a folder under Privacy → "Keep on this PC" is sensitive; password fields are never read) and user labels (Privacy → Private words: a word gives text its class); a sensitive request routes to a local brain, and a private tool result is never shown to a cloud brain (egress check, logged in Activity) · verified: `classify` tests (`labels_and_private_folders_classify_by_source`), `brain_turns::private_folders_and_labels_stay_on_this_pc`, `Permissions.test.tsx` (2026-09-24)
+- [x] **SEC-21** · M7 · Privacy modes Cloud / Local / Strict Private / Custom enforced in the router and egress checks (cloud STT/TTS included); privacy overrides failover (§6) → done: Cloud / Local / Strict Private / Custom enforced in the router (`privacy::cloud_brains`, `cloud_limit`), cloud STT/TTS egress (`speech_egress`, Custom has its own switch), screenshots (`cloud_vision`) and the tool-result egress check; Custom shows four switches (cloud brains, personal details to cloud, cloud speech, cloud screen); privacy wins over failover (same-privacy only, BRAIN-22) · verified: `privacy` tests (`custom_turns_each_kind_of_cloud_on_by_itself`), `brain_turns` privacy and failover tests, `Permissions.test.tsx` Custom (2026-09-24)
 
 **Audit (§7)**
 
 - [x] **SEC-22** · M1 · Append-only `audit` table with the §7 fields and `hash = sha256(prev_hash || row)` (§7) → done: the append-only `audit` table (migration 3, triggers refuse UPDATE/DELETE) with the §7 fields and `hash = sha256(prev_hash || row)`; `verify_audit` finds the first broken row · verified: `audit_rows_chain_and_the_chain_verifies`, `the_audit_log_refuses_edits_and_detects_tampering`, the end-to-end test verifies the chain (2026-09-23)
 - [ ] **SEC-23** · M8 · Chain verification in diagnostics (§7)
-- [ ] **SEC-24** · M7 · Activity → Audit view in the Control Center (§7)
+- [x] **SEC-24** · M7 · Activity → Audit view in the Control Center (§7) → done: Activity → Audit lists every permission decision (tool, arguments, risk, allow/deny, who confirmed, error) from the audit log · verified: `Activity.test.tsx` (2026-09-24)
 
 **Emergency stop (§8)**
 

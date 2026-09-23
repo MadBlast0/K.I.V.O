@@ -12,7 +12,8 @@
     "lint": "oxlint --type-aware --deny-warnings",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "e2e": "playwright test -c e2e/playwright.config.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
@@ -27,6 +28,7 @@
     "react-i18next": "^17.0.14"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/vite": "^4.3.3",
     "@tauri-apps/cli": "^2.11.5",
     "@testing-library/dom": "^10.4.2",

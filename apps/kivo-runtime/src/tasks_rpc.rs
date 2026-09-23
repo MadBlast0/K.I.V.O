@@ -212,15 +212,10 @@ impl TasksRpc {
                     accept: bool,
                 }
                 parse::<P>(params).and_then(|p| {
-                    self.workspaces
-                        .answer(&p.id, p.accept)
+                    self.engine
+                        .answer_offer(&p.id, p.accept)
                         .map_err(refuse)
-                        .and_then(|w| {
-                            if let Some(w) = &w {
-                                self.engine.agents.set_workspace(w.path.clone().into());
-                            }
-                            ok(&w)
-                        })
+                        .and_then(|(_, w)| ok(&w))
                 })
             }
             method::WORKSPACES_FORGET => parse::<Id>(params).map(|Id { id }| {

@@ -354,3 +354,21 @@ bridge are custom.
 | **Imports copy, never modify** | Other apps' MCP setups (Claude Desktop incl. the Store build, Claude Code, Cursor, VS Code, Codex, Gemini CLI) are read and copied; their files are never written. Secret-looking environment values move to Credential Manager. Every imported tool waits for review |
 | **Skills trust** | Skills in KIVO's own folder are on; skills found in `~/.claude/skills` or a project's `.claude/skills` and imported folders or zips are off until reviewed. Zip import rejects paths outside the folder. Only a skill's name and description go with a request; `skills.load` (always offered while skills are on) loads its body; its scripts run through `shell.run` and ask like any command |
 | **Plugins after 1.0** | The Plugins tab says plugins come after 1.0 (INT-06+ are Post); MCP servers and skills extend KIVO until then |
+
+## 2026-09-24 — M7 build
+
+| Topic | Decision |
+|---|---|
+| **The vault is the memory** | `crates/kivo-memory`: Markdown notes with front-matter (unknown keys kept), wikilinks and tags in `%APPDATA%\KIVO\memory\`. The files are the source of truth; SQLite (migration 10) is only the index, rebuilt by hash, and an edit made in Obsidian or any editor wins. Writes are atomic through `.kivo/tmp`. Secrets are removed before anything is written |
+| **Instructions live in the vault** | "About me" is `about-me.md` and each workspace's instructions `workspaces/<slug>/instructions.md`; the M5 instruction files are moved there once, front-matter stripped when sent |
+| **Memory budget** | ≤ 150 tokens per memory and 400 per request (MEM-08; CONVERSATION §8's "≤ 600" is the assembler's cap for the layer); an agent handoff gets ≤ 300. Guests get no memory tools and no recall |
+| **Settings file** | Export writes `kivo.toml` plus routines to Downloads; import never brings grants or Bypass and keeps this PC's device choices; reset asks first |
+| **Setup recommends, never decides** | `setup.recommend` preselects the brain, mode (Auto, the default), performance profile and privacy mode from RAM, GPU, battery, the network (`GetNetworkConnectivityHint`: offline, metered), agents and local servers found, and brains connected; each shown with its reason and changeable on the same screen. Metered connections don't start downloads |
+| **Context settings** | A `[context]` section: layer switches (About me, workspace, memories, skills), the live fields sent, auto-compaction and its threshold (default: only when full), "Start each conversation fresh" (a new voice session never joins an earlier thread). They live on Brains → Context rather than a Settings tab, beside the budget they affect. The preview builds the next request with no side effects and redacts secrets; its cost estimate counts only the start-up layers |
+| **Privacy by source and labels** | Two kinds of folder: `tools.private-folders` are never touched; `privacy.sensitive-folders` ("Keep on this PC") are readable but only a local brain sees their content. User labels ("Project Falcon" → sensitive) raise text's class. A request that asks to stay local ("…locally", "confidential") is routed like sensitive data. A tool result that is private is replaced, for a cloud brain, by a note saying it stayed on the PC, and Activity records it |
+| **Custom privacy** | Custom has four switches: cloud brains (on), personal details to cloud (off), cloud speech (off), cloud screen (off). Sensitive data never goes to the cloud in any mode |
+| **Contrast** | Text tokens are ≥ 4.5:1 on every surface: `--text-3` darkened from the mockup (light `#6E6E73`, dark `#8E8E93`), text-safe `--acc-text` and status `-text` tokens, light Amber `#BF7C00` for 3:1 as a control; a custom accent's text colour is computed. `contrast.test.ts` reads `tokens.css`. Windows contrast themes use system colours |
+| **Mica** | Only on Windows 11 (build ≥ 22000) with transparency on; Windows 10 stays solid |
+| **Hidden companion** | The Hidden Island style shows nothing but questions that need an answer; everything else is sounds and Activity |
+| **UI tests on the dev build** | Playwright connects over CDP to the dev app's own WebView2 (`pnpm dev:e2e` opens a debugging port on 127.0.0.1 only); no browser is downloaded and the tests are read-only against the owner's KIVO |
+| **Low-memory mode** | Speech models unload right after each request |

@@ -82,11 +82,11 @@
 }
 .k-side__item.is-active {
   background: var(--acc-soft);
-  color: var(--acc);
+  color: var(--acc-text);
   font-weight: 600;
 }
 .k-side__item.is-active svg {
-  color: var(--acc);
+  color: var(--acc-text);
 }
 .k-side__badge {
   margin-inline-start: auto;
@@ -856,6 +856,20 @@
   border-radius: 2px;
   margin-inline-end: 6px;
 }
+.k-context__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+.k-context__fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin: 10px 4px 0;
+}
 .k-context__text {
   white-space: pre-wrap;
   font-family: var(--font-mono);
@@ -971,8 +985,8 @@
   max-width: 76%;
   padding: 8px 12px;
   border-radius: 14px 14px 4px 14px;
-  background: var(--acc);
-  color: #fff;
+  background: var(--acc-text);
+  color: var(--on-acc);
   white-space: pre-wrap;
 }
 .k-chat__kivo {
@@ -1065,7 +1079,7 @@
   border: 0;
   padding: 0;
   background: none;
-  color: var(--acc);
+  color: var(--acc-text);
   font: inherit;
   cursor: pointer;
 }
@@ -1094,4 +1108,129 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+/* ═════════ Mica (UX-32): Windows 11's material shows through the sidebar and, lightly, the
+   page. Without it (off, or Windows 10) everything stays solid. ═════════ */
+[data-mica="on"] body {
+  background: transparent;
+}
+[data-mica="on"] .k-app {
+  background: color-mix(in srgb, var(--win) 84%, transparent);
+}
+[data-mica="on"] .k-side {
+  background: color-mix(in srgb, var(--side) 40%, transparent);
+}
+[data-mica="on"] .k-titlebar {
+  background: transparent;
+}
+
+/* Setup's small desktop with the Island (mockup `.mini`), and the recommendation reasons. */
+.k-mini {
+  position: relative;
+  height: 220px;
+  flex: none;
+  margin-bottom: 12px;
+  border-radius: var(--r-m);
+  overflow: hidden;
+  box-shadow: 0 0 0 1px var(--border);
+  isolation: isolate;
+}
+.k-mini[data-tall] {
+  height: 240px;
+}
+.k-mini__wall {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background:
+    radial-gradient(60% 80% at 78% 30%, #cfdce8, transparent 60%),
+    radial-gradient(70% 70% at 10% 90%, #eadccb, transparent 60%),
+    linear-gradient(160deg, #eef1f4, #dde4eb 55%, #eae3da);
+}
+[data-theme="dark"] .k-mini__wall {
+  background:
+    radial-gradient(60% 80% at 78% 25%, #29394c, transparent 60%),
+    radial-gradient(70% 70% at 10% 95%, #3a2e27, transparent 60%),
+    linear-gradient(160deg, #15181d, #1b2129 55%, #1e1a17);
+}
+.k-mini__app {
+  position: absolute;
+  left: 12%;
+  top: 28%;
+  width: 76%;
+  height: 60%;
+  z-index: -1;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--group);
+  box-shadow:
+    0 0 0 1px var(--border),
+    0 18px 50px -20px rgba(0, 0, 0, 0.4);
+}
+.k-mini__bar {
+  display: flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--sep);
+  font-size: 12px;
+  color: var(--text-2);
+}
+.k-mini__island {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 10px;
+  display: flex;
+  justify-content: center;
+  transform: scale(0.82);
+  transform-origin: top center;
+  transition: top 0.3s ease;
+}
+.k-mini__island[data-bottom] {
+  top: auto;
+  bottom: 10px;
+  transform-origin: bottom center;
+}
+.k-reasons {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+.k-reasons > span {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.k-reasons__dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  transform: translateY(-1px);
+}
+.k-tray-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: var(--r-m);
+  background: var(--group);
+  box-shadow: 0 0 0 1px var(--border);
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+.k-try {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+  color: var(--text-2);
 }

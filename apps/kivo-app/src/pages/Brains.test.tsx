@@ -152,13 +152,19 @@ const preview: ContextPreview = {
   brain: "Ollama",
   budget: { voice: 4096, chat: 4096 },
   layers: [
-    { id: "system", text: "You are KIVO…", tokens: 320, max: 800 },
-    { id: "instructions", text: "- name: Call me Sam", tokens: 12, max: 400 },
-    { id: "live", text: "Current context:", tokens: 40, max: 300 },
-    { id: "summary", text: "", tokens: 0, max: 1500 },
-    { id: "turns", tokens: 0 },
-    { id: "tools", tokens: 900, count: 18, max: 20 },
+    { id: "system", text: "You are KIVO…", tokens: 320, max: 800, on: true },
+    { id: "instructions", text: "- name: Call me Sam", tokens: 12, max: 400, on: true },
+    { id: "workspace", text: "", tokens: 0, max: 800, on: true },
+    { id: "live", text: "Current context:", tokens: 40, max: 300, on: true },
+    { id: "skills", text: "", tokens: 0, max: 1000, on: false },
+    { id: "memories", tokens: 0, max: 600, on: true },
+    { id: "summary", text: "", tokens: 0, max: 1500, on: true },
+    { id: "turns", tokens: 0, on: true },
+    { id: "tools", tokens: 900, count: 18, max: 20, on: true },
   ],
+  sessionCost: 0,
+  preview: "[system, cached]\nYou are KIVO…\n\n[user]\nhello [redacted]",
+  previewTokens: 1272,
 };
 
 const runtime = vi.hoisted(() => ({
@@ -188,6 +194,9 @@ runtime.request = (method: string, params?: unknown) => {
       return Promise.resolve(preview);
     case "memory.preferences":
       return Promise.resolve([{ key: "name", value: "Call me Sam" }]);
+    case "settings.get":
+    case "settings.set":
+      return Promise.resolve({ context: { "live-fields": ["local time", "language"], "compact-at": 100 } });
     case "brains.setKey":
       return Promise.resolve({ health: { state: "ready" } });
     default:
@@ -271,6 +280,27 @@ describe("Brains (UX-22)", () => {
     await settle();
     expect(await screen.findByText(/tokens to start a conversation/)).toBeTruthy();
     expect(screen.getByText("Call me Sam")).toBeTruthy();
+    expect(screen.getByText("Free: this brain costs nothing")).toBeTruthy();
     expect(await violations()).toEqual([]);
+
+    // Settings → Context (CONV-31): a layer turned off, live fields, compaction, fresh start.
+    expect(screen.getByRole("switch", { name: "Skills index" }).getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(screen.getByRole("switch", { name: "About me" }));
+    await settle();
+    expect(calls).toContainEqual({ method: "settings.set", params: { context: { "about-me": false } } });
+    fireEvent.click(screen.getByRole("checkbox", { name: "Active app" }));
+    await settle();
+    expect(calls).toContainEqual({
+      method: "settings.set",
+      params: { context: { "live-fields": ["local time", "language", "active app"] } },
+    });
+    fireEvent.click(screen.getByRole("switch", { name: "Start each conversation fresh" }));
+    await settle();
+    expect(calls).toContainEqual({ method: "settings.set", params: { context: { "fresh-start": true } } });
+
+    // The whole request, secrets redacted by the runtime.
+    fireEvent.click(screen.getByRole("button", { name: "Preview what the AI sees" }));
+    await settle();
+    expect(screen.getByText(/hello \[redacted\]/)).toBeTruthy();
   });
 });

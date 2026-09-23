@@ -4,13 +4,27 @@
     {
       "name": "kivo-dev",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["dev"],
+      "runtimeArgs": [
+        "dev"
+      ],
       "port": 1420
     },
     {
       "name": "kivo-ui",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "kivo-app", "dev"],
+      "runtimeArgs": [
+        "--filter",
+        "kivo-app",
+        "dev"
+      ],
+      "port": 1420
+    },
+    {
+      "name": "kivo-dev-e2e",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev:e2e"
+      ],
       "port": 1420
     }
   ]

@@ -6,7 +6,7 @@ pub mod classify;
 pub mod policy;
 pub mod privacy;
 
-pub use classify::{DataClass, classify};
+pub use classify::{DataClass, classify, classify_labeled, classify_path};
 pub use kivo_core::tool::{ConfirmSpec, ConfirmedBy, Strength};
 pub use policy::{
     Answer, Context, Decision, Denial, DenyCode, Grant, HardLimits, Permit, SessionKind, Taint,

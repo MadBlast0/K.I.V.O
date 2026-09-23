@@ -312,7 +312,7 @@ makes each layer **explicit, small, cached and user-controllable**:
    session for the current brain, and a **"Preview what the AI sees"** button that renders the
    exact assembled prompt, with secrets redacted.
 
-**Settings → Context** (advanced; defaults just work):
+**Settings → Context** (advanced; defaults just work; built as the Context tab of the Brains page, DECISIONS "M7 build"):
 
 - toggles and edit links per layer;
 - the per-profile budget;
@@ -380,7 +380,7 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 
 - [x] **CONV-01** · M3 · Voice sessions end after 2 min of silence (setting); threads join voice sessions within 30 min on the same topic; "Kivo, new topic" starts a new thread; typed chats choose a thread (§1) → done: voice sessions end after `brains.voice-session-minutes` (2) of silence; a new session joins a thread from the last 30 min on the same topic; "Kivo, new topic" starts one; Chat picks its thread · verified: `follow_ups_continue_the_thread_and_new_topic_starts_another` (2026-09-23)
 - [x] **CONV-02** · M3 · Agent sessions: the CLI agent's session id is stored so KIVO can resume it (§1) → done: the agent's session id is stored per agent and workspace and resumed with `session/load` when the agent restarts · verified: the Claude Code e2e test checks the stored id; `a_stored_session_is_resumed_when_the_agent_can` (2026-09-23)
-- [ ] **CONV-03** · M7 · Chat power features: rename, pin, continue, branch, export, delete, context meter, Compact now (§0)
+- [x] **CONV-03** · M7 · Chat power features: rename, pin, continue, branch, export, delete, context meter, Compact now (§0) → done: the thread menu has rename, pin, Continue by voice (`chat.continue`: the next voice request joins the thread), Branch and "Branch from here" on an answer (`chat.branch`, the summary carried when every message it covers is), Export as Markdown or JSON to Downloads (`chat.export`), Compact now and delete; the context meter shows between turns from `brains.context` · verified: `Chat.test.tsx` power features, `brain_turns::follow_ups_continue_the_thread_and_new_topic_starts_another` (continue), `the_control_centers_brain_requests` (branch, export, continue), `kivo-store` `a_branch_copies_up_to_a_message_and_keeps_the_summary` (2026-09-24)
 
 **Context budgets and compaction (§2)**
 
@@ -409,10 +409,10 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 
 **Memory v2 (§6)**
 
-- [ ] **CONV-17** · M7 · Knowledge graph tables `entities`, `relations`, `observations` with `valid_from` / `valid_to` (§6)
-- [ ] **CONV-18** · M7 · Obsidian-compatible Markdown vault in `%APPDATA%\KIVO\memory\` (front-matter, wikilinks, `people/`, `workspaces/`, `topics/`, `.kivo/` index); SQLite is the index rebuilt from the files, and user edits win (§6)
-- [ ] **CONV-19** · M7 · Capture modes Only when I ask / Suggest (on) / Workspace notes (on), each switchable; memory only from conversations and tasks KIVO took part in (§6)
-- [ ] **CONV-20** · M7 · Suggest: memory candidates at compaction or after tasks, accepted, edited or dismissed by the user (§2, §6)
+- [x] **CONV-17** · M7 · Knowledge graph tables `entities`, `relations`, `observations` with `valid_from` / `valid_to` (§6) → done: migration 10 adds `entities`, `relations` and `observations` (with `valid_from` / `valid_to`), filled from each note's people, `[[links]]` and facts when the vault is indexed (`kivo-memory` graph, `kivo_store::memory`); a superseded fact gets its `valid_to` · verified: `kivo-store` memory tests, `kivo-memory` graph tests, `m7_memory::the_memory_page` backlinks (2026-09-24)
+- [x] **CONV-18** · M7 · Obsidian-compatible Markdown vault in `%APPDATA%\KIVO\memory\` (front-matter, wikilinks, `people/`, `workspaces/`, `topics/`, `.kivo/` index); SQLite is the index rebuilt from the files, and user edits win (§6) → done: `crates/kivo-memory`: Markdown notes with front-matter (unknown keys kept), wikilinks and tags in `%APPDATA%\KIVO\memory\` (`people/`, `workspaces/`, `topics/`, `.kivo/` for temp files); SQLite is only the index, rebuilt from the files by hash, and a note edited outside KIVO wins (watched) · verified: 19 `kivo-memory` tests, `m7_memory` (3), runtime `memory` tests (2026-09-24)
+- [x] **CONV-19** · M7 · Capture modes Only when I ask / Suggest (on) / Workspace notes (on), each switchable; memory only from conversations and tasks KIVO took part in (§6) → done: `memory.capture` Only when I ask / Suggest (default) and `memory.workspace-notes` (on), each a switch on the Memory page; memories come only from turns and tasks KIVO ran (`remember`, compaction, task end), never from other apps' content · verified: `m7_memory::remembering_by_voice_then_answers_use_it`, `compaction_suggests_and_the_island_asks`, runtime `memory` tests (2026-09-24)
+- [x] **CONV-20** · M7 · Suggest: memory candidates at compaction or after tasks, accepted, edited or dismissed by the user (§2, §6) → done: compaction's `REMEMBER:` lines and finished tasks become suggestions (`memory_suggestions`), offered on the Island ("Want me to remember …?") and on the Memory page to accept, edit or dismiss · verified: `m7_memory::compaction_suggests_and_the_island_asks`, `Memory.test.tsx` (2026-09-24)
 - [ ] **CONV-21** · M8 · Workspace notes (automatic) with detail level Brief / Standard / Detailed (§6)
 - [ ] **CONV-22** · M8 · Tidy job: merge duplicates, condense logs older than 14 days, mark superseded facts, 50 KB per-workspace cap, never keep secrets, ask before new workspace/person notes (§6)
 - [ ] **CONV-23** · M8 · Hybrid search FTS5 + `sqlite-vec` (§6, MEMORY §3)
@@ -429,7 +429,7 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 **Context layers (§8)**
 
 - [x] **CONV-30** · M3 · Context layers 1–8 with the default sizes, lazy-loading tools and skills (~1.5k tokens at start), CLI handoff = request + ≤ 300 tokens of memory (§8) → done: layers 1–8 with the default sizes; tools are chosen per request, the agent handoff is the request plus ≤ 300 tokens of saved context; Brains → Context shows each layer · verified: context tests, `Brains.test.tsx` · note: skills load with M6 (2026-09-23)
-- [ ] **CONV-31** · M7 · Settings → Context: per-layer toggles and edit links, per-profile budget, auto-compaction threshold, "Start each conversation fresh", estimated cost per session, "Preview what the AI sees" with secrets redacted (§8)
+- [x] **CONV-31** · M7 · Settings → Context: per-layer toggles and edit links, per-profile budget, auto-compaction threshold, "Start each conversation fresh", estimated cost per session, "Preview what the AI sees" with secrets redacted (§8) → done: Brains → Context (`components/brains/ContextSettings.tsx`): each layer's size with a switch and an Edit link (About me, workspace, memories, skills; `[context]` in `kivo.toml`), the live fields sent, auto-compaction and its threshold (60–100 %), "Start each conversation fresh", the budget, an estimated cost of a new conversation, and "Preview what the AI sees" (the next request built without side effects, secrets redacted) · verified: `brain_turns::the_control_centers_brain_requests` (preview, toggles, live fields), `follow_ups…` (fresh start), `engine::brain` `compaction_follows_the_context_settings`, `Brains.test.tsx` Context (2026-09-24)
 
 **Skills (§9)**
 

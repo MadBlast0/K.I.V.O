@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "../components/layout/Shell";
-import { Button, Group, Note, Row, Segmented, Tag, type Tone } from "../components/ui";
+import { Button, Group, Note, Popover, Row, Segmented, Tag, type Tone } from "../components/ui";
 import type { IconName } from "../icons";
 import { Method, type ActivityItem, type AuditItem } from "../ipc/generated";
 import { useRuntime, useRuntimeEvents } from "../ipc/runtime";
@@ -24,6 +24,51 @@ const TONE: Record<Outcome, Tone> = {
 };
 
 const ICON: Record<Entry["kind"], IconName> = { voice: "mic", tool: "play", setting: "settings" };
+
+type Used = { path: string; title: string; exists: boolean };
+
+/** "Why did you say that?" (MEM-10): the memories a request's answer was given. */
+function Why({ turn }: { turn: string }) {
+  const { t } = useTranslation();
+  const { request } = useRuntime();
+  const [used, setUsed] = useState<Used[] | null>(null);
+  return (
+    <Popover
+      title={t("activity.whyTitle")}
+      trigger={
+        <Button
+          size="sm"
+          variant="plain"
+          onClick={() =>
+            void request<Used[]>(Method.memoryWhy, { turn })
+              .then(setUsed)
+              .catch(() => setUsed([]))
+          }
+        >
+          {t("activity.why")}
+        </Button>
+      }
+    >
+      {used === null ? (
+        t("ui.working")
+      ) : used.length === 0 ? (
+        t("activity.whyNone")
+      ) : (
+        <>
+          {t("activity.whyUsed", { count: used.length })}
+          <ul className="k-why">
+            {used.map((u) => (
+              <li key={u.path}>
+                {u.title}
+                {!u.exists && ` (${t("activity.whyGone")})`}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </Popover>
+  );
+}
 
 export function Activity() {
   const { t, i18n } = useTranslation();
@@ -116,6 +161,7 @@ export function Activity() {
               subtitle={e.detail ?? undefined}
               end={
                 <>
+                  {e.turn !== null && e.answered && <Why turn={e.turn} />}
                   <span className="k-meta">{when(e.ts)}</span>
                   <Tag tone={TONE[e.outcome]}>{t(`activity.outcome.${e.outcome}`)}</Tag>
                 </>

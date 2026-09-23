@@ -407,6 +407,30 @@ mod tests {
         assert_eq!(ist, day - 330 * 60_000);
     }
 
+    /// The shape the Usage page sends and gets back (UX-30).
+    #[test]
+    fn a_limit_as_json() {
+        let limit = Limit {
+            scope: Scope::Overall,
+            period: Period::Monthly { reset_day: 1 },
+            amount: 10.0,
+            warnings: vec![80],
+            at_limit: AtLimit::LocalOnly,
+        };
+        let json = serde_json::to_value(&limit).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "scope": { "kind": "overall" },
+                "period": { "monthly": { "reset_day": 1 } },
+                "amount": 10.0,
+                "warnings": [80],
+                "atLimit": "localOnly"
+            })
+        );
+        assert_eq!(serde_json::from_value::<Limit>(json).unwrap(), limit);
+    }
+
     #[test]
     fn limits_warn_at_thresholds_and_say_when_reached() {
         let limit = Limit {

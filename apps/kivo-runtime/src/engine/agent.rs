@@ -154,7 +154,7 @@ impl Engine {
         self.core
             .update_turn(|view| view.confirm = Some(spec.clone()));
         self.speaker.cue(crate::speaker::Cue::Question);
-        self.say_phrase(format!("{}?", spec.action)).await;
+        self.say_phrase(self.question(&spec.action)).await;
         let idle = lock(&self.turn)
             .as_ref()
             .is_some_and(|t| t.speaking.is_none() && t.phrases.is_empty());
@@ -225,11 +225,37 @@ impl Engine {
         self.agents
             .touched(&id, session.id(), &cwd, thread.as_deref());
         // The handoff: the request plus at most 300 tokens of the user's saved context (CONV-30).
+        // Relevant memories first (an agent's provider is a cloud one: sensitive notes stay out
+        // unless allowed, MEM-07), then stated preferences.
+        let mut notes: Vec<ContextItem> = Vec::new();
+        if let Some(memory) = self.memory() {
+            let current = self.workspaces().and_then(|w| w.current());
+            let recalled = memory.recall(
+                &crate::memory::Ask {
+                    text,
+                    app: None,
+                    project: Some(&cwd),
+                    workspace: current.as_ref().map(|w| w.name.as_str()),
+                    cloud: true,
+                    guest,
+                },
+                crate::memory::HANDOFF_TOKENS,
+            );
+            memory.record_used(&turn, &recalled);
+            notes.extend(
+                recalled
+                    .into_iter()
+                    .map(|r| ContextItem::new(r.text, "user-provided memory", Trust::System)),
+            );
+        }
         let preferences = self.recorder_db(|db| db.preferences()).unwrap_or_default();
-        let notes: Vec<ContextItem> = preferences
-            .into_iter()
-            .map(|(k, v)| ContextItem::new(format!("{k}: {v}"), "preference", Trust::User))
-            .collect();
+        if !guest {
+            notes.extend(
+                preferences
+                    .into_iter()
+                    .map(|(k, v)| ContextItem::new(format!("{k}: {v}"), "preference", Trust::User)),
+            );
+        }
         let mut handoff = context::handoff(text, &notes);
         let attachments = lock(&self.turn)
             .as_ref()
@@ -289,6 +315,9 @@ impl Engine {
         let mut last_card = Instant::now() - CARD_EVERY;
         let mut failed: Option<NormalizedError> = None;
         let mut stop = String::new();
+        // What the agent did, for the workspace's notes (CONV-19).
+        let mut plan: Vec<String> = Vec::new();
+        let mut files: Vec<String> = Vec::new();
         while let Some(event) = events.recv().await {
             match event {
                 AgentEvent::Message(delta) => {
@@ -307,6 +336,7 @@ impl Engine {
                 }
                 AgentEvent::Thought(t) => reasoning.push_str(&t),
                 AgentEvent::Plan(entries) => {
+                    plan = entries.iter().map(|e| e.content.clone()).collect();
                     for (i, entry) in entries.iter().enumerate() {
                         self.core.set_step(StepView {
                             id: format!("{turn}-plan{i}"),
@@ -331,6 +361,9 @@ impl Engine {
                     });
                 }
                 AgentEvent::FileDiff { path } => {
+                    if !files.contains(&path) {
+                        files.push(path.clone());
+                    }
                     self.core.set_step(StepView {
                         id: format!("{turn}-f{path}"),
                         title: path,
@@ -403,6 +436,26 @@ impl Engine {
                         .await;
                     answer.push_str("\n\n");
                     answer.push_str(&verdict);
+                    plan.push(verdict.lines().next().unwrap_or_default().to_owned());
+                }
+                // Workspace notes: what was done here, for next time (CONV-19). Never for guests.
+                if !guest
+                    && let (Some(memory), Some(workspace)) =
+                        (self.memory(), self.workspaces().and_then(|w| w.current()))
+                {
+                    let mut bullets = plan.clone();
+                    if !files.is_empty() {
+                        let list: Vec<String> = files.iter().take(8).cloned().collect();
+                        bullets.push(text::tf(
+                            "memory.changedFiles",
+                            &[("files", &list.join(", "))],
+                        ));
+                    }
+                    if bullets.is_empty() {
+                        bullets.push(clip(answer.lines().next().unwrap_or_default()));
+                    }
+                    let request: String = text.chars().take(80).collect();
+                    memory.workspace_log(&workspace.name, &format!("{name}: {request}"), &bullets);
                 }
                 self.core
                     .update_turn(|view| view.answer = Some(answer.clone()));

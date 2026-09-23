@@ -44,6 +44,9 @@ windows = { version = "0.61", features = [
     "Win32_Storage_EnhancedStorage",
     "Win32_System_Com_StructuredStorage",
     "Win32_System_Variant",
+    # Mica only on Windows 11 (effects.rs, UX-32).
+    "Wdk_System_SystemServices",
+    "Win32_System_SystemInformation",
 ] }
 
 [lints]

@@ -168,4 +168,27 @@ describe("Permissions (UX-28)", () => {
     await settle();
     expect(calls).toContainEqual({ method: "settings.set", params: { privacy: { "debug-transcripts": true } } });
   });
+
+  it("has Custom's switches, folders kept on this PC and private words (SEC-20, SEC-21)", async () => {
+    settings.privacy = { ...settings.privacy, mode: "custom", custom: { "cloud-brains": true } };
+    page("privacy");
+    await settle();
+    expect(screen.getByRole("radio", { name: "Custom" }).getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByRole("switch", { name: "Cloud speech" }).getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(screen.getByRole("switch", { name: "Cloud speech" }));
+    await settle();
+    expect(calls).toContainEqual({
+      method: "settings.set",
+      params: { privacy: { custom: { "cloud-speech": true } } },
+    });
+    fireEvent.change(screen.getByLabelText("Private words"), { target: { value: "Project Falcon" } });
+    const form = screen.getByLabelText("Private words").closest("form");
+    if (!form) throw new Error("the labels form");
+    fireEvent.submit(form);
+    await settle();
+    expect(calls).toContainEqual({
+      method: "settings.set",
+      params: { privacy: { labels: [{ text: "Project Falcon", class: "sensitive" }] } },
+    });
+  });
 });

@@ -489,12 +489,14 @@ pub fn overlay_typing_done(window: tauri::WebviewWindow) {
 
 /// What the Island may ask the runtime: only the actions its own buttons offer (SECURITY §9: the
 /// overlay window gets almost nothing).
-const ISLAND_METHODS: [&str; 10] = [
+const ISLAND_METHODS: [&str; 11] = [
     kivo_ipc::method::SESSION_CANCEL,
     // The Undo button (UX-43): only takes back KIVO's own last change.
     kivo_ipc::method::SESSION_UNDO,
     // "That's not what I meant" on a brain's answer (BRAIN-06): it only records a report.
     kivo_ipc::method::CHAT_MISROUTE,
+    // "Remember this" on an answer (MEM-05): keeps only that turn's own answer.
+    kivo_ipc::method::MEMORY_REMEMBER_TURN,
     kivo_ipc::method::SESSION_SAY,
     kivo_ipc::method::SESSION_TALK,
     kivo_ipc::method::PERMISSIONS_ANSWER,
@@ -593,6 +595,7 @@ mod tests {
         IslandPlacement {
             position: position_,
             spots,
+            ..IslandPlacement::default()
         }
     }
 

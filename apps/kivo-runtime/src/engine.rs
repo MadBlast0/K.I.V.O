@@ -117,6 +117,9 @@ struct Running {
     tainted: Vec<String>,
     /// The tools offered to the brain in this round; only these can be called (SEC-15).
     offered: Vec<String>,
+    /// The brain answering this round runs off the device (its name, for the egress check's
+    /// message): private tool results aren't shown to it (SEC-20/21).
+    cloud_brain: Option<String>,
     /// The Draft's text after the user changed it (CONV-15), for the call that sends it.
     draft_text: Option<String>,
 }
@@ -150,6 +153,7 @@ impl Running {
             attachments: Vec::new(),
             tainted: Vec::new(),
             offered: Vec::new(),
+            cloud_brain: None,
             draft_text: None,
         }
     }
@@ -230,6 +234,8 @@ pub struct Engine {
     workspaces: RwLock<Option<Arc<crate::workspaces::Workspaces>>>,
     /// Agent Skills (CONV-32): their names and descriptions go into each brain request.
     skills: RwLock<Option<Arc<crate::skills::Skills>>>,
+    /// The memory vault (CONVERSATION §6): memories for each brain request, "remember …".
+    memory: RwLock<Option<Arc<crate::memory::Memory>>>,
     /// Counts media activities shown, so only the newest one's timer removes it.
     media_shown: Arc<AtomicU64>,
     /// Reads the selection in the app in front when the text box opens (UX-42).
@@ -275,6 +281,7 @@ impl Engine {
             workspaces: RwLock::new(None),
             media_shown: Arc::new(AtomicU64::new(0)),
             skills: RwLock::new(None),
+            memory: RwLock::new(None),
             previous: Mutex::new(None),
             uia: RwLock::new(None),
         }
@@ -286,6 +293,57 @@ impl Engine {
 
     pub fn workspaces(&self) -> Option<Arc<crate::workspaces::Workspaces>> {
         read(&self.workspaces).clone()
+    }
+
+    /// A decision's spoken question: "Close Chrome?" — and in voice-only use, the words that
+    /// answer it, since the buttons can't be seen (Settings → Accessibility).
+    pub(crate) fn question(&self, action: &str) -> String {
+        if self.core.config().accessibility.voice_only {
+            format!("{action}? {}", text::t("confirm.sayOptions"))
+        } else {
+            format!("{action}?")
+        }
+    }
+
+    /// Answers the Island's offer (by voice, or its buttons): "Remember … as a workspace?"
+    /// (CONV-10) or "Remember this?" (CONV-20). Returns what to say, and the workspace when one
+    /// was remembered.
+    pub fn answer_offer(
+        &self,
+        id: &str,
+        accept: bool,
+    ) -> Result<(String, Option<kivo_ipc::protocol::WorkspaceItem>), String> {
+        if let Some(n) = id.strip_prefix("memory:") {
+            let n: i64 = n.parse().map_err(|_| text::t("memory.notFound"))?;
+            let memory = self.memory().ok_or_else(|| text::t("memory.notFound"))?;
+            return match memory.answer(n, accept, None)? {
+                Some(crate::memory::Remembered::Already { .. }) => {
+                    Ok((text::t("memory.already"), None))
+                }
+                Some(_) => Ok((text::t("memory.added"), None)),
+                None => Ok((text::t("reply.okay"), None)),
+            };
+        }
+        match self.workspaces().map(|w| w.answer(id, accept)) {
+            Some(Ok(Some(w))) => {
+                self.agents.set_workspace(w.path.clone().into());
+                Ok((
+                    text::tf("workspace.remembered", &[("name", &w.name)]),
+                    Some(w),
+                ))
+            }
+            Some(Ok(None)) => Ok((text::t("reply.okay"), None)),
+            Some(Err(e)) => Err(e),
+            None => Err(text::t("workspace.notFound")),
+        }
+    }
+
+    pub fn set_memory(&self, memory: Arc<crate::memory::Memory>) {
+        *write(&self.memory) = Some(memory);
+    }
+
+    pub fn memory(&self) -> Option<Arc<crate::memory::Memory>> {
+        read(&self.memory).clone()
     }
 
     pub fn set_routines(&self, routines: Arc<crate::routines::Routines>) {
@@ -1279,14 +1337,8 @@ impl Engine {
             )
         {
             let accept = !matches!(answer, kivo_intent::answers::Answer::Deny);
-            let reply = match self.workspaces().map(|w| w.answer(&offer.id, accept)) {
-                Some(Ok(Some(w))) => {
-                    self.agents.set_workspace(w.path.clone().into());
-                    text::tf("workspace.remembered", &[("name", &w.name)])
-                }
-                Some(Ok(None)) => text::t("reply.okay"),
-                Some(Err(e)) => e,
-                None => text::t("workspace.notFound"),
+            let reply = match self.answer_offer(&offer.id, accept) {
+                Ok((reply, _)) | Err(reply) => reply,
             };
             self.speak_and_finish(&reply).await;
             return;
@@ -1362,6 +1414,17 @@ impl Engine {
                         .update_turn(|view| view.help.clone_from(&examples));
                     self.speak_and_finish(&text::t("help.intro")).await;
                     return;
+                }
+                // What to remember or forget is kept in the user's own words (a path, a name's
+                // case), not the grammar's normalized ones (MEM-05).
+                let mut matched = matched;
+                if matches!(matched.tool.as_str(), "memory.add" | "memory.forget")
+                    && let Some(slot) = matched.args.get("text").and_then(|v| v.as_str())
+                    && let Some(own) = kivo_intent::normalize::original_span(&text, slot)
+                {
+                    matched
+                        .args
+                        .insert("text".into(), serde_json::Value::String(own));
                 }
                 let call = ToolCall {
                     id: format!("{}-c1", self.turn_key()),
@@ -1544,7 +1607,7 @@ impl Engine {
                 self.show_draft(&call);
                 // A distinct cue says "this needs your answer" (CONV-26).
                 self.speaker.cue(Cue::Question);
-                let question = format!("{title}?");
+                let question = self.question(&title);
                 self.speak(&question).await;
             }
             Decision::Deny(denial) => {
@@ -1913,7 +1976,10 @@ impl Engine {
             .enabled(kivo_core::Capability::SpeakResponses);
         // Over a fullscreen app or in Focus, KIVO uses sounds only (UX §2, UX-11).
         let quiet = self.core.turn_view().is_some_and(|v| v.quiet.is_some());
-        capability_on && !quiet && (!typed || config.voice.speak_typed_replies)
+        // Voice-only use speaks typed replies too (Settings → Accessibility).
+        capability_on
+            && !quiet
+            && (!typed || config.voice.speak_typed_replies || config.accessibility.voice_only)
     }
 
     /// Streams `text` through the voice; `SpeakDone` finishes the turn.
@@ -2100,10 +2166,22 @@ impl Engine {
         }
         let core = Arc::clone(&self.core);
         let turn_id = running.id.clone();
+        // Settings → Island "Hide after an answer" (UX-10); 0 keeps it until dismissed, but a
+        // follow-up window still ends on time.
+        let hide_after = self.core.config().overlay.hide_after_seconds;
+        let stay = hide_after == 0 && window.is_none();
+        let collapse = if hide_after == 0 {
+            COLLAPSE_AFTER
+        } else {
+            Duration::from_secs(u64::from(hide_after))
+        };
         let wait = window
             .as_ref()
-            .map_or(COLLAPSE_AFTER, |(_, length)| (*length).max(COLLAPSE_AFTER));
+            .map_or(collapse, |(_, length)| (*length).max(collapse));
         let listener = window.map(|(l, _)| l);
+        if stay {
+            return;
+        }
         tokio::spawn(async move {
             tokio::time::sleep(wait).await;
             let same_turn = core.turn_view().is_some_and(|v| v.id == turn_id);
@@ -2225,6 +2303,15 @@ impl Engine {
         // The folder open in VS Code is a folder the user works in (CONV-10).
         if let Some(workspaces) = self.workspaces() {
             workspaces.front_window(&front.title, &front.app_id);
+        }
+        // Settings → Island "Which screen": the main screen always holds (0, 0) on Windows, so
+        // anchoring there keeps the Island on it; the title-bar shift is for the window in front.
+        if self.core.config().overlay.monitor == kivo_core::config::IslandMonitor::Main {
+            self.core.update_turn(|view| {
+                view.anchor = Some(kivo_ipc::protocol::ScreenPoint { x: 0, y: 0 });
+                view.title_bar_bottom = None;
+            });
+            return;
         }
         let b = front.bounds;
         let anchor = kivo_ipc::protocol::ScreenPoint {

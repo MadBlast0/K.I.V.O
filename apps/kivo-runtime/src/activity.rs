@@ -344,6 +344,20 @@ impl Recorder {
         });
     }
 
+    /// A tool's result kept from a cloud brain because it was private (SEC-20/21).
+    pub fn privacy_kept(&self, turn: &str, tool: &str) {
+        self.add(NewActivity {
+            ts: now_ms(),
+            turn_id: turn_of(turn),
+            task_id: task_of(turn),
+            kind: "privacy".into(),
+            title: kivo_core::text::tf("activity.privacyKept", &[("tool", &tool)]),
+            detail: None,
+            status: "done".into(),
+            data: None,
+        });
+    }
+
     /// What KIVO said.
     pub fn answer(&self, turn: &str, text: &str, status: &str) {
         self.add(NewActivity {
@@ -493,6 +507,21 @@ impl Recorder {
             kind: "setting".into(),
             title: summary.into(),
             detail: None,
+            status: "done".into(),
+            data: None,
+        });
+    }
+
+    /// A background job KIVO ran on its own (the memory tidy job, CONVERSATION §6), shown in
+    /// Activity so nothing happens unseen.
+    pub fn background(&self, kind: &str, title: &str, detail: Option<&str>) {
+        self.add(NewActivity {
+            ts: now_ms(),
+            turn_id: None,
+            task_id: None,
+            kind: kind.into(),
+            title: title.into(),
+            detail: detail.map(str::to_owned),
             status: "done".into(),
             data: None,
         });

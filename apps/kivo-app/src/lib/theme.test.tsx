@@ -46,7 +46,38 @@ describe("ThemeProvider", () => {
       accent: "teal",
       textSize: "large",
       motion: "reduced",
+      transparency: true,
     });
+  });
+
+  it("uses a custom accent colour and saves each change to the runtime's settings (DS-03, UX-37)", () => {
+    const saved: unknown[] = [];
+    function Custom() {
+      const t = useTheme();
+      return (
+        <>
+          <button onClick={() => t.setSaver((p) => saved.push(p))}>connect</button>
+          <button onClick={() => t.setAccent("#12ab34")}>custom</button>
+          <button onClick={() => t.setTextSize("normal")}>normal</button>
+          <button onClick={() => t.apply({ theme: "dark" })}>from-runtime</button>
+        </>
+      );
+    }
+    render(
+      <ThemeProvider>
+        <Custom />
+      </ThemeProvider>,
+    );
+    press("connect");
+    press("custom");
+    expect(root.dataset.accent).toBe("custom");
+    expect(root.style.getPropertyValue("--acc")).toBe("#12ab34");
+    press("normal");
+    expect(saved).toEqual([{ appearance: { accent: "#12ab34" } }, { appearance: { "text-size": "normal" } }]);
+    // What the runtime holds is applied without being sent back.
+    press("from-runtime");
+    expect(root.dataset.theme).toBe("dark");
+    expect(saved).toHaveLength(2);
   });
 
   it("restores saved settings, and removes the motion attribute when set back", () => {

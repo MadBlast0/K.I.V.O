@@ -339,7 +339,7 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 - [x] **ARCH-34** · M0 · Rust stable with MSRV pinned in `rust-toolchain.toml`; `cargo fmt`; `clippy -D warnings` → done: `rust-toolchain.toml` pins 1.97.0 (MSRV stays `rust-version` 1.90), `rustfmt.toml`, CI runs `cargo fmt --check` and clippy with `RUSTFLAGS=-D warnings` · verified: CI green on Windows, Ubuntu, macOS (2026-09-21)
 - [x] **ARCH-35** · M0 · `cargo deny` configured: licenses (GPL/AGPL denied in the default graph), advisories, bans (§7) → done: `deny.toml` (permissive allow-list, no GPL/AGPL, advisories, crates.io only, unmaintained checked for direct deps) · verified: `cargo deny check` clean locally with 0 warnings and in CI
 - [x] **ARCH-36** · M0 · UI toolchain: Node LTS + pnpm, TypeScript strict, Oxlint (type-aware; ESLint cannot run on TypeScript 7), Prettier, Vitest (§7) → done: pnpm 11.27.1, TypeScript strict, Oxlint type-aware (`.oxlintrc.json`), Prettier (`.prettierrc.json`), Vitest on jsdom (21 tests) · verified: all run clean in CI
-- [ ] **ARCH-37** · M7 · Playwright UI tests against the Tauri dev build where practical (§7)
+- [x] **ARCH-37** · M7 · Playwright UI tests against the Tauri dev build where practical (§7) → done: Playwright (`@playwright/test`, no browser download) drives the dev app's own WebView2 over CDP: `pnpm dev:e2e` starts `pnpm dev` with a debugging port on 127.0.0.1, then `pnpm --filter kivo-app e2e` runs `apps/kivo-app/e2e/app.e2e.ts` (every page and Settings tab, the Ctrl+K palette opening a setting, no console errors; read-only, so it never changes the owner's settings) · verified: 4 passed against the running dev build (2026-09-24)
 
 **Invariant enforcement (§8)**
 

@@ -1,12 +1,15 @@
 /** Accent colour picker and keyboard-shortcut recorder. */
-import { useEffect, useState } from "react";
-import { ACCENTS, type Accent } from "../../lib/theme";
+import { useEffect, useRef, useState } from "react";
+import { ACCENTS, isCustomAccent, type Accent } from "../../lib/theme";
 import { Button } from "./Button";
 import { Keys } from "./Status";
 import { useTranslation } from "react-i18next";
 
+/** Seven presets and an eighth, custom colour (DS-03). */
 export function AccentPicker({ value, onChange }: { value: Accent; onChange: (a: Accent) => void }) {
   const { t } = useTranslation();
+  const custom = isCustomAccent(value);
+  const picker = useRef<HTMLInputElement>(null);
   return (
     <div className="k-swatches" role="radiogroup" aria-label={t("ui.accent")}>
       {ACCENTS.map((a) => (
@@ -22,6 +25,28 @@ export function AccentPicker({ value, onChange }: { value: Accent; onChange: (a:
           onClick={() => onChange(a.id)}
         />
       ))}
+      <button
+        type="button"
+        role="radio"
+        aria-checked={custom}
+        aria-label={t("accent.custom")}
+        title={t("accent.custom")}
+        className={custom ? "k-swatch" : "k-swatch k-swatch--custom"}
+        style={custom ? { background: value } : undefined}
+        onClick={() => picker.current?.click()}
+      />
+      <input
+        ref={picker}
+        type="color"
+        className="k-swatch__input"
+        tabIndex={-1}
+        aria-hidden
+        value={custom ? value : "#0a6cff"}
+        onChange={(e) => {
+          const hex = e.target.value.toLowerCase();
+          if (isCustomAccent(hex)) onChange(hex);
+        }}
+      />
     </div>
   );
 }
@@ -33,10 +58,13 @@ export function ShortcutRecorder({
   value,
   onChange,
   conflict,
+  onClear,
 }: {
   value: string[];
   onChange?: (keys: string[]) => void;
   conflict?: (keys: string[]) => string | null;
+  /** An optional shortcut: offers Remove, and says when there is none. */
+  onClear?: () => void;
 }) {
   const { t } = useTranslation();
   const [recording, setRecording] = useState(false);
@@ -56,7 +84,8 @@ export function ShortcutRecorder({
       if (e.altKey) keys.push("Alt");
       if (e.shiftKey) keys.push("Shift");
       if (e.metaKey) keys.push("Win");
-      keys.push(e.key.length === 1 ? e.key.toUpperCase() : e.key);
+      // The runtime's key names: "Space", not " " (and letters in capitals).
+      keys.push(e.key === " " ? "Space" : e.key.length === 1 ? e.key.toUpperCase() : e.key);
       setRecording(false);
       setWarning(conflict?.(keys) ?? null);
       onChange?.(keys);
@@ -73,10 +102,15 @@ export function ShortcutRecorder({
         </button>
       ) : (
         <span className="k-hotkey">
-          <Keys keys={value} />
+          {value.length > 0 ? <Keys keys={value} /> : <span className="k-meta">{t("ui.noShortcut")}</span>}
           <Button size="sm" variant="plain" onClick={() => setRecording(true)}>
-            {t("ui.change")}
+            {value.length > 0 ? t("ui.change") : t("ui.set")}
           </Button>
+          {onClear && value.length > 0 && (
+            <Button size="sm" variant="plain" onClick={onClear}>
+              {t("ui.remove")}
+            </Button>
+          )}
         </span>
       )}
       {warning && (

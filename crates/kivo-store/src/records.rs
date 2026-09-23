@@ -345,6 +345,26 @@ impl Database {
             .optional()?)
     }
 
+    /// The newest turns' route and T0–T10 timings, for the medians in Settings → Performance.
+    pub fn recent_turn_timings(
+        &self,
+        limit: u32,
+    ) -> Result<Vec<(Option<String>, String, serde_json::Value)>, DbError> {
+        let mut stmt = self.connection().prepare(
+            "SELECT t.route, t.source, m.spans FROM turns t JOIN turn_metrics m ON m.turn_id = t.id
+             ORDER BY t.started_at DESC LIMIT ?1",
+        )?;
+        let rows = stmt.query_map([limit], |r| {
+            let spans: String = r.get(2)?;
+            Ok((
+                r.get(0)?,
+                r.get(1)?,
+                serde_json::from_str(&spans).unwrap_or(serde_json::Value::Null),
+            ))
+        })?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
     /// Stores a turn's T0–T10 timings (ARCH-28).
     pub fn record_turn_metrics(
         &self,

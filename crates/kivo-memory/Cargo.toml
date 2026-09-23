@@ -1,0 +1,21 @@
+[package]
+name = "kivo-memory"
+description = "KIVO's memory vault: Obsidian-compatible Markdown notes, their links and tags, and the rules that keep them small (CONVERSATION §6)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+regex.workspace = true
+sha2.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

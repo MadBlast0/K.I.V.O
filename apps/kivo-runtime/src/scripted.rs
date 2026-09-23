@@ -102,8 +102,11 @@ pub struct Rig {
     pub home: PathBuf,
     pub appdata: PathBuf,
     /// Pages a connector's sign-in opened in "the browser" (which follows them, like a user who
-    /// signs in at once).
+    /// signs in at once), and folders or URIs the Memory page opened.
     pub opened: Arc<Mutex<Vec<String>>>,
+    /// M7: the memory vault (in this rig's folder) and the Memory page's requests.
+    pub memory: Arc<crate::memory::Memory>,
+    pub memory_rpc: Arc<crate::memory_rpc::MemoryRpc>,
 }
 
 impl Drop for Rig {
@@ -310,8 +313,16 @@ pub fn rig_with_voice(
         screenshots.join("kivo-data"),
     );
     engine.set_workspaces(Arc::clone(&workspaces));
+    // The memory vault, in this rig's own folder (beside the instruction files).
+    let memory = crate::memory::Memory::new(
+        Arc::clone(&core),
+        Arc::clone(&db),
+        screenshots.join("kivo-data").join("memory"),
+        0,
+    );
+    engine.set_memory(Arc::clone(&memory));
     // What KIVO remembers, for brains and for agents through KIVO's MCP server (CONV-24).
-    registry.set_live("memory.", crate::memory_tools::tools(&db, &workspaces));
+    registry.set_live("memory.", crate::memory_tools::tools(&db, &memory));
     // M6 on fakes, in this rig's own folder.
     let home = screenshots.join("home");
     let appdata = screenshots.join("appdata");
@@ -365,6 +376,32 @@ pub fn rig_with_voice(
             })
         },
     );
+    let memory_rpc = Arc::new(crate::memory_rpc::MemoryRpc {
+        memory: Arc::clone(&memory),
+        utc_offset: 0,
+        recorder: engine.recorder.clone(),
+        exports: screenshots.join("downloads"),
+        reveal: {
+            let opened = Arc::clone(&opened);
+            Arc::new(move |folder: &str| {
+                opened
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .push(format!("folder:{folder}"));
+                Ok(())
+            })
+        },
+        open_uri: {
+            let opened = Arc::clone(&opened);
+            Arc::new(move |uri: &str| {
+                opened
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .push(uri.to_owned());
+                Ok(())
+            })
+        },
+    });
     let extensions = Arc::new(crate::extensions_rpc::ExtensionsRpc {
         core: Arc::clone(&core),
         engine: Arc::clone(&engine),
@@ -463,6 +500,8 @@ pub fn rig_with_voice(
             home,
             appdata,
             opened,
+            memory,
+            memory_rpc,
         },
         worker_task,
         pump,

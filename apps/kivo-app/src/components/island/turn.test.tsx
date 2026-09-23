@@ -41,6 +41,7 @@ function handlers(): IslandHandlers {
     edit: vi.fn<IslandHandlers["edit"]>(),
     talk: vi.fn<IslandHandlers["talk"]>(),
     misroute: vi.fn<IslandHandlers["misroute"]>(),
+    remember: vi.fn<IslandHandlers["remember"]>(() => Promise.resolve(null)),
     editDraft: vi.fn<IslandHandlers["editDraft"]>(),
     offer: vi.fn<IslandHandlers["offer"]>(),
     openTask: vi.fn<IslandHandlers["openTask"]>(),
@@ -200,6 +201,29 @@ describe("Island for a brain's answer (PLAN-17, BRAIN-06)", () => {
     expect(chip.getAttribute("title")).toBe("Coding · Claude Code — because this looked like a coding task");
     fireEvent.click(screen.getByRole("button", { name: "That’s not what I meant" }));
     expect(on.misroute).toHaveBeenCalledWith("t1");
+  });
+
+  it("keeps an answer with Remember this (MEM-05)", async () => {
+    const on = handlers();
+    const t = i18n.t.bind(i18n);
+    const snapshot = acting("auto");
+    snapshot.session = "idle";
+    if (!snapshot.turn) throw new Error("turn");
+    snapshot.turn.steps = [];
+    snapshot.turn.answer = "Your dentist is Dr. Rao.";
+    snapshot.turn.brain = {
+      name: "Ollama",
+      profile: "Default",
+      reason: "Default · Ollama",
+      local: true,
+      contextUsed: 900,
+      contextBudget: 8000,
+    };
+    const model = islandForTurn(snapshot, t, on);
+    render(<>{model?.body}</>);
+    fireEvent.click(screen.getByRole("button", { name: "Remember this" }));
+    expect(on.remember).toHaveBeenCalledWith("t1");
+    expect(await screen.findByText("Remembered")).toBeTruthy();
   });
 });
 
@@ -393,5 +417,76 @@ describe("Island M5 parts", () => {
     expect(on.offer).toHaveBeenCalledWith("w1", true);
     fireEvent.click(screen.getByRole("button", { name: "Not now" }));
     expect(on.offer).toHaveBeenCalledWith("w1", false);
+  });
+});
+
+describe("Island preferences (Settings → Island, Accessibility)", () => {
+  const t = i18n.t.bind(i18n);
+  function speaking(prefs: Partial<NonNullable<StateSnapshot["island"]>>): StateSnapshot {
+    const s = acting("auto");
+    s.session = "speaking";
+    s.turn!.answer = "Chrome is open.";
+    s.turn!.undo = { until: Date.now() + 8_000, title: "Close Chrome" };
+    s.island = {
+      position: "top-center",
+      spots: [],
+      size: "standard",
+      showTranscript: true,
+      showUndo: true,
+      voiceHints: true,
+      largeText: false,
+      captions: true,
+      announcements: true,
+      motion: "system",
+      companion: "pill",
+      ...prefs,
+    };
+    return s;
+  }
+
+  it("shows the answer and Undo by default, and hides them when turned off", () => {
+    const on = { ...handlers(), undo: vi.fn<() => void>() };
+    const { unmount } = render(<>{islandForTurn(speaking({}), t, on)?.body}</>);
+    expect(screen.getByText("Chrome is open.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: t("island.undo") })).toBeTruthy();
+    unmount();
+    render(<>{islandForTurn(speaking({ captions: false, showUndo: false }), t, on)?.body}</>);
+    expect(screen.queryByText("Chrome is open.")).toBeNull();
+    expect(screen.queryByRole("button", { name: t("island.undo") })).toBeNull();
+  });
+
+  it("shows nothing when hidden, except a question that needs an answer", () => {
+    const hidden = speaking({ companion: "hidden" });
+    expect(islandForTurn(hidden, t, handlers())).toBeNull();
+    hidden.session = "awaitingConfirmation";
+    hidden.turn!.confirm = {
+      callId: "c1",
+      tool: "apps.close",
+      action: "Close Google Chrome",
+      target: "Google Chrome",
+      why: "",
+      provenance: "You asked",
+      risk: "medium",
+      strength: "normal",
+      allowAlways: false,
+      plan: false,
+      hello: false,
+    };
+    expect(islandForTurn(hidden, t, handlers())).not.toBeNull();
+  });
+
+  it("keeps the user's words to itself while they speak when asked to", () => {
+    const listening = speaking({ showTranscript: false });
+    listening.session = "listening";
+    listening.turn!.transcript = "open chr";
+    listening.turn!.transcriptFinal = false;
+    const model = islandForTurn(listening, t, handlers());
+    expect(model?.body).toBeUndefined();
+    const shown = speaking({});
+    shown.session = "listening";
+    shown.turn!.transcript = "open chr";
+    shown.turn!.transcriptFinal = false;
+    render(<>{islandForTurn(shown, t, handlers())?.body}</>);
+    expect(screen.getByText("open chr")).toBeTruthy();
   });
 });

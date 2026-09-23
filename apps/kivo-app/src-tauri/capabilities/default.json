@@ -14,6 +14,7 @@
     "core:window:allow-start-dragging",
     "allow-ui-ready",
     "allow-runtime-request",
-    "allow-runtime-start"
+    "allow-runtime-start",
+    "allow-window-effects"
   ]
 }

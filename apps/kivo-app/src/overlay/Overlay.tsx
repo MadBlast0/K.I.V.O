@@ -15,7 +15,7 @@ import { Island, IslandActions, IslandKeys, type IslandModel } from "../componen
 import { islandForMode } from "../components/island/session";
 import { hasButtons, islandForTurn, type IslandHandlers } from "../components/island/turn";
 import { NOTHING, announcements, heardFrom } from "../components/island/announce";
-import type { Link, PermissionMode, StateSnapshot } from "../ipc/generated";
+import type { Link, MotionPref, PermissionMode, StateSnapshot } from "../ipc/generated";
 import { Method } from "../ipc/generated";
 
 /** Room below the Island for its shadow (0 16px 36px -14px → ~38 px). */
@@ -33,6 +33,9 @@ function snapshotOf(link: Link): StateSnapshot | null {
 function request(method: string, params?: unknown) {
   void invoke("island_request", { method, params }).catch((e: unknown) => console.warn(e));
 }
+
+/** Settings → Appearance "Animations" for Motion (`user` follows Windows). */
+const MOTION: Record<MotionPref, "user" | "never" | "always"> = { system: "user", full: "never", reduced: "always" };
 
 export function Overlay() {
   const { t } = useTranslation();
@@ -115,7 +118,9 @@ export function Overlay() {
     const now = heardFrom(snapshot);
     const said = announcements(heard.current, now, t);
     heard.current = now;
-    if (isTauri()) for (const text of said) void invoke("announce", { text });
+    // Only when the user wants them (Settings → Accessibility).
+    const wanted = snapshot?.island?.announcements ?? true;
+    if (isTauri() && wanted) for (const text of said) void invoke("announce", { text });
   }, [snapshot, t]);
 
   const handlers = useMemo<IslandHandlers>(
@@ -141,6 +146,7 @@ export function Overlay() {
       },
       talk: () => request(Method.sessionTalk),
       misroute: (turnId) => request(Method.chatMisroute, { turnId, note: "" }),
+      remember: (turnId) => invoke("island_request", { method: Method.memoryRememberTurn, params: { turnId } }),
       editDraft: (callId, text) => {
         setEditingDraft(callId);
         setDraft(text);
@@ -321,12 +327,15 @@ export function Overlay() {
   }, []);
 
   return (
-    // "user" follows Windows' "Animation effects" setting (DESIGN_SYSTEM §5).
-    <MotionConfig reducedMotion="user">
+    // "user" follows Windows' "Animation effects" setting (DESIGN_SYSTEM §5), unless the user
+    // chose Full or Reduced (Settings → Appearance).
+    <MotionConfig reducedMotion={MOTION[snapshot?.island?.motion ?? "system"]}>
       {/* The keys only act while the user asked for keyboard focus (Ctrl+Shift+Space). */}
       {/* oxlint-disable-next-line jsx-a11y/no-static-element-interactions */}
       <div
         className="k-overlay"
+        data-size={snapshot?.island?.size ?? "standard"}
+        data-large-text={snapshot?.island?.largeText ? "" : undefined}
         ref={root}
         // Half the screen, less the Island's row and shadow: the card scrolls beyond it (UX-09).
         style={{

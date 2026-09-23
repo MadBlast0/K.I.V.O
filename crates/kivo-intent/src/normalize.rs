@@ -136,9 +136,49 @@ pub fn url(words: &[String]) -> Option<String> {
     valid.then(|| format!("https://{host}"))
 }
 
+/// The stretch of the user's own words that normalizes to `slot` (a text slot's words), with
+/// its case, punctuation and paths intact: "Remember that my project is in D:\work." with the
+/// slot "my project is in d work" gives "my project is in D:\work.". `None` if no stretch does.
+pub fn original_span(original: &str, slot: &str) -> Option<String> {
+    let tokens: Vec<&str> = original.split_whitespace().collect();
+    let wanted: Vec<String> = slot.split_whitespace().map(str::to_owned).collect();
+    if wanted.is_empty() {
+        return None;
+    }
+    for start in 0..tokens.len() {
+        for end in (start + 1..=tokens.len()).rev() {
+            if words(&tokens[start..end].join(" ")) == wanted {
+                return Some(tokens[start..end].join(" "));
+            }
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_slot_is_found_in_the_users_own_words() {
+        assert_eq!(
+            original_span(
+                "Kivo, remember that my project is in D:\\work.",
+                "my project is in d work"
+            )
+            .as_deref(),
+            Some("my project is in D:\\work.")
+        );
+        assert_eq!(
+            original_span(
+                "remember Maya's birthday is May 3rd please",
+                "mayas birthday is may 3rd"
+            )
+            .as_deref(),
+            Some("Maya's birthday is May 3rd")
+        );
+        assert_eq!(original_span("remember nothing", "something else"), None);
+    }
 
     fn w(s: &str) -> Vec<String> {
         s.split_whitespace().map(String::from).collect()

@@ -113,6 +113,57 @@ static DETECTORS: LazyLock<Vec<Detector>> = LazyLock::new(|| {
     ]
 });
 
+/// `text` with every credential the detectors find (keys, tokens, private keys, "password is …")
+/// replaced by `[removed]`, for text KIVO keeps (memory notes never hold secrets).
+pub fn redact_secrets(text: &str) -> String {
+    let mut out = text.to_owned();
+    for d in DETECTORS
+        .iter()
+        .filter(|d| d.class == DataClass::Credential)
+    {
+        out = d.pattern.replace_all(&out, "[removed]").into_owned();
+    }
+    out
+}
+
+/// `classify`, then the user's labels (SECURITY §6): a label found in the text, in any case,
+/// raises it to the label's class.
+pub fn classify_labeled(text: &str, labels: &[kivo_core::config::PrivacyLabel]) -> DataClass {
+    use kivo_core::config::LabelClass;
+    let lower = text.to_lowercase();
+    labels
+        .iter()
+        .filter(|l| !l.text.trim().is_empty() && lower.contains(&l.text.trim().to_lowercase()))
+        .map(|l| match l.class {
+            LabelClass::Personal => DataClass::Personal,
+            LabelClass::Sensitive => DataClass::Sensitive,
+            LabelClass::HighlySensitive => DataClass::HighlySensitive,
+        })
+        .fold(classify(text), DataClass::max)
+}
+
+/// The class of a file by where it is (SECURITY §6, by source): inside a folder the user keeps on
+/// this PC it's `Sensitive`, else `Normal`. Compared by path components, ignoring case (Windows).
+pub fn classify_path(path: &str, sensitive_folders: &[String]) -> DataClass {
+    let parts = |p: &str| -> Vec<String> {
+        p.split(['\\', '/'])
+            .filter(|c| !c.is_empty() && *c != ".")
+            .map(|c| c.trim_start_matches("?").to_lowercase())
+            .filter(|c| !c.is_empty())
+            .collect()
+    };
+    let file = parts(path);
+    let inside = sensitive_folders.iter().any(|folder| {
+        let folder = parts(folder);
+        !folder.is_empty() && file.len() > folder.len() && file[..folder.len()] == folder[..]
+    });
+    if inside {
+        DataClass::Sensitive
+    } else {
+        DataClass::Normal
+    }
+}
+
 /// The highest class any detector finds in `text` (`Normal` when none do).
 pub fn classify(text: &str) -> DataClass {
     DETECTORS
@@ -126,6 +177,49 @@ pub fn classify(text: &str) -> DataClass {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn labels_and_private_folders_classify_by_source() {
+        use kivo_core::config::{LabelClass, PrivacyLabel};
+        let labels = [PrivacyLabel {
+            text: "Project Falcon".into(),
+            class: LabelClass::Sensitive,
+        }];
+        assert_eq!(
+            classify_labeled("summarize the project falcon budget", &labels),
+            DataClass::Sensitive
+        );
+        assert_eq!(
+            classify_labeled("summarize the budget", &labels),
+            DataClass::Normal
+        );
+        // A detector finding more still wins.
+        assert_eq!(
+            classify_labeled(
+                "Project Falcon key sk-ant-api03-abcdefghijklmnopqrstuvwxyz",
+                &labels
+            ),
+            DataClass::Credential
+        );
+        let private = ["C:\\Users\\me\\Documents\\Legal".to_owned()];
+        assert_eq!(
+            classify_path("c:/users/ME/documents/legal/contract.pdf", &private),
+            DataClass::Sensitive
+        );
+        assert_eq!(
+            classify_path("\\\\?\\C:\\Users\\me\\Documents\\Legal\\a\\b.txt", &private),
+            DataClass::Sensitive
+        );
+        assert_eq!(
+            classify_path("C:\\Users\\me\\Documents\\Legalese\\x.txt", &private),
+            DataClass::Normal,
+            "a folder with the same start isn't inside"
+        );
+        assert_eq!(
+            classify_path("C:\\Users\\me\\Documents\\Legal", &private),
+            DataClass::Normal
+        );
+    }
 
     #[test]
     fn ordinary_requests_are_normal() {
@@ -162,6 +256,21 @@ mod tests {
         assert_eq!(classify("mail maya@studio.com"), DataClass::Personal);
         assert!(!classify("SSN 123-45-6789").cloud_ok());
         assert!(classify("mail maya@studio.com").cloud_ok());
+    }
+
+    #[test]
+    fn secrets_are_redacted_and_the_rest_kept() {
+        let text = "Deploy key sk-ant-api03-abcdefghijklmnopqrstuvwx and the wifi password is hunter22; mail maya@studio.com";
+        let out = redact_secrets(text);
+        assert!(
+            !out.contains("sk-ant") && !out.contains("hunter22"),
+            "{out}"
+        );
+        assert!(
+            out.contains("maya@studio.com") && out.contains("Deploy key [removed]"),
+            "{out}"
+        );
+        assert_eq!(classify(&out), DataClass::Personal);
     }
 
     #[test]

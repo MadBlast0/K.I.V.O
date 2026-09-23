@@ -3,8 +3,9 @@
  * (pinned, recent, search, voice threads too); the conversation with the brain chip and its
  * reason, the context meter and a cost estimate; the live answer, the tool steps and any decision
  * waiting, answered right here; a composer with the brain switcher, the permission-mode picker
- * (SEC-04), attachments and Stop. "Compact now", rename, pin and delete are in the thread's menu,
- * and "That's not what I meant" reports a misroute (BRAIN-06).
+ * (SEC-04), attachments and Stop. The thread's menu has rename, pin, continue by voice, branch,
+ * export (Markdown or JSON, to Downloads), "Compact now" and delete (CONV-03); an answer can be
+ * branched from, and "That's not what I meant" reports a misroute (BRAIN-06).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -23,7 +24,7 @@ import {
   TextField,
   useToast,
 } from "../components/ui";
-import type { BrainsList, Conversation, StoredMessage } from "../ipc/brains";
+import type { BrainsList, ContextPreview, Conversation, StoredMessage } from "../ipc/brains";
 import { Method, type PermissionMode, type StepView, type TurnView } from "../ipc/generated";
 import { useRuntime, useRuntimeEvents } from "../ipc/runtime";
 import { cn } from "../lib/cn";
@@ -57,6 +58,8 @@ export function Chat({ onOpenPermissions }: { onOpenPermissions: () => void }) {
   /** The turn this page started, so its live answer shows here. */
   const [ownTurn, setOwnTurn] = useState<{ thread: string; before: string | null } | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
+  /** The thread's context between turns: what the next message would start with. */
+  const [context, setContext] = useState<{ used: number; budget: number } | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const bottom = useRef<HTMLDivElement>(null);
 
@@ -80,6 +83,12 @@ export function Chat({ onOpenPermissions }: { onOpenPermissions: () => void }) {
         setThread(null);
         setMessages([]);
       });
+    void request<ContextPreview>(Method.brainsContext, { thread: current })
+      .then((p) => {
+        const used = p.layers.filter((l) => l.on !== false).reduce((sum, l) => sum + l.tokens, 0);
+        setContext(p.brain ? { used, budget: p.budget.chat } : null);
+      })
+      .catch(() => setContext(null));
   }, [connected, current, request]);
   useEffect(loadThreads, [loadThreads]);
   useEffect(loadThread, [loadThread]);
@@ -184,8 +193,25 @@ export function Chat({ onOpenPermissions }: { onOpenPermissions: () => void }) {
   const pinned = threads.filter((c) => c.pinned);
   const recent = threads.filter((c) => !c.pinned);
   const chip = turn?.brain ?? null;
+  // The live turn's meter while it runs; otherwise what the next message would start with.
   const contextPercent =
-    chip && chip.contextBudget > 0 ? Math.round((chip.contextUsed / chip.contextBudget) * 100) : null;
+    chip && chip.contextBudget > 0
+      ? Math.round((chip.contextUsed / chip.contextBudget) * 100)
+      : context && context.budget > 0
+        ? Math.round((context.used / context.budget) * 100)
+        : null;
+  const branch = (id: string, message?: number) =>
+    void request<Conversation>(Method.chatBranch, { id, ...(message === undefined ? {} : { message }) })
+      .then((c) => {
+        setCurrent(c.id);
+        loadThreads();
+        toast(t("chat.branched"));
+      })
+      .catch(fail);
+  const exportAs = (id: string, json: boolean) =>
+    void request<{ file: string }>(Method.chatExport, { id, json, save: true })
+      .then((r) => toast(t("chat.exported", { file: r.file })))
+      .catch(fail);
 
   if (!connected) {
     return (
@@ -283,6 +309,29 @@ export function Chat({ onOpenPermissions }: { onOpenPermissions: () => void }) {
                 },
                 {
                   type: "item",
+                  label: t("chat.continue"),
+                  icon: "mic",
+                  onSelect: () =>
+                    void request(Method.chatContinue, { id: thread.id })
+                      .then(() => toast(t("chat.continued")))
+                      .catch(fail),
+                },
+                { type: "item", label: t("chat.branch"), icon: "branch", onSelect: () => branch(thread.id) },
+                {
+                  type: "item",
+                  label: t("chat.exportMarkdown"),
+                  icon: "download",
+                  onSelect: () => exportAs(thread.id, false),
+                },
+                {
+                  type: "item",
+                  label: t("chat.exportJson"),
+                  icon: "download",
+                  onSelect: () => exportAs(thread.id, true),
+                },
+                { type: "separator" },
+                {
+                  type: "item",
                   label: t("chat.compact"),
                   icon: "compress",
                   onSelect: () =>
@@ -329,6 +378,9 @@ export function Chat({ onOpenPermissions }: { onOpenPermissions: () => void }) {
                   <p className="k-chat__text">{m.text}</p>
                   <div className="k-chat__why">
                     {m.brain && <span>{m.brain}</span>}
+                    <button type="button" className="k-link" onClick={() => branch(m.conversationId, m.id)}>
+                      {t("chat.branchHere")}
+                    </button>
                     {m.turnId && (
                       <button
                         type="button"

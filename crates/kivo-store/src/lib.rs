@@ -8,6 +8,7 @@ pub mod crashes;
 pub mod db;
 pub mod extensions;
 pub mod logging;
+pub mod memory;
 pub mod models;
 pub mod records;
 pub mod tasks;

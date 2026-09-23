@@ -5,11 +5,13 @@
   "packageManager": "pnpm@11.27.1",
   "scripts": {
     "dev": "cargo build -p kivo-runtime -p kivo-infer && pnpm --filter kivo-app tauri dev",
+    "dev:e2e": "node scripts/dev-e2e.mjs",
     "ui": "pnpm --filter kivo-app dev",
     "sidecars": "node scripts/sidecars.mjs",
     "build": "node scripts/sidecars.mjs && pnpm --filter kivo-app tauri build --config src-tauri/tauri.bundle.conf.json",
     "typecheck": "pnpm --filter kivo-app typecheck",
     "docs:sync": "node scripts/sync-roadmap.mjs",
+    "licenses:gen": "node scripts/licenses.mjs",
     "release:version": "node scripts/set-version.mjs",
     "bench:data": "node scripts/bench-data.mjs",
     "lint": "pnpm --filter kivo-app lint",

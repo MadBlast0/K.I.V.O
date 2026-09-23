@@ -222,3 +222,21 @@ args = { page = "home" }
 [[command]]
 tool = "session.help"
 patterns = ["what can i say", "what can i say here", "help", "what can you do here", "what can i ask", "show me what i can say"]
+
+# Memory (MEM-05): the user asks KIVO to remember or forget something, or what it remembers.
+[[command]]
+tool = "memory.add"
+patterns = ["remember that {text}", "please remember that {text}", "please remember {text}", "remember {text}", "dont forget that {text}", "keep in mind that {text}"]
+
+[[command]]
+tool = "memory.forget"
+patterns = ["forget that {text}", "please forget that {text}", "stop remembering that {text}"]
+
+[[command]]
+tool = "memory.search"
+patterns = ["what do you remember about {text}", "do you remember anything about {text}"]
+
+[[command]]
+tool = "session.open"
+patterns = ["open my memory", "show my memory", "open memory", "show me what you remember"]
+args = { page = "memory" }

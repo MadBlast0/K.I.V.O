@@ -127,16 +127,23 @@ export interface StoredMessage {
 }
 
 export interface ContextLayer {
-  id: "system" | "instructions" | "live" | "summary" | "turns" | "tools";
+  id: "system" | "instructions" | "workspace" | "live" | "skills" | "memories" | "summary" | "turns" | "tools";
   text?: string;
   tokens: number;
   max?: number;
   count?: number;
+  /** Turned off in Settings → Context (CONV-31). */
+  on?: boolean;
 }
 
 export interface ContextPreview {
   brain: string | null;
   budget: { voice: number; chat: number };
+  /** A new conversation's first message, in dollars; null when the price isn't known. */
+  sessionCost?: number | null;
+  /** The whole request the next message would send, secrets redacted. */
+  preview?: string | null;
+  previewTokens?: number | null;
   layers: ContextLayer[];
 }
 

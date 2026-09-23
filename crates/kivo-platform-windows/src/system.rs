@@ -22,6 +22,29 @@ use windows::core::w;
 pub struct WindowsSystemInfo;
 
 impl SystemInfo for WindowsSystemInfo {
+    fn network(&self) -> Option<kivo_platform::Network> {
+        use windows::Win32::NetworkManagement::IpHelper::GetNetworkConnectivityHint;
+        use windows::Win32::Networking::WinSock::{
+            NL_NETWORK_CONNECTIVITY_HINT, NetworkConnectivityCostHintFixed,
+            NetworkConnectivityCostHintVariable,
+            NetworkConnectivityLevelHintConstrainedInternetAccess,
+            NetworkConnectivityLevelHintInternetAccess, NetworkConnectivityLevelHintUnknown,
+        };
+        let mut hint = NL_NETWORK_CONNECTIVITY_HINT::default();
+        // SAFETY: fills the structure it's given.
+        let status = unsafe { GetNetworkConnectivityHint(&raw mut hint) };
+        if status.is_err() || hint.ConnectivityLevel == NetworkConnectivityLevelHintUnknown {
+            return None;
+        }
+        Some(kivo_platform::Network {
+            online: hint.ConnectivityLevel == NetworkConnectivityLevelHintInternetAccess
+                || hint.ConnectivityLevel == NetworkConnectivityLevelHintConstrainedInternetAccess,
+            metered: hint.ConnectivityCost == NetworkConnectivityCostHintFixed
+                || hint.ConnectivityCost == NetworkConnectivityCostHintVariable
+                || hint.OverDataLimit
+                || hint.Roaming,
+        })
+    }
     fn attention(&self) -> PlatformResult<kivo_platform::Attention> {
         let (fullscreen_app, focus_mode) = notification_state();
         Ok(kivo_platform::Attention {
@@ -32,6 +55,10 @@ impl SystemInfo for WindowsSystemInfo {
 
     fn presence(&self) -> kivo_platform::Presence {
         crate::presence::presence()
+    }
+
+    fn process_usage(&self, pid: u32) -> Option<kivo_platform::ProcessUsage> {
+        process_usage(pid)
     }
 
     fn snapshot(&self) -> PlatformResult<SystemSnapshot> {
@@ -49,6 +76,48 @@ impl SystemInfo for WindowsSystemInfo {
             battery_percent,
             fullscreen_app,
             focus_mode,
+        })
+    }
+}
+
+/// CPU time and private memory of one process (`PROCESS_QUERY_LIMITED_INFORMATION` only).
+fn process_usage(pid: u32) -> Option<kivo_platform::ProcessUsage> {
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::System::ProcessStatus::{
+        GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS_EX2,
+    };
+    use windows::Win32::System::Threading::{
+        GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+    // SAFETY: the handle is closed below; the out-structures are sized as documented.
+    unsafe {
+        let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
+        let (mut created, mut exited, mut kernel, mut user) = (
+            FILETIME::default(),
+            FILETIME::default(),
+            FILETIME::default(),
+            FILETIME::default(),
+        );
+        let times = GetProcessTimes(
+            handle,
+            &raw mut created,
+            &raw mut exited,
+            &raw mut kernel,
+            &raw mut user,
+        );
+        let mut mem = PROCESS_MEMORY_COUNTERS_EX2 {
+            cb: u32::try_from(size_of::<PROCESS_MEMORY_COUNTERS_EX2>()).unwrap_or(0),
+            ..Default::default()
+        };
+        let memory = GetProcessMemoryInfo(handle, (&raw mut mem).cast(), mem.cb);
+        let _ = CloseHandle(handle);
+        times.ok()?;
+        memory.ok()?;
+        let ticks = |t: FILETIME| (u64::from(t.dwHighDateTime) << 32) | u64::from(t.dwLowDateTime);
+        // FILETIME counts 100 ns ticks.
+        Some(kivo_platform::ProcessUsage {
+            cpu_ms: (ticks(kernel) + ticks(user)) / 10_000,
+            memory_bytes: mem.PrivateWorkingSetSize as u64,
         })
     }
 }
@@ -217,6 +286,14 @@ pub fn utc_offset_minutes() -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tells_whether_it_is_online() {
+        // Windows 10 2004 and later always answer; this dev PC is online.
+        let network = WindowsSystemInfo.network().expect("a connectivity hint");
+        println!("{network:?}");
+        assert!(network.online);
+    }
 
     #[test]
     fn describes_this_machine() {

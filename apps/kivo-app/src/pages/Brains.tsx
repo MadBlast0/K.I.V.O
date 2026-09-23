@@ -6,13 +6,13 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { ContextSettings } from "../components/brains/ContextSettings";
 import { PageHeader } from "../components/layout/Shell";
 import {
   Alert,
   Button,
   Dialog,
   Group,
-  IconButton,
   Monogram,
   NewDot,
   Note,
@@ -38,7 +38,6 @@ import {
   type BrainView,
   type BrainsList,
   type Catalog,
-  type ContextPreview,
   type DiscoverySection,
   type Health,
   type Profile,
@@ -46,11 +45,19 @@ import {
 import { Method } from "../ipc/generated";
 import { useRuntime, useRuntimeEvents } from "../ipc/runtime";
 
-type Tab = "brains" | "context";
+export const BRAINS_TABS = ["brains", "context"] as const;
+type Tab = (typeof BRAINS_TABS)[number];
 
-export function Brains() {
+export function Brains({
+  initialTab = "brains",
+  onNavigate,
+}: {
+  initialTab?: Tab;
+  /** Opens another page ("memory", "extensions/skills"). */
+  onNavigate?: (to: string) => void;
+}) {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<Tab>("brains");
+  const [tab, setTab] = useState<Tab>(initialTab);
   return (
     <>
       <PageHeader title={t("nav.brains")} subtitle={t("brains.subtitle")} />
@@ -60,7 +67,13 @@ export function Brains() {
         onChange={setTab}
         tabs={[
           { value: "brains", label: t("brains.tab"), content: <BrainsTab /> },
-          { value: "context", label: t("context.tab"), content: <ContextTab /> },
+          {
+            value: "context",
+            label: t("context.tab"),
+            content: (
+              <ContextSettings onNavigate={(to) => (to === "brains/brains" ? setTab("brains") : onNavigate?.(to))} />
+            ),
+          },
         ]}
       />
     </>
@@ -790,152 +803,5 @@ function ProfileSheet({
         </Button>
       </div>
     </Sheet>
-  );
-}
-
-/** Settings → Context (CONV-30): what a conversation starts with, layer by layer. */
-function ContextTab() {
-  const { t, i18n } = useTranslation();
-  const { link, request } = useRuntime();
-  const fail = useFail();
-  const connected = link?.status === "connected";
-  const [preview, setPreview] = useState<ContextPreview | null>(null);
-  const [prefs, setPrefs] = useState<{ key: string; value: string }[]>([]);
-  const [key, setKey] = useState("");
-  const [value, setValue] = useState("");
-  const [viewing, setViewing] = useState<string | null>(null);
-  const load = useCallback(() => {
-    if (!connected) return;
-    void request<ContextPreview>(Method.brainsContext)
-      .then(setPreview)
-      .catch(() => {});
-    void request<{ key: string; value: string }[]>(Method.memoryPreferences)
-      .then(setPrefs)
-      .catch(() => {});
-  }, [connected, request]);
-  useEffect(load, [load]);
-  const number = new Intl.NumberFormat(i18n.language);
-  if (!connected) return <Note>{t("brains.notConnected")}</Note>;
-  if (!preview) return <Spinner label={t("brains.loading")} />;
-  const start = preview.layers.filter((l) => l.id !== "turns").reduce((sum, l) => sum + l.tokens, 0);
-  const colors: Record<string, string> = {
-    system: "var(--text)",
-    instructions: "var(--acc)",
-    live: "#8E8E93",
-    summary: "#32D74B",
-    tools: "#FF9F0A",
-  };
-  const shown = preview.layers.filter((l) => l.id !== "turns");
-  return (
-    <div className="k-brains">
-      <div className="k-context__tile">
-        <b>{t("context.start", { tokens: number.format(start) })}</b>
-        <span className="k-meta">
-          {preview.brain
-            ? t("context.budget", {
-                brain: preview.brain,
-                voice: number.format(preview.budget.voice),
-                chat: number.format(preview.budget.chat),
-              })
-            : t("context.noBrain")}
-        </span>
-        <div className="k-context__bar" aria-hidden>
-          {shown.map((l) => (
-            <i key={l.id} style={{ width: `${(l.tokens / Math.max(1, start)) * 100}%`, background: colors[l.id] }} />
-          ))}
-        </div>
-        <div className="k-context__legend">
-          {shown.map((l) => (
-            <span key={l.id}>
-              <b style={{ background: colors[l.id] }} />
-              {t(`context.layer.${l.id}`)} {number.format(l.tokens)}
-            </span>
-          ))}
-        </div>
-      </div>
-      <Section title={t("context.always")} />
-      <Group>
-        {preview.layers
-          .filter((l) => l.id === "system" || l.id === "instructions" || l.id === "live")
-          .map((l) => (
-            <Row
-              key={l.id}
-              icon={l.id === "system" ? "file" : l.id === "instructions" ? "user" : "compass"}
-              title={t(`context.layer.${l.id}`)}
-              subtitle={t(`context.hint.${l.id}`)}
-              end={
-                <>
-                  <span className="k-meta">{t("context.tokensOf", { tokens: l.tokens, max: l.max ?? 0 })}</span>
-                  <Button size="sm" variant="plain" onClick={() => setViewing(l.text ?? "")}>
-                    {t("context.view")}
-                  </Button>
-                </>
-              }
-            />
-          ))}
-      </Group>
-      <Section title={t("context.onlyWhenRelevant")} />
-      <Group>
-        <Row icon="memory" title={t("context.layer.summary")} subtitle={t("context.hint.summary")} />
-        <Row
-          icon="connector"
-          title={t("context.layer.tools")}
-          subtitle={t("context.hint.tools", { count: preview.layers.find((l) => l.id === "tools")?.count ?? 0 })}
-        />
-      </Group>
-      <Section title={t("context.aboutMe")} />
-      <Group>
-        {prefs.map((p) => (
-          <Row
-            key={p.key}
-            icon="user"
-            title={p.key}
-            subtitle={p.value}
-            end={
-              <IconButton
-                size="sm"
-                icon="delete"
-                label={t("context.removePreference", { key: p.key })}
-                onClick={() => void request(Method.memoryDeletePreference, { key: p.key }).then(load).catch(fail)}
-              />
-            }
-          />
-        ))}
-      </Group>
-      <div className="k-brains__key">
-        <TextField
-          value={key}
-          placeholder={t("context.prefKey")}
-          onChange={(e) => setKey(e.target.value)}
-          aria-label={t("context.prefKey")}
-        />
-        <TextField
-          value={value}
-          placeholder={t("context.prefValue")}
-          onChange={(e) => setValue(e.target.value)}
-          aria-label={t("context.prefValue")}
-        />
-        <Button
-          disabled={!key.trim() || !value.trim()}
-          onClick={() =>
-            void request(Method.memorySetPreference, { key, value })
-              .then(() => {
-                setKey("");
-                setValue("");
-                load();
-              })
-              .catch(fail)
-          }
-        >
-          {t("context.addPreference")}
-        </Button>
-      </div>
-      <Note>{t("context.note")}</Note>
-      {viewing !== null && (
-        <Sheet open onOpenChange={(o) => !o && setViewing(null)} title={t("context.view")}>
-          <pre className="k-context__text">{viewing || t("context.empty")}</pre>
-        </Sheet>
-      )}
-    </div>
   );
 }

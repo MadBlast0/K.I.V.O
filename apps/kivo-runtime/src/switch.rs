@@ -71,7 +71,7 @@ pub fn check(slot: InferSlot, id: &str, config: &kivo_core::KivoConfig) -> Resul
         });
     }
     if entry.engine.sends_data_off_device()
-        && kivo_security::privacy::speech_egress(true, config.privacy.mode, &config.capabilities)
+        && kivo_security::privacy::speech_egress(true, &config.privacy, &config.capabilities)
             .is_err()
     {
         return Err(text::tf(

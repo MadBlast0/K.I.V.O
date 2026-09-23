@@ -105,7 +105,10 @@
       "explain": "Explain",
       "rewrite": "Rewrite",
       "translate": "Translate"
-    }
+    },
+    "rememberThis": "Remember this",
+    "remembered": "Remembered",
+    "rememberFailed": "Couldn’t remember it: try again"
   },
   "home": {
     "talk": "Talk",
@@ -148,7 +151,12 @@
       "cancelled": "Cancelled",
       "denied": "Blocked",
       "unhandled": "Not understood"
-    }
+    },
+    "why": "Why?",
+    "whyTitle": "Why did KIVO say that?",
+    "whyNone": "No memories were used for this answer.",
+    "whyUsed": "{count, plural, one {It used this memory:} other {It used these memories:}}",
+    "whyGone": "deleted since"
   },
   "mode": {
     "ask": "Ask every time",
@@ -272,7 +280,29 @@
     "ask": "Ask KIVO",
     "move": "↑↓ move",
     "open": "↵ open",
-    "close": "Esc close"
+    "close": "Esc close",
+    "settingsGroup": "Settings",
+    "routines": "Routines",
+    "run": "Run “{name}”",
+    "actions": "Actions",
+    "remember": "Remember something",
+    "newChat": "New conversation",
+    "addWake": "Add a wake word",
+    "switchMode": "Switch permission mode",
+    "tidyMemory": "Tidy memory now",
+    "exportSettings": "Export settings",
+    "runChecks": "Run diagnostics",
+    "asked": "Asked KIVO",
+    "settings": {
+      "wake": "Wake words",
+      "voice": "Voice and speaking",
+      "mode": "Permission mode",
+      "privacy": "Privacy",
+      "brains": "Brains and models",
+      "memory": "Memory",
+      "budget": "Usage and limits",
+      "context": "Context: what the AI starts with"
+    }
   },
   "ui": {
     "accent": "Accent colour",
@@ -280,7 +310,12 @@
     "change": "Change",
     "new": "New",
     "working": "Working",
-    "done": "Done"
+    "done": "Done",
+    "cancel": "Cancel",
+    "save": "Save",
+    "noShortcut": "Not set",
+    "set": "Set",
+    "remove": "Remove"
   },
   "accent": {
     "blue": "Blue",
@@ -289,7 +324,8 @@
     "green": "Green",
     "amber": "Amber",
     "coral": "Coral",
-    "graphite": "Graphite"
+    "graphite": "Graphite",
+    "custom": "Custom colour"
   },
   "gallery": {
     "components": "Components",
@@ -800,9 +836,10 @@
     "phase": {
       "welcome": "Welcome",
       "voice": "Voice",
-      "brain": "Brain"
+      "brain": "Brain",
+      "control": "Control",
+      "ready": "Ready"
     },
-    "voiceStep": "Voice · {n} of {total}",
     "optional": "optional",
     "back": "Back",
     "skip": "Skip",
@@ -883,6 +920,72 @@
       "signIn": "Sign in",
       "free": "Free",
       "keysLater": "Have an API key? Add it later on the Brains page (advanced)."
+    },
+    "stepOf": "{phase} · {n} of {total}",
+    "why": "Why these choices",
+    "apps": {
+      "title": "Connect your apps and tools",
+      "sub": "Let KIVO work with the apps you use. Skip this and add them anytime in Extensions.",
+      "looking": "Looking for your apps…",
+      "ready": "Works right away",
+      "media": "Media controls",
+      "mediaHint": "Spotify, YouTube Music and other players",
+      "on": "On",
+      "signIn": "Connect with one sign-in",
+      "connecting": "Connecting…",
+      "extension": "Browser extension",
+      "extensionHint": "Read and act on your open tabs",
+      "extensionOn": "Connected to your browser",
+      "install": "Install",
+      "advanced": "Advanced",
+      "mcp": "MCP server",
+      "mcpHint": "Add tools from any MCP server",
+      "skills": "Skills",
+      "skillsHint": "Import skills made for Claude, Codex or Gemini",
+      "add": "Add",
+      "import": "Import",
+      "afterSetup": "Opens after setup"
+    },
+    "mode": {
+      "title": "How much can KIVO do on its own?",
+      "sub": "Switch anytime from the Island or the tray.",
+      "note": "Deleting, sending, paying and security changes always ask. Bypass mode, which skips even that, can be turned on later in Settings."
+    },
+    "look": {
+      "title": "Make it yours",
+      "sub": "This is the Island. It appears when you talk to KIVO.",
+      "preview": "The Island on your desktop",
+      "notes": "Notes",
+      "hello": "Hi, I’m KIVO",
+      "top": "Top",
+      "bottom": "Bottom",
+      "chimes": "Chimes",
+      "chimesHint": "When KIVO starts and stops listening"
+    },
+    "startup": {
+      "title": "Keep KIVO ready",
+      "sub": "For “Hey Kivo” to work, KIVO runs quietly in the background, using about 1% of your processor. You can also open it with Windows.",
+      "withWindows": "Open KIVO when Windows starts",
+      "withWindowsHint": "Adds KIVO to Windows startup apps",
+      "keepRunning": "Keep running when I close the window",
+      "keepRunningHint": "Quit anytime from the tray icon",
+      "tray": "KIVO lives in the system tray, next to the clock.",
+      "forThisPc": "Recommended for this PC",
+      "privacy": "Where AI runs",
+      "privacyModes": {
+        "cloud": "Cloud and this PC",
+        "local": "This PC only",
+        "strict-private": "Strictly private"
+      }
+    },
+    "try": {
+      "title": "You’re all set",
+      "sub": "Say “Hey Kivo, what time is it?”, or watch it here.",
+      "show": "Show me",
+      "orPress": "Or hold",
+      "partial": "Hey Kivo, what",
+      "question": "What time is it?",
+      "answer": "It’s {time}."
     }
   },
   "enroll": {
@@ -1030,7 +1133,8 @@
       "cancelled": "When something is cancelled",
       "hangup": "When the conversation ends",
       "notification": "When KIVO has news for you"
-    }
+    },
+    "previewSet": "Play {set}"
   },
   "settings": {
     "subtitle": "How KIVO behaves. More settings are on their way.",
@@ -1043,6 +1147,51 @@
         "top-center": "Top center",
         "bottom-center": "Bottom center",
         "remember-drag": "Where I dragged it"
+      },
+      "style": "Style",
+      "styles": {
+        "pill": "Island",
+        "pillHint": "Default",
+        "orb": "Orb",
+        "orbHint": "Floats and points",
+        "character": "Character",
+        "characterHint": "Animated mascot",
+        "hidden": "Hidden",
+        "hiddenHint": "Sounds only"
+      },
+      "silentTitle": "KIVO won’t show or sound that it’s listening",
+      "silentDetail": "The Island is hidden and sounds are off. Turn one of them on, or turn this warning off in Accessibility.",
+      "placement": "Placement",
+      "size": "Size",
+      "sizes": {
+        "compact": "Compact",
+        "standard": "Standard",
+        "large": "Large"
+      },
+      "monitor": "Which screen",
+      "monitorHint": "With several monitors",
+      "monitors": {
+        "active": "Where I’m working",
+        "main": "Main screen"
+      },
+      "shows": "What it shows",
+      "transcript": "Your words as you speak",
+      "live": "Live activities",
+      "liveHint": "Music, timers, downloads and tasks after a request",
+      "undo": "Undo after changes",
+      "undoHint": "A few seconds to take it back",
+      "hints": "Voice hints",
+      "hintsHint": "“Say approve or cancel” under questions",
+      "behavior": "Behavior",
+      "hideAfter": "Hide after an answer",
+      "seconds": "{count} s",
+      "never": "Never",
+      "glow": "Wake glow",
+      "glowHint": "A soft light at the screen edge when KIVO wakes",
+      "fullscreen": "In fullscreen apps and games",
+      "fullscreens": {
+        "hide": "Hide it",
+        "tinyPill": "Tiny dot"
       }
     },
     "notify": {
@@ -1065,7 +1214,23 @@
       "quietHoursBad": "Use hours like 22:00-07:00",
       "catchUp": "Catch me up when I’m back",
       "catchUpHint": "What happened while you were away, grouped",
-      "note": "KIVO speaks up at most once every 10 minutes, never during calls or over a fullscreen app, and groups the rest. Agents that need your answer always show."
+      "note": "KIVO speaks up at most once every 10 minutes, never during calls or over a fullscreen app, and groups the rest. Agents that need your answer always show.",
+      "how": "How to tell you",
+      "speak": "Say it out loud",
+      "speaks": {
+        "always": "Always",
+        "when-free": "When I’m free",
+        "never": "Never"
+      },
+      "toasts": "Windows notifications",
+      "toastsHint": "Off: news waits in the Control Center",
+      "sound": "Notification sound",
+      "soundOn": "The sound set’s chime",
+      "soundOff": "No sound",
+      "whenFree": "“When I’m free” means not during calls, fullscreen apps, presentations or Focus.",
+      "quiet": "Quiet times",
+      "focus": "Follow Windows Focus",
+      "about": "What to tell you about"
     },
     "activities": {
       "title": "Live activities",
@@ -1074,6 +1239,188 @@
       "timer": "Timers and reminders",
       "download": "Downloads",
       "agent": "Agent progress"
+    },
+    "tabs": {
+      "general": "General",
+      "appearance": "Appearance",
+      "island": "Island",
+      "sounds": "Sounds",
+      "notifications": "Notifications",
+      "accessibility": "Accessibility",
+      "shortcuts": "Shortcuts",
+      "performance": "Performance",
+      "diagnostics": "Diagnostics",
+      "about": "About"
+    },
+    "subtitles": {
+      "general": "The basics: starting up, language and your data.",
+      "appearance": "How KIVO looks.",
+      "island": "The capsule at the top of your screen when you talk to KIVO.",
+      "sounds": "The short sounds KIVO plays so you know what’s happening without looking.",
+      "notifications": "How KIVO tells you when something finishes or needs you.",
+      "accessibility": "Make KIVO easier to see, hear and use.",
+      "shortcuts": "Keyboard shortcuts that work everywhere. Select one to change it.",
+      "performance": "How much of your PC KIVO uses.",
+      "diagnostics": "Check that everything works.",
+      "about": "Version, licences and links."
+    },
+    "general": {
+      "startup": "Startup",
+      "startWithWindows": "Open KIVO when Windows starts",
+      "startWithWindowsHint": "So “Hey Kivo” works right after you sign in",
+      "keepRunning": "Keep running when I close the window",
+      "keepRunningHint": "KIVO stays in the system tray; quit from there",
+      "trayIcon": "Show KIVO in the system tray",
+      "trayIconHint": "Off: open KIVO from the Start menu to bring it back",
+      "language": "Language",
+      "appLanguage": "App language",
+      "appLanguageHint": "More languages come later",
+      "spoken": "Languages you speak",
+      "spokenHint": "KIVO understands and answers in these",
+      "spokenDetail": "The first one you choose is the main one. The speech engines on the Voice page decide which languages work.",
+      "primary": "main",
+      "format": "Date, time and number format",
+      "formatExample": "Like {example}",
+      "formatWindows": "Match Windows",
+      "formatApp": "Match the app language",
+      "people": "People",
+      "profiles": "Profiles for each person",
+      "profilesHint": "Separate voice, memory and settings for everyone who uses this PC",
+      "later": "Coming later",
+      "yourSettings": "Your settings",
+      "export": "Export settings",
+      "exportHint": "Save your settings, routines and memory to a file",
+      "exportButton": "Export",
+      "exported": "Saved to {file}",
+      "import": "Import settings",
+      "importHint": "Restore from a file, for example on a new PC",
+      "importButton": "Import",
+      "imported": "Imported: {routines, plural, one {# routine} other {# routines}}, {notes, plural, one {# note} other {# notes}}{skipped, plural, =0 {} other { (# routines left out: they clash)}}. Routines ask before running until you save them here.",
+      "reset": "Reset all settings",
+      "resetHint": "Your memory, conversations and connected brains are kept",
+      "resetButton": "Reset",
+      "resetTitle": "Reset all settings?",
+      "resetConfirm": "Every setting goes back to its default. Your memory, conversations, routines and connected brains stay.",
+      "resetDone": "Settings reset.",
+      "lowMemory": "Low-memory mode",
+      "lowMemoryHint": "Speech models unload right after each request. Slower to answer, lighter on the PC"
+    },
+    "appearance": {
+      "theme": "Theme",
+      "themes": {
+        "light": "Light",
+        "dark": "Dark",
+        "system": "System"
+      },
+      "systemNote": "System follows your Windows setting and switches automatically.",
+      "accent": "Accent colour",
+      "accentHint": "Used for selection, focus and status. Buttons stay black and white.",
+      "textMotion": "Text and motion",
+      "textSize": "Text size",
+      "sizes": {
+        "normal": "Default",
+        "large": "Large"
+      },
+      "motion": "Animations",
+      "motionHint": "Reduced keeps only what shows a change",
+      "motions": {
+        "system": "Match Windows",
+        "full": "Full",
+        "reduced": "Reduced"
+      },
+      "transparency": "Transparency effects",
+      "transparencyHint": "Frosted window background on Windows 11"
+    },
+    "access": {
+      "announcements": "Screen reader announcements",
+      "announcementsHint": "Narrator hears what KIVO is doing",
+      "captions": "Captions for spoken replies",
+      "captionsHint": "Show what KIVO says as text",
+      "large-island-text": "Larger Island text",
+      "voice-only": "Voice-only mode",
+      "voice-onlyHint": "KIVO says everything out loud, typed replies and the words for each button included",
+      "contrast": "High contrast",
+      "contrastHint": "KIVO follows your Windows contrast theme",
+      "contrastOn": "On in Windows",
+      "contrastOff": "Off in Windows",
+      "warn-silent": "Warn me if the Island and all sounds are off",
+      "warn-silentHint": "So you always know when KIVO is listening"
+    },
+    "shortcuts": {
+      "talk": "Hold to talk",
+      "type": "Type to KIVO",
+      "search": "Search KIVO",
+      "searchHint": "Inside the Control Center",
+      "mode": "Switch permission mode",
+      "pause": "Pause listening",
+      "stop": "Stop everything",
+      "stopHint": "Always works, even if another app is using this shortcut",
+      "taken": "Already used by {name}",
+      "toggle": "Press once to talk",
+      "toggleHint": "Press the talk shortcut to start and again to stop, instead of holding it",
+      "autoEnd": "Stop listening when I pause",
+      "autoEndHint": "Holding the shortcut, KIVO also stops when you stop speaking"
+    },
+    "performance": {
+      "profile": "Performance profile",
+      "profileHint": "Balanced suits most PCs. Gaming keeps KIVO light while you play",
+      "profiles": {
+        "auto": "Auto",
+        "battery": "Battery",
+        "balanced": "Balanced",
+        "performance": "Performance",
+        "gaming": "Gaming"
+      },
+      "now": "Right now",
+      "measure": "Measure again",
+      "cpu": "CPU (KIVO, last second)",
+      "memory": "memory",
+      "gpu": "graphics card",
+      "gpuNone": "Not used",
+      "wake": "wake → chime",
+      "times": "Response times · median",
+      "latency": {
+        "wakeToChime": "Wake → chime",
+        "speechToText": "End of speech → text",
+        "commandDone": "Simple command → done",
+        "firstWord": "Question → first spoken word"
+      },
+      "ms": "{value} ms",
+      "seconds": "{value} s",
+      "notYet": "Not measured yet",
+      "timesNote": "From your latest requests on this PC.",
+      "models": "Speech models",
+      "noModels": "No speech models on this PC yet",
+      "onDisk": "{mb} MB on disk",
+      "residency": {
+        "unloaded": "Unloaded",
+        "warming": "Loading",
+        "warm": "Warm",
+        "active": "In use",
+        "idle": "Idle"
+      }
+    },
+    "diagnostics": {
+      "run": "Run checks",
+      "running": "Checking…",
+      "fix": "Fix",
+      "ok": "Working",
+      "problem": "Needs attention",
+      "note": "Checks run on this PC. Nothing is sent anywhere."
+    },
+    "about": {
+      "tagline": "Knowledge · Intelligence · Voice · Operations",
+      "version": "Version {version}",
+      "more": "More",
+      "licenses": "Licences",
+      "licensesHint": "Open-source libraries and model attributions",
+      "licensesDetail": "{count} open-source libraries, and the speech models on the Voice page.",
+      "libraries": "Libraries",
+      "models": "Models",
+      "noModels": "The model list needs KIVO running.",
+      "search": "Search libraries",
+      "security": "Security policy",
+      "source": "Source code"
     }
   },
   "brains": {
@@ -1192,14 +1539,20 @@
       "live": "Live context",
       "summary": "Conversation summary",
       "turns": "Recent turns",
-      "tools": "Tools"
+      "tools": "Tools",
+      "workspace": "Workspace notes",
+      "skills": "Skills index",
+      "memories": "Memories"
     },
     "hint": {
       "system": "KIVO’s core rules, safety and voice style",
       "instructions": "Your stated preferences",
-      "live": "Time, active app, permission mode",
+      "live": "The fields you choose below",
       "summary": "Older messages, summarized automatically",
-      "tools": "Only the tools a request needs · {count} available"
+      "tools": "Only the tools a request needs · {count} available",
+      "workspace": "The current project’s notes and its CLAUDE.md or AGENTS.md summary",
+      "skills": "One line per enabled skill; a skill loads fully only when used",
+      "memories": "Up to 400 tokens of what you asked KIVO to remember, when relevant"
     },
     "tokensOf": "{tokens} / {max}",
     "view": "View",
@@ -1209,7 +1562,32 @@
     "prefValue": "Preference",
     "addPreference": "Add",
     "removePreference": "Remove {key}",
-    "note": "KIVO never sends the whole history: recent turns go verbatim, older ones as a summary, and old messages are recalled only when relevant."
+    "note": "KIVO never sends the whole history: recent turns go verbatim, older ones as a summary, and old messages are recalled only when relevant.",
+    "edit": "Edit",
+    "cost": "≈ {cost} to start a new conversation",
+    "costFree": "Free: this brain costs nothing",
+    "costUnknown": "The price of this brain isn’t known",
+    "preview": "Preview what the AI sees",
+    "previewHint": "The whole request the next message would send, with secrets hidden",
+    "liveFields": "Live fields sent",
+    "field": {
+      "local-time": "Time",
+      "language": "Language",
+      "permission-mode": "Permission mode",
+      "active-app": "Active app",
+      "window-title": "Window title"
+    },
+    "conversation": "Conversation",
+    "autoCompact": "Compact automatically",
+    "autoCompactHint": "Older messages are summarized so the conversation fits; off, they drop out and “Compact now” is in Chat",
+    "compactAt": "Compact at",
+    "compactAtHint": "How full the context may get first",
+    "whenFull": "When full",
+    "percent": "{percent}% full",
+    "fresh": "Start each conversation fresh",
+    "freshHint": "A new voice session never picks up an earlier conversation",
+    "profileBudget": "Budget per profile",
+    "profileBudgetHint": "Set a profile’s context limit on the Brains tab"
   },
   "chat": {
     "notConnected": "Chat needs KIVO running",
@@ -1248,7 +1626,15 @@
     "talk": "Talk",
     "stop": "Stop",
     "send": "Send",
-    "voice": "Voice"
+    "voice": "Voice",
+    "continue": "Continue by voice",
+    "continued": "Your next request by voice continues this conversation.",
+    "branch": "Branch",
+    "branchHere": "Branch from here",
+    "branched": "A copy to take another way",
+    "exportMarkdown": "Export as Markdown",
+    "exportJson": "Export as JSON",
+    "exported": "Saved to {file}"
   },
   "permissions": {
     "subtitle": "What KIVO may do, and how much it asks first.",
@@ -1412,7 +1798,9 @@
         "local": "Prefer this PC",
         "localHint": "Local models first. Cloud AI only when you allow it.",
         "strict-private": "Strict private",
-        "strict-privateHint": "Nothing leaves this PC. Personal data is never sent anywhere."
+        "strict-privateHint": "Nothing leaves this PC. Personal data is never sent anywhere.",
+        "custom": "Custom",
+        "customHint": "Choose each kind of cloud processing yourself."
       },
       "stays": "Always stays on this PC",
       "wake": "Wake word listening",
@@ -1436,7 +1824,29 @@
       "privateHint": "Files here are never read, searched or sent",
       "neverTitle": "Stop keeping conversations?",
       "neverBody": "KIVO will forget each conversation when it ends, and chats won’t be kept.",
-      "neverConfirm": "Stop keeping them"
+      "neverConfirm": "Stop keeping them",
+      "customTitle": "Custom",
+      "custom": {
+        "cloud-brains": "Cloud AI answers questions",
+        "cloud-brainsHint": "Brains that run online, like Claude, GPT or Gemini",
+        "personal-to-cloud": "Personal details may go to cloud AI",
+        "personal-to-cloudHint": "Names, email addresses and phone numbers. Sensitive data never does",
+        "cloud-speech": "Cloud speech",
+        "cloud-speechHint": "Speech engines that hear or speak online",
+        "cloud-vision": "Cloud AI may see the screen",
+        "cloud-visionHint": "Screenshots, only when you ask about the screen"
+      },
+      "localFolders": "Keep on this PC",
+      "localFoldersHint": "KIVO can use files here, but only a brain on this PC sees them",
+      "labels": "Private words",
+      "labelsHint": "Anything mentioning these stays with a brain on this PC",
+      "labelPlaceholder": "A name or word, like Project Falcon",
+      "labelClass": "How private",
+      "classes": {
+        "personal": "Personal",
+        "sensitive": "Sensitive",
+        "highly-sensitive": "Highly sensitive"
+      }
     },
     "bypass": {
       "title": "Bypass permissions",
@@ -1772,5 +2182,165 @@
       "on": "On"
     },
     "toolsUsed": "{count, plural, one {# tool} other {# tools}} · last used {when}"
+  },
+  "memory": {
+    "subtitle": "What KIVO knows about you and your work: Markdown notes on this PC, organized by folders and tags.",
+    "search": "Search notes",
+    "openFolder": "Open folder",
+    "openObsidian": "Open in Obsidian",
+    "suggest": "Suggest things to remember",
+    "suggestDetail": "KIVO asks before keeping something",
+    "workspaceNotes": "Keep workspace notes",
+    "workspaceNotesDetail": "Notes for projects KIVO works on with you, kept short and tidy",
+    "detail": "Note detail",
+    "details": {
+      "brief": "Brief",
+      "standard": "Standard",
+      "detailed": "Detailed"
+    },
+    "suggestions": "Suggested by KIVO",
+    "dismiss": "No thanks",
+    "edit": "Edit",
+    "keep": "Remember",
+    "kept": "Remembered.",
+    "alreadyKnown": "KIVO already remembers that.",
+    "editSuggestion": "Edit before remembering",
+    "tags": "Tags",
+    "allTags": "All",
+    "remember": "Remember something",
+    "rememberTitle": "Remember something",
+    "rememberDetail": "A short fact, preference or decision. It becomes a note you can edit later.",
+    "rememberWhat": "What to remember",
+    "rememberPlaceholder": "My projects live in D:\\work",
+    "tagsField": "Tags (optional)",
+    "empty": "Nothing remembered yet",
+    "emptyDetail": "Say “Kivo, remember …”, or add something here. Workspace notes appear as KIVO works on your projects.",
+    "folders": {
+      "label": "Memory folders",
+      "about": "About me",
+      "people": "People",
+      "workspaces": "Workspaces",
+      "topics": "Topics",
+      "notes": "Things to remember",
+      "archive": "Archive",
+      "log": "Session logs"
+    },
+    "noAbout": "Nothing about you yet",
+    "noAboutDetail": "Tell KIVO about yourself in Brains → Context, or add about-me.md to the memory folder.",
+    "nothingFound": "No notes match",
+    "replaced": "Replaced",
+    "sensitive": "Sensitive",
+    "tagsLine": "tags: {tags}",
+    "updated": "updated {when}",
+    "supersededNote": "A newer note replaced this on {date}. It stays as history.",
+    "noSuchNote": "There’s no note called “{name}” yet.",
+    "used": "{count, plural, one {Used once} other {Used # times}}",
+    "linked": "{count, plural, one {# linked note} other {# linked notes}}",
+    "history": "History",
+    "delete": "Delete",
+    "deleted": "Note deleted.",
+    "shareCloud": "Allow cloud AI to see this note",
+    "shareCloudDetail": "Only when “Never send sensitive notes to cloud AI” is off",
+    "noNoteYet": "No note yet",
+    "linksHere": "Links here",
+    "noLinks": "No links yet.",
+    "current": "Current",
+    "until": "Until {date}",
+    "editTitle": "Edit {name}",
+    "editDetail": "This is the Markdown file itself. Front-matter at the top holds its type, tags and sensitivity.",
+    "saved": "Saved.",
+    "tidyTitle": "Keeping memory tidy",
+    "merge": "Merge duplicate notes",
+    "condense": "Condense logs older than 14 days",
+    "condenseDetail": "Into the workspace overview and decisions",
+    "noCloud": "Never send sensitive notes to cloud AI",
+    "noCloudDetail": "Personal notes can still help cloud brains; sensitive ones stay on this PC",
+    "agents": "Let agents use my memory",
+    "agentsDetail": "Claude Code, Codex and others, through KIVO’s memory MCP. Choose agents in Agents.",
+    "tidyNow": "Tidy now",
+    "tidyNowDetail": "Runs by itself once a day",
+    "tidy": "Tidy",
+    "tidied": "Tidied: {merged} merged, {superseded} updated, {logs} logs condensed",
+    "export": "Export",
+    "exportDetail": "Every note as JSON, to your Downloads folder",
+    "exportButton": "Export",
+    "exported": "Saved to {file}",
+    "forget": "Forget everything",
+    "forgetDetail": "Deletes all notes",
+    "forgetButton": "Forget",
+    "forgetTitle": "Forget everything?",
+    "forgetConfirm": "{count, plural, one {# note} other {# notes}} and every suggestion will be deleted from this PC. This can’t be undone.",
+    "forgotten": "{count, plural, one {Forgot # note.} other {Forgot # notes.}}",
+    "note": "Your memory is a folder of Markdown files: {folder}. Edit them anywhere; KIVO reads the changes. Notes never hold passwords or keys.",
+    "lastUsed": "last {when}"
+  },
+  "usage": {
+    "subtitle": "Estimated cost of cloud AI and speech. Work done on this PC is free.",
+    "range": "Period",
+    "week": "Week",
+    "month": "Month",
+    "all": "All",
+    "csv": "CSV",
+    "exported": "Saved to {file}",
+    "exportedNoFile": "Exported.",
+    "totalFor": {
+      "week": "the last 7 days",
+      "month": "the last 30 days",
+      "all": "the last year"
+    },
+    "today": "today",
+    "free": "handled for free",
+    "noLimit": "No limit",
+    "budget": "budget",
+    "budgetSpent": "{spent} spent this month",
+    "byDay": "By day",
+    "ai": "AI",
+    "speech": "Speech",
+    "chartLabel": "Estimated spend per day, AI and speech",
+    "nothingYet": "Nothing spent yet.",
+    "noProviders": "No cloud AI used yet",
+    "shareOf": "Share spent on {name}",
+    "unpriced": "{count, plural, one {# request used a model with no known price and isn’t counted.} other {# requests used models with no known price and aren’t counted.}}",
+    "byFeature": "By feature",
+    "feature": {
+      "brain": "Answers and actions",
+      "agent": "Agents",
+      "stt": "Speech recognition",
+      "tts": "Speaking",
+      "realtime": "Realtime voice",
+      "computerUse": "Computer use",
+      "vision": "Screen reading"
+    },
+    "byRoutine": "By routine",
+    "noRoutines": "No routine has cost anything.",
+    "top": "Most expensive",
+    "untitled": "A request",
+    "kind": {
+      "task": "Task",
+      "turn": "Request"
+    },
+    "limits": "Limits",
+    "monthlyBudget": "Monthly budget",
+    "monthlyBudgetDetail": "All cloud AI and speech. Off: KIVO only tracks spending.",
+    "amount": "Amount in dollars",
+    "warnAt": "Warn me at",
+    "atLimit": "At the limit",
+    "at": {
+      "ask": "Ask",
+      "cheaperProfile": "Use cheaper",
+      "localOnly": "Local only",
+      "block": "Stop"
+    },
+    "caps": "Per-task limits",
+    "capsLine": "Computer use {computer} · agents {agents} · realtime {minutes} min",
+    "capsDetail": "The most one task may spend. KIVO asks before going over.",
+    "capComputer": "Computer use, per task",
+    "capAgents": "Agents, per task",
+    "capRealtime": "Realtime voice, minutes per session",
+    "capsEmpty": "Leave a field empty for no limit.",
+    "none": "no limit",
+    "showCost": "Show the cost in the card",
+    "showCostDetail": "A live “≈ $0.12” next to the brain while it answers",
+    "note": "All costs are estimates from public price lists, refreshed weekly. Your provider’s bill is what counts."
   }
 }

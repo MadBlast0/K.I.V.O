@@ -3,7 +3,8 @@ import axe from "axe-core";
 import { MotionConfig } from "motion/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ToastProvider } from "../components/ui";
-import type { RecommendationItem, SpeechChoices } from "../ipc/generated";
+import type { ConnectorView, RecommendationItem, SetupAdvice, SpeechChoices } from "../ipc/generated";
+import { ThemeProvider } from "../lib/theme";
 
 const calls: Array<{ method: string; params: unknown }> = [];
 
@@ -68,8 +69,37 @@ const recommendation: RecommendationItem = {
   reason: "This is a mid-range PC.",
 };
 
+const advice: SetupAdvice = {
+  online: true,
+  metered: false,
+  ramMb: 16384,
+  gpu: null,
+  onBattery: false,
+  mode: "auto",
+  performance: "auto",
+  privacy: "cloud",
+  brain: "gemini-cli",
+  brainUrl: null,
+  downloadNow: true,
+  reasons: ["Gemini CLI is installed and signed in."],
+};
+
+const connector = (id: string, name: string, kind: string, state: string): ConnectorView => ({
+  id,
+  name,
+  description: "",
+  access: `${name} things`,
+  kind,
+  state,
+  detail: null,
+  server: null,
+  tools: 0,
+  badges: [],
+  lastUsed: null,
+});
+
 const runtime = vi.hoisted(() => ({
-  link: { status: "connected", runtimeVersion: "0.0.0", snapshot: null, message: null },
+  link: { status: "connected", runtimeVersion: "0.0.0", snapshot: { mode: "auto" }, message: null },
   request: (_method: string, _params?: unknown): Promise<unknown> => Promise.resolve(null),
 }));
 
@@ -93,7 +123,23 @@ runtime.request = (method: string, params?: unknown) => {
     case "voice.micCheck":
       return Promise.resolve({ heard: true, peakDb: -12, seconds: 1.4 });
     case "settings.get":
-      return Promise.resolve({ voice: { "push-to-talk": ["Ctrl", "Space"] } });
+      return Promise.resolve({
+        voice: { "push-to-talk": ["Ctrl", "Space"] },
+        general: { "keep-running-on-close": true },
+        overlay: { position: "top-center" },
+        sounds: { enabled: true },
+        performance: { profile: "auto" },
+        privacy: { mode: "cloud" },
+      });
+    case "setup.recommend":
+      return Promise.resolve(advice);
+    case "connectors.list":
+      return Promise.resolve([
+        connector("git", "Git", "local", "ready"),
+        connector("github", "GitHub", "remote", "available"),
+      ]);
+    case "browser.status":
+      return Promise.resolve({ connected: false, extensionId: "x", folder: "C:\\KIVO\\extension" });
     case "wake.list":
       return Promise.resolve({ words: [], modelInstalled: false, listening: false });
     case "voiceId.status":
@@ -145,12 +191,14 @@ const settle = () =>
     await new Promise((r) => setTimeout(r, 0));
   });
 
-async function mount(onFinish = vi.fn<() => void>()) {
+async function mount(onFinish = vi.fn<(then?: string) => void>()) {
   render(
     <MotionConfig reducedMotion="always">
-      <ToastProvider>
-        <Onboarding onFinish={onFinish} />
-      </ToastProvider>
+      <ThemeProvider>
+        <ToastProvider>
+          <Onboarding onFinish={onFinish} />
+        </ToastProvider>
+      </ThemeProvider>
     </MotionConfig>,
   );
   await settle();
@@ -162,18 +210,19 @@ async function next() {
   await settle();
 }
 
-describe("Onboarding (UX-33, UX-60, UX-34)", () => {
+describe("Onboarding (UX-33–36, UX-60)", () => {
   beforeEach(() => {
     calls.length = 0;
   });
 
-  it("walks the voice steps, then Finish marks setup done", async () => {
+  it("walks all eleven steps, then Finish marks setup done", async () => {
     const onFinish = await mount();
     expect(screen.getByText("Talk to your PC.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Get started" }));
     await settle();
 
     expect(await screen.findByText("Check your microphone")).toBeTruthy();
+    expect(screen.getByText("Voice · 1 of 5")).toBeTruthy();
     expect(await violations()).toEqual([]);
     fireEvent.click(screen.getByRole("button", { name: "Test" }));
     await settle();
@@ -203,6 +252,9 @@ describe("Onboarding (UX-33, UX-60, UX-34)", () => {
     expect(await screen.findByText("Gemini CLI")).toBeTruthy();
     expect(screen.getByText("Ollama")).toBeTruthy();
     expect(screen.getAllByText("Free").length).toBeGreaterThanOrEqual(2);
+    // The one setup recommends for this PC (UX-36), with why.
+    expect(screen.getByText("Recommended")).toBeTruthy();
+    expect(screen.getByText("Gemini CLI is installed and signed in.")).toBeTruthy();
     expect(calls.some((c) => c.method === "brains.connect")).toBe(false);
     expect(await violations()).toEqual([]);
     fireEvent.click(screen.getAllByRole("button", { name: "Use" })[1]);
@@ -211,11 +263,76 @@ describe("Onboarding (UX-33, UX-60, UX-34)", () => {
       method: "brains.connect",
       params: { id: "ollama", baseUrl: "http://127.0.0.1:11434/v1" },
     });
+    // The recommended profile and privacy were preselected once.
+    expect(calls).toContainEqual({
+      method: "settings.set",
+      params: { performance: { profile: "auto" }, privacy: { mode: "cloud" } },
+    });
+    await next();
+
+    // Step 7: apps ready now, ones a sign-in away, and the advanced ones for after setup.
+    expect(await screen.findByText("Connect your apps and tools")).toBeTruthy();
+    expect(await screen.findByText("Git")).toBeTruthy();
+    expect(await violations()).toEqual([]);
+    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+    await settle();
+    expect(calls).toContainEqual({ method: "connectors.connect", params: { id: "github" } });
+    fireEvent.click(screen.getByRole("button", { name: "Install" }));
+    expect(screen.getByText(/C:\\KIVO\\extension/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    expect(screen.getByText("Opens after setup")).toBeTruthy();
+    await next();
+
+    // Step 8: the permission mode, Auto recommended and chosen; no Bypass.
+    expect(await screen.findByText("How much can KIVO do on its own?")).toBeTruthy();
+    expect(screen.getByText("Control · 1 of 3")).toBeTruthy();
+    expect(screen.queryByText(/Bypass permissions$/)).toBeNull();
+    expect(await violations()).toEqual([]);
+    fireEvent.click(screen.getByRole("radio", { name: "Plan first" }));
+    await settle();
+    expect(calls).toContainEqual({ method: "permissions.setMode", params: { mode: "plan" } });
+    await next();
+
+    // Step 9: look & feel on a live Island.
+    expect(await screen.findByText("Make it yours")).toBeTruthy();
+    expect(screen.getByRole("img", { name: "The Island on your desktop" })).toBeTruthy();
+    expect(await violations()).toEqual([]);
+    fireEvent.click(screen.getByRole("button", { name: "Bottom" }));
+    await settle();
+    expect(calls).toContainEqual({ method: "settings.set", params: { overlay: { position: "bottom-center" } } });
+    fireEvent.click(screen.getByRole("switch", { name: "Chimes" }));
+    await settle();
+    expect(calls).toContainEqual({ method: "settings.set", params: { sounds: { enabled: false } } });
+    await next();
+
+    // Step 10: startup, and what suits this PC.
+    expect(await screen.findByText("Keep KIVO ready")).toBeTruthy();
+    expect(screen.getByText("Recommended for this PC")).toBeTruthy();
+    expect(await violations()).toEqual([]);
+    fireEvent.click(screen.getByRole("switch", { name: "Open KIVO when Windows starts" }));
+    await settle();
+    expect(calls).toContainEqual({ method: "settings.set", params: { general: { "start-with-windows": true } } });
+    await next();
+
+    // Step 11: Try it plays the demo on the Island.
+    expect(await screen.findByText("You’re all set")).toBeTruthy();
+    expect(screen.getAllByText("Ready").length).toBe(2);
+    fireEvent.click(screen.getByRole("button", { name: "Show me" }));
+    await settle();
+    // The answer comes after listening and thinking, as in a real request.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 2500));
+    });
+    expect(screen.getByText(/^It’s /)).toBeTruthy();
+    expect(screen.getByText("What time is it?")).toBeTruthy();
+    expect(await violations()).toEqual([]);
+
     fireEvent.click(screen.getByRole("button", { name: "Finish" }));
     await settle();
     expect(calls).toContainEqual({ method: "settings.set", params: { general: { onboarded: true } } });
-    expect(onFinish).toHaveBeenCalledOnce();
-  });
+    // The MCP server the user wanted to add opens next.
+    expect(onFinish).toHaveBeenCalledWith("extensions/mcp");
+  }, 20_000);
 
   it("can be skipped from the first screen", async () => {
     const onFinish = await mount();

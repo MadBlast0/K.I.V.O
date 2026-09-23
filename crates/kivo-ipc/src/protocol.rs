@@ -172,6 +172,12 @@ pub mod method {
     pub const CHAT_DELETE: &str = "chat.delete";
     pub const CHAT_SEND: &str = "chat.send";
     pub const CHAT_COMPACT: &str = "chat.compact";
+    /// The next voice request continues this thread (CONV-03).
+    pub const CHAT_CONTINUE: &str = "chat.continue";
+    /// A new thread copied from one, up to a message (CONV-03).
+    pub const CHAT_BRANCH: &str = "chat.branch";
+    /// A thread as Markdown or JSON, returned or saved to Downloads (CONV-03).
+    pub const CHAT_EXPORT: &str = "chat.export";
     pub const CHAT_SEARCH: &str = "chat.search";
     pub const CHAT_MISROUTE: &str = "chat.misroute";
     /// The user's own words for recognition and transcript repair (VOICE-23).
@@ -267,6 +273,49 @@ pub mod method {
     pub const SKILLS_REMOVE: &str = "skills.remove";
     /// Re-runs one section's detectors (DISCOVERY §2): `{ section: "mcp" | "skills" | "connectors" }`.
     pub const EXTENSIONS_REFRESH: &str = "extensions.refresh";
+
+    // ---- M7: the memory vault (MEM-04–10, CONV-17–20, UX-29) --------------------------------
+    /// Everything the Memory page shows: notes, tags, folders, suggestions.
+    pub const MEMORY_OVERVIEW: &str = "memory.overview";
+    /// One note: `{ path }` → its Markdown, links, backlinks and history.
+    pub const MEMORY_NOTE: &str = "memory.note";
+    /// Saves an edited note: `{ path, markdown }`.
+    pub const MEMORY_SAVE: &str = "memory.save";
+    /// Remembers a fact: `{ text, tags? }`.
+    pub const MEMORY_REMEMBER: &str = "memory.remember";
+    /// "Remember this" on the Island: the answer of one turn becomes a memory (MEM-05).
+    pub const MEMORY_REMEMBER_TURN: &str = "memory.rememberTurn";
+    /// Changes a note's tags, sensitivity or cloud sharing: `{ path, tags?, sensitivity?, shareCloud? }`.
+    pub const MEMORY_META: &str = "memory.meta";
+    pub const MEMORY_DELETE: &str = "memory.delete";
+    /// Forget everything: every note and suggestion.
+    pub const MEMORY_FORGET: &str = "memory.forget";
+    /// Exports every note as JSON to the Downloads folder; returns the file.
+    pub const MEMORY_EXPORT: &str = "memory.export";
+    /// Accepts (optionally edited) or dismisses a suggestion: `{ id, accept, text? }`.
+    pub const MEMORY_SUGGESTION: &str = "memory.suggestion";
+    /// Runs the tidy job now.
+    pub const MEMORY_TIDY: &str = "memory.tidy";
+    /// Opens the vault: `{ in: "folder" | "obsidian", path? }`.
+    pub const MEMORY_OPEN: &str = "memory.open";
+    /// Which memories a turn used ("Why did you say that?"): `{ turn }`.
+    pub const MEMORY_WHY: &str = "memory.why";
+
+    // ---- M7: Settings → Performance, Diagnostics, and the settings file (UX-31) -------------
+    /// KIVO's CPU and memory, response-time medians and loaded models.
+    pub const PERFORMANCE_STATUS: &str = "performance.status";
+    /// Setup's recommended defaults for this PC (UX-36).
+    pub const SETUP_RECOMMEND: &str = "setup.recommend";
+    /// Runs the checks: microphone, wake word, speech, echo cancellation, brains, extension, audit.
+    pub const DIAGNOSTICS_RUN: &str = "diagnostics.run";
+    /// Saves settings, routines and memory to one file in Downloads; returns it.
+    pub const SETTINGS_EXPORT: &str = "settings.export";
+    /// Restores from such a file's contents: `{ content }`.
+    pub const SETTINGS_IMPORT: &str = "settings.import";
+    /// Back to the defaults; memory, conversations and connected brains are kept.
+    pub const SETTINGS_RESET: &str = "settings.reset";
+    /// Opens a web page in the default browser (About's links): `{ url }`, https only.
+    pub const SYSTEM_OPEN_URL: &str = "system.openUrl";
 }
 
 /// The name the desktop app gives in `hello`; the runtime supervises the client with this name.
@@ -381,13 +430,28 @@ pub struct Offer {
     pub decline: String,
 }
 
-/// The Island's placement setting and remembered spots (UX-13).
+/// The Island's placement setting and remembered spots (UX-13), and how it shows things
+/// (Settings → Island, Accessibility, Appearance).
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", default)]
 pub struct IslandPlacement {
     pub position: kivo_core::config::OverlayPosition,
     pub spots: Vec<kivo_core::config::IslandSpot>,
+    pub size: kivo_core::config::IslandSize,
+    /// The user's words as they speak.
+    pub show_transcript: bool,
+    pub show_undo: bool,
+    /// "Say approve or cancel" under questions.
+    pub voice_hints: bool,
+    pub large_text: bool,
+    /// What KIVO says is shown as text too.
+    pub captions: bool,
+    /// Narrator announcements (UX-53).
+    pub announcements: bool,
+    pub motion: kivo_core::config::MotionPref,
+    /// Island (the pill), or Hidden: sounds only, except a question that needs an answer.
+    pub companion: kivo_core::config::CompanionStyle,
 }
 
 impl Default for IslandPlacement {
@@ -395,6 +459,15 @@ impl Default for IslandPlacement {
         Self {
             position: kivo_core::config::OverlayPosition::TopCenter,
             spots: Vec::new(),
+            size: kivo_core::config::IslandSize::Standard,
+            show_transcript: true,
+            show_undo: true,
+            voice_hints: true,
+            large_text: false,
+            captions: true,
+            announcements: true,
+            motion: kivo_core::config::MotionPref::System,
+            companion: kivo_core::config::CompanionStyle::Pill,
         }
     }
 }
@@ -1216,6 +1289,117 @@ pub struct SkillView {
     pub scripts: bool,
     /// About how many tokens its name and description add to a request.
     pub tokens: u32,
+}
+
+/// A note in the memory vault (UX-29).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemoryNoteView {
+    /// Vault-relative (`people/maya.md`).
+    pub path: String,
+    /// `fact`, `about`, `instructions`, `person`, `workspace`, `topic`, `decisions`, `log`, `note`.
+    pub kind: String,
+    pub title: String,
+    pub excerpt: String,
+    pub tags: Vec<String>,
+    /// Its folder (`workspaces/k-i-v-o/log`), empty at the top.
+    pub folder: String,
+    pub workspace: Option<String>,
+    /// A data class.
+    pub sensitivity: String,
+    pub share_cloud: bool,
+    pub updated_at: i64,
+    /// Set when a newer fact replaced it.
+    pub valid_until: Option<i64>,
+    pub use_count: i64,
+    pub last_used_at: Option<i64>,
+}
+
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemoryTagView {
+    pub tag: String,
+    pub count: u32,
+}
+
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemoryFolderView {
+    pub path: String,
+    /// Notes in it and below.
+    pub count: u32,
+}
+
+/// Something KIVO suggested remembering (CONV-20).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemorySuggestionView {
+    pub id: i64,
+    pub text: String,
+    pub reason: Option<String>,
+    pub workspace: Option<String>,
+    pub created_at: i64,
+}
+
+/// Setup's recommended defaults (UX-36, plan §130). Each is only preselected.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetupAdvice {
+    pub online: bool,
+    pub metered: bool,
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
+    pub ram_mb: u64,
+    /// The GPU with the most memory of its own.
+    pub gpu: Option<String>,
+    pub on_battery: bool,
+    /// A permission mode (`auto`).
+    pub mode: String,
+    /// A performance profile (`auto`, `battery`).
+    pub performance: String,
+    /// A privacy mode (`cloud`, `local`).
+    pub privacy: String,
+    /// The brain to connect first: a discovered id or `openrouter`; none when one is connected or
+    /// none can answer.
+    pub brain: Option<String>,
+    /// A local server's address, for connecting it.
+    pub brain_url: Option<String>,
+    /// Download the speech models now (not on a metered connection).
+    pub download_now: bool,
+    /// Why, one line each, in the user's language.
+    pub reasons: Vec<String>,
+}
+
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemoryOverview {
+    /// The vault folder.
+    pub root: String,
+    pub notes: Vec<MemoryNoteView>,
+    pub tags: Vec<MemoryTagView>,
+    pub folders: Vec<MemoryFolderView>,
+    pub suggestions: Vec<MemorySuggestionView>,
+}
+
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemoryNoteDetail {
+    pub note: MemoryNoteView,
+    /// The whole file, front-matter included.
+    pub markdown: String,
+    /// Its `[[links]]`.
+    pub links: Vec<String>,
+    /// Notes linking to it.
+    pub backlinks: Vec<String>,
+    /// Other facts about the same thing (older or newer).
+    pub history: Vec<MemoryNoteView>,
+    pub superseded_by: Option<String>,
 }
 
 #[cfg(test)]

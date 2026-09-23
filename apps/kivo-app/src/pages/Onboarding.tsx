@@ -1,13 +1,14 @@
 /**
- * First-launch setup (UX §4, UX-33 steps 1–5, UX-60 and UX-34): Welcome, then the Voice phase —
+ * First-launch setup (UX §4, UX-33–35, UX-60): eleven short screens in five phases. Welcome; Voice —
  * check the microphone, how you call KIVO, how it hears and speaks (recommended for this PC, with
- * the other profiles a click away), a summary of the choices, and optionally the owner's voice —
- * then step 6, connecting a brain (optional; sign-in without keys, free options marked). One
- * decision per screen, the recommended answer preselected; Finish (or skipping from Welcome's fine
- * print) marks setup done and opens the Control Center. The control phase joins in M7.
+ * the other profiles a click away), a summary, and optionally the owner's voice; Brain — connect a
+ * brain (sign-in without keys, free options marked) and apps and tools; Control — the permission
+ * mode, look & feel, startup; Ready — Try it. One decision per screen, the recommended answer
+ * preselected from this PC (UX-36); Finish (or skipping from Welcome's fine print) marks setup
+ * done and opens the Control Center.
  */
 import { AnimatePresence, motion, useReducedMotionConfig } from "motion/react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Island } from "../components/island/Island";
 import { Enrollment } from "../components/voice/Enrollment";
@@ -16,20 +17,48 @@ import { Recommended, SpeechChooser, VoiceList } from "../components/voice/Speec
 import { useSpeech, type Speech } from "../components/voice/useSpeech";
 import { HeyKivoSwitch } from "../components/voice/WakeWords";
 import { Button, Group, Monogram, Pill, Row, Section, ShortcutRecorder, Spinner, useToast } from "../components/ui";
+import { AppsStep, LookStep, ModeStep, Reasons, StartupStep, TryStep, useAdvice } from "../components/onboarding/steps";
 import { brainColor, monogram, type BrainsList, type DiscoverySection } from "../ipc/brains";
 import { Icon } from "../icons";
-import { Method } from "../ipc/generated";
+import { Method, type SetupAdvice } from "../ipc/generated";
 import { useRuntime } from "../ipc/runtime";
 
-const STEPS = ["welcome", "mic", "activation", "speech", "summary", "voice", "brain"] as const;
+const STEPS = [
+  "welcome",
+  "mic",
+  "activation",
+  "speech",
+  "summary",
+  "voice",
+  "brain",
+  "apps",
+  "mode",
+  "look",
+  "startup",
+  "try",
+] as const;
 type Step = (typeof STEPS)[number];
-/** The phases the progress capsule shows: Welcome, the Voice steps, then the brain. */
-const PHASES = ["welcome", "voice", "brain"] as const;
-const OPTIONAL: ReadonlySet<Step> = new Set<Step>(["voice", "brain"]);
+/** The phases the progress capsule shows, and the steps in each. */
+const PHASES = ["welcome", "voice", "brain", "control", "ready"] as const;
+const PHASE_OF: Record<Step, number> = {
+  welcome: 0,
+  mic: 1,
+  activation: 1,
+  speech: 1,
+  summary: 1,
+  voice: 1,
+  brain: 2,
+  apps: 2,
+  mode: 3,
+  look: 3,
+  startup: 3,
+  try: 4,
+};
+const OPTIONAL: ReadonlySet<Step> = new Set<Step>(["voice", "brain", "apps"]);
 
 function Header({ step }: { step: Step }) {
   const { t } = useTranslation();
-  const phase = step === "welcome" ? 0 : step === "brain" ? 2 : 1;
+  const phase = PHASE_OF[step];
   return (
     <div className="k-onboarding__bar">
       <span className="k-onboarding__progress">
@@ -47,11 +76,16 @@ function Header({ step }: { step: Step }) {
 
 function Screen({ step, children }: { step: Step; children: ReactNode }) {
   const { t } = useTranslation();
-  const index = STEPS.indexOf(step);
+  // "Voice · 2 of 5", "Control · 1 of 3", "Ready".
+  const phase = PHASE_OF[step];
+  const inPhase = STEPS.filter((s) => PHASE_OF[s] === phase);
+  const name = t(`onboarding.phase.${PHASES[phase]}`);
   return (
     <>
       <div className="k-onboarding__eyebrow">
-        {t("onboarding.voiceStep", { n: index, total: STEPS.length - 1 })}
+        {inPhase.length > 1
+          ? t("onboarding.stepOf", { phase: name, n: inPhase.indexOf(step) + 1, total: inPhase.length })
+          : name}
         {OPTIONAL.has(step) && ` · ${t("onboarding.optional")}`}
       </div>
       <h2 className="k-onboarding__h">{t(`onboarding.${step}.title`)}</h2>
@@ -154,7 +188,7 @@ function Speaking({ speech }: { speech: Speech }) {
 
 /** Step 6 (UX-34): connect a brain — what's already on this PC first, then OpenRouter's sign-in;
  * free options marked (CONV-08). Nothing is connected without a click (DISC-03). */
-function ConnectBrain() {
+function ConnectBrain({ advice }: { advice: SetupAdvice | null }) {
   const { t } = useTranslation();
   const { link, request } = useRuntime();
   const toast = useToast();
@@ -181,6 +215,9 @@ function ConnectBrain() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, when connected
   }, [connected]);
   const isConnected = (id: string) => brains?.connected.some((b) => b.id === id) ?? false;
+  // The one setup suggests for this PC (UX-36).
+  const suggested = (id: string) =>
+    advice?.brain === id && !isConnected(id) ? <Pill tone="accent">{t("permissions.recommended")}</Pill> : null;
   const use = (id: string, baseUrl?: string) =>
     request(Method.brainsConnect, { id, ...(baseUrl ? { baseUrl } : {}) })
       .then(load)
@@ -205,6 +242,7 @@ function ConnectBrain() {
                 subtitle={free ?? undefined}
                 end={
                   <>
+                    {suggested(i.id)}
                     {free && <Pill tone="success">{t("onboarding.brain.free")}</Pill>}
                     {isConnected(i.id) ? (
                       <Pill tone="success">{t("onboarding.brain.connected")}</Pill>
@@ -233,16 +271,20 @@ function ConnectBrain() {
             isConnected("openrouter") ? (
               <Pill tone="success">{t("onboarding.brain.connected")}</Pill>
             ) : (
-              <Button
-                size="sm"
-                onClick={() => void request(Method.brainsSignIn, { id: "openrouter" }).then(load).catch(fail)}
-              >
-                {t("onboarding.brain.connect")}
-              </Button>
+              <>
+                {suggested("openrouter")}
+                <Button
+                  size="sm"
+                  onClick={() => void request(Method.brainsSignIn, { id: "openrouter" }).then(load).catch(fail)}
+                >
+                  {t("onboarding.brain.connect")}
+                </Button>
+              </>
             )
           }
         />
       </Group>
+      <Reasons advice={advice && { ...advice, reasons: advice.reasons.slice(0, 1) }} />
       <p className="k-note">{t("onboarding.brain.keysLater")}</p>
     </>
   );
@@ -290,12 +332,26 @@ function Summary({ speech }: { speech: Speech }) {
   );
 }
 
-export function Onboarding({ onFinish }: { onFinish: () => void }) {
+export function Onboarding({ onFinish }: { onFinish: (then?: string) => void }) {
   const { t } = useTranslation();
   const { request } = useRuntime();
   const toast = useToast();
   const reduce = useReducedMotionConfig() ?? false;
   const speech = useSpeech();
+  const advice = useAdvice();
+  // A page to open once setup is done ("add an MCP server" from the Apps step).
+  const [after, setAfter] = useState<string | undefined>();
+  // The recommended performance profile and privacy mode are preselected once (UX-36); the
+  // Startup step shows them with their reasons, to change there or later in Settings.
+  const applied = useRef(false);
+  useEffect(() => {
+    if (!advice || applied.current) return;
+    applied.current = true;
+    void request(Method.settingsSet, {
+      performance: { profile: advice.performance },
+      privacy: { mode: advice.privacy },
+    }).catch(() => {});
+  }, [advice, request]);
   const [index, setIndex] = useState(0);
   const [direction, setDirection] = useState(1);
   const step: Step = STEPS[index] ?? "welcome";
@@ -303,7 +359,7 @@ export function Onboarding({ onFinish }: { onFinish: () => void }) {
 
   const finish = () =>
     request(Method.settingsSet, { general: { onboarded: true } })
-      .then(onFinish)
+      .then(() => onFinish(after))
       .catch((e: unknown) => toast(e instanceof Error ? e.message : String(e)));
   const go = (by: number) => {
     setDirection(by);
@@ -324,7 +380,12 @@ export function Onboarding({ onFinish }: { onFinish: () => void }) {
     speech: <Speaking speech={speech} />,
     summary: <Summary speech={speech} />,
     voice: <Enrollment onDone={() => go(1)} />,
-    brain: <ConnectBrain />,
+    brain: <ConnectBrain advice={advice} />,
+    apps: <AppsStep onAfter={setAfter} />,
+    mode: <ModeStep advice={advice} />,
+    look: <LookStep />,
+    startup: <StartupStep advice={advice} />,
+    try: <TryStep />,
   };
 
   // Steps slide 18 px in the direction of travel (DESIGN_SYSTEM §5).

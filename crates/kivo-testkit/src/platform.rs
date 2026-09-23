@@ -312,6 +312,10 @@ pub struct FakeSystemInfo {
     pub snapshot: Mutex<SystemSnapshot>,
     /// Idle time, lock and "in a call", as the test sets them.
     pub presence: Mutex<kivo_platform::Presence>,
+    /// What each process has used, by pid (Settings → Performance).
+    pub usage: Mutex<std::collections::HashMap<u32, kivo_platform::ProcessUsage>>,
+    /// Online and unmetered unless a test says otherwise.
+    pub network: Mutex<Option<kivo_platform::Network>>,
 }
 
 impl Default for FakeSystemInfo {
@@ -319,6 +323,11 @@ impl Default for FakeSystemInfo {
     fn default() -> Self {
         Self {
             presence: Mutex::default(),
+            usage: Mutex::default(),
+            network: Mutex::new(Some(kivo_platform::Network {
+                online: true,
+                metered: false,
+            })),
             snapshot: Mutex::new(SystemSnapshot {
                 cpu_name: "Fake 8-core".into(),
                 logical_cpus: 16,
@@ -341,6 +350,12 @@ impl SystemInfo for FakeSystemInfo {
     }
     fn presence(&self) -> kivo_platform::Presence {
         *lock(&self.presence)
+    }
+    fn process_usage(&self, pid: u32) -> Option<kivo_platform::ProcessUsage> {
+        lock(&self.usage).get(&pid).copied()
+    }
+    fn network(&self) -> Option<kivo_platform::Network> {
+        *lock(&self.network)
     }
     fn attention(&self) -> PlatformResult<kivo_platform::Attention> {
         let s = lock(&self.snapshot);
@@ -463,6 +478,7 @@ mod tests {
             body: String::new(),
             actions: vec![],
             reply: false,
+            silent: false,
         };
         n.show(&note).unwrap();
         assert_eq!(*lock(&n.shown), vec![note]);

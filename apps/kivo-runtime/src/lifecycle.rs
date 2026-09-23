@@ -123,6 +123,7 @@ impl Lifecycle {
                     action(FIRST_CLOSE_QUIT, "notice.firstClose.quit"),
                 ],
                 reply: false,
+                silent: false,
             });
         }
         true
@@ -138,6 +139,7 @@ impl Lifecycle {
                 action(MIC_TYPE, "notice.mic.type"),
             ],
             reply: false,
+            silent: false,
         });
     }
 
@@ -162,6 +164,7 @@ impl Lifecycle {
             body: text::t("notice.crash.body"),
             actions: vec![action(CRASH_FOLDER, "notice.crash.folder")],
             reply: false,
+            silent: false,
         });
     }
 

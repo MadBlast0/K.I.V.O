@@ -15,7 +15,7 @@ use kivo_brain::openai::{OpenAi, OpenAiConfig};
 use kivo_brain::routing::{self, Available, Profile, Route, RouteError, RouteRequest};
 use kivo_brain::{BrainProvider, Health, ModelInfo, NormalizedError, PrivacyClass, ProviderKind};
 use kivo_brain::{ProviderInfo, Usage};
-use kivo_core::config::{BrainConnection, KivoConfig, PrivacyMode};
+use kivo_core::config::{BrainConnection, KivoConfig};
 use kivo_core::{Capability, Secret};
 use kivo_platform::{SecretHandle, Secrets};
 use kivo_store::Database;
@@ -315,10 +315,7 @@ impl Brains {
     /// Cloud brains are allowed at all: the privacy mode and the Cloud AI capability (invariant
     /// 11).
     pub fn cloud_allowed(config: &KivoConfig) -> bool {
-        matches!(
-            config.privacy.mode,
-            PrivacyMode::Cloud | PrivacyMode::Custom
-        ) && config.capabilities.enabled(Capability::CloudBrains)
+        kivo_security::privacy::cloud_brains(&config.privacy, &config.capabilities)
     }
 
     /// Every connected brain as routing sees it.
@@ -743,6 +740,15 @@ impl Brains {
 
     // Money (BRAINS §9).
 
+    /// What `usage` would cost on `provider`'s `model`, recording nothing (Settings → Context's
+    /// estimate). Local brains cost nothing; `None` when the price isn't known.
+    pub fn estimate(&self, provider: &str, model: &str, usage: Usage) -> Option<f64> {
+        let local = self
+            .provider(provider)
+            .is_some_and(|p| p.info().privacy == PrivacyClass::Local);
+        read(&self.prices).cost(provider, model, usage, local)
+    }
+
     /// Records one call's usage with its estimated cost; returns the cost.
     pub fn meter(&self, m: &Meter<'_>) -> Option<f64> {
         let local = self
@@ -968,6 +974,7 @@ pub fn sees_by_name(model: &str) -> bool {
 mod tests {
     use super::*;
     use kivo_brain::testing::{MockServer, Reply, Script, ScriptedBrain};
+    use kivo_core::config::PrivacyMode;
     use kivo_testkit::FakeSecrets;
     use serde_json::json;
 

@@ -33,6 +33,12 @@ pub struct Rpc {
     tasks: Option<Arc<crate::tasks_rpc::TasksRpc>>,
     /// MCP servers, connectors and skills (M6).
     extensions: Option<Arc<crate::extensions_rpc::ExtensionsRpc>>,
+    /// The memory vault (M7).
+    memory: Option<Arc<crate::memory_rpc::MemoryRpc>>,
+    /// Settings → Performance and Diagnostics (M7).
+    system: Option<Arc<crate::system_rpc::SystemRpc>>,
+    /// Where "Export settings" saves (the Downloads folder).
+    exports: Option<std::path::PathBuf>,
 }
 
 impl Rpc {
@@ -54,7 +60,31 @@ impl Rpc {
             browser: None,
             tasks: None,
             extensions: None,
+            memory: None,
+            system: None,
+            exports: None,
         }
+    }
+
+    /// Adds Settings → Performance and Diagnostics.
+    #[must_use]
+    pub fn with_system(mut self, system: Arc<crate::system_rpc::SystemRpc>) -> Self {
+        self.system = Some(system);
+        self
+    }
+
+    /// Where "Export settings" saves.
+    #[must_use]
+    pub fn with_exports(mut self, dir: std::path::PathBuf) -> Self {
+        self.exports = Some(dir);
+        self
+    }
+
+    /// Adds the M7 memory requests (the Memory page).
+    #[must_use]
+    pub fn with_memory(mut self, memory: Arc<crate::memory_rpc::MemoryRpc>) -> Self {
+        self.memory = Some(memory);
+        self
     }
 
     /// Adds the M5 requests (tasks, routines, agents, workspaces).
@@ -120,7 +150,20 @@ impl Handler for Rpc {
         let browser = self.browser.clone();
         let tasks = self.tasks.clone();
         let extensions = self.extensions.clone();
+        let memory = self.memory.clone();
+        let system = self.system.clone();
+        let exports = self.exports.clone();
         Box::pin(async move {
+            if let Some(system) = system
+                && let Some(result) = system.call(&name, params.clone()).await
+            {
+                return result;
+            }
+            if let Some(memory) = memory
+                && let Some(result) = memory.call(&name, params.clone()).await
+            {
+                return result;
+            }
             if let Some(tasks) = tasks
                 && let Some(result) = tasks.call(&name, params.clone()).await
             {
@@ -367,6 +410,37 @@ impl Handler for Rpc {
                     "keepRunning": lifecycle.window_closed()
                 })),
                 method::SETTINGS_GET => ok(&core.config()),
+                // Settings, routines and memory in one file (Settings → General).
+                method::SETTINGS_EXPORT => {
+                    let dir =
+                        exports.ok_or_else(|| refuse(kivo_core::text::t("settings.noExports")))?;
+                    let bundle = crate::settings_file::export(&core, &engine);
+                    crate::settings_file::save(&dir, &bundle, engine.brains.utc_offset())
+                        .map(|file| serde_json::json!({ "file": file.display().to_string() }))
+                        .map_err(refuse)
+                }
+                method::SETTINGS_IMPORT => {
+                    #[derive(Deserialize)]
+                    #[serde(deny_unknown_fields)]
+                    struct P {
+                        content: String,
+                    }
+                    let P { content } = parse(params)?;
+                    let report =
+                        crate::settings_file::import(&core, &engine, &content).map_err(refuse)?;
+                    let saved = core.config();
+                    models.apply_engines(&saved);
+                    engine.settings_changed(&saved);
+                    lifecycle.apply_autostart(&saved);
+                    ok(&report)
+                }
+                method::SETTINGS_RESET => {
+                    let saved = core.update_config(|c| *c = crate::settings_file::reset(c));
+                    models.apply_engines(&saved);
+                    engine.settings_changed(&saved);
+                    lifecycle.apply_autostart(&saved);
+                    ok(&saved)
+                }
                 method::SETTINGS_SET => {
                     // A partial settings object, merged into the current one.
                     let current = serde_json::to_value(core.config())

@@ -54,6 +54,15 @@ fn placement(config: &KivoConfig) -> kivo_ipc::protocol::IslandPlacement {
     kivo_ipc::protocol::IslandPlacement {
         position: config.overlay.position,
         spots: config.overlay.spots.clone(),
+        size: config.overlay.size,
+        show_transcript: config.overlay.show_transcript,
+        show_undo: config.overlay.show_undo,
+        voice_hints: config.overlay.voice_hints,
+        large_text: config.accessibility.large_island_text,
+        captions: config.accessibility.captions,
+        announcements: config.accessibility.announcements,
+        motion: config.appearance.motion,
+        companion: config.companion.style,
     }
 }
 
@@ -182,6 +191,10 @@ impl Core {
             tracing::error!(%e, "couldn't save the settings");
         }
         self.settings.send_modify(|n| *n += 1);
+        self.bus
+            .publish(kivo_core::Event::new(kivo_core::EventKind::System(
+                kivo_core::event::SystemEvent::ConfigChanged,
+            )));
         // The Island's placement is part of the live state the app reads (UX-13).
         let island = placement(&updated);
         self.state.send_if_modified(|s| {

@@ -13,6 +13,10 @@ pub struct KivoConfig {
     pub general: General,
     pub voice: Voice,
     pub overlay: Overlay,
+    /// Theme, accent, text size, motion and transparency (UX §5, DECISIONS "Appearance settings").
+    pub appearance: Appearance,
+    /// Screen-reader announcements, captions, larger Island text, voice-only use (UX §10).
+    pub accessibility: Accessibility,
     pub sounds: Sounds,
     pub permissions: Permissions,
     /// Capability toggles changed from their defaults (CAPABILITIES §1).
@@ -23,6 +27,8 @@ pub struct KivoConfig {
     pub performance: Performance,
     /// Providers and profiles (filled in by M3, BRAINS §5).
     pub brains: Brains,
+    /// What a brain starts with, layer by layer (CONVERSATION §8, Settings → Context).
+    pub context: Context,
     /// Per-tool overrides (M4, TOOLS_AND_CONTROL §1).
     pub tools: Tools,
     /// Connected services (M6, INTEGRATIONS_AND_PLUGINS §0).
@@ -38,6 +44,8 @@ impl Default for KivoConfig {
             general: General::default(),
             voice: Voice::default(),
             overlay: Overlay::default(),
+            appearance: Appearance::default(),
+            accessibility: Accessibility::default(),
             sounds: Sounds::default(),
             permissions: Permissions::default(),
             capabilities: crate::capability::CapabilitySettings::default(),
@@ -46,6 +54,7 @@ impl Default for KivoConfig {
             companion: Companion::default(),
             performance: Performance::default(),
             brains: Brains::default(),
+            context: Context::default(),
             tools: Tools::default(),
             integrations: Integrations::default(),
             automation: Automation::default(),
@@ -65,6 +74,8 @@ pub struct General {
     pub language: String,
     pub languages: Vec<String>,
     pub low_memory_mode: bool,
+    /// Dates, times and numbers as Windows formats them, or as the app's language does.
+    pub format: FormatLocale,
     /// The one-time "KIVO is still running" notice after the first close has been shown (UX §1).
     pub first_close_seen: bool,
     /// Setup has been finished or skipped; until then the Control Center opens on it (UX-33).
@@ -80,6 +91,7 @@ impl Default for General {
             language: "en".into(),
             languages: Vec::new(),
             low_memory_mode: false,
+            format: FormatLocale::Windows,
             first_close_seen: false,
             onboarded: false,
         }
@@ -96,6 +108,8 @@ pub struct Voice {
     pub auto_end_on_silence: bool,
     /// Keys that open the card in text mode (UX §8).
     pub type_to_kivo: Vec<String>,
+    /// Pauses or resumes listening (Settings → Shortcuts); empty for none.
+    pub pause_shortcut: Vec<String>,
     /// Audio device ids; `None` follows the Windows default.
     pub input_device: Option<String>,
     pub output_device: Option<String>,
@@ -122,6 +136,7 @@ impl Default for Voice {
             toggle_mode: false,
             auto_end_on_silence: true,
             type_to_kivo: vec!["Ctrl".into(), "Shift".into(), "Space".into()],
+            pause_shortcut: Vec::new(),
             input_device: None,
             output_device: None,
             speaker_mode: SpeakerMode::Off,
@@ -154,8 +169,20 @@ pub struct Overlay {
     pub spots: Vec<IslandSpot>,
     pub wake_glow: bool,
     pub in_fullscreen: FullscreenBehavior,
-    /// Motion: follow Windows "Animation effects", or always reduced.
+    /// Replaced by `appearance.motion` (M7); kept so settings files that have it still load.
     pub reduce_motion: bool,
+    /// Compact, Standard or Large (Settings → Island).
+    pub size: IslandSize,
+    /// The monitor the Island shows on: where the user is working, or always the main one.
+    pub monitor: IslandMonitor,
+    /// The user's words as they speak.
+    pub show_transcript: bool,
+    /// Undo after a change (UX-43).
+    pub show_undo: bool,
+    /// "Say approve or cancel" under questions.
+    pub voice_hints: bool,
+    /// Seconds before the Island hides after an answer; 0 keeps it until dismissed (UX-10).
+    pub hide_after_seconds: u8,
 }
 
 impl Default for Overlay {
@@ -167,6 +194,12 @@ impl Default for Overlay {
             wake_glow: false,
             in_fullscreen: FullscreenBehavior::Hide,
             reduce_motion: false,
+            size: IslandSize::Standard,
+            monitor: IslandMonitor::Active,
+            show_transcript: true,
+            show_undo: true,
+            voice_hints: true,
+            hide_after_seconds: 4,
         }
     }
 }
@@ -199,6 +232,182 @@ pub enum OverlayPosition {
     TopCenter,
     BottomCenter,
     RememberDrag,
+}
+
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum IslandSize {
+    Compact,
+    Standard,
+    Large,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum IslandMonitor {
+    /// The monitor with the window in front.
+    Active,
+    /// The primary monitor.
+    Main,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum FormatLocale {
+    /// As Windows' regional settings format them.
+    Windows,
+    /// As the app's language does.
+    App,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
+pub struct Appearance {
+    pub theme: Theme,
+    /// A preset (`blue`, `violet`, `teal`, `green`, `amber`, `coral`, `graphite`) or `#RRGGBB`.
+    pub accent: String,
+    pub text_size: TextSize,
+    pub motion: MotionPref,
+    /// Mica behind the Control Center on Windows 11 (UX-32); solid when off or on Windows 10.
+    pub transparency: bool,
+}
+
+impl Default for Appearance {
+    fn default() -> Self {
+        Self {
+            theme: Theme::Light,
+            accent: "blue".into(),
+            text_size: TextSize::Normal,
+            motion: MotionPref::System,
+            transparency: true,
+        }
+    }
+}
+
+/// The accent presets (DS-03); a custom accent is `#RRGGBB`.
+pub const ACCENTS: &[&str] = &[
+    "blue", "violet", "teal", "green", "amber", "coral", "graphite",
+];
+
+impl Appearance {
+    /// A preset name or a `#RRGGBB` colour.
+    pub fn accent_ok(&self) -> bool {
+        ACCENTS.contains(&self.accent.as_str())
+            || (self.accent.len() == 7
+                && self.accent.starts_with('#')
+                && self.accent[1..].chars().all(|c| c.is_ascii_hexdigit()))
+    }
+}
+
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Theme {
+    Light,
+    Dark,
+    System,
+}
+
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TextSize {
+    Normal,
+    Large,
+}
+
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum MotionPref {
+    /// Follow Windows "Animation effects".
+    System,
+    Full,
+    Reduced,
+}
+
+/// Settings → Context (CONV-31, CONVERSATION §8): which layers a brain starts with, the live fields
+/// it sees, and when the conversation is compacted. Defaults just work.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
+pub struct Context {
+    /// Layer 2: "About me" and stated preferences.
+    pub about_me: bool,
+    /// Layer 3: the workspace's notes and the project's agent files.
+    pub workspace: bool,
+    /// Layer 4: which live fields are sent (`local time`, `language`, `permission mode`,
+    /// `active app`, `window title`).
+    pub live_fields: Vec<String>,
+    /// Layer 5: relevant memories.
+    pub memories: bool,
+    /// Layer 6: the skills index.
+    pub skills: bool,
+    /// Summarize older turns on its own (off: they drop out of the request; "Compact now" still
+    /// works).
+    pub auto_compact: bool,
+    /// Compact when the conversation fills this share of the budget, in percent (50–100).
+    pub compact_at: u8,
+    /// "Start each conversation fresh": a new voice session never joins an earlier thread, so
+    /// no summary carries over.
+    pub fresh_start: bool,
+}
+
+/// The live fields a brain can be sent (CONVERSATION §8, layer 4).
+pub const LIVE_FIELDS: &[&str] = &[
+    "local time",
+    "language",
+    "permission mode",
+    "active app",
+    "window title",
+];
+
+impl Default for Context {
+    fn default() -> Self {
+        Self {
+            about_me: true,
+            workspace: true,
+            live_fields: LIVE_FIELDS.iter().map(|f| (*f).to_owned()).collect(),
+            memories: true,
+            skills: true,
+            auto_compact: true,
+            compact_at: 100,
+            fresh_start: false,
+        }
+    }
+}
+
+impl Context {
+    /// Whether the live field `name` is sent.
+    pub fn live(&self, name: &str) -> bool {
+        self.live_fields.iter().any(|f| f == name)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
+pub struct Accessibility {
+    /// Narrator hears what KIVO is doing (UX-53).
+    pub announcements: bool,
+    /// What KIVO says is shown as text too.
+    pub captions: bool,
+    pub large_island_text: bool,
+    /// KIVO says everything out loud, typed replies and the words for each button included.
+    pub voice_only: bool,
+    /// Warn when the Island is hidden and every sound is off (UX-54).
+    pub warn_silent: bool,
+}
+
+impl Default for Accessibility {
+    fn default() -> Self {
+        Self {
+            announcements: true,
+            captions: true,
+            large_island_text: false,
+            voice_only: false,
+            warn_silent: true,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -287,6 +496,8 @@ pub struct Permissions {
     pub emergency_stop: Vec<String>,
     /// Apps KIVO must never act on, by app id or name (SECURITY §1.1 hard limit).
     pub blocked_apps: Vec<String>,
+    /// Moves to the next permission mode (Settings → Shortcuts); empty for none.
+    pub mode_shortcut: Vec<String>,
 }
 
 impl Default for Permissions {
@@ -295,6 +506,7 @@ impl Default for Permissions {
             mode: PermissionMode::Auto,
             emergency_stop: vec!["Ctrl".into(), "Alt".into(), "Shift".into(), "Esc".into()],
             blocked_apps: Vec::new(),
+            mode_shortcut: vec!["Ctrl".into(), "Shift".into(), "M".into()],
         }
     }
 }
@@ -332,6 +544,14 @@ pub struct Privacy {
     pub retention_days: u32,
     /// Log transcript text (off: transcripts never reach the log files).
     pub debug_transcripts: bool,
+    /// Folders whose files only a brain on this PC may see (SECURITY §6, classified by source):
+    /// KIVO reads them, and their content is `sensitive`. (Folders never touched at all are
+    /// `tools.private-folders`.)
+    pub sensitive_folders: Vec<String>,
+    /// Words the user labels ("Project Falcon" → sensitive): text with them gets that class.
+    pub labels: Vec<PrivacyLabel>,
+    /// What Custom mode lets off the device, one switch each.
+    pub custom: CustomPrivacy,
 }
 
 impl Default for Privacy {
@@ -340,6 +560,51 @@ impl Default for Privacy {
             mode: PrivacyMode::Cloud,
             retention_days: 30,
             debug_transcripts: false,
+            sensitive_folders: Vec::new(),
+            labels: Vec::new(),
+            custom: CustomPrivacy::default(),
+        }
+    }
+}
+
+/// A user label (SECURITY §6): text containing `text` (any case) is at least `class`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub struct PrivacyLabel {
+    pub text: String,
+    pub class: LabelClass,
+}
+
+/// The classes a user label can give.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum LabelClass {
+    Personal,
+    Sensitive,
+    HighlySensitive,
+}
+
+/// Custom privacy (SEC-21): each kind of cloud processing on its own switch.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
+pub struct CustomPrivacy {
+    /// Cloud brains answer questions.
+    pub cloud_brains: bool,
+    /// Personal details (contacts, addresses) may go to them; off, those requests stay local.
+    pub personal_to_cloud: bool,
+    /// Cloud speech engines hear and speak.
+    pub cloud_speech: bool,
+    /// Cloud brains may be shown screenshots.
+    pub cloud_vision: bool,
+}
+
+impl Default for CustomPrivacy {
+    fn default() -> Self {
+        Self {
+            cloud_brains: true,
+            personal_to_cloud: false,
+            cloud_speech: false,
+            cloud_vision: false,
         }
     }
 }
@@ -360,6 +625,16 @@ pub struct Memory {
     pub capture: CaptureMode,
     /// Automatic notes for workspaces KIVO works in (CONVERSATION §6; on by default).
     pub workspace_notes: bool,
+    /// How much a session-log entry says.
+    pub detail: NoteDetail,
+    /// The tidy job merges near-duplicate notes.
+    pub merge_duplicates: bool,
+    /// The tidy job condenses workspace logs older than 14 days.
+    pub condense_logs: bool,
+    /// Sensitive notes may go to cloud AI when each one allows it (MEM-07). Off: never.
+    pub sensitive_to_cloud: bool,
+    /// The most memories put into one request (MEM-08).
+    pub max_items: u32,
 }
 
 impl Default for Memory {
@@ -367,6 +642,11 @@ impl Default for Memory {
         Self {
             capture: CaptureMode::Suggest,
             workspace_notes: true,
+            detail: NoteDetail::Standard,
+            merge_duplicates: true,
+            condense_logs: true,
+            sensitive_to_cloud: false,
+            max_items: 5,
         }
     }
 }
@@ -376,6 +656,15 @@ impl Default for Memory {
 pub enum CaptureMode {
     OnlyWhenAsked,
     Suggest,
+}
+
+/// Memory → Note detail (CONVERSATION §6).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum NoteDetail {
+    Brief,
+    Standard,
+    Detailed,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -393,6 +682,7 @@ impl Default for Companion {
 }
 
 /// UX §6.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum CompanionStyle {
@@ -618,6 +908,15 @@ pub struct Automation {
     pub catch_up_on_return: bool,
     /// Ongoing status in the collapsed Island (UX-15); all off in fullscreen.
     pub live_activities: LiveActivities,
+    /// "Say it out loud": always, only when the user is free (not in a call, a fullscreen app
+    /// or Focus), or never (Settings → Notifications).
+    pub speak: SpeakMode,
+    /// Windows notifications; off, notices wait in the Control Center.
+    pub toasts: bool,
+    /// Notifications play the sound set's notification sound.
+    pub notification_sound: bool,
+    /// Windows Focus counts as quiet time.
+    pub follow_focus: bool,
 }
 
 impl Default for Automation {
@@ -627,8 +926,20 @@ impl Default for Automation {
             sources: std::collections::BTreeMap::new(),
             catch_up_on_return: true,
             live_activities: LiveActivities::default(),
+            speak: SpeakMode::WhenFree,
+            toasts: true,
+            notification_sound: true,
+            follow_focus: true,
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SpeakMode {
+    Always,
+    WhenFree,
+    Never,
 }
 
 impl Automation {
@@ -715,6 +1026,34 @@ impl KivoConfig {
             !self.general.language.is_empty(),
             "general.language",
             "can't be empty",
+        );
+        check(
+            self.appearance.accent_ok(),
+            "appearance.accent",
+            "must be a preset or #RRGGBB",
+        );
+        check(
+            self.overlay.hide_after_seconds <= 60,
+            "overlay.hide-after-seconds",
+            "must be 0–60",
+        );
+        check(
+            (50..=100).contains(&self.context.compact_at),
+            "context.compact-at",
+            "must be 50–100",
+        );
+        check(
+            self.context
+                .live_fields
+                .iter()
+                .all(|f| LIVE_FIELDS.contains(&f.as_str())),
+            "context.live-fields",
+            "unknown live field",
+        );
+        check(
+            (1..=20).contains(&self.memory.max_items),
+            "memory.max-items",
+            "must be 1–20",
         );
         check(
             self.performance.speech_threads <= 16,

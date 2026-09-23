@@ -319,6 +319,92 @@ const SCHEMA: &[&str] = &[
              updated_at INTEGER NOT NULL,
              PRIMARY KEY (profile_id, id)
          ) STRICT;",
+    // 10 · M7: the memory index (MEM-04, CONV-17/18). The Markdown vault is the source of truth;
+    // these rows are rebuilt from its files (only use counts live here alone). The graph
+    // (entities, relations, observations with validity windows), links for backlinks, KIVO's
+    // suggestions waiting for the user (CONV-20), and which memories each turn used (MEM-10).
+    "CREATE TABLE memories (
+             id           INTEGER PRIMARY KEY,
+             profile_id   TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+             path         TEXT NOT NULL,
+             kind         TEXT NOT NULL,
+             title        TEXT NOT NULL,
+             text         TEXT NOT NULL,
+             tags         TEXT NOT NULL CHECK (json_valid(tags)),
+             workspace    TEXT,
+             scope        TEXT NOT NULL,
+             sensitivity  TEXT NOT NULL,
+             share_cloud  INTEGER NOT NULL CHECK (share_cloud IN (0, 1)),
+             source       TEXT,
+             created_at   INTEGER NOT NULL,
+             updated_at   INTEGER NOT NULL,
+             valid_until  INTEGER,
+             last_used_at INTEGER,
+             use_count    INTEGER NOT NULL DEFAULT 0,
+             hash         TEXT NOT NULL
+         ) STRICT;
+     CREATE UNIQUE INDEX memories_by_path ON memories (profile_id, path);
+     CREATE VIRTUAL TABLE memories_fts USING fts5 (title, text, tags, content='memories', content_rowid='id');
+     CREATE TRIGGER memories_fts_insert AFTER INSERT ON memories BEGIN
+         INSERT INTO memories_fts (rowid, title, text, tags) VALUES (new.id, new.title, new.text, new.tags);
+     END;
+     CREATE TRIGGER memories_fts_delete AFTER DELETE ON memories BEGIN
+         INSERT INTO memories_fts (memories_fts, rowid, title, text, tags)
+             VALUES ('delete', old.id, old.title, old.text, old.tags);
+     END;
+     CREATE TRIGGER memories_fts_update AFTER UPDATE OF title, text, tags ON memories BEGIN
+         INSERT INTO memories_fts (memories_fts, rowid, title, text, tags)
+             VALUES ('delete', old.id, old.title, old.text, old.tags);
+         INSERT INTO memories_fts (rowid, title, text, tags) VALUES (new.id, new.title, new.text, new.tags);
+     END;
+     CREATE TABLE memory_links (
+             profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+             memory_id  INTEGER NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+             target     TEXT NOT NULL COLLATE NOCASE
+         ) STRICT;
+     CREATE INDEX memory_links_by_target ON memory_links (profile_id, target);
+     CREATE TABLE entities (
+             id         INTEGER PRIMARY KEY,
+             profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+             name       TEXT NOT NULL COLLATE NOCASE,
+             kind       TEXT NOT NULL,
+             UNIQUE (profile_id, name)
+         ) STRICT;
+     CREATE TABLE relations (
+             id         INTEGER PRIMARY KEY,
+             profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+             from_id    INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+             kind       TEXT NOT NULL,
+             to_id      INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+             memory_id  INTEGER NOT NULL REFERENCES memories(id) ON DELETE CASCADE
+         ) STRICT;
+     CREATE TABLE observations (
+             id         INTEGER PRIMARY KEY,
+             profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+             entity_id  INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+             text       TEXT NOT NULL,
+             memory_id  INTEGER NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+             valid_from INTEGER NOT NULL,
+             valid_to   INTEGER
+         ) STRICT;
+     CREATE INDEX observations_by_entity ON observations (entity_id);
+     CREATE TABLE memory_suggestions (
+             id         INTEGER PRIMARY KEY,
+             profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+             text       TEXT NOT NULL,
+             reason     TEXT,
+             source     TEXT,
+             workspace  TEXT,
+             created_at INTEGER NOT NULL,
+             state      TEXT NOT NULL CHECK (state IN ('pending', 'accepted', 'dismissed'))
+         ) STRICT;
+     CREATE TABLE turn_memories (
+             profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+             turn_id    TEXT NOT NULL,
+             path       TEXT NOT NULL,
+             title      TEXT NOT NULL,
+             PRIMARY KEY (profile_id, turn_id, path)
+         ) STRICT;",
 ];
 
 static MIGRATIONS: LazyLock<Migrations<'static>> =

@@ -3,6 +3,7 @@
 //! its window only hides it while KIVO keeps running (UX §1).
 
 mod announce;
+mod effects;
 mod jumplist;
 mod memory;
 mod overlay;
@@ -171,7 +172,8 @@ pub fn run() {
             overlay::overlay_hover,
             overlay::overlay_drag,
             overlay::island_request,
-            announce::announce
+            announce::announce,
+            effects::window_effects
         ])
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {

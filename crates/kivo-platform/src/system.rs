@@ -58,6 +58,35 @@ pub trait SystemInfo: Send + Sync {
     fn presence(&self) -> Presence {
         Presence::default()
     }
+    /// A process's CPU time so far and private memory (Settings → Performance). `None` when it
+    /// can't be read (gone, or not ours to read).
+    fn process_usage(&self, _pid: u32) -> Option<ProcessUsage> {
+        None
+    }
+    /// Whether the PC reaches the internet and whether the connection is metered (plan §130).
+    /// `None` when it can't be told.
+    fn network(&self) -> Option<Network> {
+        None
+    }
+}
+
+/// The network as Windows sees it (plan §130: recommendations).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Network {
+    pub online: bool,
+    /// Pay-per-use or capped (a phone hotspot): large downloads wait for the user.
+    pub metered: bool,
+}
+
+/// What one process has used.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProcessUsage {
+    /// CPU time (user + kernel) since it started, in milliseconds.
+    pub cpu_ms: u64,
+    /// Private working set, in bytes.
+    pub memory_bytes: u64,
 }
 
 /// The speaker or microphone level (TOOLS_AND_CONTROL §3, "Audio").

@@ -126,6 +126,9 @@ pub fn toast_xml(n: &Notification) -> String {
         }
         xml.push_str("</actions>");
     }
+    if n.silent {
+        xml.push_str("<audio silent=\"true\"/>");
+    }
     xml.push_str("</toast>");
     xml
 }
@@ -196,9 +199,11 @@ mod tests {
                 },
             ],
             reply: false,
+            silent: true,
         };
         let xml = toast_xml(&n);
         assert!(xml.contains("&lt;here&gt; &amp; listening"));
+        assert!(xml.contains("<audio silent=\"true\"/>"));
         assert!(xml.contains("arguments=\"first-close.quit\""));
         assert!(!xml.contains("<input"));
         // The document parses (WinRT's own XML parser).
@@ -216,6 +221,7 @@ mod tests {
                 label: "Send".into(),
             }],
             reply: true,
+            silent: false,
         };
         let xml = toast_xml(&n);
         assert!(xml.contains("<input id=\"reply\""));

@@ -13,6 +13,7 @@ fn main() {
         "overlay_drag",
         "island_request",
         "announce",
+        "window_effects",
     ]);
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(manifest))
         .expect("failed to run the Tauri build script");

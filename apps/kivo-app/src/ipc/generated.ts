@@ -49,7 +49,7 @@ export type SystemEvent = { "type": "windowChanged", app: string, title: string,
 /**
  * Download progress while downloading.
  */
-percent: number | null, installed: boolean, } | { "type": "modelResidency", engine: string, state: string, } | { "type": "speechFallback", slot: string, from: string, to: string | null, message: string, } | { "type": "engineSwitch", slot: string, engine: string, stage: string, message: string | null, } | { "type": "discoveryChanged", section: string, };
+percent: number | null, installed: boolean, } | { "type": "modelResidency", engine: string, state: string, } | { "type": "speechFallback", slot: string, from: string, to: string | null, message: string, } | { "type": "engineSwitch", slot: string, engine: string, stage: string, message: string | null, } | { "type": "discoveryChanged", section: string, } | { "type": "configChanged" };
 
 export type DeviceKind = "microphone" | "speaker";
 
@@ -352,7 +352,27 @@ hasSelection?: boolean,
  */
 revision: number, };
 
-export type IslandPlacement = { position: OverlayPosition, spots: Array<IslandSpot>, };
+export type IslandPlacement = { position: OverlayPosition, spots: Array<IslandSpot>, size: IslandSize, 
+/**
+ * The user's words as they speak.
+ */
+showTranscript: boolean, showUndo: boolean, 
+/**
+ * "Say approve or cancel" under questions.
+ */
+voiceHints: boolean, largeText: boolean, 
+/**
+ * What KIVO says is shown as text too.
+ */
+captions: boolean, 
+/**
+ * Narrator announcements (UX-53).
+ */
+announcements: boolean, motion: MotionPref, 
+/**
+ * Island (the pill), or Hidden: sounds only, except a question that needs an answer.
+ */
+companion: CompanionStyle, };
 
 export type IslandSpot = { 
 /**
@@ -361,6 +381,12 @@ export type IslandSpot = {
 monitor: string, x: number, y: number, };
 
 export type OverlayPosition = "top-center" | "bottom-center" | "remember-drag";
+
+export type IslandSize = "compact" | "standard" | "large";
+
+export type MotionPref = "system" | "full" | "reduced";
+
+export type CompanionStyle = "pill" | "orb" | "character" | "hidden";
 
 export type ActivityItem = { id: number, 
 /**
@@ -727,6 +753,97 @@ scripts: boolean,
  */
 tokens: number, };
 
+export type MemoryNoteView = { 
+/**
+ * Vault-relative (`people/maya.md`).
+ */
+path: string, 
+/**
+ * `fact`, `about`, `instructions`, `person`, `workspace`, `topic`, `decisions`, `log`, `note`.
+ */
+kind: string, title: string, excerpt: string, tags: Array<string>, 
+/**
+ * Its folder (`workspaces/k-i-v-o/log`), empty at the top.
+ */
+folder: string, workspace: string | null, 
+/**
+ * A data class.
+ */
+sensitivity: string, shareCloud: boolean, updatedAt: number, 
+/**
+ * Set when a newer fact replaced it.
+ */
+validUntil: number | null, useCount: number, lastUsedAt: number | null, };
+
+export type MemoryTagView = { tag: string, count: number, };
+
+export type MemoryFolderView = { path: string, 
+/**
+ * Notes in it and below.
+ */
+count: number, };
+
+export type MemorySuggestionView = { id: number, text: string, reason: string | null, workspace: string | null, createdAt: number, };
+
+export type MemoryOverview = { 
+/**
+ * The vault folder.
+ */
+root: string, notes: Array<MemoryNoteView>, tags: Array<MemoryTagView>, folders: Array<MemoryFolderView>, suggestions: Array<MemorySuggestionView>, };
+
+export type SetupAdvice = { online: boolean, metered: boolean, ramMb: number, 
+/**
+ * The GPU with the most memory of its own.
+ */
+gpu: string | null, onBattery: boolean, 
+/**
+ * A permission mode (`auto`).
+ */
+mode: string, 
+/**
+ * A performance profile (`auto`, `battery`).
+ */
+performance: string, 
+/**
+ * A privacy mode (`cloud`, `local`).
+ */
+privacy: string, 
+/**
+ * The brain to connect first: a discovered id or `openrouter`; none when one is connected or
+ * none can answer.
+ */
+brain: string | null, 
+/**
+ * A local server's address, for connecting it.
+ */
+brainUrl: string | null, 
+/**
+ * Download the speech models now (not on a metered connection).
+ */
+downloadNow: boolean, 
+/**
+ * Why, one line each, in the user's language.
+ */
+reasons: Array<string>, };
+
+export type MemoryNoteDetail = { note: MemoryNoteView, 
+/**
+ * The whole file, front-matter included.
+ */
+markdown: string, 
+/**
+ * Its `[[links]]`.
+ */
+links: Array<string>, 
+/**
+ * Notes linking to it.
+ */
+backlinks: Array<string>, 
+/**
+ * Other facts about the same thing (older or newer).
+ */
+history: Array<MemoryNoteView>, supersededBy: string | null, };
+
 export type ProtocolVersion = { major: number, minor: number, };
 
 export type Welcome = { protocolVersion: ProtocolVersion, runtimeVersion: string, snapshot: StateSnapshot, };
@@ -833,6 +950,9 @@ export const Method = {
   chatDelete: "chat.delete",
   chatSend: "chat.send",
   chatCompact: "chat.compact",
+  chatContinue: "chat.continue",
+  chatBranch: "chat.branch",
+  chatExport: "chat.export",
   chatSearch: "chat.search",
   chatMisroute: "chat.misroute",
   memoryPreferences: "memory.preferences",
@@ -886,6 +1006,26 @@ export const Method = {
   skillsRead: "skills.read",
   skillsRemove: "skills.remove",
   extensionsRefresh: "extensions.refresh",
+  memoryOverview: "memory.overview",
+  memoryNote: "memory.note",
+  memorySave: "memory.save",
+  memoryRemember: "memory.remember",
+  memoryRememberTurn: "memory.rememberTurn",
+  memoryMeta: "memory.meta",
+  memoryDelete: "memory.delete",
+  memoryForget: "memory.forget",
+  memoryExport: "memory.export",
+  memorySuggestion: "memory.suggestion",
+  memoryTidy: "memory.tidy",
+  memoryOpen: "memory.open",
+  memoryWhy: "memory.why",
+  performanceStatus: "performance.status",
+  setupRecommend: "setup.recommend",
+  diagnosticsRun: "diagnostics.run",
+  settingsExport: "settings.export",
+  settingsImport: "settings.import",
+  settingsReset: "settings.reset",
+  systemOpenUrl: "system.openUrl",
 } as const;
 
 export type Method = (typeof Method)[keyof typeof Method];

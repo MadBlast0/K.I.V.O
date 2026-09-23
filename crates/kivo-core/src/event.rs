@@ -337,6 +337,9 @@ pub enum SystemEvent {
     DiscoveryChanged {
         section: String,
     },
+    /// The settings changed (from any client, the tray, a voice command or a file edit): open
+    /// pages reload them (UX-37).
+    ConfigChanged,
 }
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]

@@ -761,6 +761,7 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
                         body: body.into(),
                         actions: Vec::new(),
                         reply: false,
+                        silent: false,
                     })
                     .map_err(platform_error)?;
                 done(text::t("reply.done"), json!({}))

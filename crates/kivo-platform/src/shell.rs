@@ -102,6 +102,8 @@ pub struct Notification {
     pub actions: Vec<NotificationAction>,
     /// Show an inline reply field (UX-58).
     pub reply: bool,
+    /// No sound (Settings → Notifications "Notification sound" off).
+    pub silent: bool,
 }
 
 pub trait Notifications: Send + Sync {

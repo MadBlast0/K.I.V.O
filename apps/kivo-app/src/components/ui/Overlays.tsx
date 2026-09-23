@@ -3,7 +3,7 @@ import { Dialog as BDialog } from "@base-ui/react/dialog";
 import { Popover as BPopover } from "@base-ui/react/popover";
 import { Tabs as BTabs } from "@base-ui/react/tabs";
 import { Tooltip as BTooltip } from "@base-ui/react/tooltip";
-import type { ReactElement, ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { IconButton } from "./Button";
 import { useTranslation } from "react-i18next";
 
@@ -27,6 +27,31 @@ export function PageTabs<T extends string>({
   onChange?: (v: T) => void;
   label: string;
 }) {
+  // When the tabs don't fit, the list scrolls: its hidden end fades out, and the chosen tab is
+  // scrolled into view.
+  const list = useRef<HTMLDivElement | null>(null);
+  const [fade, setFade] = useState<"none" | "end" | "start" | "both">("none");
+  const measure = useCallback(() => {
+    const el = list.current;
+    if (!el) return;
+    const start = Math.abs(el.scrollLeft) > 2;
+    const end = Math.abs(el.scrollLeft) + el.clientWidth < el.scrollWidth - 2;
+    setFade(start && end ? "both" : start ? "start" : end ? "end" : "none");
+  }, []);
+  useEffect(() => {
+    const el = list.current;
+    if (!el) return;
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [measure]);
+  // A page opened on a later tab (from a link or the palette) brings that tab into view.
+  useEffect(() => {
+    list.current
+      ?.querySelector<HTMLElement>("[aria-selected='true']")
+      ?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  }, []);
   return (
     <BTabs.Root
       value={value}
@@ -36,7 +61,13 @@ export function PageTabs<T extends string>({
         if (tab) onChange?.(tab.value);
       }}
     >
-      <BTabs.List className="k-tabs__list" aria-label={label}>
+      <BTabs.List
+        ref={list}
+        className="k-tabs__list"
+        aria-label={label}
+        data-fade={fade === "none" ? undefined : fade}
+        onScroll={measure}
+      >
         {tabs.map((t) => (
           <BTabs.Tab key={t.value} value={t.value} className="k-tabs__tab">
             {t.label}

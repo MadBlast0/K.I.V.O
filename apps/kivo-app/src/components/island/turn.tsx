@@ -5,6 +5,7 @@
  */
 import type { TFunction } from "i18next";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type {
   Capability,
   ConfirmSpec,
@@ -57,6 +58,8 @@ export interface IslandHandlers {
   talk: () => void;
   /** "That's not what I meant" on a brain's answer (BRAIN-06). */
   misroute: (turnId: string) => void;
+  /** "Remember this" on an answer (MEM-05): the runtime keeps the answer as a memory. */
+  remember: (turnId: string) => Promise<unknown>;
   /** The Draft card's Edit (CONV-15): opens the text field with the prompt in it. */
   editDraft: (callId: string, text: string) => void;
   /** Answers an offer the Island makes outside a turn (CONV-10). */
@@ -407,6 +410,29 @@ function Note({ turn }: { turn: TurnView }) {
 }
 
 /** Undo with a countdown ring while it is offered (UX-43); irreversible actions never offer it. */
+/** "Remember this" (MEM-05): once kept, it says so. */
+function RememberThis({ turnId, on }: { turnId: string; on: IslandHandlers }) {
+  const { t } = useTranslation();
+  const [state, setState] = useState<"idle" | "saving" | "kept" | "failed">("idle");
+  if (state === "kept") return <span className="k-island__misroute">{t("island.remembered")}</span>;
+  return (
+    <button
+      type="button"
+      className="k-island__misroute"
+      disabled={state === "saving"}
+      onClick={() => {
+        setState("saving");
+        on.remember(turnId).then(
+          () => setState("kept"),
+          () => setState("failed"),
+        );
+      }}
+    >
+      {state === "failed" ? t("island.rememberFailed") : t("island.rememberThis")}
+    </button>
+  );
+}
+
 function undoOffer(turn: TurnView, t: TFunction, on: IslandHandlers) {
   const offer = turn.undo;
   if (!offer || !on.undo) return null;
@@ -469,13 +495,47 @@ function Footer({ t, on, stop }: { t: TFunction; on: IslandHandlers; stop: boole
   );
 }
 
+/** How the Island shows things (Settings → Island, Accessibility), from the runtime. */
+export interface IslandPrefs {
+  showTranscript: boolean;
+  showUndo: boolean;
+  voiceHints: boolean;
+  captions: boolean;
+}
+
+export function islandPrefs(snapshot: StateSnapshot | null): IslandPrefs {
+  const island = snapshot?.island;
+  return {
+    showTranscript: island?.showTranscript ?? true,
+    showUndo: island?.showUndo ?? true,
+    voiceHints: island?.voiceHints ?? true,
+    captions: island?.captions ?? true,
+  };
+}
+
 /** The Island for the runtime's state, or `null` when there is nothing to show. */
 export function islandForTurn(snapshot: StateSnapshot, t: TFunction, on: IslandHandlers): IslandModel | null {
   if (snapshot.islandHidden) return null;
-  const { session, turn } = snapshot;
+  const prefs = islandPrefs(snapshot);
+  const { session } = snapshot;
+  // The user's words while they speak, and Undo, only when they're wanted.
+  const raw = snapshot.turn;
+  const turn = raw
+    ? {
+        ...raw,
+        transcript: !prefs.showTranscript && !raw.transcriptFinal ? "" : raw.transcript,
+        undo: prefs.showUndo ? raw.undo : null,
+        answering: prefs.voiceHints ? raw.answering : false,
+      }
+    : raw;
+  // What KIVO says, shown as text too unless captions are off.
+  const caption = (text: string | null | undefined) =>
+    prefs.captions && text ? <div className="k-island__answer">{text}</div> : null;
 
   if (turn?.confirm && turn.draft) return draftCard(turn.draft, turn.confirm, turn, t, on);
   if (turn?.confirm) return confirmCard(turn.confirm, turn, t, on);
+  // Hidden (Settings → Island): sounds only. A question that needs an answer still shows.
+  if (snapshot.island?.companion === "hidden") return null;
 
   // Over a fullscreen app or during Focus, a dot is all that shows (UX-11; "hidden" never
   // reaches here: the window stays hidden).
@@ -607,7 +667,7 @@ export function islandForTurn(snapshot: StateSnapshot, t: TFunction, on: IslandH
         body: turn ? (
           <>
             <Heard turn={turn} t={t} on={on} />
-            {turn.answer && <div className="k-island__answer">{turn.answer}</div>}
+            {caption(turn.answer)}
             <Help turn={turn} />
             <Note turn={turn} />
             {undoOffer(turn, t, on)}
@@ -635,15 +695,18 @@ export function islandForTurn(snapshot: StateSnapshot, t: TFunction, on: IslandH
             <>
               <Heard turn={turn} t={t} on={on} />
               {turn.steps.length > 0 && <Steps steps={turn.steps} />}
-              <div className="k-island__answer">{turn.answer}</div>
+              {caption(turn.answer)}
               <Help turn={turn} />
               <Note turn={turn} />
               {undoOffer(turn, t, on)}
               <TaskLink turn={turn} t={t} on={on} />
               {turn.brain && (
-                <button type="button" className="k-island__misroute" onClick={() => on.misroute(turn.id)}>
-                  {t("island.misroute")}
-                </button>
+                <span className="k-island__links">
+                  <RememberThis turnId={turn.id} on={on} />
+                  <button type="button" className="k-island__misroute" onClick={() => on.misroute(turn.id)}>
+                    {t("island.misroute")}
+                  </button>
+                </span>
               )}
               <Footer t={t} on={on} stop={false} />
             </>

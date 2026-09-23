@@ -476,6 +476,8 @@ async fn follow_ups_continue_the_thread_and_new_topic_starts_another() {
             Script::text("It's 24 degrees in Paris."),
             Script::text("Tomorrow will be 26."),
             Script::text("Rust is a systems language."),
+            Script::text("Rain the day after."),
+            Script::text("A sunny weekend."),
         ],
     );
     r.rig.brains.insert(b.clone());
@@ -514,6 +516,135 @@ async fn follow_ups_continue_the_thread_and_new_topic_starts_another() {
     );
     assert_eq!(texts(2), ["what is Rust"]);
     assert_eq!(r.rig.db.lock().unwrap().conversations(10).unwrap().len(), 2);
+
+    // "Continue" in Chat (CONV-03): the next voice request joins the Paris thread again.
+    let paris = r
+        .rig
+        .db
+        .lock()
+        .unwrap()
+        .conversations(10)
+        .unwrap()
+        .into_iter()
+        .find(|c| c.title == "weather in Paris")
+        .unwrap()
+        .id;
+    until("idle", Duration::from_secs(5), || {
+        r.rig.core.state().borrow().session == SessionState::Idle
+    })
+    .await;
+    r.rig.engine.continue_thread(&paris);
+    r.rig.engine.say("and the day after?").await.unwrap();
+    until("the fourth answer", Duration::from_secs(10), || {
+        r.rig.core.turn_view().and_then(|t| t.answer).as_deref() == Some("Rain the day after.")
+    })
+    .await;
+    let requests = b.requests.lock().unwrap().clone();
+    let fourth: Vec<String> = requests[3]
+        .messages
+        .iter()
+        .map(kivo_brain::Message::text)
+        .collect();
+    assert_eq!(
+        fourth.first().map(String::as_str),
+        Some("weather in Paris"),
+        "{fourth:?}"
+    );
+
+    // "Start each conversation fresh" (CONV-31): a new session never joins an earlier thread.
+    until("idle", Duration::from_secs(5), || {
+        r.rig.core.state().borrow().session == SessionState::Idle
+    })
+    .await;
+    r.rig.core.update_config(|c| {
+        c.brains.voice_session_minutes = 0;
+        c.context.fresh_start = true;
+    });
+    r.rig.engine.say("and the weekend in Paris?").await.unwrap();
+    until("the fifth answer", Duration::from_secs(10), || {
+        r.rig.core.turn_view().and_then(|t| t.answer).as_deref() == Some("A sunny weekend.")
+    })
+    .await;
+    let requests = b.requests.lock().unwrap().clone();
+    let fifth: Vec<String> = requests[4]
+        .messages
+        .iter()
+        .map(kivo_brain::Message::text)
+        .collect();
+    assert_eq!(fifth, ["and the weekend in Paris?"]);
+    assert_eq!(r.rig.db.lock().unwrap().conversations(10).unwrap().len(), 3);
+    r.stop().await;
+}
+
+/// SEC-20/21: a file from a folder the user keeps on this PC is read, but its content isn't shown
+/// to a cloud brain; a request with a private label goes to a local brain instead.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn private_folders_and_labels_stay_on_this_pc() {
+    let _one = ONE_AT_A_TIME.lock().await;
+    let r = start(false);
+    let private = r.rig.screenshots.join("Legal");
+    std::fs::create_dir_all(&private).unwrap();
+    let contract = private.join("contract.txt");
+    std::fs::write(&contract, "Secret terms: the fee is 90,000.").unwrap();
+    let cloud = brain(
+        "openai",
+        "OpenAI",
+        PrivacyClass::Cloud,
+        vec![
+            Script::tool(
+                "files__read",
+                serde_json::json!({"path": contract.display().to_string()}),
+            ),
+            Script::text("I can't see that file."),
+        ],
+    );
+    r.rig.brains.insert(cloud.clone());
+    r.rig.core.update_config(|c| {
+        c.privacy.sensitive_folders = vec![private.display().to_string()];
+        c.privacy.labels = vec![kivo_core::config::PrivacyLabel {
+            text: "Project Falcon".into(),
+            class: kivo_core::config::LabelClass::Sensitive,
+        }];
+    });
+    r.rig.engine.say("read my contract").await.unwrap();
+    answered(&r.rig).await;
+    let requests = cloud.requests.lock().unwrap().clone();
+    let result: String = requests[1]
+        .messages
+        .iter()
+        .filter(|m| m.role == Role::Tool)
+        .flat_map(|m| &m.parts)
+        .filter_map(|p| match p {
+            Part::ToolResult { content, .. } => Some(content.clone()),
+            _ => None,
+        })
+        .collect();
+    assert!(!result.contains("Secret terms"), "{result}");
+    assert!(result.contains("stays on this PC"), "{result}");
+    let kept = r.rig.db.lock().unwrap().activity(None, 50).unwrap();
+    assert!(kept.iter().any(|a| a.kind == "privacy"), "{kept:?}");
+
+    // A labelled request never goes to the cloud brain: with only it connected, it can't be
+    // answered, and nothing is sent.
+    until("idle", Duration::from_secs(5), || {
+        r.rig.core.state().borrow().session == SessionState::Idle
+    })
+    .await;
+    let before = cloud.requests.lock().unwrap().len();
+    r.rig
+        .engine
+        .say("summarize the project falcon notes")
+        .await
+        .unwrap();
+    until("idle again", Duration::from_secs(10), || {
+        r.rig.core.state().borrow().session == SessionState::Idle
+    })
+    .await;
+    assert_eq!(
+        cloud.requests.lock().unwrap().len(),
+        before,
+        "nothing went to the cloud"
+    );
     r.stop().await;
 }
 
@@ -839,14 +970,18 @@ async fn the_control_centers_brain_requests() {
         Vec::new(),
         Arc::clone(&r.rig.brains),
     );
-    let rpc = Arc::new(kivo_runtime::brains_rpc::BrainsRpc::new(
-        Arc::clone(&r.rig.core),
-        Arc::clone(&r.rig.engine),
-        discovery,
-        r.rig.recorder.clone(),
-        r.rig.control.clone(),
-        Arc::new(|_: &std::path::Path, _: &[String]| Ok(())),
-    ));
+    let exports = tempfile::tempdir().unwrap();
+    let rpc = Arc::new(
+        kivo_runtime::brains_rpc::BrainsRpc::new(
+            Arc::clone(&r.rig.core),
+            Arc::clone(&r.rig.engine),
+            discovery,
+            r.rig.recorder.clone(),
+            r.rig.control.clone(),
+            Arc::new(|_: &std::path::Path, _: &[String]| Ok(())),
+        )
+        .with_exports(exports.path().to_path_buf()),
+    );
     let call = |name: &'static str, params: Value| {
         let rpc = Arc::clone(&rpc);
         async move { rpc.call(name, params).await.expect("handled") }
@@ -984,10 +1119,27 @@ async fn the_control_centers_brain_requests() {
         .unwrap();
     assert_eq!(usage["requests"], 5, "4 answers and the summary");
     assert!(usage["total"].as_f64().unwrap() > 0.0);
+    // BRAIN-37: today's spend, the AI/speech split per day, and the costliest requests named by
+    // what was said.
+    assert!((usage["today"].as_f64().unwrap() - usage["total"].as_f64().unwrap()).abs() < 1e-9);
+    let day = &usage["byDay"][0];
+    assert!(day["ai"].as_f64().unwrap() > 0.0 && day["speech"].as_f64() == Some(0.0));
+    let top = usage["top"].as_array().unwrap();
+    assert!(!top.is_empty() && top[0]["kind"] == "turn");
+    assert!(top.iter().any(|t| t["title"] == "say three"), "{top:?}");
+    assert!(usage["turns"].as_u64().unwrap() >= 4);
+    assert!(usage["freeTurns"].as_u64().unwrap() <= usage["turns"].as_u64().unwrap());
     let csv = call(method::USAGE_EXPORT, json!({"days": 7}))
         .await
         .unwrap();
     assert_eq!(csv["csv"].as_str().unwrap().lines().count(), 6);
+    // Saved to the Downloads folder for the Usage page's CSV button.
+    let saved = call(method::USAGE_EXPORT, json!({"days": 7, "save": true}))
+        .await
+        .unwrap();
+    let file = saved["file"].as_str().unwrap();
+    assert!(file.ends_with(".csv") && file.contains("KIVO usage"));
+    assert_eq!(std::fs::read_to_string(file).unwrap().lines().count(), 6);
 
     // The context preview (Settings → Context).
     let preview = call(method::BRAINS_CONTEXT, json!({"thread": id}))
@@ -995,6 +1147,87 @@ async fn the_control_centers_brain_requests() {
         .unwrap();
     assert_eq!(preview["brain"], "Anthropic");
     assert!(preview["layers"][0]["tokens"].as_u64().unwrap() > 0);
+    // "Preview what the AI sees": the whole request, secrets redacted; a session's cost.
+    let text = preview["preview"].as_str().unwrap();
+    assert!(text.starts_with("[system, cached]"), "{text}");
+    assert!(text.contains("[user]"), "{text}");
+    assert!(preview["previewTokens"].as_u64().unwrap() > 0);
+    // Priced when the model's price is known; this test's model isn't in the table.
+    assert!(preview.get("sessionCost").is_some(), "{preview}");
+    assert!(
+        preview["layers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|l| l["on"] == true)
+    );
+    // Settings → Context turns layers off (CONV-31).
+    r.rig.core.update_config(|c| {
+        c.context.about_me = false;
+        c.context.skills = false;
+        c.context.live_fields = vec!["local time".into()];
+    });
+    let preview = call(method::BRAINS_CONTEXT, json!({"thread": id}))
+        .await
+        .unwrap();
+    let layer = |id: &str| {
+        preview["layers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|l| l["id"] == id)
+            .unwrap()
+            .clone()
+    };
+    assert_eq!(layer("instructions")["on"], false);
+    assert_eq!(layer("instructions")["tokens"], 0);
+    assert_eq!(layer("skills")["on"], false);
+    let text = preview["preview"].as_str().unwrap();
+    assert!(
+        text.contains("local time") && !text.contains("permission mode"),
+        "{text}"
+    );
+
+    // Chat's power features (CONV-03): branch, export, continue.
+    let thread = call(method::CHAT_THREAD, json!({"id": id})).await.unwrap();
+    let first = thread["messages"][0]["id"].as_i64().unwrap();
+    let branch = call(method::CHAT_BRANCH, json!({"id": id, "message": first}))
+        .await
+        .unwrap();
+    assert!(
+        branch["title"].as_str().unwrap().ends_with("(branch)"),
+        "{branch}"
+    );
+    let copied = call(method::CHAT_THREAD, json!({"id": branch["id"]}))
+        .await
+        .unwrap();
+    assert_eq!(copied["messages"].as_array().unwrap().len(), 1);
+    let md = call(method::CHAT_EXPORT, json!({"id": id})).await.unwrap();
+    let md = md["text"].as_str().unwrap();
+    assert!(
+        md.starts_with("# ") && md.contains("**You**") && md.contains("**KIVO"),
+        "{md}"
+    );
+    let saved = call(
+        method::CHAT_EXPORT,
+        json!({"id": id, "json": true, "save": true}),
+    )
+    .await
+    .unwrap();
+    let file = saved["file"].as_str().unwrap();
+    assert!(file.ends_with(".json"), "{file}");
+    let back: Value = serde_json::from_str(&std::fs::read_to_string(file).unwrap()).unwrap();
+    assert_eq!(back["thread"]["id"], id.as_str());
+    assert!(
+        call(method::CHAT_CONTINUE, json!({"id": branch["id"]}))
+            .await
+            .is_ok()
+    );
+    assert!(
+        call(method::CHAT_CONTINUE, json!({"id": "nope"}))
+            .await
+            .is_err()
+    );
 
     // "That's not what I meant" (BRAIN-06).
     let turn = r.rig.core.turn_view().unwrap().id;

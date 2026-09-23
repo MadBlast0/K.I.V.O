@@ -106,6 +106,33 @@ pub fn decide(
     }
 }
 
+/// The user's own choices on top of the rules (Settings → Notifications): "Say it out loud"
+/// never speaks at all, or speaks whenever it isn't rude (not in a call, a quiet time, or over
+/// KIVO itself); with Windows notifications off, a toast waits in the Control Center instead.
+pub fn with_prefs(
+    decided: Delivery,
+    speak: kivo_core::config::SpeakMode,
+    toasts: bool,
+    a: &Announcement,
+    s: &Situation,
+) -> Delivery {
+    use kivo_core::config::SpeakMode;
+    let d = match (speak, decided) {
+        (SpeakMode::Never, Delivery::Spoken) => Delivery::Shown,
+        (SpeakMode::Always, Delivery::Queued | Delivery::Toast)
+            if a.tell_me && !s.in_call && !s.quiet_hours && !s.busy =>
+        {
+            Delivery::Spoken
+        }
+        (_, d) => d,
+    };
+    if !toasts && d == Delivery::Toast {
+        Delivery::Queued
+    } else {
+        d
+    }
+}
+
 /// Whether `minute` (after local midnight) is inside quiet hours `(from, to)`, which may wrap
 /// midnight.
 pub fn in_quiet_hours(quiet: (u32, u32), minute: u32) -> bool {
@@ -183,7 +210,8 @@ impl Notifier {
         Situation {
             in_call: presence.mic_in_use_elsewhere,
             fullscreen: attention.fullscreen_app,
-            focus: attention.focus_mode,
+            // Windows Focus counts only when the user chose that (Settings → Notifications).
+            focus: attention.focus_mode && config.automation.follow_focus,
             away: presence.locked || presence.idle_seconds >= AWAY_AFTER_SECONDS,
             quiet_hours: quiet_now(&config.automation, self.utc_offset_minutes),
             busy: self.core.state().borrow().session != kivo_core::SessionState::Idle,
@@ -195,11 +223,17 @@ impl Notifier {
         let config = self.core.config();
         let situation = self.situation();
         let recently = lock(&self.last_spoken).is_some_and(|t| t.elapsed() < SPOKEN_GAP);
-        let delivery = decide(
-            config.automation.sources.get(&a.source).copied(),
+        let delivery = with_prefs(
+            decide(
+                config.automation.sources.get(&a.source).copied(),
+                &a,
+                &situation,
+                recently,
+            ),
+            config.automation.speak,
+            config.automation.toasts,
             &a,
             &situation,
-            recently,
         );
         tracing::info!(source = %a.source, ?delivery, "announcement");
         match delivery {
@@ -235,7 +269,10 @@ impl Notifier {
                     text: a.text.clone(),
                     at: kivo_store::brains::now_ms(),
                 });
-                self.toast(&a);
+                // A quiet badge, unless Windows notifications are off.
+                if config.automation.toasts {
+                    self.toast(&a);
+                }
                 if config.automation.catch_up_on_return && situation.away {
                     self.watch_for_return();
                 }
@@ -264,6 +301,7 @@ impl Notifier {
             body: a.text.clone(),
             actions,
             reply: true,
+            silent: !self.core.config().automation.notification_sound,
         });
         if let Err(e) = shown {
             tracing::warn!(%e, "couldn't show a notification");
@@ -347,6 +385,51 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_users_choices_come_on_top_of_the_rules() {
+        use kivo_core::config::SpeakMode;
+        let a = Announcement {
+            source: "tasks".into(),
+            title: "Task finished".into(),
+            text: "The build passed.".into(),
+            urgent: false,
+            tell_me: true,
+            task: None,
+        };
+        let free = Situation::default();
+        let fullscreen = Situation {
+            fullscreen: true,
+            ..Situation::default()
+        };
+        let call = Situation {
+            in_call: true,
+            ..Situation::default()
+        };
+        // Never: shown, not spoken.
+        assert_eq!(
+            with_prefs(Delivery::Spoken, SpeakMode::Never, true, &a, &free),
+            Delivery::Shown
+        );
+        // Always: spoken in a fullscreen app, but never over a call.
+        assert_eq!(
+            with_prefs(Delivery::Queued, SpeakMode::Always, true, &a, &fullscreen),
+            Delivery::Spoken
+        );
+        assert_eq!(
+            with_prefs(Delivery::Queued, SpeakMode::Always, true, &a, &call),
+            Delivery::Queued
+        );
+        // No Windows notifications: it waits in the Control Center instead.
+        assert_eq!(
+            with_prefs(Delivery::Toast, SpeakMode::WhenFree, false, &a, &free),
+            Delivery::Queued
+        );
+        assert_eq!(
+            with_prefs(Delivery::Shown, SpeakMode::WhenFree, true, &a, &free),
+            Delivery::Shown
+        );
+    }
 
     fn tell(urgent: bool) -> Announcement {
         Announcement {

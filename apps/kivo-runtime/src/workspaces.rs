@@ -1,8 +1,8 @@
 //! Instructions and workspaces (CONVERSATION §4, CONV-09/10/11).
 //!
-//! "About me" and each workspace's notes live in SQLite and are mirrored as Markdown the user can
-//! edit (`instructions\global.md`, `workspaces\<name>\instructions.md`); an edited file is read
-//! back in. Workspaces are detected, not configured: a folder KIVO works in (a command's folder, an
+//! "About me" and each workspace's notes live in SQLite and are mirrored as Markdown in the
+//! memory vault, where the user can edit them (`memory\about-me.md`,
+//! `memory\workspaces\<name>\instructions.md`); an edited file is read back in. Workspaces are detected, not configured: a folder KIVO works in (a command's folder, an
 //! agent's workspace, a git repository) leads to a one-time "Remember … as a workspace?". While
 //! working in a workspace, the project's own agent files (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`)
 //! are read, never written, unless the user asks to export KIVO's notes as `AGENTS.md`.
@@ -193,22 +193,60 @@ impl Workspaces {
             asked: Mutex::default(),
             watcher: Mutex::new(None),
         });
+        me.move_old_files();
         me.mirror_all();
         me
     }
 
+    /// The memory vault, where the instruction files live (CONVERSATION §6).
+    fn vault(&self) -> PathBuf {
+        self.dir.join("memory")
+    }
+
+    /// A workspace's folder in the vault (the same one its notes use).
+    fn workspace_dir(&self, name: &str) -> PathBuf {
+        self.vault()
+            .join("workspaces")
+            .join(kivo_memory::vault::slug(name))
+    }
+
     fn instructions_file(&self, scope: &str) -> Option<PathBuf> {
         if scope == GLOBAL {
-            return Some(self.dir.join("instructions").join("global.md"));
+            return Some(self.vault().join("about-me.md"));
         }
         let id = scope.strip_prefix("workspace:")?;
         let w = lock(&self.db).workspace(id).ok().flatten()?;
-        Some(
-            self.dir
-                .join("workspaces")
-                .join(folder_name(&w.name))
-                .join("instructions.md"),
-        )
+        Some(self.workspace_dir(&w.name).join("instructions.md"))
+    }
+
+    /// Before M7 the files lived in `instructions\` and `workspaces\` beside the vault: an edit
+    /// made there while KIVO was closed is read in, then the old file goes (the vault has it).
+    fn move_old_files(&self) {
+        let old_global = self.dir.join("instructions").join("global.md");
+        let mut moves = vec![(GLOBAL.to_owned(), old_global)];
+        for w in lock(&self.db).workspaces().unwrap_or_default() {
+            moves.push((
+                format!("workspace:{}", w.id),
+                self.dir
+                    .join("workspaces")
+                    .join(folder_name(&w.name))
+                    .join("instructions.md"),
+            ));
+        }
+        for (scope, file) in moves {
+            let Ok(body) = std::fs::read_to_string(&file) else {
+                continue;
+            };
+            if !body.trim().is_empty() && self.instructions(&scope) != body {
+                let _ = lock(&self.db).set_instructions(&scope, &body);
+            }
+            let _ = std::fs::remove_file(&file);
+            if let Some(parent) = file.parent() {
+                let _ = std::fs::remove_dir(parent);
+            }
+        }
+        let _ = std::fs::remove_dir(self.dir.join("instructions"));
+        let _ = std::fs::remove_dir(self.dir.join("workspaces"));
     }
 
     /// Instructions for `global` or `workspace:<id>`.
@@ -268,23 +306,23 @@ impl Workspaces {
 
     /// Reads an edited Markdown file back in (CONV-09: the user can edit the files directly).
     pub fn file_changed(&self, file: &Path) {
-        let Ok(body) = std::fs::read_to_string(file) else {
+        let Ok(raw) = std::fs::read_to_string(file) else {
             return;
         };
-        let scope = if file == self.dir.join("instructions").join("global.md") {
+        // Front-matter added in Obsidian is the note's, not part of the instructions.
+        let body = if raw.starts_with("---") {
+            kivo_memory::Note::parse(&raw).body.trim_start().to_owned()
+        } else {
+            raw
+        };
+        let scope = if file == self.vault().join("about-me.md") {
             Some(GLOBAL.to_owned())
         } else {
             lock(&self.db)
                 .workspaces()
                 .unwrap_or_default()
                 .into_iter()
-                .find(|w| {
-                    self.dir
-                        .join("workspaces")
-                        .join(folder_name(&w.name))
-                        .join("instructions.md")
-                        == file
-                })
+                .find(|w| self.workspace_dir(&w.name).join("instructions.md") == file)
                 .map(|w| format!("workspace:{}", w.id))
         };
         let Some(scope) = scope else { return };
@@ -296,8 +334,7 @@ impl Workspaces {
 
     /// Watches the instruction files for edits, until KIVO quits.
     pub fn watch(self: &Arc<Self>) {
-        let _ = std::fs::create_dir_all(self.dir.join("instructions"));
-        let _ = std::fs::create_dir_all(self.dir.join("workspaces"));
+        let _ = std::fs::create_dir_all(self.vault());
         let me = Arc::downgrade(self);
         let watcher = notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
             let Ok(event) = event else { return };
@@ -309,14 +346,17 @@ impl Workspaces {
             }
             let Some(me) = me.upgrade() else { return };
             for path in &event.paths {
-                if path.extension().is_some_and(|e| e == "md") {
+                let name = path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or_default();
+                if name == "about-me.md" || name == "instructions.md" {
                     me.file_changed(path);
                 }
             }
         });
         let Ok(mut watcher) = watcher else { return };
-        let _ = watcher.watch(&self.dir.join("instructions"), RecursiveMode::Recursive);
-        let _ = watcher.watch(&self.dir.join("workspaces"), RecursiveMode::Recursive);
+        let _ = watcher.watch(&self.vault(), RecursiveMode::Recursive);
         *lock(&self.watcher) = Some(watcher);
     }
 
@@ -583,16 +623,37 @@ mod tests {
     async fn instructions_are_mirrored_and_edits_come_back() {
         let (w, _core, dir) = setup();
         w.set_instructions("global", "Call me Sam.").unwrap();
-        let file = dir
-            .path()
-            .join("KIVO")
-            .join("instructions")
-            .join("global.md");
+        let file = dir.path().join("KIVO").join("memory").join("about-me.md");
         assert_eq!(std::fs::read_to_string(&file).unwrap(), "Call me Sam.");
         std::fs::write(&file, "Call me Sam. Use metric.").unwrap();
         w.file_changed(&file);
         assert_eq!(w.instructions("global"), "Call me Sam. Use metric.");
+        // Front-matter added in Obsidian isn't part of the instructions.
+        std::fs::write(&file, "---\ntags: [me]\n---\nCall me Sam.\n").unwrap();
+        w.file_changed(&file);
+        assert_eq!(w.instructions("global"), "Call me Sam.\n");
         assert!(w.set_instructions("elsewhere", "x").is_err());
+    }
+
+    #[tokio::test]
+    async fn files_from_before_the_vault_are_moved_in() {
+        let dir = tempfile::tempdir().unwrap();
+        let kivo = dir.path().join("KIVO");
+        std::fs::create_dir_all(kivo.join("instructions")).unwrap();
+        std::fs::write(
+            kivo.join("instructions").join("global.md"),
+            "Edited while closed.",
+        )
+        .unwrap();
+        let core = Arc::new(Core::with_config(kivo_core::KivoConfig::default(), None));
+        let db = Arc::new(Mutex::new(Database::in_memory().unwrap()));
+        let w = Workspaces::new(core, db, kivo.clone());
+        assert_eq!(w.instructions("global"), "Edited while closed.");
+        assert!(!kivo.join("instructions").exists());
+        assert_eq!(
+            std::fs::read_to_string(kivo.join("memory").join("about-me.md")).unwrap(),
+            "Edited while closed."
+        );
     }
 
     #[tokio::test]

@@ -64,6 +64,7 @@ rmcp = { version = "3.4.0", default-features = false, features = [
   "auth",
 ] }
 kivo-mcp = { path = "crates/kivo-mcp" }
+kivo-memory = { path = "crates/kivo-memory" }
 async-trait = "0.1"
 # UI Automation (Apache-2.0, checked in M0): the UIA thread and tools (TOOL-19).
 uiautomation = { version = "0.25.1", default-features = false, features = ["process", "control", "event", "pattern", "input"] }

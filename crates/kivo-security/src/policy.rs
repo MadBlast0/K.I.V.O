@@ -460,8 +460,12 @@ pub fn authorize(spec: &ToolSpec, call: &ToolCall, cx: &Context<'_>) -> Decision
         Decision::Confirm(confirm_spec(spec, call, cx, strength, &why, plan))
     };
 
-    // 3. Guests: reads and low-risk actions only, and low risk asks (SECURITY §2 table).
+    // 3. Guests: reads and low-risk actions only, and low risk asks (SECURITY §2 table). A guest
+    // reads and writes no memory at all (MEM-07).
     if cx.session == SessionKind::Guest {
+        if spec.capability == Capability::Memory {
+            return deny(DenyCode::GuestNotAllowed, text::t("policy.guestDenied"));
+        }
         return match risk {
             Risk::Safe => Decision::Allow(Permit::new(call, ConfirmedBy::Policy)),
             Risk::Low => confirm(Strength::Normal, "guestLow", false),
@@ -809,6 +813,25 @@ mod tests {
             assert_eq!(outcome(&tainted), expected[1], "{risk:?} tainted");
             assert_eq!(outcome(&guest), expected[2], "{risk:?} guest");
         }
+    }
+
+    /// MEM-07: a guest can't even search the owner's memory, though searching is Safe.
+    #[test]
+    fn guests_get_no_memory() {
+        let env = Env::new();
+        let search = spec(Risk::Safe, &[SideEffect::LocalRead], Capability::Memory);
+        let guest = authorize(
+            &search,
+            &call(Initiator::UserDirect),
+            &env.cx(PermissionMode::Auto, SessionKind::Guest, Taint::Clean),
+        );
+        assert_eq!(outcome(&guest), "deny");
+        let owner = authorize(
+            &search,
+            &call(Initiator::UserDirect),
+            &env.cx(PermissionMode::Auto, SessionKind::Owner, Taint::Clean),
+        );
+        assert_eq!(outcome(&owner), "allow");
     }
 
     #[test]

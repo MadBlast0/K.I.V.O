@@ -58,7 +58,7 @@
 }
 .k-btn--link {
   background: transparent;
-  color: var(--acc);
+  color: var(--acc-text);
   padding: 0 4px;
 }
 .k-btn--link:hover {
@@ -66,7 +66,7 @@
   text-decoration: underline;
 }
 .k-btn--destructive {
-  color: var(--red);
+  color: var(--red-text);
 }
 .k-btn--stop {
   background: var(--red);
@@ -351,19 +351,19 @@
 }
 .k-pill--accent {
   background: var(--acc-soft);
-  color: var(--acc);
+  color: var(--acc-text);
 }
 .k-pill--danger {
   background: color-mix(in srgb, var(--red) 12%, transparent);
-  color: var(--red);
+  color: var(--red-text);
 }
 .k-pill--warning {
   background: color-mix(in srgb, var(--orange) 14%, transparent);
-  color: var(--orange);
+  color: var(--orange-text);
 }
 .k-pill--success {
   background: color-mix(in srgb, var(--green) 13%, transparent);
-  color: var(--green);
+  color: var(--green-text);
 }
 .k-kbd {
   font-size: 11px;
@@ -689,19 +689,19 @@
   font-weight: 600;
 }
 .k-alert--info svg {
-  color: var(--acc);
+  color: var(--acc-text);
 }
 .k-alert--success svg {
-  color: var(--green);
+  color: var(--green-text);
 }
 .k-alert--warning svg {
-  color: var(--orange);
+  color: var(--orange-text);
 }
 .k-alert--danger {
   background: color-mix(in srgb, var(--red) 9%, transparent);
 }
 .k-alert--danger svg {
-  color: var(--red);
+  color: var(--red-text);
 }
 
 .k-empty {
@@ -745,6 +745,16 @@
 .k-swatch--custom {
   background: conic-gradient(#f55, #fd5, #5e8, #5cf, #76f, #f5d, #f55);
 }
+/* The native colour input behind the custom swatch: the swatch opens it. */
+.k-swatch__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  border: 0;
+  padding: 0;
+}
 
 .k-hotkey {
   display: inline-flex;
@@ -761,7 +771,7 @@
     0 0 0 1px var(--acc) inset,
     0 0 0 3px var(--acc-soft);
   padding-inline-end: 8px;
-  color: var(--acc);
+  color: var(--acc-text);
   font-size: 12.5px;
 }
 
@@ -774,6 +784,15 @@
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
+}
+.k-tabs__list[data-fade="end"] {
+  mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
+}
+.k-tabs__list[data-fade="start"] {
+  mask-image: linear-gradient(to left, #000 calc(100% - 40px), transparent);
+}
+.k-tabs__list[data-fade="both"] {
+  mask-image: linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 40px), transparent);
 }
 .k-tabs__tab {
   border: 0;
@@ -874,7 +893,7 @@
 }
 .k-menu__item--danger,
 .k-menu__item--danger svg {
-  color: var(--red);
+  color: var(--red-text);
 }
 .k-menu__shortcut {
   margin-inline-start: auto;
@@ -1661,7 +1680,7 @@ button.k-island__chip {
   border: 2px solid var(--acc);
   display: grid;
   place-items: center;
-  color: var(--acc);
+  color: var(--acc-text);
 }
 .k-win-toast__x {
   margin-inline-start: auto;
@@ -1700,6 +1719,10 @@ button.k-island__chip {
 }
 .k-tray-tip span {
   color: var(--text-2);
+}
+.k-island__links {
+  display: flex;
+  gap: 14px;
 }
 .k-island__misroute {
   margin-top: 6px;
@@ -1751,10 +1774,10 @@ button.k-island__chip {
   color: var(--text-3);
 }
 .k-compare__cell--ask {
-  color: var(--orange);
+  color: var(--orange-text);
 }
 .k-compare__cell--auto {
-  color: var(--green);
+  color: var(--green-text);
 }
 
 /* ───────── Tasks (UX-24) ───────── */
@@ -1801,10 +1824,10 @@ button.k-island__chip {
   color: var(--text-2);
 }
 .k-task__step[data-status="done"] .k-task__mark {
-  color: var(--green);
+  color: var(--green-text);
 }
 .k-task__step[data-status="failed"] .k-task__mark {
-  color: var(--red);
+  color: var(--red-text);
 }
 .k-task__dot {
   width: 10px;
@@ -2016,4 +2039,526 @@ button.k-island__chip {
 .k-review__files {
   margin: 0;
   padding-left: 18px;
+}
+
+/* ───────── Memory (UX-29): tag chips, the vault tree and a note's preview ───────── */
+.k-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.k-chips button {
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 0;
+  background: var(--fill);
+  font-size: 12px;
+  color: var(--text-2);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition:
+    background var(--t-fast),
+    color var(--t-fast);
+}
+.k-chips button:hover {
+  background: var(--fill-2);
+}
+.k-chips button[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--ink-fg);
+}
+.k-chips__n {
+  font-size: 11px;
+  opacity: 0.6;
+}
+.k-vault {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: var(--gap);
+  align-items: start;
+  margin-block-start: 12px;
+}
+.k-vault__main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+.k-tree {
+  background: var(--group);
+  box-shadow: 0 0 0 1px var(--border);
+  border-radius: var(--r-m);
+  padding: 8px;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+}
+.k-tree button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  text-align: start;
+  font: inherit;
+  transition: background var(--t-fast);
+}
+.k-tree button svg {
+  color: var(--text-2);
+  flex: none;
+}
+.k-tree button:hover {
+  background: var(--fill);
+}
+.k-tree button.on {
+  background: var(--fill-2);
+}
+.k-tree__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.k-tree__n {
+  font-size: 11px;
+  color: var(--text-3);
+}
+.k-tree__in {
+  padding-inline-start: 18px;
+  display: flex;
+  flex-direction: column;
+}
+.k-note-prev {
+  background: var(--group);
+  box-shadow: 0 0 0 1px var(--border);
+  border-radius: var(--r-m);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 120px;
+}
+.k-note-prev__fm {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-3);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.k-note-prev__meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.k-note-prev__meta:empty {
+  display: none;
+}
+.k-note-prev__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.k-note-body h4 {
+  font-family: var(--font-disp);
+  font-size: 17px;
+  margin: 0 0 8px;
+}
+.k-note-body h5 {
+  font-size: 13px;
+  margin: 12px 0 4px;
+  color: var(--text-2);
+}
+.k-note-body p {
+  margin: 0 0 8px;
+  line-height: 1.6;
+}
+.k-note-body ul {
+  margin: 0 0 8px;
+  padding-inline-start: 18px;
+  line-height: 1.7;
+}
+.k-note-body code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--fill);
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+.k-wikilink {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--acc-text);
+  cursor: pointer;
+}
+.k-wikilink:hover {
+  text-decoration: underline;
+}
+.k-mono,
+.k-mono textarea {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+@media (max-width: 980px) {
+  .k-vault {
+    grid-template-columns: 1fr;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .k-chips button,
+  .k-tree button {
+    transition: none;
+  }
+}
+
+.k-why {
+  margin: 6px 0 0;
+  padding-inline-start: 18px;
+  line-height: 1.6;
+}
+
+/* ───────── Usage (UX-30): stat grid and the per-day chart ───────── */
+.k-grid {
+  display: grid;
+  gap: var(--gap);
+}
+.k-grid--2 {
+  grid-template-columns: 1fr 1fr;
+}
+.k-grid--4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+@media (max-width: 860px) {
+  .k-grid--2,
+  .k-grid--4 {
+    grid-template-columns: 1fr;
+  }
+}
+.k-chart__head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-2);
+  margin-block-end: 10px;
+}
+.k-chart__head b {
+  color: var(--text);
+}
+.k-chart__speech-key {
+  opacity: 0.55;
+}
+.k-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 5px;
+  height: 130px;
+}
+.k-chart__bar {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  height: 100%;
+  gap: 1px;
+  min-width: 0;
+}
+.k-chart__bar i {
+  display: block;
+  background: var(--acc);
+  border-radius: 3px 3px 1px 1px;
+  min-height: 0;
+}
+.k-chart__bar i.k-chart__speech {
+  background: color-mix(in srgb, var(--acc) 35%, transparent);
+  border-radius: 1px;
+}
+.k-chart__bar span {
+  font-size: 10px;
+  color: var(--text-3);
+  text-align: center;
+  margin-top: 4px;
+}
+
+/* ───────── Island size and larger text (Settings → Island, Accessibility) ───────── */
+.k-overlay[data-size="compact"] .k-island {
+  zoom: 0.9;
+}
+.k-overlay[data-size="large"] .k-island {
+  zoom: 1.15;
+}
+.k-overlay[data-large-text] .k-island {
+  font-size: 115%;
+}
+.k-overlay[data-large-text] .k-island__answer,
+.k-overlay[data-large-text] .k-island__quote {
+  font-size: 1.15em;
+}
+
+/* A list of checkboxes in a dialog (Settings → General, languages). */
+.k-checklist {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 8px 16px;
+}
+
+/* ───────── Settings → Appearance: theme tiles (a tiny window in each theme) ───────── */
+.k-theme-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--gap);
+}
+.k-theme-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  border: 0;
+  border-radius: var(--r-m);
+  background: var(--group);
+  box-shadow: 0 0 0 1px var(--border);
+  text-align: start;
+  color: var(--text);
+  transition: box-shadow var(--t-fast);
+}
+.k-theme-tile[aria-checked="true"] {
+  box-shadow: 0 0 0 2px var(--acc);
+}
+.k-theme-tile__window {
+  display: grid;
+  grid-template-columns: 30% 1fr;
+  height: 78px;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px var(--border);
+}
+.k-theme-tile__side,
+.k-theme-tile__main {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+}
+.k-theme-tile i {
+  display: block;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--tile-line);
+}
+.k-theme-tile i.k-theme-tile__island {
+  width: 44%;
+  height: 8px;
+  margin: 0 auto 2px;
+  border-radius: 999px;
+  background: #000;
+}
+.k-theme-tile[data-preview="light"] .k-theme-tile__window {
+  --tile-line: #dadad6;
+  background: #fbfbfa;
+}
+.k-theme-tile[data-preview="light"] .k-theme-tile__side {
+  background: #f2f2f0;
+}
+.k-theme-tile[data-preview="dark"] .k-theme-tile__window {
+  --tile-line: #3a3a3c;
+  background: #1b1b1c;
+}
+.k-theme-tile[data-preview="dark"] .k-theme-tile__side {
+  background: #222223;
+}
+.k-theme-tile[data-preview="system"] .k-theme-tile__window {
+  --tile-line: #9c9ca1;
+  background: linear-gradient(90deg, #fbfbfa 50%, #1b1b1c 50%);
+}
+.k-theme-tile[data-preview="system"] .k-theme-tile__side {
+  background: #f2f2f0;
+}
+.k-theme-tile__label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+@media (max-width: 700px) {
+  .k-theme-tiles {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ───────── Settings → Island: style cards ───────── */
+.k-style-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--gap);
+}
+.k-style-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 10px;
+  border: 0;
+  border-radius: var(--r-m);
+  background: var(--group);
+  box-shadow: 0 0 0 1px var(--border);
+  color: var(--text);
+  text-align: center;
+  transition: box-shadow var(--t-fast);
+}
+.k-style-card[aria-checked="true"] {
+  box-shadow: 0 0 0 2px var(--acc);
+}
+.k-style-card:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.k-style-card__preview {
+  height: 44px;
+  display: grid;
+  place-items: center;
+  width: 100%;
+}
+.k-style-preview--pill {
+  width: 92px;
+  height: 22px;
+  border-radius: 12px;
+  background: #000;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px;
+}
+.k-style-preview--pill i {
+  flex: 1;
+  height: 3px;
+  border-radius: 2px;
+  background: #fff;
+  opacity: 0.8;
+}
+.k-style-preview--character {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: var(--fill);
+}
+.k-style-preview--hidden {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1.5px var(--border) inset;
+}
+@media (max-width: 760px) {
+  .k-style-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ───────── Settings → Sounds: sound-set cards ───────── */
+.k-sound-sets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--gap);
+}
+.k-sound-set {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 6px 6px 4px;
+  border-radius: var(--r-m);
+  background: var(--group);
+  box-shadow: 0 0 0 1px var(--border);
+  transition: box-shadow var(--t-fast);
+}
+.k-sound-set[data-on] {
+  box-shadow: 0 0 0 2px var(--acc);
+}
+.k-sound-set__pick {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  text-align: start;
+}
+.k-sound-set__pick > span:last-child {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.k-sound-set--later {
+  opacity: 0.7;
+}
+
+/* ───────── Settings: a tab's own actions, and check marks (Diagnostics) ───────── */
+.k-tab-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-block-end: var(--gap);
+}
+.k-check-ok,
+.k-check-warn {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+}
+.k-check-ok {
+  color: var(--green-text);
+  background: color-mix(in srgb, var(--green) 14%, transparent);
+}
+.k-check-warn {
+  color: var(--orange-text);
+  background: color-mix(in srgb, var(--orange) 14%, transparent);
+}
+
+/* ───────── Settings → About ───────── */
+.k-about {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 30px 0 22px;
+  gap: 8px;
+}
+.k-about h2 {
+  font-family: var(--font-disp);
+  margin: 0;
+  font-size: 22px;
+}
+.k-about p {
+  color: var(--text-2);
+  margin: 0;
+}
+.k-narrow {
+  max-width: 560px;
+  margin: 0 auto;
+}
+.k-license-list {
+  max-height: 320px;
+  overflow-y: auto;
+  margin-block-start: 8px;
+  display: flex;
+  flex-direction: column;
+}
+.k-license {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 2px;
+  border-block-end: 1px solid var(--sep);
+  font-size: 12.5px;
 }

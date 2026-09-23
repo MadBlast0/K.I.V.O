@@ -120,7 +120,7 @@ async fn a_client_gets_the_snapshot_answers_and_events() {
     );
     assert_eq!(
         c.request(method::STATE, Value::Null).await.unwrap(),
-        json!({"session":"idle","mode":"auto","islandHidden":false,"turn":null,"speech":{"state":"missing"},"island":{"position":"top-center","spots":[]},"revision":1})
+        json!({"session":"idle","mode":"auto","islandHidden":false,"turn":null,"speech":{"state":"missing"},"island":{"position":"top-center","spots":[],"size":"standard","showTranscript":true,"showUndo":true,"voiceHints":true,"largeText":false,"captions":true,"announcements":true,"motion":"system","companion":"pill"},"revision":1})
     );
     assert_eq!(
         c.request("echo", json!({"a": [1, 2]})).await.unwrap(),
@@ -430,7 +430,7 @@ async fn state_changes_are_pushed_to_every_client() {
     }
     assert_eq!(
         a.client.request(method::STATE, Value::Null).await.unwrap(),
-        json!({"session":"paused","mode":"auto","islandHidden":false,"turn":null,"speech":{"state":"missing"},"island":{"position":"top-center","spots":[]},"revision":2})
+        json!({"session":"paused","mode":"auto","islandHidden":false,"turn":null,"speech":{"state":"missing"},"island":{"position":"top-center","spots":[],"size":"standard","showTranscript":true,"showUndo":true,"voiceHints":true,"largeText":false,"captions":true,"announcements":true,"motion":"system","companion":"pill"},"revision":2})
     );
     rt.shutdown.cancel();
 }

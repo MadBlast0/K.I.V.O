@@ -1,5 +1,6 @@
-/** Ctrl+K command palette: black, top-centre, like the Island expanding. An ARIA combobox: the
- * input keeps focus and points at the highlighted option with aria-activedescendant. */
+/** Ctrl+K command palette (UX-47): black, top-centre, like the Island expanding. It finds pages,
+ * every setting, routines to run and actions; anything else is asked of KIVO. An ARIA combobox:
+ * the input keeps focus and points at the highlighted option with aria-activedescendant. */
 import { Dialog as BDialog } from "@base-ui/react/dialog";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Icon, type IconName } from "../../icons";
@@ -11,6 +12,8 @@ export interface Command {
   label: string;
   icon: IconName;
   hint?: string;
+  /** More words it's found by. */
+  keywords?: string;
   run: () => void;
 }
 
@@ -18,10 +21,13 @@ export function CommandPalette({
   commands,
   open,
   onOpenChange,
+  onAsk,
 }: {
   commands: Command[];
   open: boolean;
   onOpenChange: (o: boolean) => void;
+  /** What wasn't found goes to KIVO as a typed request. */
+  onAsk?: (text: string) => void;
 }) {
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
@@ -29,10 +35,13 @@ export function CommandPalette({
   const input = useRef<HTMLInputElement>(null);
   const listId = useId();
 
-  const results = useMemo(
-    () => commands.filter((c) => c.label.toLowerCase().includes(query.toLowerCase())),
-    [commands, query],
-  );
+  const results = useMemo(() => {
+    const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+    return commands.filter((c) => {
+      const text = `${c.label} ${c.group} ${c.keywords ?? ""}`.toLowerCase();
+      return words.every((w) => text.includes(w));
+    });
+  }, [commands, query]);
   // Group headers are derived up front, not while rendering the rows.
   const rows = useMemo(
     () =>
@@ -85,7 +94,12 @@ export function CommandPalette({
                 }
                 if (e.key === "Enter") {
                   e.preventDefault();
-                  run(results[index]);
+                  if (results.length === 0 && query.trim() && onAsk) {
+                    setOpen(false);
+                    onAsk(query.trim());
+                  } else {
+                    run(results[index]);
+                  }
                 }
               }}
             />
@@ -94,7 +108,24 @@ export function CommandPalette({
             {results.length === 0 && query && (
               <>
                 <div className="k-palette__group">{t("palette.ask")}</div>
-                <div className="k-palette__item" data-selected="true">
+                <div
+                  role="option"
+                  tabIndex={-1}
+                  aria-selected
+                  className="k-palette__item"
+                  data-selected="true"
+                  onClick={() => {
+                    if (!onAsk) return;
+                    setOpen(false);
+                    onAsk(query.trim());
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && onAsk) {
+                      setOpen(false);
+                      onAsk(query.trim());
+                    }
+                  }}
+                >
                   <Icon name="ai" />“{query}”<span className="k-palette__hint">↵</span>
                 </div>
               </>

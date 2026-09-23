@@ -72,6 +72,20 @@ runtime.request = (method: string, params?: unknown) => {
       });
     case "chat.search":
       return Promise.resolve([messages[1]]);
+    case "brains.context":
+      return Promise.resolve({
+        brain: "Claude Code",
+        budget: { voice: 12000, chat: 32000 },
+        layers: [
+          { id: "system", tokens: 600, on: true },
+          { id: "skills", tokens: 900, on: false },
+          { id: "turns", tokens: 7400, on: true },
+        ],
+      });
+    case "chat.branch":
+      return Promise.resolve({ ...thread, id: "c-2", title: "Why is my build failing? (branch)" });
+    case "chat.export":
+      return Promise.resolve({ text: "# Why", file: "C:/Users/me/Downloads/KIVO - Why.md" });
     default:
       return Promise.resolve(null);
   }
@@ -130,5 +144,25 @@ describe("Chat (UX-21)", () => {
     fireEvent.change(screen.getByLabelText("Search conversations"), { target: { value: "Result" } });
     await settle();
     expect(calls).toContainEqual({ method: "chat.search", params: { query: "Result" } });
+  });
+
+  it("has the power features: context meter, continue, branch and export (CONV-03)", async () => {
+    await mount();
+    // Between turns the meter shows what the next message starts with: 8,000 of 32,000.
+    expect(screen.getByText("25% of context")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Branch from here" }));
+    await settle();
+    expect(calls).toContainEqual({ method: "chat.branch", params: { id: "c-1", message: 2 } });
+
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Continue by voice" }));
+    await settle();
+    expect(calls).toContainEqual({ method: "chat.continue", params: { id: "c-1" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Export as Markdown" }));
+    await settle();
+    expect(calls).toContainEqual({ method: "chat.export", params: { id: "c-1", json: false, save: true } });
+    expect(await screen.findByText(/Saved to .*KIVO - Why\.md/)).toBeTruthy();
   });
 });

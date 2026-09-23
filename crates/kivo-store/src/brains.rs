@@ -221,6 +221,45 @@ impl Database {
         Ok(())
     }
 
+    /// A copy of `from` up to and including message `upto` (all of it when `None`), as a new
+    /// chat `id` (CONV-03 "branch"). The running summary comes along when every message it covers
+    /// does.
+    pub fn branch_conversation(
+        &self,
+        from: &str,
+        id: &str,
+        title: &str,
+        upto: Option<i64>,
+    ) -> Result<Conversation, DbError> {
+        let source = self
+            .conversation(from)?
+            .ok_or(DbError::Sqlite(rusqlite::Error::QueryReturnedNoRows))?;
+        let upto = upto.unwrap_or(i64::MAX);
+        let mut branch = self.create_conversation(id, "chat", title)?;
+        let tx = self.connection().unchecked_transaction()?;
+        let mut last_summarized = 0;
+        for m in self.messages(from)?.into_iter().filter(|m| m.id <= upto) {
+            tx.execute(
+                "INSERT INTO messages (conversation_id, profile_id, ts, role, text, brain, turn_id)
+                 SELECT ?1, profile_id, ts, role, text, brain, turn_id FROM messages WHERE id = ?2",
+                params![id, m.id],
+            )?;
+            if m.id <= source.summarized {
+                last_summarized = tx.last_insert_rowid();
+            }
+        }
+        if source.summarized > 0 && source.summarized <= upto {
+            tx.execute(
+                "UPDATE conversations SET summary = ?2, summarized = ?3, brain = ?4 WHERE id = ?1",
+                params![id, source.summary, last_summarized, source.brain],
+            )?;
+            branch.summary = source.summary;
+            branch.summarized = last_summarized;
+        }
+        tx.commit()?;
+        Ok(branch)
+    }
+
     pub fn delete_conversation(&self, id: &str) -> Result<(), DbError> {
         self.connection()
             .execute("DELETE FROM conversations WHERE id = ?1", [id])?;
@@ -270,6 +309,19 @@ impl Database {
         )?;
         let rows = stmt
             .query_map([conversation], Self::message_from)?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    /// The kept messages of one turn, in order (the Island's "Remember this").
+    pub fn turn_messages(&self, turn: &str) -> Result<Vec<StoredMessage>, DbError> {
+        let owner = self.owner()?;
+        let mut stmt = self.connection().prepare(
+            "SELECT id, conversation_id, ts, role, text, brain, turn_id FROM messages
+             WHERE turn_id = ?1 AND profile_id = ?2 ORDER BY id",
+        )?;
+        let rows = stmt
+            .query_map(params![turn, owner], Self::message_from)?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(rows)
     }
@@ -385,6 +437,16 @@ impl Database {
             ],
         )?;
         Ok(())
+    }
+
+    /// How many requests (turns) started since `since`, for "handled for free" on the Usage page.
+    pub fn turns_since(&self, since: i64) -> Result<u64, DbError> {
+        let n: i64 = self.connection().query_row(
+            "SELECT COUNT(*) FROM turns WHERE started_at >= ?1",
+            [since],
+            |r| r.get(0),
+        )?;
+        Ok(u64::try_from(n).unwrap_or(0))
     }
 
     /// Usage since `since` (Unix ms), oldest first.
@@ -681,6 +743,42 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
+    }
+
+    #[test]
+    fn a_branch_copies_up_to_a_message_and_keeps_the_summary() {
+        let db = Database::in_memory().unwrap();
+        db.create_conversation("c1", "voice", "Trip").unwrap();
+        let ids: Vec<i64> = ["a", "b", "c", "d"]
+            .iter()
+            .map(|t| db.add_message("c1", "user", t, None, None).unwrap())
+            .collect();
+        db.set_summary("c1", "They planned a trip.", ids[1])
+            .unwrap();
+        let b = db
+            .branch_conversation("c1", "c2", "Trip (branch)", Some(ids[2]))
+            .unwrap();
+        let copied = db.messages("c2").unwrap();
+        assert_eq!(
+            copied.iter().map(|m| m.text.as_str()).collect::<Vec<_>>(),
+            ["a", "b", "c"]
+        );
+        assert_eq!(b.summary, "They planned a trip.");
+        assert_eq!(
+            b.summarized, copied[1].id,
+            "the summary covers the copies of a and b"
+        );
+        assert_eq!(
+            db.messages("c1").unwrap().len(),
+            4,
+            "the original is untouched"
+        );
+        // Branching before the summary's end leaves it behind.
+        let early = db
+            .branch_conversation("c1", "c3", "", Some(ids[0]))
+            .unwrap();
+        assert_eq!((early.summary.as_str(), early.summarized), ("", 0));
+        assert!(db.branch_conversation("nope", "c4", "", None).is_err());
     }
 
     #[test]

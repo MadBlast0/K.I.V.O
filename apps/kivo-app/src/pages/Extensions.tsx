@@ -52,7 +52,8 @@ import { useRuntime, useRuntimeEvents } from "../ipc/runtime";
 import { initials } from "./Agents";
 import { ago } from "../lib/ago";
 
-type Tab = "connectors" | "mcp" | "plugins" | "skills";
+export const EXTENSION_TABS = ["connectors", "mcp", "plugins", "skills"] as const;
+type Tab = (typeof EXTENSION_TABS)[number];
 
 function message(e: unknown): string {
   return e instanceof Error ? e.message : String(e);

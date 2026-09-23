@@ -17,6 +17,10 @@ export interface Entry {
   /** What KIVO did and said. */
   detail: string | null;
   outcome: Outcome;
+  /** The request's turn, when it was one (for "Why did you say that?"). */
+  turn: string | null;
+  /** KIVO answered (so its answer may have used memories). */
+  answered: boolean;
 }
 
 const OUTCOMES: ReadonlyArray<Outcome> = ["done", "failed", "cancelled", "denied", "unhandled"];
@@ -38,6 +42,8 @@ export function entries(items: ActivityItem[]): Entry[] {
         title: item.title,
         detail: item.detail,
         outcome: outcomeOf(item.status),
+        turn: null,
+        answered: false,
       });
       continue;
     }
@@ -46,7 +52,16 @@ export function entries(items: ActivityItem[]): Entry[] {
     else {
       byTurn.set(item.turnId, [item]);
       // A placeholder keeps the turn in time order; it is filled in below.
-      out.push({ key: item.turnId, ts: item.ts, kind: "voice", title: "", detail: null, outcome: "done" });
+      out.push({
+        key: item.turnId,
+        ts: item.ts,
+        kind: "voice",
+        title: "",
+        detail: null,
+        outcome: "done",
+        turn: item.turnId,
+        answered: false,
+      });
     }
   }
   for (const entry of out) {
@@ -62,6 +77,7 @@ export function entries(items: ActivityItem[]): Entry[] {
     entry.detail =
       [tools.map((t) => t.detail ?? t.title).join(" · "), reply?.title].filter(Boolean).join(" — ") || null;
     entry.outcome = outcomeOf(failed?.status ?? reply?.status ?? tools[0]?.status ?? "done");
+    entry.answered = reply !== undefined;
   }
   return out;
 }

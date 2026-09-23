@@ -19,6 +19,8 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],
+    // The design tokens are read as text by the contrast test (UX-54).
+    css: { include: [/tokens\.css/] },
   },
   build: {
     target: "es2022",

@@ -38,6 +38,63 @@ pub struct BrainsRpc {
     control: Arc<dyn SystemControl>,
     terminal: Terminal,
     oauth: OpenRouterOAuth,
+    /// Where "Export CSV" saves (the Downloads folder).
+    exports: Option<std::path::PathBuf>,
+}
+
+/// A thread as Markdown: its title, the summary of what was compacted, then each message with who
+/// said it and when (CONV-03 export).
+fn thread_markdown(
+    thread: &kivo_store::brains::Conversation,
+    messages: &[kivo_store::brains::StoredMessage],
+    utc_offset: i32,
+) -> String {
+    let title = if thread.title.trim().is_empty() {
+        "Conversation"
+    } else {
+        thread.title.trim()
+    };
+    let mut out = format!(
+        "# {title}
+
+_{} · {} messages_
+",
+        kivo_memory::date::format(thread.created_at, utc_offset),
+        messages.len()
+    );
+    if !thread.summary.trim().is_empty() {
+        out.push_str(&format!(
+            "
+> Earlier: {}
+",
+            thread.summary.trim()
+        ));
+    }
+    for m in messages {
+        let who = match m.role.as_str() {
+            "user" => "You".to_owned(),
+            "assistant" => m
+                .brain
+                .as_deref()
+                .map_or_else(|| "KIVO".to_owned(), |b| format!("KIVO ({b})")),
+            other => other.to_owned(),
+        };
+        out.push_str(&format!(
+            "
+**{who}** · {}
+
+{}
+",
+            kivo_memory::date::format(m.ts, utc_offset),
+            m.text.trim()
+        ));
+    }
+    out
+}
+
+/// `2026-09-23` for a day number (days since 1970-01-01).
+fn chrono_date(day: i64) -> String {
+    kivo_memory::date::format(day * 86_400_000, 0)
 }
 
 fn parse<T: serde::de::DeserializeOwned>(params: Value) -> Result<T, RpcError> {
@@ -81,7 +138,15 @@ impl BrainsRpc {
             control,
             terminal,
             oauth: OpenRouterOAuth::default(),
+            exports: None,
         }
+    }
+
+    /// Where the Usage page's CSV export is saved.
+    #[must_use]
+    pub fn with_exports(mut self, dir: std::path::PathBuf) -> Self {
+        self.exports = Some(dir);
+        self
     }
 
     /// Uses other OpenRouter endpoints (tests).
@@ -264,35 +329,172 @@ impl BrainsRpc {
         Ok(json!({ "started": true }))
     }
 
+    /// Today's date, `2026-09-23`, in the user's time zone.
+    fn today(&self) -> String {
+        let offset = i64::from(self.brains().utc_offset()) * 60_000;
+        chrono_date((now_ms() + offset).div_euclid(86_400_000))
+    }
+
+    /// Writes `content` to the Downloads folder as `<stem>.<ext>`, numbered if taken; returns the
+    /// file (UX-30, CONV-03).
+    fn save_download(&self, stem: &str, ext: &str, content: &str) -> Result<String, String> {
+        let dir = self
+            .exports
+            .as_ref()
+            .ok_or_else(|| "there's no Downloads folder".to_owned())?;
+        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+        let file = (1..)
+            .map(|n: u32| {
+                dir.join(if n < 2 {
+                    format!("{stem}.{ext}")
+                } else {
+                    format!("{stem} ({n}).{ext}")
+                })
+            })
+            .find(|f| !f.exists())
+            .unwrap_or_else(|| dir.join(format!("{stem}.{ext}")));
+        std::fs::write(&file, content).map_err(|e| e.to_string())?;
+        Ok(file.display().to_string())
+    }
+
+    /// A thread as Markdown (headings, who said what, the running summary) or JSON; with `save`,
+    /// written to Downloads (CONV-03).
+    fn export_thread(&self, id: &str, as_json: bool, save: bool) -> Result<Value, RpcError> {
+        let db = self.brains().database();
+        let (thread, messages) = {
+            let db = lock(&db);
+            match db.conversation(id) {
+                Ok(Some(c)) => (c, db.messages(id).unwrap_or_default()),
+                _ => return Err(refuse("no such conversation")),
+            }
+        };
+        let offset = self.brains().utc_offset();
+        let text = if as_json {
+            serde_json::to_string_pretty(&json!({ "thread": thread, "messages": messages }))
+                .unwrap_or_default()
+        } else {
+            thread_markdown(&thread, &messages, offset)
+        };
+        if !save {
+            return Ok(json!({ "text": text }));
+        }
+        let title: String = thread
+            .title
+            .chars()
+            .filter(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_'))
+            .take(60)
+            .collect();
+        let stem = if title.trim().is_empty() {
+            format!("KIVO conversation {}", self.today())
+        } else {
+            format!("KIVO - {}", title.trim())
+        };
+        self.save_download(&stem, if as_json { "json" } else { "md" }, &text)
+            .map(|file| json!({ "text": text, "file": file }))
+            .map_err(refuse)
+    }
+
     fn usage(&self, days: u32) -> Value {
         let since = now_ms() - i64::from(days) * 24 * 3_600 * 1_000;
         let rows = lock(&self.brains().database())
             .usage_since(since)
             .unwrap_or_default();
-        let mut by_day: BTreeMap<i64, f64> = BTreeMap::new();
+        // Per day: AI (brains, agents, computer use) and speech (cloud STT/TTS, realtime).
+        let mut by_day: BTreeMap<i64, (f64, f64)> = BTreeMap::new();
         let mut by_provider: BTreeMap<String, (f64, u64)> = BTreeMap::new();
         let mut by_feature: BTreeMap<String, f64> = BTreeMap::new();
+        let mut by_routine: BTreeMap<String, f64> = BTreeMap::new();
         let mut by_turn: BTreeMap<String, f64> = BTreeMap::new();
+        let mut by_task: BTreeMap<String, f64> = BTreeMap::new();
         let offset = i64::from(self.brains().utc_offset()) * 60_000;
+        let today_start = (now_ms() + offset).div_euclid(86_400_000) * 86_400_000 - offset;
+        let mut today = 0.0;
         let mut unknown = 0u32;
+        let mut paid_turns: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
         for u in &rows {
             let cost = u.cost.unwrap_or(0.0);
             if u.cost.is_none() {
                 unknown += 1;
             }
+            if u.ts >= today_start {
+                today += cost;
+            }
             let day = (u.ts + offset).div_euclid(86_400_000) * 86_400_000 - offset;
-            *by_day.entry(day).or_default() += cost;
+            let d = by_day.entry(day).or_default();
+            if matches!(u.kind.as_str(), "stt" | "tts" | "realtime") {
+                d.1 += cost;
+            } else {
+                d.0 += cost;
+            }
             let p = by_provider.entry(u.provider.clone()).or_default();
             p.0 += cost;
             p.1 += u.input_tokens + u.output_tokens;
             *by_feature.entry(u.kind.clone()).or_default() += cost;
-            if let Some(turn) = &u.turn_id {
+            if let Some(routine) = &u.routine_id {
+                *by_routine.entry(routine.clone()).or_default() += cost;
+            }
+            if let Some(task) = &u.task_id {
+                *by_task.entry(task.clone()).or_default() += cost;
+            } else if let Some(turn) = &u.turn_id {
                 *by_turn.entry(turn.clone()).or_default() += cost;
             }
+            if cost > 0.0
+                && let Some(turn) = &u.turn_id
+            {
+                paid_turns.insert(turn.clone());
+            }
         }
-        let mut top: Vec<(String, f64)> = by_turn.into_iter().collect();
-        top.sort_by(|a, b| b.1.total_cmp(&a.1));
+        // The most expensive tasks and requests, named (a task by its title, a request by what
+        // was said).
+        let db = self.brains().database();
+        let mut top: Vec<Value> = {
+            let db = lock(&db);
+            by_task
+                .into_iter()
+                .map(|(id, cost)| {
+                    let title = db
+                        .task(&id)
+                        .ok()
+                        .flatten()
+                        .map(|t| t.title)
+                        .unwrap_or_default();
+                    json!({ "kind": "task", "id": id, "title": title, "cost": cost })
+                })
+                .chain(by_turn.into_iter().map(|(id, cost)| {
+                    let title = db
+                        .turn(&id)
+                        .ok()
+                        .flatten()
+                        .and_then(|t| t.transcript)
+                        .unwrap_or_default();
+                    json!({ "kind": "turn", "id": id, "title": title, "cost": cost })
+                }))
+                .collect()
+        };
+        top.sort_by(|a, b| {
+            b["cost"]
+                .as_f64()
+                .unwrap_or(0.0)
+                .total_cmp(&a["cost"].as_f64().unwrap_or(0.0))
+        });
         top.truncate(10);
+        let routines: Vec<Value> = {
+            let db = lock(&db);
+            by_routine
+                .into_iter()
+                .map(|(id, cost)| {
+                    let name = db
+                        .routine(&id)
+                        .ok()
+                        .flatten()
+                        .map(|r| r.name)
+                        .unwrap_or_default();
+                    json!({ "routine": id, "name": name, "cost": cost })
+                })
+                .collect()
+        };
+        let turns = lock(&db).turns_since(since).unwrap_or(0);
+        let paid = u64::try_from(paid_turns.len()).unwrap_or(0);
         let brains = self.brains();
         let limits: Vec<Value> = brains
             .limits()
@@ -322,10 +524,15 @@ impl BrainsRpc {
             "total": rows.iter().filter_map(|u| u.cost).sum::<f64>(),
             "requests": rows.len(),
             "unpriced": unknown,
-            "byDay": by_day.into_iter().map(|(d, c)| json!({"day": d, "cost": c})).collect::<Vec<_>>(),
+            "today": today,
+            "turns": turns,
+            // Requests that cost nothing: the fast path, local brains and local speech.
+            "freeTurns": turns.saturating_sub(paid),
+            "byDay": by_day.into_iter().map(|(d, (ai, speech))| json!({"day": d, "cost": ai + speech, "ai": ai, "speech": speech})).collect::<Vec<_>>(),
+            "byRoutine": routines,
             "byProvider": by_provider.into_iter().map(|(p, (c, t))| json!({"provider": p, "cost": c, "tokens": t})).collect::<Vec<_>>(),
             "byFeature": by_feature.into_iter().map(|(f, c)| json!({"feature": f, "cost": c})).collect::<Vec<_>>(),
-            "topTurns": top.into_iter().map(|(t, c)| json!({"turn": t, "cost": c})).collect::<Vec<_>>(),
+            "top": top,
             "limits": limits,
             "caps": brains.task_caps(),
             "overrides": brains.price_overrides(),
@@ -566,7 +773,16 @@ impl BrainsRpc {
                 let days = params["days"]
                     .as_u64()
                     .map_or(90, |d| u32::try_from(d).unwrap_or(90));
-                Ok(json!({ "csv": self.usage_csv(days) }))
+                let csv = self.usage_csv(days);
+                // `save`: into the Downloads folder, and the file is returned (UX-30).
+                if params["save"].as_bool().unwrap_or(false) {
+                    let date = self.today();
+                    self.save_download(&format!("KIVO usage {date}"), "csv", &csv)
+                        .map(|file| json!({ "csv": csv, "file": file }))
+                        .map_err(refuse)
+                } else {
+                    Ok(json!({ "csv": csv }))
+                }
             }
             method::USAGE_SET_LIMITS => {
                 #[derive(Deserialize)]
@@ -717,6 +933,63 @@ impl BrainsRpc {
                 }
                 Err(e) => Err(e),
             },
+            method::CHAT_CONTINUE => match parse::<Id>(params) {
+                Ok(Id { id }) if lock(&db).conversation(&id).ok().flatten().is_some() => {
+                    self.engine.continue_thread(&id);
+                    Ok(Value::Null)
+                }
+                Ok(_) => Err(refuse("no such conversation")),
+                Err(e) => Err(e),
+            },
+            method::CHAT_BRANCH => {
+                #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
+                struct P {
+                    id: String,
+                    /// The last message to keep; all when absent.
+                    #[serde(default)]
+                    message: Option<i64>,
+                }
+                match parse::<P>(params) {
+                    Ok(p) => {
+                        let id = format!("c-{}", uuid::Uuid::now_v7().simple());
+                        let db = lock(&db);
+                        let title = db
+                            .conversation(&p.id)
+                            .ok()
+                            .flatten()
+                            .map(|c| {
+                                kivo_core::text::tf("chat.branchTitle", &[("title", &c.title)])
+                            })
+                            .unwrap_or_default();
+                        let made = db.branch_conversation(&p.id, &id, &title, p.message);
+                        drop(db);
+                        match made {
+                            Ok(c) => {
+                                self.publish(ProviderEvent::ThreadChanged { thread: id });
+                                ok(&c)
+                            }
+                            Err(e) => Err(refuse(e.to_string())),
+                        }
+                    }
+                    Err(e) => Err(e),
+                }
+            }
+            method::CHAT_EXPORT => {
+                #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
+                struct P {
+                    id: String,
+                    #[serde(default)]
+                    json: bool,
+                    #[serde(default)]
+                    save: bool,
+                }
+                match parse::<P>(params) {
+                    Ok(p) => self.export_thread(&p.id, p.json, p.save),
+                    Err(e) => Err(e),
+                }
+            }
             method::CHAT_SEARCH => {
                 let query = params["query"].as_str().unwrap_or_default().to_owned();
                 ok(&lock(&db).search_messages(&query, 50).unwrap_or_default())

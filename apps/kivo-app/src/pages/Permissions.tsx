@@ -49,8 +49,10 @@ import {
 } from "../ipc/generated";
 import { useRuntime } from "../ipc/runtime";
 import { ago } from "../lib/ago";
+import { bool, str } from "../lib/settings";
 
-type Tab = "mode" | "capabilities" | "privacy";
+export const PERMISSIONS_TABS = ["mode", "capabilities", "privacy"] as const;
+type Tab = (typeof PERMISSIONS_TABS)[number];
 
 export function Permissions({ initialTab = "mode" }: { initialTab?: Tab }) {
   const { t } = useTranslation();
@@ -555,22 +557,24 @@ function ListEditor({
   };
   return (
     <>
-      <Group>
-        {items.map((item) => (
-          <Row
-            key={item}
-            title={item}
-            end={
-              <IconButton
-                icon="delete"
-                size="sm"
-                label={t("permissions.remove", { item })}
-                onClick={() => onChange(items.filter((i) => i !== item))}
-              />
-            }
-          />
-        ))}
-      </Group>
+      {items.length > 0 && (
+        <Group>
+          {items.map((item) => (
+            <Row
+              key={item}
+              title={item}
+              end={
+                <IconButton
+                  icon="delete"
+                  size="sm"
+                  label={t("permissions.remove", { item })}
+                  onClick={() => onChange(items.filter((i) => i !== item))}
+                />
+              }
+            />
+          ))}
+        </Group>
+      )}
       <form
         className="k-inline"
         onSubmit={(e) => {
@@ -765,13 +769,88 @@ function CapabilityOptions({
 /* ───────────────────────────── Privacy ───────────────────────────── */
 
 type PrivacyMode = "cloud" | "local" | "strict-private" | "custom";
-const PRIVACY: ReadonlyArray<PrivacyMode> = ["cloud", "local", "strict-private"];
+const PRIVACY: ReadonlyArray<PrivacyMode> = ["cloud", "local", "strict-private", "custom"];
+/** Custom mode's switches (SEC-21). */
+const CUSTOM = ["cloud-brains", "personal-to-cloud", "cloud-speech", "cloud-vision"] as const;
+const LABEL_CLASSES = ["personal", "sensitive", "highly-sensitive"] as const;
+type LabelClass = (typeof LABEL_CLASSES)[number];
+interface PrivacyLabel {
+  text: string;
+  class: LabelClass;
+}
+
+/** Words the user labels private (SEC-20): any text with one gets its class. */
+function Labels({ labels, onChange }: { labels: PrivacyLabel[]; onChange: (l: PrivacyLabel[]) => void }) {
+  const { t } = useTranslation();
+  const [text, setText] = useState("");
+  const [cls, setCls] = useState<LabelClass>("sensitive");
+  return (
+    <>
+      {labels.length > 0 && (
+        <Group>
+          {labels.map((l) => (
+            <Row
+              key={l.text}
+              icon="privacy"
+              title={l.text}
+              subtitle={t(`permissions.privacy.classes.${l.class}`)}
+              end={
+                <IconButton
+                  icon="delete"
+                  size="sm"
+                  label={t("permissions.remove", { item: l.text })}
+                  onClick={() => onChange(labels.filter((x) => x.text !== l.text))}
+                />
+              }
+            />
+          ))}
+        </Group>
+      )}
+      <form
+        className="k-inline"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const value = text.trim();
+          if (!value || labels.some((l) => l.text.toLowerCase() === value.toLowerCase())) return;
+          onChange([...labels, { text: value, class: cls }]);
+          setText("");
+        }}
+      >
+        <TextField
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder={t("permissions.privacy.labelPlaceholder")}
+          aria-label={t("permissions.privacy.labels")}
+        />
+        <Select
+          label={t("permissions.privacy.labelClass")}
+          value={cls}
+          onChange={setCls}
+          items={LABEL_CLASSES.map((c) => ({ value: c, label: t(`permissions.privacy.classes.${c}`) }))}
+        />
+        <Button type="submit" icon="add" disabled={!text.trim()}>
+          {t("permissions.add")}
+        </Button>
+      </form>
+    </>
+  );
+}
 const KEEP: ReadonlyArray<{ days: number; key: string }> = [
   { days: 7, key: "week" },
   { days: 30, key: "month" },
   { days: 3650, key: "forever" },
   { days: 0, key: "never" },
 ];
+
+/** The labels as saved, dropping anything malformed. */
+function labelsOf(value: unknown): PrivacyLabel[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((v) => {
+    const text = str(field(v, "text"));
+    const cls = oneOf(field(v, "class"), LABEL_CLASSES);
+    return text && cls ? [{ text, class: cls }] : [];
+  });
+}
 
 function PrivacyTab() {
   const { t } = useTranslation();
@@ -790,7 +869,7 @@ function PrivacyTab() {
       <Section title={t("permissions.privacy.where")} />
       <RadioGroup<PrivacyMode>
         label={t("permissions.privacy.where")}
-        value={mode === "custom" ? undefined : mode}
+        value={mode}
         onChange={(m) => save({ privacy: { mode: m } })}
       >
         {PRIVACY.map((m) => (
@@ -803,6 +882,27 @@ function PrivacyTab() {
           />
         ))}
       </RadioGroup>
+      {mode === "custom" && (
+        <>
+          <Section title={t("permissions.privacy.customTitle")} />
+          <Group>
+            {CUSTOM.map((k) => (
+              <Row
+                key={k}
+                title={t(`permissions.privacy.custom.${k}`)}
+                subtitle={t(`permissions.privacy.custom.${k}Hint`)}
+                end={
+                  <Switch
+                    label={t(`permissions.privacy.custom.${k}`)}
+                    checked={bool(field(privacy["custom"], k), k === "cloud-brains")}
+                    onChange={(v) => save({ privacy: { custom: { [k]: v } } })}
+                  />
+                }
+              />
+            ))}
+          </Group>
+        </>
+      )}
 
       <Section title={t("permissions.privacy.stays")} />
       <Group>
@@ -863,6 +963,15 @@ function PrivacyTab() {
           }
         />
       </Group>
+      <Section title={t("permissions.privacy.localFolders")} aside={t("permissions.privacy.localFoldersHint")} />
+      <ListEditor
+        label={t("permissions.privacy.localFolders")}
+        items={strings(privacy["sensitive-folders"])}
+        onChange={(v) => save({ privacy: { "sensitive-folders": v } })}
+        placeholder={t("permissions.options.folderPlaceholder")}
+      />
+      <Section title={t("permissions.privacy.labels")} aside={t("permissions.privacy.labelsHint")} />
+      <Labels labels={labelsOf(privacy["labels"])} onChange={(labels) => save({ privacy: { labels } })} />
       <Section title={t("permissions.options.privateFolders")} aside={t("permissions.privacy.privateHint")} />
       <ListEditor
         label={t("permissions.options.privateFolders")}

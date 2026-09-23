@@ -63,3 +63,7 @@ desktop.ini
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Playwright (ARCH-37)
+test-results/
+playwright-report/

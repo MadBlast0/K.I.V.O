@@ -1,7 +1,8 @@
 //! Global hotkeys, in the runtime so they work whether or not the app is running: push-to-talk
 //! (VOICE-41: hold the configured keys, Ctrl+Space by default, to talk), Ctrl+Shift+Space to type
-//! to KIVO (UX §8), Ctrl+Shift+M to switch the permission mode (SECURITY §1.1) and the emergency
-//! stop (SECURITY §8).
+//! to KIVO (UX §8), Ctrl+Shift+M to switch the permission mode (SECURITY §1.1), an optional key
+//! to pause listening, and the emergency stop (SECURITY §8). All but the emergency stop are
+//! chosen in Settings → Shortcuts and bound again when they change.
 
 use crate::core::Core;
 use crate::engine::Engine;
@@ -17,6 +18,7 @@ const EMERGENCY_STOP: HotkeyId = HotkeyId(3);
 const TYPE_TO_KIVO: HotkeyId = HotkeyId(4);
 /// Esc, registered only while KIVO is busy so it never takes Esc from other apps otherwise.
 const CANCEL: HotkeyId = HotkeyId(5);
+const PAUSE: HotkeyId = HotkeyId(6);
 /// Routines' hotkeys (ROUT-05) take ids from here up.
 const ROUTINES_FROM: u32 = 100;
 
@@ -29,6 +31,7 @@ pub enum Action {
     StopEverything,
     OpenTextBox,
     Cancel,
+    TogglePause,
     Ignore,
 }
 
@@ -43,6 +46,7 @@ pub fn action(event: HotkeyEvent, toggle_mode: bool, listening: bool) -> Action 
         HotkeyEvent::Pressed(EMERGENCY_STOP) => Action::StopEverything,
         HotkeyEvent::Pressed(TYPE_TO_KIVO) => Action::OpenTextBox,
         HotkeyEvent::Pressed(CANCEL) => Action::Cancel,
+        HotkeyEvent::Pressed(PAUSE) => Action::TogglePause,
         HotkeyEvent::Pressed(_) | HotkeyEvent::Released(_) => Action::Ignore,
     }
 }
@@ -88,6 +92,14 @@ async fn handle(
         }
         // Esc cancels what KIVO is doing (UX-12).
         Action::Cancel => engine.cancel(CancelReason::Hotkey),
+        // Pause listening, or resume it.
+        Action::TogglePause => {
+            let paused = core.state().borrow().session == kivo_core::SessionState::Paused;
+            let result = if paused { core.resume() } else { core.pause() };
+            if let Err(refused) = result {
+                tracing::debug!(reason = refused.0, "pause key ignored");
+            }
+        }
         Action::Ignore => {}
     }
 }
@@ -124,10 +136,22 @@ pub async fn run(
     };
     let mut push_to_talk = Chord(keys);
     bind_push_to_talk(&core, &hotkeys, &push_to_talk);
-    let mode_keys = Chord(vec!["Ctrl".into(), "Shift".into(), "M".into()]);
-    if let Err(e) = hotkeys.register(SWITCH_MODE, &mode_keys) {
-        tracing::warn!(%e, chord = %mode_keys, "couldn't register the mode hotkey");
-    }
+    let mut mode_keys = Chord(core.config().permissions.mode_shortcut.clone());
+    rebind(
+        &hotkeys,
+        SWITCH_MODE,
+        &Chord(Vec::new()),
+        &mode_keys,
+        "the mode hotkey",
+    );
+    let mut pause_keys = Chord(core.config().voice.pause_shortcut.clone());
+    rebind(
+        &hotkeys,
+        PAUSE,
+        &Chord(Vec::new()),
+        &pause_keys,
+        "the pause key",
+    );
     let mut type_keys = Chord(core.config().voice.type_to_kivo.clone());
     if let Err(e) = hotkeys.register(TYPE_TO_KIVO, &type_keys) {
         tracing::warn!(%e, chord = %type_keys, "couldn't register the type-to-KIVO keys");
@@ -199,9 +223,31 @@ pub async fn run(
                     }
                     type_keys = wanted;
                 }
+                let wanted = Chord(core.config().permissions.mode_shortcut.clone());
+                if wanted != mode_keys {
+                    rebind(&hotkeys, SWITCH_MODE, &mode_keys, &wanted, "the mode hotkey");
+                    mode_keys = wanted;
+                }
+                let wanted = Chord(voice.pause_shortcut.clone());
+                if wanted != pause_keys {
+                    rebind(&hotkeys, PAUSE, &pause_keys, &wanted, "the pause key");
+                    pause_keys = wanted;
+                }
             }
             () = shutdown.cancelled() => break,
         }
+    }
+}
+
+/// Moves `id` from `old` keys to `new` ones; empty keys mean the shortcut is off.
+fn rebind(hotkeys: &dyn Hotkeys, id: HotkeyId, old: &Chord, new: &Chord, what: &str) {
+    if !old.0.is_empty() {
+        let _ = hotkeys.unregister(id);
+    }
+    if !new.0.is_empty()
+        && let Err(e) = hotkeys.register(id, new)
+    {
+        tracing::warn!(%e, chord = %new, "couldn't register {what}");
     }
 }
 
@@ -230,6 +276,29 @@ fn bind_routines(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shortcuts_are_rebound_or_turned_off() {
+        let hotkeys = kivo_testkit::FakeHotkeys::default();
+        let none = Chord(Vec::new());
+        let ctrl_p = Chord(vec!["Ctrl".into(), "Alt".into(), "P".into()]);
+        rebind(&hotkeys, PAUSE, &none, &ctrl_p, "the pause key");
+        assert_eq!(
+            hotkeys
+                .registered
+                .lock()
+                .unwrap()
+                .get(&PAUSE)
+                .map(ToString::to_string),
+            Some("Ctrl+Alt+P".into())
+        );
+        rebind(&hotkeys, PAUSE, &ctrl_p, &none, "the pause key");
+        assert!(hotkeys.registered.lock().unwrap().get(&PAUSE).is_none());
+        assert_eq!(
+            action(HotkeyEvent::Pressed(PAUSE), false, false),
+            Action::TogglePause
+        );
+    }
 
     #[test]
     fn routine_hotkeys_replace_the_previous_ones() {

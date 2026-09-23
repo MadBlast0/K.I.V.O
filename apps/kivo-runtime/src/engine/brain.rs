@@ -94,6 +94,101 @@ fn topic_words(text: &str) -> std::collections::HashSet<String> {
         .collect()
 }
 
+/// Every string in a tool call's arguments (paths among them), for the local-only folder check.
+fn collect_strings(value: &serde_json::Value, out: &mut Vec<String>) {
+    match value {
+        serde_json::Value::String(s) => out.push(s.clone()),
+        serde_json::Value::Array(items) => items.iter().for_each(|v| collect_strings(v, out)),
+        serde_json::Value::Object(map) => map.values().for_each(|v| collect_strings(v, out)),
+        _ => {}
+    }
+}
+
+/// How many older turns to compact after a request (CONV-31): none when auto-compaction is off;
+/// the ones that didn't fit; or, when the request fills more than the threshold, half of those
+/// beyond the last four.
+fn compaction(
+    settings: &kivo_core::config::Context,
+    overflow: usize,
+    used: u32,
+    budget: u32,
+    turns: usize,
+) -> usize {
+    if !settings.auto_compact {
+        return 0;
+    }
+    if overflow > 0 {
+        return overflow;
+    }
+    let over = u64::from(used) * 100 > u64::from(budget) * u64::from(settings.compact_at);
+    let older = turns.saturating_sub(context::KEEP_TURNS);
+    if over && older > 0 {
+        older.div_ceil(2)
+    } else {
+        0
+    }
+}
+
+/// A request as text, for "Preview what the AI sees": the system blocks, the tools offered and
+/// the messages, in order.
+fn render_request(request: &ChatRequest) -> String {
+    let mut out = String::new();
+    for block in &request.system {
+        out.push_str("[system");
+        if block.cacheable {
+            out.push_str(", cached");
+        }
+        out.push_str("]\n");
+        out.push_str(block.text.trim());
+        out.push_str("\n\n");
+    }
+    if !request.tools.is_empty() {
+        let names: Vec<&str> = request.tools.iter().map(|t| t.name.as_str()).collect();
+        out.push_str(&format!("[tools] {}\n\n", names.join(", ")));
+    }
+    for m in &request.messages {
+        let role = match m.role {
+            Role::User => "user",
+            Role::Assistant => "assistant",
+            Role::Tool => "tool",
+        };
+        let text = m.text();
+        if text.trim().is_empty() {
+            continue;
+        }
+        out.push_str(&format!("[{role}]\n{}\n\n", text.trim()));
+    }
+    out.trim_end().to_owned()
+}
+
+/// A compaction reply split into the summary and its `REMEMBER:` lines (at most three).
+fn split_remember(reply: &str) -> (String, Vec<String>) {
+    let mut summary = Vec::new();
+    let mut remember = Vec::new();
+    for line in reply.lines() {
+        let t = line.trim().trim_start_matches(['-', '*']).trim();
+        match t.get(..9) {
+            Some(head) if head.eq_ignore_ascii_case("remember:") => {
+                let fact = t[9..].trim();
+                if !fact.is_empty() && remember.len() < 3 {
+                    remember.push(fact.to_owned());
+                }
+            }
+            _ => summary.push(line),
+        }
+    }
+    (
+        summary
+            .join(
+                "
+",
+            )
+            .trim()
+            .to_owned(),
+        remember,
+    )
+}
+
 /// Does `text` continue a conversation about `earlier` (CONV-01 "on the same topic")? A request
 /// that leans on what came before ("and tomorrow?", "what about it") always does.
 pub(super) fn same_topic(text: &str, earlier: &[String]) -> bool {
@@ -229,8 +324,12 @@ impl Engine {
         let Some(choice) = lock(&self.turn).as_ref().map(|t| t.brain_choice.clone()) else {
             return;
         };
-        // Sensitive data never goes to a cloud brain (SECURITY §6, BRAINS §5 rule 3).
-        let sensitive = !kivo_security::classify(&text).cloud_ok();
+        // Sensitive data never goes to a cloud brain (SECURITY §6, BRAINS §5 rule 3): the
+        // detectors and the user's labels, against what the privacy mode lets out (SEC-20/21).
+        // A request that asks to stay on the PC does too (plan §139).
+        let sensitive = kivo_security::classify_labeled(&text, &config.privacy.labels)
+            > kivo_security::privacy::cloud_limit(&config.privacy)
+            || kivo_security::privacy::asks_to_stay_local(&text);
         let mut routed = self
             .brains
             .route(&config, &text, choice.as_deref(), sensitive);
@@ -493,7 +592,7 @@ impl Engine {
             running.cancel.clone()
         };
         self.core.advance(SessionInput::NeedConfirmation);
-        let question = format!("{}?", spec.action);
+        let question = self.question(&spec.action);
         self.core.update_turn(|view| {
             view.confirm = Some(spec.clone());
             view.target_app.clone_from(&spec.target);
@@ -575,12 +674,11 @@ impl Engine {
             let sees = self.brains.sees(&attempt.provider, &attempt.model)
                 && (info.privacy == PrivacyClass::Local
                     || (config.tools.cloud_vision
-                        && matches!(
-                            config.privacy.mode,
-                            kivo_core::config::PrivacyMode::Cloud
-                                | kivo_core::config::PrivacyMode::Custom
-                        )));
+                        && kivo_security::privacy::cloud_vision(&config.privacy)));
             self.vision.store(sees, std::sync::atomic::Ordering::SeqCst);
+            if let Some(t) = lock(&self.turn).as_mut() {
+                t.cloud_brain = (info.privacy == PrivacyClass::Cloud).then(|| info.name.clone());
+            }
             let request = self.brain_request(
                 &config,
                 &route,
@@ -590,6 +688,7 @@ impl Engine {
                 thread.as_deref(),
                 &extra,
                 voice,
+                false,
             );
             let (request, used, budget_tokens, to_compact) = request;
             self.core.update_turn(|view| {
@@ -881,10 +980,14 @@ impl Engine {
         if within_session && let Some(thread) = &session.thread {
             return Some(thread.clone());
         }
-        // A new voice session joins a recent thread on the same topic.
+        // A new voice session joins a recent thread on the same topic, unless each conversation
+        // starts fresh (CONV-31).
         let since = now_ms() - i64::from(config.brains.thread_join_minutes) * 60_000;
         let joined = self
             .recorder_db(|db| {
+                if config.context.fresh_start {
+                    return Ok(None);
+                }
                 let Some(c) = db.latest_conversation("voice", since)? else {
                     return Ok(None);
                 };
@@ -911,6 +1014,19 @@ impl Engine {
 
     /// The live context: time, language, mode and the window in front (BRAINS §6 "Always").
     fn live_snapshot(&self, config: &kivo_core::KivoConfig) -> (Snapshot, Option<ContextItem>) {
+        let (snapshot, title) = self.live_fields(config);
+        // Only the fields Settings → Context sends (CONV-31).
+        let mut sent = Snapshot::default();
+        for (name, value) in snapshot.fields {
+            if config.context.live(&name) {
+                sent.set(&name, value);
+            }
+        }
+        (sent, title.filter(|_| config.context.live("window title")))
+    }
+
+    /// Every live field, before Settings → Context picks.
+    fn live_fields(&self, config: &kivo_core::KivoConfig) -> (Snapshot, Option<ContextItem>) {
         let mut snapshot = Snapshot::default();
         snapshot.set("local time", local_time(self.brains.utc_offset()));
         snapshot.set("language", config.general.language.clone());
@@ -940,7 +1056,10 @@ impl Engine {
         let mut state = lock(&self.session);
         let text = match state.agents.get(session) {
             Some(before) => {
-                let deltas = snapshot.deltas(before);
+                // Fields turned off since aren't "no longer known": they just aren't sent.
+                let mut before = before.clone();
+                before.fields.retain(|field, _| config.context.live(field));
+                let deltas = snapshot.deltas(&before);
                 if deltas.is_empty() {
                     String::new()
                 } else {
@@ -961,7 +1080,8 @@ impl Engine {
     }
 
     /// Builds a request in the CONV-05 order within the model's budget. Returns the request, the
-    /// tokens used, the budget and how many older turns should be compacted.
+    /// tokens used, the budget and how many older turns should be compacted. `dry` builds it for
+    /// "Preview what the AI sees" only: nothing is recorded and the turn is left alone.
     #[allow(clippy::too_many_arguments, reason = "one request's inputs")]
     fn brain_request(
         &self,
@@ -973,6 +1093,7 @@ impl Engine {
         thread: Option<&str>,
         extra: &[Message],
         voice: bool,
+        dry: bool,
     ) -> (ChatRequest, u32, u32, usize) {
         let profile = self
             .brains
@@ -991,7 +1112,11 @@ impl Engine {
         let mut layers = Layers {
             system: persona::system_prompt(&persona, voice, &addendum),
             // The skills index (CONV-32): names and descriptions; a body loads with `skills.load`.
-            skills: self.skills_index(),
+            skills: if config.context.skills {
+                self.skills_index()
+            } else {
+                String::new()
+            },
             ..Layers::default()
         };
         // Stated preferences ("call me Sam", "use metric", MEM-03) and, for voice, the words
@@ -1004,8 +1129,12 @@ impl Engine {
             .workspaces()
             .map(|w| w.instructions("global"))
             .unwrap_or_default();
-        let mut instructions = about.trim().to_owned();
-        if !preferences.is_empty() {
+        let mut instructions = if config.context.about_me {
+            about.trim().to_owned()
+        } else {
+            String::new()
+        };
+        if config.context.about_me && !preferences.is_empty() {
             if !instructions.is_empty() {
                 instructions.push('\n');
             }
@@ -1023,9 +1152,41 @@ impl Engine {
         }
         layers.instructions = instructions;
         // The current workspace's notes and the project's own agent files (CONV-11).
-        layers.workspace = self.workspaces().map(|w| w.context()).unwrap_or_default();
+        if config.context.workspace {
+            layers.workspace = self.workspaces().map(|w| w.context()).unwrap_or_default();
+        }
         // Live context: the whole block, plus what changed since this thread's last request.
         let (snapshot, title) = self.live_snapshot(config);
+        // Memories that match the request (MEM-08), as KIVO's own "user-provided memory": never
+        // for a guest, and sensitive ones never to a cloud brain unless allowed (MEM-07).
+        if let Some(memory) = self.memory().filter(|_| config.context.memories) {
+            let guest = lock(&self.turn).as_ref().is_some_and(|t| t.guest);
+            let current = self.workspaces().and_then(|w| w.current());
+            let app = snapshot.fields.get("active app").and_then(|a| {
+                std::path::Path::new(a)
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().to_lowercase())
+            });
+            let project = current.as_ref().map(|w| std::path::PathBuf::from(&w.path));
+            let recalled = memory.recall(
+                &crate::memory::Ask {
+                    text,
+                    app: app.as_deref(),
+                    project: project.as_deref(),
+                    workspace: current.as_ref().map(|w| w.name.as_str()),
+                    cloud: route.privacy == kivo_brain::PrivacyClass::Cloud,
+                    guest,
+                },
+                crate::memory::MEMORY_TOKENS,
+            );
+            if !dry {
+                memory.record_used(&self.turn_key(), &recalled);
+            }
+            layers.memories = recalled
+                .into_iter()
+                .map(|r| ContextItem::new(r.text, "user-provided memory", Trust::System))
+                .collect();
+        }
         let mut live = snapshot.block();
         if let Some(title) = title {
             live.push('\n');
@@ -1037,13 +1198,17 @@ impl Engine {
             if let Some((last_thread, before)) = &session.snapshot
                 && *last_thread == key
             {
-                let deltas = snapshot.deltas(before);
+                let mut before = before.clone();
+                before.fields.retain(|field, _| config.context.live(field));
+                let deltas = snapshot.deltas(&before);
                 if !deltas.is_empty() {
                     live.push_str("\nSince the last message: ");
                     live.push_str(&deltas.join("; "));
                 }
             }
-            session.snapshot = Some((key, snapshot));
+            if !dry {
+                session.snapshot = Some((key, snapshot));
+            }
         }
         layers.live = live;
         // The thread: its running summary, the turns since, recalled older messages.
@@ -1135,7 +1300,7 @@ impl Engine {
             });
         }
         // Only what was offered can be called (SEC-15): a brain naming another tool is refused.
-        if let Some(t) = lock(&self.turn).as_mut() {
+        if !dry && let Some(t) = lock(&self.turn).as_mut() {
             t.offered = layers
                 .tools
                 .iter()
@@ -1152,6 +1317,13 @@ impl Engine {
         );
         let assembled = context::assemble(&layers, budget_tokens);
         let used = assembled.total();
+        let to_compact = compaction(
+            &config.context,
+            assembled.to_compact,
+            used,
+            budget_tokens,
+            layers.turns.len(),
+        );
         let request = ChatRequest {
             model: attempt.model.clone(),
             system: assembled.system,
@@ -1164,7 +1336,7 @@ impl Engine {
             },
             temperature: None,
         };
-        (request, used, budget_tokens, assembled.to_compact)
+        (request, used, budget_tokens, to_compact)
     }
 
     /// One tool call from a brain, through the permission engine (invariant 4): decided now,
@@ -1282,6 +1454,13 @@ impl Engine {
             (Ok(_), Some(output)) => {
                 let body =
                     json!({ "ok": true, "said": output.say, "data": output.data }).to_string();
+                // The egress check (SEC-20/21): what came from a local-only folder or carries a
+                // private label isn't shown to a cloud brain. The action itself happened; only
+                // its result stays on the PC.
+                if let Some(message) = self.kept_local(&call.args, &body) {
+                    self.recorder.privacy_kept(&self.turn_key(), &title);
+                    return Some(vec![result(&wire, message, true)]);
+                }
                 // Someone else's content goes to the brain fenced and labelled (SEC-15).
                 let content = match &output.source {
                     Some(source) => {
@@ -1316,6 +1495,35 @@ impl Engine {
             (Ok(_), None) => vec![result(&wire, json!({ "ok": true }).to_string(), false)],
             (Err(error), _) => vec![result(&wire, error.message, true)],
         })
+    }
+
+    /// Why a tool's result must not reach this round's brain (SEC-20/21), as the message it gets
+    /// instead; `None` when it may. Only a cloud brain is checked: the class of the result (the
+    /// detectors and the user's labels) and of any file path in the call (local-only folders),
+    /// against what the privacy mode lets out.
+    fn kept_local(&self, args: &serde_json::Value, body: &str) -> Option<String> {
+        let brain = lock(&self.turn).as_ref()?.cloud_brain.clone()?;
+        let config = self.core.config();
+        let privacy = &config.privacy;
+        let limit = kivo_security::privacy::cloud_limit(privacy);
+        let mut paths = Vec::new();
+        collect_strings(args, &mut paths);
+        let from_folder = paths
+            .iter()
+            .any(|p| kivo_security::classify_path(p, &privacy.sensitive_folders) > limit);
+        let labelled = kivo_security::classify_labeled(body, &privacy.labels) > limit;
+        if !from_folder && !labelled {
+            return None;
+        }
+        let why = if from_folder {
+            text::t("policy.whyFolder")
+        } else {
+            text::t("policy.whyLabel")
+        };
+        Some(text::tf(
+            "policy.keptLocal",
+            &[("why", &why), ("brain", &brain)],
+        ))
     }
 
     /// A phrase of a streamed answer: spoken now, or queued behind the one playing (BRAIN-28).
@@ -1489,12 +1697,24 @@ impl Engine {
             task: None,
             routine: None,
         });
-        let summary = collected.text.trim();
+        // The summary, and what the brain thinks is worth remembering (CONV-20: suggested at
+        // compaction; kept only if the user accepts).
+        let (summary, remember) = split_remember(&collected.text);
         if summary.is_empty() {
             return Err("empty summary".into());
         }
         let last = batch.last().map_or(conversation.summarized, |m| m.id);
-        self.recorder_db(|db| db.set_summary(thread, summary, last));
+        self.recorder_db(|db| db.set_summary(thread, &summary, last));
+        if let Some(memory) = self.memory() {
+            for fact in remember {
+                memory.suggest(
+                    &fact,
+                    Some(&text::t("memory.fromConversation")),
+                    Some(&format!("conversation:{thread}")),
+                    None,
+                );
+            }
+        }
         Ok(())
     }
 
@@ -1530,10 +1750,13 @@ impl Engine {
         self.brain_turn(&corrected).await;
     }
 
-    /// What a request would start with, layer by layer (Settings → Context, CONV-30): each
-    /// layer's text and size, the tools offered, and the default brain's budget.
+    /// What a request would start with, layer by layer (Settings → Context, CONV-30/31): each
+    /// layer's text, size and whether it's on; the default brain's budget; an estimated cost of a
+    /// new conversation's first message; and the whole assembled request ("Preview what the AI
+    /// sees"). Secrets are redacted from every text shown.
     pub fn context_preview(&self, thread: Option<&str>) -> serde_json::Value {
         let config = self.core.config();
+        let on = &config.context;
         let route = self.brains.route(&config, "", None, false).ok();
         let (kind, window, profile) = route.as_ref().map_or((ProviderKind::Api, None, None), |r| {
             (
@@ -1568,7 +1791,8 @@ impl Engine {
         let workspace = self.workspaces().map(|w| w.context()).unwrap_or_default();
         let (snapshot, _) = self.live_snapshot(&config);
         let live = snapshot.block();
-        let (summary, turns) = thread
+        let skills = self.skills_index();
+        let (summary, turns, last) = thread
             .and_then(|id| {
                 self.recorder_db(|db| {
                     let c = db.conversation(id)?;
@@ -1576,14 +1800,19 @@ impl Engine {
                     Ok((c, m))
                 })
             })
-            .map_or((String::new(), 0), |(c, m)| {
+            .map_or((String::new(), 0, None), |(c, m)| {
                 let summarized = c.as_ref().map_or(0, |c| c.summarized);
                 let text: u32 = m
                     .iter()
                     .filter(|m| m.id > summarized)
                     .map(|m| context::tokens(&m.text) + 4)
                     .sum();
-                (c.map(|c| c.summary).unwrap_or_default(), text)
+                let last = m
+                    .iter()
+                    .rev()
+                    .find(|m| m.role == "user")
+                    .map(|m| m.text.clone());
+                (c.map(|c| c.summary).unwrap_or_default(), text, last)
             });
         let capabilities = config.capabilities.clone();
         let tools: Vec<(String, u32)> = self
@@ -1597,30 +1826,86 @@ impl Engine {
             })
             .collect();
         let class = model_class(kind, window);
-        let budget_voice = budget(
-            class,
-            window,
-            true,
-            profile.as_ref().and_then(|p| p.max_context),
-        );
-        let budget_chat = budget(
-            class,
-            window,
-            false,
-            profile.as_ref().and_then(|p| p.max_context),
-        );
+        let max_context = profile.as_ref().and_then(|p| p.max_context);
+        let budget_voice = budget(class, window, true, max_context);
+        let budget_chat = budget(class, window, false, max_context);
+        // The request the next message in this thread would send, built without side effects.
+        let assembled = route.as_ref().map(|r| {
+            let (request, used, _, _) = self.brain_request(
+                &config,
+                r,
+                &r.target,
+                r.kind,
+                last.as_deref().unwrap_or_default(),
+                thread,
+                &[],
+                false,
+                true,
+            );
+            (render_request(&request), used)
+        });
+        let redact = |t: &str| kivo_security::classify::redact_secrets(t);
+        let layer = |id: &str, text: &str, enabled: bool, max: u32| {
+            let tokens = if enabled { context::tokens(text) } else { 0 };
+            json!({ "id": id, "text": redact(text), "tokens": tokens, "max": max, "on": enabled })
+        };
+        let layers = vec![
+            layer("system", &system, true, context::SYSTEM_MAX),
+            layer(
+                "instructions",
+                &instructions,
+                on.about_me,
+                context::INSTRUCTIONS_MAX,
+            ),
+            layer(
+                "workspace",
+                &workspace,
+                on.workspace,
+                context::WORKSPACE_MAX,
+            ),
+            layer("live", &live, !on.live_fields.is_empty(), context::LIVE_MAX),
+            layer("skills", &skills, on.skills, 1_000),
+            json!({ "id": "memories", "tokens": 0, "max": context::MEMORY_MAX, "on": on.memories }),
+            layer("summary", &summary, true, context::SUMMARY_MAX),
+            json!({ "id": "turns", "tokens": turns, "on": true }),
+            json!({
+                "id": "tools",
+                "tokens": tools.iter().map(|t| t.1).sum::<u32>(),
+                "count": tools.len(),
+                "max": 20,
+                "on": true,
+            }),
+        ];
+        // A new conversation's first message: its start-up context (tools, memories and the
+        // summary come only when relevant), the words and a short reply.
+        let start: u64 = layers
+            .iter()
+            .filter(|l| {
+                !matches!(
+                    l["id"].as_str(),
+                    Some("turns" | "summary" | "tools" | "memories")
+                )
+            })
+            .map(|l| l["tokens"].as_u64().unwrap_or(0))
+            .sum();
+        let cost = route.as_ref().and_then(|r| {
+            self.brains.estimate(
+                &r.target.provider,
+                &r.target.model,
+                kivo_brain::Usage {
+                    input_tokens: start + 30,
+                    output_tokens: 150,
+                    cached_tokens: 0,
+                },
+            )
+        });
         json!({
             "brain": route.as_ref().map(|r| r.target_name.clone()),
             "budget": { "voice": budget_voice, "chat": budget_chat },
-            "layers": [
-                { "id": "system", "text": system, "tokens": context::tokens(&system), "max": context::SYSTEM_MAX },
-                { "id": "instructions", "text": instructions, "tokens": context::tokens(&instructions), "max": context::INSTRUCTIONS_MAX },
-                { "id": "workspace", "text": workspace, "tokens": context::tokens(&workspace), "max": context::WORKSPACE_MAX },
-                { "id": "live", "text": live, "tokens": context::tokens(&live), "max": context::LIVE_MAX },
-                { "id": "summary", "text": summary, "tokens": context::tokens(&summary), "max": context::SUMMARY_MAX },
-                { "id": "turns", "tokens": turns },
-                { "id": "tools", "tokens": tools.iter().map(|t| t.1).sum::<u32>(), "count": tools.len(), "max": 20 },
-            ],
+            "layers": layers,
+            "sessionCost": cost,
+            "preview": assembled.as_ref().map(|(text, _)| redact(text)),
+            "previewTokens": assembled.map(|(_, used)| used),
         })
     }
 
@@ -1646,6 +1931,14 @@ impl Engine {
         self.recorder
             .brain_problem(turn, "That's not what I meant", note);
         json!({ "misroutes": count })
+    }
+
+    /// "Continue" in Chat (CONV-03): the next voice request joins `thread`, as if its session
+    /// had just been talking.
+    pub fn continue_thread(&self, thread: &str) {
+        let mut session = lock(&self.session);
+        session.thread = Some(thread.to_owned());
+        session.last = Some(Instant::now());
     }
 
     /// Stops a brain turn from outside (the Chat page's Stop), like Esc.
@@ -1702,6 +1995,37 @@ enum Spend {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn compaction_follows_the_context_settings() {
+        let mut s = kivo_core::config::Context::default();
+        // Default: only what didn't fit.
+        assert_eq!(compaction(&s, 3, 9_000, 10_000, 12), 3);
+        assert_eq!(compaction(&s, 0, 9_900, 10_000, 12), 0);
+        // A lower threshold compacts earlier: half of the turns before the last four.
+        s.compact_at = 80;
+        assert_eq!(compaction(&s, 0, 8_100, 10_000, 12), 4);
+        assert_eq!(compaction(&s, 0, 7_900, 10_000, 12), 0);
+        assert_eq!(
+            compaction(&s, 0, 9_000, 10_000, 4),
+            0,
+            "the last four always stay"
+        );
+        s.auto_compact = false;
+        assert_eq!(compaction(&s, 3, 9_000, 10_000, 12), 0);
+    }
+
+    #[test]
+    fn compaction_replies_give_the_summary_and_suggestions() {
+        let (summary, remember) = split_remember(
+            "Sam is planning the release.\nThey chose Friday.\nREMEMBER: Sam's releases go out on Fridays\n- remember: Sam uses pnpm\nREMEMBER:\nREMEMBER: a\nREMEMBER: b",
+        );
+        assert_eq!(summary, "Sam is planning the release.\nThey chose Friday.");
+        assert_eq!(
+            remember,
+            ["Sam's releases go out on Fridays", "Sam uses pnpm", "a"]
+        );
+    }
 
     #[test]
     fn new_topic_is_found_and_stripped() {

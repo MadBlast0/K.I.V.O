@@ -255,7 +255,6 @@ async fn run(
 
     let push_to_talk_keys = config.voice.push_to_talk.clone();
     let emergency_stop_keys = config.permissions.emergency_stop.clone();
-    let show_tray = config.general.tray_icon;
     let keep_history = config.privacy.retention_days > 0;
     let core = Arc::new(Core::with_config(
         config.clone(),
@@ -427,11 +426,22 @@ async fn run(
     );
     workspaces.watch();
     engine.set_workspaces(Arc::clone(&workspaces));
-    // What KIVO remembers, for brains and for agents through KIVO's MCP server (CONV-24).
-    registry.set_live(
-        "memory.",
-        kivo_runtime::memory_tools::tools(&db, &workspaces),
+    // The memory vault (CONVERSATION §6): Markdown notes the user can edit, indexed in SQLite;
+    // edits made elsewhere are picked up, and a tidy job keeps it small (once a day).
+    let memory = kivo_runtime::memory::Memory::new(
+        Arc::clone(&core),
+        Arc::clone(&db),
+        dirs::config_dir()
+            .unwrap_or_else(std::env::temp_dir)
+            .join("KIVO")
+            .join("memory"),
+        kivo_platform_windows::utc_offset_minutes(),
     );
+    memory.watch();
+    engine.set_memory(Arc::clone(&memory));
+    kivo_runtime::memory::tidy_daily(Arc::clone(&memory), Arc::clone(&engine));
+    // What KIVO remembers, for brains and for agents through KIVO's MCP server (CONV-24).
+    registry.set_live("memory.", kivo_runtime::memory_tools::tools(&db, &memory));
     // MCP servers, connectors and skills (M6): servers connect and detectors run in the
     // background; other apps' setups and the skills folders are watched.
     let projects: Vec<std::path::PathBuf> = workspaces
@@ -524,14 +534,17 @@ async fn run(
         ],
         Arc::clone(&brains),
     );
-    let brains_rpc = Arc::new(kivo_runtime::brains_rpc::BrainsRpc::new(
-        Arc::clone(&core),
-        Arc::clone(&engine),
-        discovery,
-        recorder.clone(),
-        Arc::clone(&platform.control),
-        Arc::new(kivo_platform_windows::environment::open_in_terminal),
-    ));
+    let brains_rpc = Arc::new(
+        kivo_runtime::brains_rpc::BrainsRpc::new(
+            Arc::clone(&core),
+            Arc::clone(&engine),
+            Arc::clone(&discovery),
+            recorder.clone(),
+            Arc::clone(&platform.control),
+            Arc::new(kivo_platform_windows::environment::open_in_terminal),
+        )
+        .with_exports(dirs::download_dir().unwrap_or_else(std::env::temp_dir)),
+    );
     brains_rpc.start_background(core.shutdown());
     brains_rpc.start_pruning(core.shutdown());
     // Paraphrased commands (BRAIN-03): when the small embedding model is on this PC, and as soon
@@ -749,15 +762,43 @@ async fn run(
                     clipboard: Arc::clone(&controls.clipboard),
                     db: Arc::clone(&db),
                 }))
-                .with_extensions(Arc::new(
-                    kivo_runtime::extensions_rpc::ExtensionsRpc {
-                        core: Arc::clone(&core),
-                        engine: Arc::clone(&engine),
-                        mcp: Arc::clone(&mcp),
-                        connectors: Arc::clone(&connectors),
-                        skills: Arc::clone(&skills),
-                    },
-                )),
+                .with_extensions(Arc::new(kivo_runtime::extensions_rpc::ExtensionsRpc {
+                    core: Arc::clone(&core),
+                    engine: Arc::clone(&engine),
+                    mcp: Arc::clone(&mcp),
+                    connectors: Arc::clone(&connectors),
+                    skills: Arc::clone(&skills),
+                }))
+                .with_memory(Arc::new(kivo_runtime::memory_rpc::MemoryRpc {
+                    memory: Arc::clone(&memory),
+                    utc_offset: kivo_platform_windows::utc_offset_minutes(),
+                    recorder: engine.recorder.clone(),
+                    exports: dirs::download_dir().unwrap_or_else(std::env::temp_dir),
+                    reveal: Arc::new(|folder: &str| {
+                        use kivo_platform::SystemControl;
+                        kivo_platform_windows::WindowsControl
+                            .reveal(std::path::Path::new(folder))
+                            .map_err(|e| e.to_string())
+                    }),
+                    open_uri: Arc::new(|uri: &str| {
+                        kivo_platform_windows::open_uri(uri).map_err(|e| e.to_string())
+                    }),
+                }))
+                .with_system(Arc::new(kivo_runtime::system_rpc::SystemRpc {
+                    engine: Arc::clone(&engine),
+                    models: Arc::clone(&models),
+                    system: Arc::new(kivo_platform_windows::WindowsSystemInfo),
+                    processes: Arc::new(kivo_platform_windows::WindowsProcesses),
+                    browser: Some(Arc::clone(&browser)),
+                    discovery: Some(Arc::clone(&discovery)),
+                    open_url: Arc::new(|url: &str| {
+                        use kivo_platform::SystemControl;
+                        kivo_platform_windows::WindowsControl
+                            .open_url(url)
+                            .map_err(|e| e.to_string())
+                    }),
+                }))
+                .with_exports(dirs::download_dir().unwrap_or_else(std::env::temp_dir)),
             ),
             core.bus.clone(),
             core.state(),
@@ -801,7 +842,11 @@ async fn run(
     };
 
     #[cfg(windows)]
-    let tray = show_tray.then(|| tokio::spawn(tray::run(Arc::clone(&core), Arc::clone(&engine))));
+    // The tray icon, shown or removed as Settings → General says (UX-03).
+    let tray = Some(tokio::spawn(tray::supervise(
+        Arc::clone(&core),
+        Arc::clone(&engine),
+    )));
 
     #[cfg(windows)]
     let push_to_talk = tokio::spawn(hotkeys::run(

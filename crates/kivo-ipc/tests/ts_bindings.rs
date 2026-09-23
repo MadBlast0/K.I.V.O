@@ -5,7 +5,10 @@
 #![cfg(feature = "ts")]
 
 use kivo_core::capability::{Badge, Capability};
-use kivo_core::config::{IslandSpot, OverlayPosition, PermissionMode, Preset, SoundCue, SoundSet};
+use kivo_core::config::{
+    CompanionStyle, IslandSize, IslandSpot, MotionPref, OverlayPosition, PermissionMode, Preset,
+    SoundCue, SoundSet,
+};
 use kivo_core::event::{
     CancelReason, DeviceKind, EventKind, IntentPath, PermissionDecision, ProviderEvent, StepStatus,
     SystemEvent, TaskEvent, ToolEvent, TtsStopReason, TurnEvent, TurnSource, UiEvent, VoiceEvent,
@@ -21,9 +24,11 @@ use kivo_ipc::protocol::{
     ActivityItem, AgentItem, AgentSessionItem, AgentsOverview, AuditItem, BrainChip,
     CapabilityItem, Collision, ConnectorView, DesktopAiItem, DraftView, GrantItem, GrantLine,
     IslandPlacement, LiveActivity, McpFoundView, McpServerView, McpToolView, MeasuredItem,
-    ModelItem, Offer, ProfileItem, ProtocolVersion, QuietIsland, RecommendationItem, RoutineCheck,
-    RoutineView, ScreenPoint, SkillView, SpeechChoices, SpeechEngineItem, SpeechStatus, StepView,
-    TaskQuestion, TaskStepView, TaskView, ToolItem, TurnView, UndoOffer, VoiceItem, WorkspaceItem,
+    MemoryFolderView, MemoryNoteDetail, MemoryNoteView, MemoryOverview, MemorySuggestionView,
+    MemoryTagView, ModelItem, Offer, ProfileItem, ProtocolVersion, QuietIsland, RecommendationItem,
+    RoutineCheck, RoutineView, ScreenPoint, SetupAdvice, SkillView, SpeechChoices,
+    SpeechEngineItem, SpeechStatus, StepView, TaskQuestion, TaskStepView, TaskView, ToolItem,
+    TurnView, UndoOffer, VoiceItem, WorkspaceItem,
 };
 use kivo_ipc::{Link, LinkStatus, RpcError, StateSnapshot, Welcome, method};
 use std::path::PathBuf;
@@ -87,6 +92,9 @@ fn render() -> String {
         IslandPlacement::decl(&cfg),
         IslandSpot::decl(&cfg),
         OverlayPosition::decl(&cfg),
+        IslandSize::decl(&cfg),
+        MotionPref::decl(&cfg),
+        CompanionStyle::decl(&cfg),
         // Control Center lists
         ActivityItem::decl(&cfg),
         AuditItem::decl(&cfg),
@@ -133,6 +141,14 @@ fn render() -> String {
         McpFoundView::decl(&cfg),
         ConnectorView::decl(&cfg),
         SkillView::decl(&cfg),
+        // the memory vault (M7)
+        MemoryNoteView::decl(&cfg),
+        MemoryTagView::decl(&cfg),
+        MemoryFolderView::decl(&cfg),
+        MemorySuggestionView::decl(&cfg),
+        MemoryOverview::decl(&cfg),
+        SetupAdvice::decl(&cfg),
+        MemoryNoteDetail::decl(&cfg),
         ProtocolVersion::decl(&cfg),
         Welcome::decl(&cfg),
         RpcError::decl(&cfg),
@@ -233,6 +249,9 @@ fn render() -> String {
         ("chatDelete", method::CHAT_DELETE),
         ("chatSend", method::CHAT_SEND),
         ("chatCompact", method::CHAT_COMPACT),
+        ("chatContinue", method::CHAT_CONTINUE),
+        ("chatBranch", method::CHAT_BRANCH),
+        ("chatExport", method::CHAT_EXPORT),
         ("chatSearch", method::CHAT_SEARCH),
         ("chatMisroute", method::CHAT_MISROUTE),
         ("memoryPreferences", method::MEMORY_PREFERENCES),
@@ -286,6 +305,26 @@ fn render() -> String {
         ("skillsRead", method::SKILLS_READ),
         ("skillsRemove", method::SKILLS_REMOVE),
         ("extensionsRefresh", method::EXTENSIONS_REFRESH),
+        ("memoryOverview", method::MEMORY_OVERVIEW),
+        ("memoryNote", method::MEMORY_NOTE),
+        ("memorySave", method::MEMORY_SAVE),
+        ("memoryRemember", method::MEMORY_REMEMBER),
+        ("memoryRememberTurn", method::MEMORY_REMEMBER_TURN),
+        ("memoryMeta", method::MEMORY_META),
+        ("memoryDelete", method::MEMORY_DELETE),
+        ("memoryForget", method::MEMORY_FORGET),
+        ("memoryExport", method::MEMORY_EXPORT),
+        ("memorySuggestion", method::MEMORY_SUGGESTION),
+        ("memoryTidy", method::MEMORY_TIDY),
+        ("memoryOpen", method::MEMORY_OPEN),
+        ("memoryWhy", method::MEMORY_WHY),
+        ("performanceStatus", method::PERFORMANCE_STATUS),
+        ("setupRecommend", method::SETUP_RECOMMEND),
+        ("diagnosticsRun", method::DIAGNOSTICS_RUN),
+        ("settingsExport", method::SETTINGS_EXPORT),
+        ("settingsImport", method::SETTINGS_IMPORT),
+        ("settingsReset", method::SETTINGS_RESET),
+        ("systemOpenUrl", method::SYSTEM_OPEN_URL),
     ];
     out.push_str("\n/** IPC methods the UI can call. */\nexport const Method = {\n");
     for (name, value) in methods {
