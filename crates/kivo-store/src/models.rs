@@ -57,7 +57,58 @@ impl ModelManifest {
 /// The models KIVO knows how to download.
 pub fn catalog() -> Vec<ModelManifest> {
     const MOONSHINE: &str = "https://huggingface.co/csukuangfj2/sherpa-onnx-moonshine-base-en-quantized-2026-02-27/resolve/main";
-    vec![ModelManifest {
+    vec![moonshine(MOONSHINE), kokoro()]
+}
+
+/// Kokoro-82M (Apache-2.0): the quantized ONNX model, five voices, and misaki's US dictionaries
+/// (Apache-2.0) for KIVO's phonemizer (VOICE-09).
+fn kokoro() -> ModelManifest {
+    const MODEL: &str = "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/1939ad2a8e416c0acfeecc08a694d14ef25f2231";
+    const MISAKI: &str = "https://raw.githubusercontent.com/hexgrad/misaki/fba1236595f2d2bf21d414ba6e57d25256afada3/misaki/data";
+    let voice = |id: &str, sha256: &str| ModelFile {
+        name: format!("voices/{id}.bin"),
+        url: format!("{MODEL}/voices/{id}.bin"),
+        size: 522_240,
+        sha256: sha256.into(),
+    };
+    ModelManifest {
+        id: "kokoro-82m".into(),
+        name: "Kokoro (English voices)".into(),
+        kind: ModelKind::Tts,
+        license: "Apache-2.0".into(),
+        attribution: "Kokoro-82M by hexgrad, Apache License 2.0. Pronunciation dictionaries from misaki by hexgrad, Apache License 2.0.".into(),
+        source: "https://huggingface.co/hexgrad/Kokoro-82M".into(),
+        languages: vec!["en".into()],
+        files: vec![
+            ModelFile {
+                name: "model_quantized.onnx".into(),
+                url: format!("{MODEL}/onnx/model_quantized.onnx"),
+                size: 92_361_116,
+                sha256: "fbae9257e1e05ffc727e951ef9b9c98418e6d79f1c9b6b13bd59f5c9028a1478".into(),
+            },
+            voice("af_heart", "d583ccff3cdca2f7fae535cb998ac07e9fcb90f09737b9a41fa2734ec44a8f0b"),
+            voice("af_bella", "f69d836209b78eb8c66e75e3cda491e26ea838a3674257e9d4e5703cbaf55c8b"),
+            voice("am_michael", "1d1f21dd8da39c30705cd4c75d039d265e9bc4a2a93ed09bc9e1b1225eb95ba1"),
+            voice("bf_emma", "669fe0647f9dd04fcab92f1439a40eeb4c8b4ab1f82e4996fe3d918ce4a63b73"),
+            voice("bm_george", "c4b235a4c1f2cd3b939fed08b899ce9385638b763f7b73a59616c4fc9bd6c9bc"),
+            ModelFile {
+                name: "us_gold.json".into(),
+                url: format!("{MISAKI}/us_gold.json"),
+                size: 3_000_469,
+                sha256: "dc414872a49a28ae6c141463d502fd945f3b2fde040484fdc47d00cc4612686f".into(),
+            },
+            ModelFile {
+                name: "us_silver.json".into(),
+                url: format!("{MISAKI}/us_silver.json"),
+                size: 3_099_517,
+                sha256: "de8f67be911bb6c659187b4a65fd966b6a30e56350e0f790d763210b053ac475".into(),
+            },
+        ],
+    }
+}
+
+fn moonshine(base: &str) -> ModelManifest {
+    ModelManifest {
         id: "moonshine-base-en".into(),
         name: "Moonshine Base (English)".into(),
         kind: ModelKind::Stt,
@@ -68,24 +119,24 @@ pub fn catalog() -> Vec<ModelManifest> {
         files: vec![
             ModelFile {
                 name: "encoder_model.ort".into(),
-                url: format!("{MOONSHINE}/encoder_model.ort"),
+                url: format!("{base}/encoder_model.ort"),
                 size: 31_326_816,
                 sha256: "7c66495948d0d08ec1af454cd4b5514862ae6511e94712a60e6d83eaec8dc8cf".into(),
             },
             ModelFile {
                 name: "decoder_model_merged.ort".into(),
-                url: format!("{MOONSHINE}/decoder_model_merged.ort"),
+                url: format!("{base}/decoder_model_merged.ort"),
                 size: 109_424_400,
                 sha256: "d9d7b333af34bc552580576ddcf248a1c6c839e0d3b43b09afb9376ed009899d".into(),
             },
             ModelFile {
                 name: "tokens.txt".into(),
-                url: format!("{MOONSHINE}/tokens.txt"),
+                url: format!("{base}/tokens.txt"),
                 size: 549_350,
                 sha256: "2870d843e14c1e187bf1913a521562a63b53933814bd7f2145120468f494a049".into(),
             },
         ],
-    }]
+    }
 }
 
 /// A model on disk.
@@ -202,6 +253,9 @@ impl ModelStore {
         let mut done_before = 0;
         for file in &manifest.files {
             let target = partial.join(&file.name);
+            if let Some(parent) = target.parent() {
+                fs::create_dir_all(parent)?;
+            }
             if target.is_file() && fs::metadata(&target)?.len() == file.size {
                 done_before += file.size;
                 continue; // finished and verified in an earlier attempt
@@ -420,7 +474,11 @@ mod tests {
     fn a_model_installs_verified_and_atomically() {
         let tmp = tempfile::tempdir().unwrap();
         let store = ModelStore::new(tmp.path().to_path_buf());
-        let files: [(&str, &[u8]); 2] = [("a.onnx", &[1; 5000]), ("tokens.txt", b"hello 0")];
+        let files: [(&str, &[u8]); 3] = [
+            ("a.onnx", &[1; 5000]),
+            ("tokens.txt", b"hello 0"),
+            ("voices/one.bin", b"style"),
+        ];
         let m = manifest(&files);
         let mut last = Progress { done: 0, total: 0 };
         let installed = store
@@ -431,13 +489,17 @@ mod tests {
                 &mut |p| last = p,
             )
             .unwrap();
-        assert_eq!(installed.bytes, 5007);
+        assert_eq!(installed.bytes, 5012);
         assert_eq!(
             last,
             Progress {
-                done: 5007,
-                total: 5007
+                done: 5012,
+                total: 5012
             }
+        );
+        assert!(
+            installed.dir.join("voices/one.bin").is_file(),
+            "files in subfolders"
         );
         assert!(!tmp.path().join("test-model.partial").exists());
         assert_eq!(store.list().len(), 1);

@@ -4,6 +4,7 @@
 
 pub mod engine;
 pub mod error;
+pub mod kokoro;
 pub mod language;
 pub mod moonshine;
 pub mod recommend;
@@ -15,7 +16,7 @@ pub use engine::{Accel, EngineInfo, EngineKind, EngineSlot, ResourceEstimate};
 
 /// Every speech engine KIVO ships, for choosing one and for the privacy check (VOICE-07).
 pub fn engines() -> Vec<EngineInfo> {
-    vec![moonshine::info(), system_tts::info()]
+    vec![moonshine::info(), system_tts::info(), kokoro::info()]
 }
 
 /// The engine with this id, if KIVO has it.

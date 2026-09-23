@@ -7,7 +7,7 @@ use crate::core::Core;
 use crate::infer::{Engines, Infer};
 use kivo_core::KivoConfig;
 use kivo_ipc::protocol::{ModelItem, SpeechStatus};
-use kivo_store::models::{HttpFetcher, ModelManifest, ModelStore, Progress, catalog};
+use kivo_store::models::{HttpFetcher, ModelKind, ModelManifest, ModelStore, Progress, catalog};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -140,10 +140,14 @@ impl Models {
                 });
                 child
             };
-            tracing::info!(model = id, "downloading the speech model");
-            models
-                .core
-                .set_speech_status(SpeechStatus::Downloading { percent: 0 });
+            // Only the recognition model decides whether KIVO can hear (Home's note, the Island).
+            let hearing = manifest.kind == ModelKind::Stt;
+            tracing::info!(model = id, "downloading a model");
+            if hearing {
+                models
+                    .core
+                    .set_speech_status(SpeechStatus::Downloading { percent: 0 });
+            }
             let result =
                 models
                     .store
@@ -157,9 +161,11 @@ impl Models {
                         {
                             entry.1 = progress;
                         }
-                        models
-                            .core
-                            .set_speech_status(SpeechStatus::Downloading { percent });
+                        if hearing {
+                            models
+                                .core
+                                .set_speech_status(SpeechStatus::Downloading { percent });
+                        }
                     });
             cancel.cancel();
             models
@@ -169,18 +175,16 @@ impl Models {
                 .remove(&id);
             match result {
                 Ok(installed) => {
-                    tracing::info!(
-                        model = id,
-                        bytes = installed.bytes,
-                        "speech model installed"
-                    );
+                    tracing::info!(model = id, bytes = installed.bytes, "model installed");
                     models.apply_engines(&models.core.config());
                 }
                 Err(e) => {
                     tracing::error!(%e, model = id, "the model download failed");
-                    models.core.set_speech_status(SpeechStatus::Failed {
-                        message: e.to_string(),
-                    });
+                    if hearing {
+                        models.core.set_speech_status(SpeechStatus::Failed {
+                            message: e.to_string(),
+                        });
+                    }
                 }
             }
         });
@@ -188,7 +192,7 @@ impl Models {
     }
 
     /// Deletes a model and its unfinished download.
-    pub fn remove(&self, id: &str) -> Result<(), String> {
+    pub fn remove(self: &Arc<Self>, id: &str) -> Result<(), String> {
         if let Some((cancel, _)) = self
             .downloads
             .lock()
@@ -204,7 +208,7 @@ impl Models {
 
     /// Tells the worker which engines to use (they load on the first request, VOICE-34) and the
     /// UI whether KIVO can hear.
-    pub fn apply_engines(&self, config: &KivoConfig) {
+    pub fn apply_engines(self: &Arc<Self>, config: &KivoConfig) {
         let wanted = Self::wanted_stt(config);
         let stt = self
             .installed_dir(&wanted)
@@ -213,14 +217,7 @@ impl Models {
         let ready = stt.is_some();
         let tts = (!config.voice.tts_engine.is_empty())
             .then(|| config.voice.tts_engine.clone())
-            .map(|id| {
-                if speech_may_use(&id, config) {
-                    id
-                } else {
-                    // A cloud voice the privacy mode rules out: the Windows voices speak instead.
-                    kivo_voice::system_tts::ENGINE_ID.to_owned()
-                }
-            });
+            .map(|id| self.tts_engine(id, config));
         let warm_minutes = u64::from(
             config
                 .performance
@@ -242,6 +239,29 @@ impl Models {
             self.core.set_speech_status(SpeechStatus::Ready);
         } else if !matches!(self.core.speech_status(), SpeechStatus::Downloading { .. }) {
             self.core.set_speech_status(SpeechStatus::Missing);
+        }
+    }
+
+    /// The voice to load for the chosen `id`: a model-backed voice (Kokoro) needs its download,
+    /// which starts here if it is missing, and the Windows voices speak meanwhile; a cloud voice
+    /// the privacy mode rules out is replaced by them too (VOICE-07).
+    fn tts_engine(self: &Arc<Self>, id: String, config: &KivoConfig) -> (String, Option<PathBuf>) {
+        let system = (kivo_voice::system_tts::ENGINE_ID.to_owned(), None);
+        if !speech_may_use(&id, config) {
+            return system;
+        }
+        let needs_model = kivo_voice::engine(&id).is_some_and(|e| e.model.is_some());
+        if !needs_model {
+            return (id, None);
+        }
+        match self.installed_dir(&id) {
+            Some(dir) => (id, Some(dir)),
+            None => {
+                if let Err(e) = self.install(&id) {
+                    tracing::warn!(%e, voice = id, "couldn't start the voice download");
+                }
+                system
+            }
         }
     }
 

@@ -85,6 +85,18 @@ fn rig(
     tokio::task::JoinHandle<()>,
     tokio::task::JoinHandle<()>,
 ) {
+    rig_with_voice(clip, model_dir, ("system".to_owned(), None))
+}
+
+fn rig_with_voice(
+    clip: Vec<f32>,
+    model_dir: PathBuf,
+    voice: (String, Option<PathBuf>),
+) -> (
+    Rig,
+    tokio::task::JoinHandle<()>,
+    tokio::task::JoinHandle<()>,
+) {
     let core = Arc::new(Core::with_config(kivo_core::KivoConfig::default(), None));
     let db = Arc::new(Mutex::new(Database::in_memory().unwrap()));
     let recorder = activity::Recorder::new(Arc::clone(&db), true);
@@ -94,7 +106,7 @@ fn rig(
             stt: model_dir
                 .is_dir()
                 .then(|| (kivo_voice::moonshine::MODEL_ID.to_owned(), model_dir)),
-            tts: Some("system".to_owned()),
+            tts: Some(voice),
             threads: 4,
         },
         Duration::from_secs(600),
@@ -202,6 +214,10 @@ impl kivo_platform::Screen for NoScreen {
     }
 }
 
+/// The journeys run one at a time: each drives real speech models, and in parallel they starve
+/// each other of CPU (one person uses KIVO at a time).
+static ONE_AT_A_TIME: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 /// Waits for `check` to hold, or gives up.
 async fn until(what: &str, timeout: Duration, mut check: impl FnMut() -> bool) {
     let deadline = Instant::now() + timeout;
@@ -216,6 +232,7 @@ async fn until(what: &str, timeout: Duration, mut check: impl FnMut() -> bool) {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_spoken_command_opens_the_app_and_kivo_answers() {
+    let _turn = ONE_AT_A_TIME.lock().await;
     let paths = Paths::user().expect("per-user folders");
     let Some(model) = ModelStore::new(paths.models()).installed(kivo_voice::moonshine::MODEL_ID)
     else {
@@ -318,6 +335,7 @@ async fn a_spoken_command_opens_the_app_and_kivo_answers() {
 /// A typed request takes the same path, with no speech at all (UX §8).
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_typed_command_is_treated_like_a_spoken_one() {
+    let _turn = ONE_AT_A_TIME.lock().await;
     let (rig, worker_task, pump) = rig(Vec::new(), PathBuf::from("no-model"));
     // Speaking replies is on by default, but typed requests stay silent unless asked (UX §8).
     rig.core.update_config(|c| {
@@ -375,6 +393,7 @@ async fn a_typed_command_is_treated_like_a_spoken_one() {
 /// the worker comes back on the next use.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_crashed_speech_worker_fails_the_turn_aloud_and_comes_back() {
+    let _turn = ONE_AT_A_TIME.lock().await;
     let paths = Paths::user().expect("per-user folders");
     let Some(model) = ModelStore::new(paths.models()).installed(kivo_voice::moonshine::MODEL_ID)
     else {
@@ -434,6 +453,7 @@ async fn a_crashed_speech_worker_fails_the_turn_aloud_and_comes_back() {
 /// `kivo-tools`; barge-in (M2) takes the same path.)
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn cancelling_stops_every_layer_within_100_ms() {
+    let _turn = ONE_AT_A_TIME.lock().await;
     const BUDGET: Duration = Duration::from_millis(100);
     if !worker().is_file() {
         eprintln!("kivo-infer isn't built beside the tests; skipping");
@@ -505,6 +525,7 @@ async fn cancelling_stops_every_layer_within_100_ms() {
 /// (hidden by default, or a tiny pill) and KIVO answers with sounds only, never speech.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn over_a_fullscreen_app_kivo_stays_quiet() {
+    let _turn = ONE_AT_A_TIME.lock().await;
     if !worker().is_file() {
         eprintln!("kivo-infer isn't built beside the tests; skipping");
         return;
@@ -548,6 +569,56 @@ async fn over_a_fullscreen_app_kivo_stays_quiet() {
             .expect("the turn's timings were recorded");
         assert!(spans.get("t9FirstAudio").is_none(), "{turn} spoke: {spans}");
     }
+    rig.core.quit();
+    let _ = tokio::time::timeout(Duration::from_secs(5), worker_task).await;
+    pump.abort();
+}
+
+/// VOICE-09: with Kokoro chosen, the worker loads it and a reply is spoken in its voice. Runs
+/// where a Kokoro folder is available (`KIVO_KOKORO_DIR`, or the installed model).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn replies_can_be_spoken_by_kokoro() {
+    let _turn = ONE_AT_A_TIME.lock().await;
+    let dir = std::env::var_os("KIVO_KOKORO_DIR")
+        .map(PathBuf::from)
+        .or_else(|| {
+            Paths::user()
+                .and_then(|p| ModelStore::new(p.models()).installed("kokoro-82m"))
+                .map(|m| m.dir)
+        })
+        .filter(|d| d.join("model_quantized.onnx").is_file());
+    let Some(dir) = dir else {
+        eprintln!("Kokoro isn't available here; skipping");
+        return;
+    };
+    if !worker().is_file() {
+        eprintln!("kivo-infer isn't built beside the tests; skipping");
+        return;
+    }
+    let (rig, worker_task, pump) = rig_with_voice(
+        Vec::new(),
+        PathBuf::from("no-model"),
+        ("kokoro-82m".to_owned(), Some(dir)),
+    );
+    rig.core
+        .update_config(|c| c.voice.speak_typed_replies = true);
+    rig.engine.say("mute").await.expect("accepted");
+    until("the reply to be spoken", Duration::from_secs(60), || {
+        rig.core.state().borrow().session == SessionState::Idle
+    })
+    .await;
+    let spans = rig
+        .db
+        .lock()
+        .unwrap()
+        .turn_metrics("t1")
+        .unwrap()
+        .expect("the turn's timings were recorded");
+    assert!(
+        spans.get("t9FirstAudio").is_some(),
+        "Kokoro produced audio: {spans}"
+    );
+    eprintln!("first audio at {} ms", spans["t9FirstAudio"]);
     rig.core.quit();
     let _ = tokio::time::timeout(Duration::from_secs(5), worker_task).await;
     pump.abort();

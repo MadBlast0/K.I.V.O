@@ -56,8 +56,8 @@ pub enum InferEvent {
 pub struct Engines {
     /// Speech-to-text engine id and its model folder.
     pub stt: Option<(String, PathBuf)>,
-    /// Text-to-speech engine id ("system", "kokoro-82m").
-    pub tts: Option<String>,
+    /// Text-to-speech engine id ("system", "kokoro-82m") and its model folder, if it has one.
+    pub tts: Option<(String, Option<PathBuf>)>,
     pub threads: usize,
 }
 
@@ -465,11 +465,11 @@ async fn load_engines(peer: &Peer, engines: &Engines) -> Result<(), String> {
         }
     }
     match &engines.tts {
-        Some(engine) => {
+        Some((engine, dir)) => {
             let params = json!(ModelLoad {
                 slot: InferSlot::Tts,
                 engine: engine.clone(),
-                dir: None,
+                dir: dir.as_ref().map(|d| d.to_string_lossy().into_owned()),
                 threads
             });
             peer.request(method::MODEL_LOAD, params)
@@ -563,7 +563,7 @@ mod tests {
         let (infer, _events, _tx) = Infer::new(PathBuf::from("kivo-infer"));
         let engines = Engines {
             stt: None,
-            tts: Some("system".into()),
+            tts: Some(("system".into(), None)),
             threads: 1,
         };
         infer.configure(engines.clone(), Duration::from_secs(600));

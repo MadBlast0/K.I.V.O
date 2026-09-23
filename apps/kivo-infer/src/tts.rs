@@ -70,8 +70,18 @@ fn report(peer: &Peer, engine: &str, state: Residency) {
     );
 }
 
-fn load(engine: &str) -> Result<Box<dyn TtsEngine>, VoiceError> {
-    match engine {
+fn load(request: &ModelLoad) -> Result<Box<dyn TtsEngine>, VoiceError> {
+    match request.engine.as_str() {
+        kivo_voice::kokoro::ENGINE_ID => {
+            let dir = request
+                .dir
+                .as_deref()
+                .ok_or_else(|| VoiceError::ModelMissing(request.engine.clone()))?;
+            Ok(Box::new(kivo_voice::kokoro::Kokoro::load(
+                std::path::Path::new(dir),
+                request.threads,
+            )?))
+        }
         #[cfg(windows)]
         system_tts::ENGINE_ID => Ok(Box::new(SystemTts::new(Arc::new(
             kivo_platform_windows::WindowsSpeech,
@@ -96,7 +106,7 @@ fn run(rx: &mpsc::Receiver<Command>, peer: &Peer, tokens: &Tokens) {
                     continue;
                 }
                 report(peer, &request.engine, Residency::Warming);
-                match load(&request.engine) {
+                match load(&request) {
                     Ok(e) => {
                         engine = Some(e);
                         report(peer, &request.engine, Residency::Warm);
