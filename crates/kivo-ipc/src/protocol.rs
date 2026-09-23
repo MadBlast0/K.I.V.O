@@ -284,6 +284,10 @@ pub struct ModelItem {
     pub disk_bytes: u64,
     /// 0–100 while downloading.
     pub downloading: Option<u8>,
+    /// Loaded or not right now (PLAN-02): `unloaded`, `warming`, `warm`, `active`, `idle`,
+    /// `unloading`; `None` until the worker reports it.
+    #[serde(default)]
+    pub residency: Option<String>,
 }
 
 /// A capability toggle (CAPABILITIES §1).

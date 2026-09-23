@@ -38,6 +38,8 @@ pub enum Command {
         id: u64,
         reply: Reply<SttFinal>,
     },
+    /// An utterance was cancelled: wakes the loop so it stops at once.
+    Cancelled,
 }
 
 pub struct Handle(mpsc::Sender<Command>);
@@ -143,7 +145,8 @@ fn run(rx: &mpsc::Receiver<Command>, peer: &Peer, tokens: &Tokens) {
                     let _ = reply.send(Err(engine_error("the speech recognizer isn't loaded")));
                 }
             },
-            Command::Audio { .. } => {} // for an utterance that already ended
+            // For an utterance that already ended.
+            Command::Audio { .. } | Command::Cancelled => {}
             Command::Finish { reply, .. } => {
                 let _ = reply.send(Err(engine_error("nothing is being transcribed")));
             }
@@ -167,14 +170,11 @@ fn utterance(
     };
     let mut stream = engine.start(&options, cancel.clone());
     let mut heard = 0usize;
-    // Wake regularly so a cancel ends the utterance even when no more audio comes.
+    // A cancel sends `Cancelled`, so the loop sleeps until something arrives.
     while !cancel.is_cancelled() {
-        let command = match rx.recv_timeout(std::time::Duration::from_millis(50)) {
-            Ok(command) => command,
-            Err(mpsc::RecvTimeoutError::Timeout) => continue,
-            Err(mpsc::RecvTimeoutError::Disconnected) => break,
-        };
+        let Ok(command) = rx.recv() else { break };
         match command {
+            Command::Cancelled => {}
             Command::Audio { id: utterance, pcm } if utterance == start.id => {
                 heard += pcm.len();
                 match stream.accept(&pcm) {

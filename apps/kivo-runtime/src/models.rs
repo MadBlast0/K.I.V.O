@@ -71,6 +71,7 @@ impl Models {
                     installed: installed.is_some(),
                     disk_bytes: installed.map_or(0, |i| i.bytes),
                     downloading,
+                    residency: self.core.residency(&m.id),
                     id: m.id,
                     name: m.name,
                     license: m.license,
@@ -103,10 +104,11 @@ impl Models {
             if downloads.contains_key(id) || self.store.installed(id).is_some() {
                 return Ok(());
             }
+            // A child of the shutdown token: quitting KIVO stops the download (Remove too).
             downloads.insert(
                 id.to_owned(),
                 (
-                    CancellationToken::new(),
+                    self.core.shutdown().child_token(),
                     Progress {
                         done: 0,
                         total: manifest.download_size(),
@@ -115,7 +117,6 @@ impl Models {
             );
         }
         let models = Arc::clone(self);
-        let shutdown = self.core.shutdown();
         tokio::task::spawn_blocking(move || {
             let id = manifest.id.clone();
             let cancel = models
@@ -123,23 +124,7 @@ impl Models {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .get(&id)
-                .map_or_else(CancellationToken::new, |(c, _)| c.clone());
-            let cancel = {
-                let child = cancel.child_token();
-                let shutdown = shutdown.clone();
-                let stop = child.clone();
-                std::thread::spawn(move || {
-                    // Stop the download when KIVO quits.
-                    while !stop.is_cancelled() {
-                        if shutdown.is_cancelled() {
-                            stop.cancel();
-                            return;
-                        }
-                        std::thread::sleep(std::time::Duration::from_millis(200));
-                    }
-                });
-                child
-            };
+                .map_or_else(CancellationToken::new, |(c, _)| c.child_token());
             // Only the recognition model decides whether KIVO can hear (Home's note, the Island).
             let hearing = manifest.kind == ModelKind::Stt;
             tracing::info!(model = id, "downloading a model");
@@ -148,11 +133,16 @@ impl Models {
                     .core
                     .set_speech_status(SpeechStatus::Downloading { percent: 0 });
             }
+            let mut last_percent = None;
             let result =
                 models
                     .store
                     .install(&manifest, &HttpFetcher::new(), &cancel, &mut |progress| {
                         let percent = percent(progress);
+                        if last_percent != Some(percent) {
+                            last_percent = Some(percent);
+                            models.changed(&id, Some(percent), false);
+                        }
                         if let Some(entry) = models
                             .downloads
                             .lock()
@@ -167,7 +157,6 @@ impl Models {
                                 .set_speech_status(SpeechStatus::Downloading { percent });
                         }
                     });
-            cancel.cancel();
             models
                 .downloads
                 .lock()
@@ -176,10 +165,12 @@ impl Models {
             match result {
                 Ok(installed) => {
                     tracing::info!(model = id, bytes = installed.bytes, "model installed");
+                    models.changed(&id, None, true);
                     models.apply_engines(&models.core.config());
                 }
                 Err(e) => {
                     tracing::error!(%e, model = id, "the model download failed");
+                    models.changed(&id, None, false);
                     if hearing {
                         models.core.set_speech_status(SpeechStatus::Failed {
                             message: e.to_string(),
@@ -189,6 +180,19 @@ impl Models {
             }
         });
         Ok(())
+    }
+
+    /// Tells the Control Center a model changed (DIST-13: its list updates by push).
+    fn changed(&self, id: &str, percent: Option<u8>, installed: bool) {
+        self.core
+            .bus
+            .publish(kivo_core::Event::new(kivo_core::EventKind::System(
+                kivo_core::event::SystemEvent::ModelChanged {
+                    id: id.to_owned(),
+                    percent,
+                    installed,
+                },
+            )));
     }
 
     /// Deletes a model and its unfinished download.
@@ -202,6 +206,7 @@ impl Models {
             cancel.cancel();
         }
         self.store.remove(id).map_err(|e| e.to_string())?;
+        self.changed(id, None, false);
         self.apply_engines(&self.core.config());
         Ok(())
     }

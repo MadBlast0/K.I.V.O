@@ -279,7 +279,7 @@ real runtime data over IPC, not mockup data.
 - [ ] **UX-28** · M4 · Permissions page tabs Mode · Capabilities · Privacy (mockup → Permissions)
 - [ ] **UX-29** · M7 · Memory page: vault by tags and folders, suggestions, instructions, Open folder / Open in Obsidian (mockup → Memory; CONVERSATION §6)
 - [ ] **UX-30** · M7 · Usage page (BRAIN-37) (mockup → Usage)
-- [ ] **UX-31** · M7 · Settings tabs General · Appearance · Island · Sounds · Notifications · Accessibility · Shortcuts · Performance · Diagnostics · About, with the §5 defaults (mockup → Settings)
+- [ ] **UX-31** · M7 · Settings tabs General · Appearance · Island · Sounds · Notifications · Accessibility · Shortcuts · Performance · Diagnostics · About (with every model's and library's licence and attribution, DIST-13), with the §5 defaults (mockup → Settings)
 - [ ] **UX-32** · M7 · Mica on the Control Center (Windows 11), solid on Windows 10 (§3)
 
 **Onboarding (§4)**

@@ -294,6 +294,20 @@ pub enum SystemEvent {
     },
     /// The runtime is quitting (tray or Control Center "Quit KIVO"); UIs close too (UX §1).
     ShuttingDown,
+    /// A model's download moved on, finished, failed or it was removed (DIST-12/13): the Voice
+    /// page updates from these instead of asking.
+    ModelChanged {
+        id: String,
+        /// Download progress while downloading.
+        percent: Option<u8>,
+        installed: bool,
+    },
+    /// A speech engine's residency changed (PLAN-02): `unloaded`, `warming`, `warm`, `active`,
+    /// `idle` or `unloading`.
+    ModelResidency {
+        engine: String,
+        state: String,
+    },
 }
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]

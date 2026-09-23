@@ -425,3 +425,23 @@
   gap: 8px;
   margin-block-start: 6px;
 }
+/* A model's licence, shown before it downloads (DIST-13). */
+.k-licence {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.k-licence p {
+  margin: 0;
+}
+.k-licence__source {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.k-voice__model-end {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}

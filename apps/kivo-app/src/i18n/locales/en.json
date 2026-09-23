@@ -540,5 +540,37 @@
     "hello": "Windows Hello prompt preview",
     "cancel": "Cancel",
     "usePin": "Use PIN"
+  },
+  "voice": {
+    "subtitle": "How KIVO hears and speaks, and the speech models on this PC.",
+    "speaking": "Speaking",
+    "engine": "Voice",
+    "engineHint": "Windows voices are built in. Kokoro sounds more natural and is downloaded once.",
+    "systemVoices": "Windows voices",
+    "kokoro": "Kokoro",
+    "models": "Models on this PC",
+    "modelsHint": "Speech runs on this PC; nothing you say is sent anywhere.",
+    "modelLine": "{license} · {size} {where}",
+    "onThisPc": "on this PC",
+    "toDownload": "to download",
+    "downloading": "Downloading · {percent, number, ::percent scale/0.01}",
+    "download": "Download",
+    "remove": "Remove {name}",
+    "removeButton": "Remove",
+    "removeTitle": "Remove {name}?",
+    "removeHearing": "This frees {size}. KIVO can’t hear you again until it’s downloaded again.",
+    "removeVoice": "This frees {size}. KIVO speaks with the Windows voices until you download it again.",
+    "downloadTitle": "Download {name}?",
+    "downloadSize": "{size}, downloaded once and kept on this PC.",
+    "license": "Licence:",
+    "cancel": "Cancel",
+    "notConnected": "Open this in the KIVO app to manage models.",
+    "residency": {
+      "warming": "Loading",
+      "warm": "Ready",
+      "active": "In use",
+      "idle": "Ready",
+      "unloading": "Unloading"
+    }
   }
 }

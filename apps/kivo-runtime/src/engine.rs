@@ -1045,6 +1045,11 @@ pub async fn handle_infer_event(engine: &Arc<Engine>, event: InferEvent) {
             state,
         } => {
             tracing::debug!(?slot, engine = name, ?state, "model residency");
+            let state = serde_json::to_value(state)
+                .ok()
+                .and_then(|v| v.as_str().map(str::to_owned))
+                .unwrap_or_default();
+            engine.core.set_residency(&name, &state);
         }
         InferEvent::Lost => engine.engine_lost(),
     }

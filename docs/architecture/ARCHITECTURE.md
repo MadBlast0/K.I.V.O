@@ -147,7 +147,7 @@ startup (the `Capabilities` struct). They are never scattered through core code.
   - `Turn(Started | IntentDetected | BrainSelected | Completed | Cancelled | Failed)`
   - `Tool(Requested | PermissionDecided | Started | Progress | Completed | Failed)`
   - `Task(Created | StepChanged | Waiting | Completed | Cancelled | Failed)`
-  - `System(WindowChanged | FullscreenChanged | FocusModeChanged | PowerChanged | DeviceChanged | NetworkChanged | FileChanged | BrowserChanged)`
+  - `System(WindowChanged | FullscreenChanged | FocusModeChanged | PowerChanged | DeviceChanged | NetworkChanged | FileChanged | BrowserChanged | ModelChanged | ModelResidency | ShuttingDown)`
   - `Provider(HealthChanged | RateLimited | AuthFailed)`
   - `Ui(OverlayShown | OverlayHidden | UserConfirmed | UserCancelled)`
 - **Metadata:** every event carries `ts` (monotonic plus wall clock), `turn_id` / `task_id`

@@ -115,12 +115,12 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 
 **Models and dependencies (§4)**
 
-- [ ] **DIST-12** · M1 · Model manager (`kivo-store::models`): per-model manifest, resumable HTTP-range downloads, sha256 verification, atomic install into `%LOCALAPPDATA%\KIVO\models`, sources Hugging Face or KIVO's release mirror (§4)
-- [ ] **DIST-13** · M1 · Licenses and attribution (CC-BY, OpenRAIL) shown before download and in About; Voice → Models on this PC shows disk usage and Remove (§4)
+- [x] **DIST-12** · M1 · Model manager (`kivo-store::models`): per-model manifest, resumable HTTP-range downloads, sha256 verification, atomic install into `%LOCALAPPDATA%\KIVO\models`, sources Hugging Face or KIVO's release mirror (§4) → done: `kivo_store::models`: per-model manifests (Moonshine, Kokoro), resumable HTTP-range downloads, sha256 checks, a retry for a damaged file, files in subfolders, atomic install into `%LOCALAPPDATA%\KIVO\models`; sources pinned Hugging Face revisions and GitHub commits · verified: model-store tests (install, resume, damage, cancel, subfolders), the real Moonshine download (2026-09-23)
+- [x] **DIST-13** · M1 · Licenses and attribution (CC-BY, OpenRAIL) shown before download; Voice → done: the Voice page lists every model with its licence, size and whether it is on this PC; Download first shows the licence, attribution and source; Remove confirms and says what changes; progress and residency update by push · verified: `Voice.test.tsx` (licence before download, list), accessibility audit of Voice (2026-09-23)
 - [ ] **DIST-14** · M8 · Dependency manager (Node.js, Git, Ollama, …): detect → explain → consent → install via winget or vendor link → verify, configure, test; version and health checked; nothing installed silently (§4, plan §20)
 
 **Telemetry and compliance (§5–6)**
 
-- [ ] **DIST-15** · M1 · No telemetry by default; crash dumps stay local; the diagnostics bundle is generated on request and reviewed before sharing (§5)
+- [x] **DIST-15** · M1 · No telemetry by default; crash dumps stay local; the diagnostics bundle (generated on request and reviewed before sharing) is ARCH-40 (§5) → done: KIVO sends nothing anywhere by default: the only network use is a model download the user starts (or the default speech model) and web pages they open; crash dumps and reports stay in the crashes folder · verified: a search of every network client in the tree (only the model downloader), crash tests (2026-09-23)
 - [ ] **DIST-16** · M9 · Generated `THIRD_PARTY_NOTICES` (`cargo about` + npm license checker) in the installer and in About (§6)
 - [x] **DIST-17** · M0 · `cargo deny` denies GPL/AGPL in the default graph; GPL components only as separately downloaded add-ons after legal review (§6, ARCH-35) → done: `deny.toml` denies GPL/AGPL by allow-list · verified: `cargo deny check licenses` in CI

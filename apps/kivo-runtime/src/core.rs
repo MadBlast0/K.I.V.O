@@ -23,6 +23,8 @@ pub struct Core {
     state: watch::Sender<StateSnapshot>,
     /// Bumped on every settings change, for parts that apply settings live (hotkeys).
     settings: watch::Sender<u64>,
+    /// Each speech engine's residency as the worker last reported it (PLAN-02).
+    residency: Mutex<std::collections::HashMap<String, String>>,
     shutdown: CancellationToken,
 }
 
@@ -57,6 +59,7 @@ impl Core {
                 revision: 0,
             }),
             settings: watch::Sender::new(0),
+            residency: Mutex::default(),
             shutdown: CancellationToken::new(),
         }
     }
@@ -149,6 +152,33 @@ impl Core {
         }
         self.settings.send_modify(|n| *n += 1);
         updated
+    }
+
+    /// A speech engine's residency changed: keep it and tell the Control Center (PLAN-02).
+    pub fn set_residency(&self, engine: &str, state: &str) {
+        let changed = self
+            .residency
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(engine.to_owned(), state.to_owned())
+            .as_deref()
+            != Some(state);
+        if changed {
+            self.bus
+                .publish(Event::new(EventKind::System(SystemEvent::ModelResidency {
+                    engine: engine.to_owned(),
+                    state: state.to_owned(),
+                })));
+        }
+    }
+
+    /// An engine's residency, if the worker has reported one.
+    pub fn residency(&self, engine: &str) -> Option<String> {
+        self.residency
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(engine)
+            .cloned()
     }
 
     /// Changes whenever the settings do.
@@ -511,6 +541,31 @@ mod tests {
         assert!(
             !core.state().borrow().island_hidden,
             "\"Show the Island\" ends it early"
+        );
+    }
+
+    #[tokio::test]
+    async fn residency_changes_are_kept_and_published() {
+        let core = Core::default();
+        let mut events = core.bus.subscribe();
+        core.set_residency("moonshine-base-en", "warm");
+        core.set_residency("moonshine-base-en", "warm");
+        assert_eq!(core.residency("moonshine-base-en").as_deref(), Some("warm"));
+        let Received::Event(event) = events.recv().await else {
+            panic!("an event")
+        };
+        assert_eq!(
+            event.kind,
+            EventKind::System(SystemEvent::ModelResidency {
+                engine: "moonshine-base-en".into(),
+                state: "warm".into()
+            })
+        );
+        assert!(
+            tokio::time::timeout(Duration::from_millis(50), events.recv())
+                .await
+                .is_err(),
+            "a repeat isn't published again"
         );
     }
 

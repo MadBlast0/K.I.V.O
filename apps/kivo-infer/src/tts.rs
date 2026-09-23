@@ -134,7 +134,13 @@ fn run(rx: &mpsc::Receiver<Command>, peer: &Peer, tokens: &Tokens) {
             }
             Command::Speak { speak, cancel } => {
                 let done = match &mut engine {
-                    Some(e) => speak_one(e.as_mut(), &speak, &cancel, peer),
+                    Some(e) => {
+                        let id = e.info().id.clone();
+                        report(peer, &id, Residency::Active);
+                        let done = speak_one(e.as_mut(), &speak, &cancel, peer);
+                        report(peer, &id, Residency::Idle);
+                        done
+                    }
                     None => TtsDone {
                         id: speak.id,
                         error: Some("the voice isn't loaded".into()),

@@ -24,7 +24,7 @@ async function open(name: string) {
 }
 
 describe("Control Center accessibility", () => {
-  it.each(["home", "activity", "chat", "settings"])("has no ARIA or labelling problems on %s", async (id) => {
+  it.each(["home", "activity", "voice", "chat", "settings"])("has no ARIA or labelling problems on %s", async (id) => {
     render(<App />);
     await open(i18n.t(`nav.${id}`));
     expect(await violations()).toEqual([]);

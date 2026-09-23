@@ -623,3 +623,49 @@ async fn replies_can_be_spoken_by_kokoro() {
     let _ = tokio::time::timeout(Duration::from_secs(5), worker_task).await;
     pump.abort();
 }
+
+/// PLAN-19, the §138 journey "Kivo, mute": said aloud, handled by the grammar with no AI, and a
+/// brief confirmation.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn saying_mute_mutes_with_no_ai_and_a_brief_answer() {
+    let _turn = ONE_AT_A_TIME.lock().await;
+    let paths = Paths::user().expect("per-user folders");
+    let Some(model) = ModelStore::new(paths.models()).installed(kivo_voice::moonshine::MODEL_ID)
+    else {
+        eprintln!("the speech model isn't installed on this machine; skipping");
+        return;
+    };
+    if !worker().is_file() {
+        eprintln!("kivo-infer isn't built beside the tests; skipping");
+        return;
+    }
+    let (rig, worker_task, pump) = rig(spoken("Kivo, mute."), model.dir);
+    rig.engine
+        .talk(TurnSource::PushToTalk)
+        .await
+        .expect("KIVO starts listening");
+    until("the answer", Duration::from_secs(30), || {
+        rig.core.turn_view().and_then(|t| t.answer).is_some()
+    })
+    .await;
+    assert_eq!(
+        rig.core.turn_view().unwrap().answer.as_deref(),
+        Some("Muted."),
+        "a brief confirmation"
+    );
+    let metrics = rig.engine.router_metrics();
+    assert_eq!(
+        (metrics.requests, metrics.fast_path),
+        (1, 1),
+        "the grammar handled it: no AI"
+    );
+    assert!(
+        rig.recorder
+            .audit_rows(5)
+            .iter()
+            .any(|a| a.tool == "audio.mute" && a.decision == "allow")
+    );
+    rig.core.quit();
+    let _ = tokio::time::timeout(Duration::from_secs(5), worker_task).await;
+    pump.abort();
+}

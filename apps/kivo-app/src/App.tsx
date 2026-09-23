@@ -16,6 +16,7 @@ import { RuntimeProvider, useRuntime } from "./ipc/runtime";
 import { ThemeProvider } from "./lib/theme";
 import { Gallery } from "./pages/Gallery";
 import { Activity } from "./pages/Activity";
+import { Voice } from "./pages/Voice";
 import { Home } from "./pages/Home";
 
 const PAGES: ReadonlyArray<PageId> = [
@@ -140,6 +141,8 @@ function Shell({ page, setPage }: { page: PageId; setPage: (page: PageId) => voi
           <Home onOpenPermissions={() => setPage("permissions")} onOpenActivity={() => setPage("activity")} />
         ) : page === "activity" ? (
           <Activity />
+        ) : page === "voice" ? (
+          <Voice />
         ) : (
           <>
             <PageHeader title={t(`nav.${page}`)} />

@@ -45,7 +45,11 @@ export type TaskEvent = { "type": "created", name: string, } | { "type": "stepCh
 
 export type StepStatus = "pending" | "running" | "done" | "failed" | "skipped";
 
-export type SystemEvent = { "type": "windowChanged", app: string, title: string, } | { "type": "fullscreenChanged", fullscreen: boolean, } | { "type": "focusModeChanged", on: boolean, } | { "type": "powerChanged", onBattery: boolean, percent: number | null, } | { "type": "deviceChanged", kind: DeviceKind, name: string, } | { "type": "networkChanged", online: boolean, } | { "type": "fileChanged", path: string, } | { "type": "browserChanged", url: string, title: string, } | { "type": "shuttingDown" };
+export type SystemEvent = { "type": "windowChanged", app: string, title: string, } | { "type": "fullscreenChanged", fullscreen: boolean, } | { "type": "focusModeChanged", on: boolean, } | { "type": "powerChanged", onBattery: boolean, percent: number | null, } | { "type": "deviceChanged", kind: DeviceKind, name: string, } | { "type": "networkChanged", online: boolean, } | { "type": "fileChanged", path: string, } | { "type": "browserChanged", url: string, title: string, } | { "type": "shuttingDown" } | { "type": "modelChanged", id: string, 
+/**
+ * Download progress while downloading.
+ */
+percent: number | null, installed: boolean, } | { "type": "modelResidency", engine: string, state: string, };
 
 export type DeviceKind = "microphone" | "speaker";
 
@@ -217,7 +221,12 @@ size: number, installed: boolean, diskBytes: number,
 /**
  * 0–100 while downloading.
  */
-downloading: number | null, };
+downloading: number | null, 
+/**
+ * Loaded or not right now (PLAN-02): `unloaded`, `warming`, `warm`, `active`, `idle`,
+ * `unloading`; `None` until the worker reports it.
+ */
+residency: string | null, };
 
 export type CapabilityItem = { capability: Capability, label: string, enabled: boolean, default: boolean, badges: Array<Badge>, };
 

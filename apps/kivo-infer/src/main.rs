@@ -92,6 +92,10 @@ async fn serve() {
                             tokens.lock().unwrap_or_else(|e| e.into_inner()).get(&id)
                     {
                         token.cancel();
+                        // Recognition waits for its next message: this is it.
+                        if n.method == method::STT_CANCEL {
+                            stt.send(stt::Command::Cancelled);
+                        }
                     }
                 }
                 other => tracing::warn!(method = other, "unknown notification"),
