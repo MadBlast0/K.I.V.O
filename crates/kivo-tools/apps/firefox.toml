@@ -5,5 +5,6 @@ browser = true
 # KIVO's extension is Chromium-only for now: Firefox is read through UI Automation.
 prefer = ["uia"]
 
+examples = ["Search for the weather", "Open YouTube", "Tell me when the download finishes"]
 [match]
 exe = ["firefox.exe"]

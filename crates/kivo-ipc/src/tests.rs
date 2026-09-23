@@ -62,6 +62,11 @@ fn start_on(endpoint: String, hello_timeout: Duration) -> Running {
         hotkey_conflict: None,
         in_use: Vec::new(),
         island: Default::default(),
+        activities: Vec::new(),
+        tasks_active: 0,
+        bypass_until: None,
+        offer: None,
+        has_selection: false,
         revision: 1,
     });
     let task = tokio::spawn(server.run(
@@ -276,6 +281,11 @@ async fn a_client_that_falls_behind_gets_a_snapshot() {
             hotkey_conflict: None,
             in_use: Vec::new(),
             island: Default::default(),
+            activities: Vec::new(),
+            tasks_active: 0,
+            bypass_until: None,
+            offer: None,
+            has_selection: false,
             revision: 42,
         };
         false
@@ -402,6 +412,11 @@ async fn state_changes_are_pushed_to_every_client() {
         hotkey_conflict: None,
         in_use: Vec::new(),
         island: Default::default(),
+        activities: Vec::new(),
+        tasks_active: 0,
+        bypass_until: None,
+        offer: None,
+        has_selection: false,
         revision: 2,
     });
     for conn in [&mut a, &mut b] {
@@ -473,6 +488,11 @@ async fn microphone_levels_stream_while_they_change() {
         hotkey_conflict: None,
         in_use: Vec::new(),
         island: Default::default(),
+        activities: Vec::new(),
+        tasks_active: 0,
+        bypass_until: None,
+        offer: None,
+        has_selection: false,
         revision: 0,
     });
     let shutdown = CancellationToken::new();

@@ -17,6 +17,8 @@ const EMERGENCY_STOP: HotkeyId = HotkeyId(3);
 const TYPE_TO_KIVO: HotkeyId = HotkeyId(4);
 /// Esc, registered only while KIVO is busy so it never takes Esc from other apps otherwise.
 const CANCEL: HotkeyId = HotkeyId(5);
+/// Routines' hotkeys (ROUT-05) take ids from here up.
+const ROUTINES_FROM: u32 = 100;
 
 /// What a hotkey means. Kept separate from the async work so it can be tested without a desktop.
 #[derive(Debug, PartialEq, Eq)]
@@ -45,7 +47,21 @@ pub fn action(event: HotkeyEvent, toggle_mode: bool, listening: bool) -> Action 
     }
 }
 
-async fn handle(core: &Core, engine: &Arc<Engine>, event: HotkeyEvent) {
+async fn handle(
+    core: &Core,
+    engine: &Arc<Engine>,
+    event: HotkeyEvent,
+    routine_ids: &std::collections::HashMap<u32, String>,
+) {
+    if let HotkeyEvent::Pressed(HotkeyId(id)) = event
+        && let Some(routine) = routine_ids.get(&id)
+    {
+        if let Err(e) = engine.run_routine(routine) {
+            core.open_control_center(Some("routines"));
+            tracing::warn!(%e, "a routine's hotkey couldn't run it");
+        }
+        return;
+    }
     let config = core.config();
     let listening = engine.is_listening();
     match action(event, config.voice.toggle_mode, listening) {
@@ -65,7 +81,11 @@ async fn handle(core: &Core, engine: &Arc<Engine>, event: HotkeyEvent) {
             engine.cancel(CancelReason::EmergencyStop);
         }
         // Type to KIVO opens the Island's text box in the app (UX-41).
-        Action::OpenTextBox => core.open_control_center(Some("type")),
+        Action::OpenTextBox => {
+            // The selection first, while the app that has it is still in front (UX-42).
+            engine.capture_selection().await;
+            core.open_control_center(Some("type"));
+        }
         // Esc cancels what KIVO is doing (UX-12).
         Action::Cancel => engine.cancel(CancelReason::Hotkey),
         Action::Ignore => {}
@@ -121,6 +141,13 @@ pub async fn run(
     let mut state = core.state();
     let esc = Chord(vec!["Esc".into()]);
     let mut esc_registered = false;
+    // Routines' hotkeys, registered again whenever routines change.
+    let mut routine_keys = engine.routines().map(|r| r.hotkeys());
+    let mut routine_ids: std::collections::HashMap<u32, String> = std::collections::HashMap::new();
+    if let Some(keys) = routine_keys.as_mut() {
+        let wanted = keys.borrow_and_update().clone();
+        bind_routines(&hotkeys, &mut routine_ids, &wanted);
+    }
     loop {
         // Esc belongs to KIVO only while a request is in progress.
         let busy = state.borrow_and_update().session.is_active();
@@ -138,8 +165,20 @@ pub async fn run(
                 }
             }
         }
+        let routines_changed = async {
+            match routine_keys.as_mut() {
+                Some(keys) => keys.changed().await.is_ok(),
+                None => std::future::pending().await,
+            }
+        };
         tokio::select! {
-            Some(event) = events.recv() => handle(&core, &engine, event).await,
+            Some(event) = events.recv() => handle(&core, &engine, event, &routine_ids).await,
+            ok = routines_changed => {
+                if ok && let Some(keys) = routine_keys.as_mut() {
+                    let wanted = keys.borrow_and_update().clone();
+                    bind_routines(&hotkeys, &mut routine_ids, &wanted);
+                }
+            }
             changed = state.changed() => if changed.is_err() { break },
             // New keys chosen (the rebind prompt, Settings → Shortcuts): bind them now.
             changed = settings.changed() => {
@@ -166,9 +205,57 @@ pub async fn run(
     }
 }
 
+/// Registers the routines' chords in place of the ones before.
+fn bind_routines(
+    hotkeys: &dyn Hotkeys,
+    ids: &mut std::collections::HashMap<u32, String>,
+    wanted: &[(String, String)],
+) {
+    for id in ids.keys() {
+        let _ = hotkeys.unregister(HotkeyId(*id));
+    }
+    ids.clear();
+    for (n, (chord, routine)) in wanted.iter().enumerate() {
+        let id = ROUTINES_FROM + u32::try_from(n).unwrap_or(0);
+        let keys = Chord(chord.split('+').map(|k| k.trim().to_owned()).collect());
+        match hotkeys.register(HotkeyId(id), &keys) {
+            Ok(_) => {
+                ids.insert(id, routine.clone());
+            }
+            Err(e) => tracing::warn!(%e, %keys, "couldn't register a routine's hotkey"),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn routine_hotkeys_replace_the_previous_ones() {
+        let hotkeys = kivo_testkit::FakeHotkeys::default();
+        let mut ids = std::collections::HashMap::new();
+        bind_routines(
+            &hotkeys,
+            &mut ids,
+            &[
+                ("Ctrl+Alt+W".into(), "work".into()),
+                ("Ctrl+Alt+B".into(), "break".into()),
+            ],
+        );
+        assert_eq!(ids.len(), 2);
+        assert_eq!(ids.get(&ROUTINES_FROM).map(String::as_str), Some("work"));
+        bind_routines(&hotkeys, &mut ids, &[("Ctrl+Alt+G".into(), "night".into())]);
+        assert_eq!(ids.len(), 1);
+        let registered = hotkeys.registered.lock().unwrap();
+        assert_eq!(registered.len(), 1, "the old chords are gone");
+        assert_eq!(
+            registered
+                .get(&HotkeyId(ROUTINES_FROM))
+                .map(ToString::to_string),
+            Some("Ctrl+Alt+G".into())
+        );
+    }
 
     #[test]
     fn shared_push_to_talk_keys_work_and_are_reported() {

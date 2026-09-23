@@ -9,6 +9,7 @@ pub mod db;
 pub mod logging;
 pub mod models;
 pub mod records;
+pub mod tasks;
 pub mod voice;
 pub mod wake;
 

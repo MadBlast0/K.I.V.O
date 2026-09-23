@@ -47,6 +47,8 @@ struct Shown {
     island_hidden: bool,
     /// Sensitive capabilities in use (CAP-06): screen, input, shell.
     in_use: u8,
+    /// Tasks running or waiting (UX-56).
+    tasks: u32,
 }
 
 /// The in-use set as bits (so `Shown` stays `Copy`).
@@ -68,6 +70,7 @@ impl From<&StateSnapshot> for Shown {
             mode: s.mode,
             island_hidden: s.island_hidden,
             in_use: in_use_bits(&s.in_use),
+            tasks: s.tasks_active,
         }
     }
 }
@@ -141,6 +144,12 @@ fn icon(state: SessionState) -> TrayIcon {
 /// error still shows first.
 fn icon_shown(shown: Shown) -> TrayIcon {
     match icon(shown.session) {
+        // Bypass shows over everything but an error and paused (SEC-03).
+        TrayIcon::Normal | TrayIcon::Listening | TrayIcon::InUse
+            if shown.mode == PermissionMode::Bypass =>
+        {
+            TrayIcon::Bypass
+        }
         TrayIcon::Normal if shown.in_use != 0 => TrayIcon::InUse,
         other => other,
     }
@@ -148,20 +157,19 @@ fn icon_shown(shown: Shown) -> TrayIcon {
 
 /// "KIVO · Ready", then the permission mode and running tasks (UX-56), and what sensitive
 /// capability is in use (CAP-06).
-fn tooltip(state: SessionState, mode: PermissionMode) -> String {
-    // Tasks arrive in M5; until then nothing runs in the background.
+fn tooltip(state: SessionState, mode: PermissionMode, tasks: u32) -> String {
     text::tf(
         "tray.tooltip",
         &[
             ("state", &describe(state)),
             ("mode", &mode_label(mode)),
-            ("tasks", &text::plural("tray.tasks", 0, &[])),
+            ("tasks", &text::plural("tray.tasks", u64::from(tasks), &[])),
         ],
     )
 }
 
 fn tooltip_shown(shown: Shown) -> String {
-    let mut tip = tooltip(shown.session, shown.mode);
+    let mut tip = tooltip(shown.session, shown.mode, shown.tasks);
     let using: Vec<String> = [(1, "screen"), (2, "input"), (4, "shell")]
         .iter()
         .filter(|(bit, _)| shown.in_use & bit != 0)
@@ -240,13 +248,9 @@ pub async fn run(core: Arc<Core>, engine: Arc<Engine>) {
     let mut state = core.state();
     let mut shown = Shown::from(&*state.borrow_and_update());
     let (tx, mut events) = mpsc::unbounded_channel();
-    let tray = match WindowsTray::start(
-        &tooltip(shown.session, shown.mode),
-        &menu(shown),
-        move |e| {
-            let _ = tx.send(e);
-        },
-    ) {
+    let tray = match WindowsTray::start(&tooltip_shown(shown), &menu(shown), move |e| {
+        let _ = tx.send(e);
+    }) {
         Ok(tray) => tray,
         Err(e) => {
             // KIVO still works without the tray (voice, the app); the error is logged.
@@ -300,6 +304,7 @@ mod tests {
             mode: PermissionMode::Auto,
             island_hidden: false,
             in_use: 0,
+            tasks: 0,
         };
         assert_eq!(
             ids(&menu(shown(SessionState::Idle))),
@@ -328,6 +333,7 @@ mod tests {
             mode: PermissionMode::Plan,
             island_hidden: false,
             in_use: 0,
+            tasks: 0,
         });
         let Some(TrayMenuItem::Submenu { items, .. }) = menu.get(2) else {
             panic!("the third item is the permission-mode submenu");
@@ -372,15 +378,33 @@ mod tests {
             mode: PermissionMode::Auto,
             island_hidden: false,
             in_use: in_use_bits(&["shell".to_owned(), "screen".to_owned()]),
+            tasks: 0,
         };
         assert_eq!(icon_shown(busy), TrayIcon::InUse);
         let tip = tooltip_shown(busy);
         assert!(tip.ends_with("Using the screen, shell commands"), "{tip}");
         assert_eq!(icon_shown(Shown { in_use: 0, ..busy }), TrayIcon::Normal);
         assert_eq!(
-            tooltip(SessionState::Idle, PermissionMode::Auto),
+            tooltip(SessionState::Idle, PermissionMode::Auto, 0),
             "KIVO · Ready\nAuto mode · 0 tasks running"
         );
+        // Running tasks are counted (UX-56), and Bypass turns the icon red (SEC-03).
+        let tasks = Shown {
+            in_use: 0,
+            tasks: 2,
+            ..busy
+        };
+        assert!(tooltip_shown(tasks).contains("2 tasks running"));
+        let bypass = Shown {
+            mode: PermissionMode::Bypass,
+            ..tasks
+        };
+        assert_eq!(icon_shown(bypass), TrayIcon::Bypass);
+        let paused = Shown {
+            session: SessionState::Paused,
+            ..bypass
+        };
+        assert_eq!(icon_shown(paused), TrayIcon::Paused);
     }
 
     #[tokio::test]

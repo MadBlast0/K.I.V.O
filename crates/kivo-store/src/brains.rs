@@ -408,6 +408,26 @@ impl Database {
         Ok(rows)
     }
 
+    /// Every stored agent session, most recently used first (the Agents page, UX-25).
+    pub fn agent_sessions(&self, limit: u32) -> Result<Vec<AgentSessionRow>, DbError> {
+        let owner = self.owner()?;
+        let mut stmt = self.connection().prepare(
+            "SELECT id, agent, workspace, conversation_id, created_at, last_used FROM agent_sessions
+             WHERE profile_id = ?1 ORDER BY last_used DESC LIMIT ?2",
+        )?;
+        let rows = stmt.query_map(params![owner, limit], |r| {
+            Ok(AgentSessionRow {
+                id: r.get(0)?,
+                agent: r.get(1)?,
+                workspace: r.get(2)?,
+                conversation_id: r.get(3)?,
+                created_at: r.get(4)?,
+                last_used: r.get(5)?,
+            })
+        })?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
     pub fn save_agent_session(&self, row: &AgentSessionRow) -> Result<(), DbError> {
         let owner = self.owner()?;
         self.connection().execute(

@@ -139,7 +139,6 @@ impl Capability {
 }
 
 /// The user's toggles: only the ones changed from the default are stored.
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct CapabilitySettings(pub BTreeMap<Capability, bool>);

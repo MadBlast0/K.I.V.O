@@ -37,6 +37,24 @@ fn optional(id: &str) -> Option<String> {
     (!id.is_empty()).then(|| id.to_owned())
 }
 
+/// What a background task records carries `task:<id>` where a turn's id would be (ARCH-27).
+const TASK_KEY: &str = "task:";
+
+fn turn_of(key: &str) -> Option<String> {
+    (!key.starts_with(TASK_KEY))
+        .then(|| optional(key))
+        .flatten()
+}
+
+fn task_of(key: &str) -> Option<String> {
+    key.strip_prefix(TASK_KEY).map(str::to_owned)
+}
+
+/// The key a task's records go under.
+pub fn task_key(task: &str) -> String {
+    format!("{TASK_KEY}{task}")
+}
+
 impl Recorder {
     pub fn new(db: Arc<Mutex<Database>>, keep_content: bool) -> Self {
         let session: Arc<str> = uuid::Uuid::now_v7().to_string().into();
@@ -85,8 +103,8 @@ impl Recorder {
     pub fn transcript(&self, turn: &str, text: &str) {
         self.add(NewActivity {
             ts: now_ms(),
-            turn_id: optional(turn),
-            task_id: None,
+            turn_id: turn_of(turn),
+            task_id: task_of(turn),
             kind: "transcript".into(),
             title: if self.keep_content {
                 text.to_owned()
@@ -112,8 +130,8 @@ impl Recorder {
         let risk = serde_json::to_value(spec.risk).unwrap_or_default();
         self.audit(&AuditRecord {
             ts: now_ms(),
-            turn_id: optional(turn),
-            task_id: None,
+            turn_id: turn_of(turn),
+            task_id: task_of(turn),
             tool: call.tool.clone(),
             args_summary: summarize(&call.args),
             risk: risk.as_str().unwrap_or("unknown").to_owned(),
@@ -128,8 +146,8 @@ impl Recorder {
         if let Decision::Deny(denial) = decision {
             self.add(NewActivity {
                 ts: now_ms(),
-                turn_id: optional(turn),
-                task_id: None,
+                turn_id: turn_of(turn),
+                task_id: task_of(turn),
                 kind: "tool".into(),
                 title: kivo_security::render_title(&spec.title, &call.args),
                 detail: Some(denial.message.clone()),
@@ -139,12 +157,31 @@ impl Recorder {
         }
     }
 
+    /// A task's life in Activity: created, finished, failed (UX-24).
+    pub fn task_activity(&self, task: &str, title: &str, status: &str, detail: Option<&str>) {
+        self.add(NewActivity {
+            ts: now_ms(),
+            turn_id: None,
+            task_id: Some(task.to_owned()),
+            kind: "task".into(),
+            title: title.to_owned(),
+            detail: detail.map(str::to_owned),
+            status: status.to_owned(),
+            data: None,
+        });
+    }
+
+    /// The database, for the task store.
+    pub fn database(&self) -> Arc<Mutex<Database>> {
+        Arc::clone(&self.db)
+    }
+
     /// A tool KIVO couldn't offer at all (its capability is off, CAP-02).
     pub fn tool_denied(&self, turn: &str, call: &ToolCall, message: &str) {
         self.audit(&AuditRecord {
             ts: now_ms(),
-            turn_id: optional(turn),
-            task_id: None,
+            turn_id: turn_of(turn),
+            task_id: task_of(turn),
             tool: call.tool.clone(),
             args_summary: summarize(&call.args),
             risk: "unknown".into(),
@@ -163,8 +200,8 @@ impl Recorder {
         };
         self.add(NewActivity {
             ts: now_ms(),
-            turn_id: optional(turn),
-            task_id: None,
+            turn_id: turn_of(turn),
+            task_id: task_of(turn),
             kind: "tool".into(),
             title: call.tool.clone(),
             detail: Some(detail.clone()),
@@ -173,8 +210,8 @@ impl Recorder {
         });
         self.audit(&AuditRecord {
             ts: now_ms(),
-            turn_id: optional(turn),
-            task_id: None,
+            turn_id: turn_of(turn),
+            task_id: task_of(turn),
             tool: call.tool.clone(),
             args_summary: summarize(&call.args),
             risk: "unknown".into(),
@@ -195,8 +232,8 @@ impl Recorder {
     ) {
         self.audit(&AuditRecord {
             ts: now_ms(),
-            turn_id: optional(turn),
-            task_id: None,
+            turn_id: turn_of(turn),
+            task_id: task_of(turn),
             tool: call.tool.clone(),
             args_summary: summarize(&call.args),
             risk: "unknown".into(),
@@ -262,6 +299,7 @@ impl Recorder {
                 tool: g.tool,
                 scope: g.scope,
                 pattern: g.pattern,
+                args: None,
             })
             .collect()
     }
@@ -296,8 +334,8 @@ impl Recorder {
     pub fn screenshot_sent(&self, turn: &str, note: &str) {
         self.add(NewActivity {
             ts: now_ms(),
-            turn_id: optional(turn),
-            task_id: None,
+            turn_id: turn_of(turn),
+            task_id: task_of(turn),
             kind: "privacy".into(),
             title: note.to_owned(),
             detail: None,
@@ -310,8 +348,8 @@ impl Recorder {
     pub fn answer(&self, turn: &str, text: &str, status: &str) {
         self.add(NewActivity {
             ts: now_ms(),
-            turn_id: optional(turn),
-            task_id: None,
+            turn_id: turn_of(turn),
+            task_id: task_of(turn),
             kind: "reply".into(),
             title: if self.keep_content {
                 text.to_owned()
@@ -328,8 +366,8 @@ impl Recorder {
     pub fn brain_route(&self, turn: &str, reason: &str, data: Value) {
         self.add(NewActivity {
             ts: now_ms(),
-            turn_id: optional(turn),
-            task_id: None,
+            turn_id: turn_of(turn),
+            task_id: task_of(turn),
             kind: "brain".into(),
             title: reason.to_owned(),
             detail: None,
@@ -345,8 +383,8 @@ impl Recorder {
     pub fn brain_problem(&self, turn: &str, title: &str, detail: &str) {
         self.add(NewActivity {
             ts: now_ms(),
-            turn_id: optional(turn),
-            task_id: None,
+            turn_id: turn_of(turn),
+            task_id: task_of(turn),
             kind: "brain".into(),
             title: title.to_owned(),
             detail: Some(detail.to_owned()),
@@ -666,6 +704,7 @@ mod tests {
                 tool: "apps.launch".into(),
                 scope: Some("chrome".into()),
                 pattern: None,
+                args: None,
             }]
         );
         // Durations: once stores nothing; a day expires; a session grant is this run's only.

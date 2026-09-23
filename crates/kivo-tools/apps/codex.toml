@@ -1,0 +1,20 @@
+# OpenAI Codex CLI: approval and sandbox flags for a visible terminal (CONVERSATION §5.2).
+# KIVO checks each flag against the installed CLI's `--help` before using it.
+id = "codex"
+name = "Codex"
+aliases = ["Codex CLI", "OpenAI Codex"]
+cli_only = true
+examples = ["Start Codex in this folder", "Tell Codex to fix the lint errors"]
+
+[match]
+exe = ["codex.exe", "codex.cmd"]
+
+[agent]
+command = "codex"
+bypass_modes = ["bypass"]
+resume = ["resume", "{session}"]
+[agent.modes]
+default = []
+plan = ["--sandbox", "read-only"]
+accept-edits = ["--full-auto"]
+bypass = ["--dangerously-bypass-approvals-and-sandbox"]

@@ -4,5 +4,6 @@ aliases = ["Chrome"]
 browser = true
 prefer = ["browser-dom", "uia"]
 
+examples = ["Search for Rust async traits", "Summarize this page", "Open YouTube", "Tell me when the download finishes"]
 [match]
 exe = ["chrome.exe"]

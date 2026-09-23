@@ -130,7 +130,7 @@ async fn window_content_is_fenced_and_taints_the_turn() {
     r.rig.brains.insert(b.clone());
     r.rig
         .engine
-        .say("press export in the test app")
+        .say("press export in the test app, then shut down the PC")
         .await
         .unwrap();
     // uia.invoke from a brain is Medium: it asks (AI-initiated).

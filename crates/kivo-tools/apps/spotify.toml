@@ -4,6 +4,7 @@ name = "Spotify"
 aliases = ["Spotify"]
 prefer = ["uri", "native", "uia"]
 
+examples = ["Play some lo-fi", "Next song", "What's playing?", "Pause the music"]
 [match]
 exe = ["Spotify.exe"]
 aumid = ["SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify"]

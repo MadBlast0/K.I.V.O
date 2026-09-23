@@ -9,8 +9,8 @@ pub mod testenv;
 
 pub use audio::FakeAudio;
 pub use control::{
-    FakeClipboard, FakeCommands, FakeDisplays, FakeFiles, FakeInput, FakeOcr, FakePower, FakeUia,
-    FakeVerifier, InputAction,
+    FakeClipboard, FakeCommands, FakeDisplays, FakeFiles, FakeInput, FakeOcr, FakePower,
+    FakeProcesses, FakeTerminals, FakeUia, FakeVerifier, InputAction,
 };
 pub use kivo_brain::testing::{MockServer, Reply, Script, ScriptedBrain};
 pub use platform::{

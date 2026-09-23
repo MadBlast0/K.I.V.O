@@ -1,0 +1,9 @@
+# Claude Desktop (DISC-06), found by its name in the installed apps. Prompting it through its
+# composer is CONVERSATION §5.3.
+id = "claude-desktop"
+name = "Claude"
+aliases = ["Claude Desktop", "Claude app"]
+desktop_ai = true
+prefer = ["uia"]
+examples = ["In Claude, prompt: summarize my notes", "Open Claude"]
+

@@ -230,7 +230,7 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 - [x] **BRAIN-04** · M3 · Hybrid requests go to the brain, with the fast-path tools exposed as tools (§2) → done: requests joining two actions skip the semantic stage and go to the brain, which gets the fast-path tools as tools (≤ 20, BRAIN-27) · verified: `the_brains_tool_calls_go_through_the_permission_engine` (mute + launch + close through tools), semantic tests reject "open chrome and search for cats" (2026-09-23)
 - [x] **BRAIN-05** · M1 · Metrics `fast_path_ratio` and per-stage p95 latency (§2) → done: `IntentRouter::metrics` keeps the fast-path share and the grammar stage's p95 over the last requests; the engine logs them per turn and exposes `Engine::router_metrics` · verified: `the_fast_path_ratio_and_grammar_latency_are_tracked`, `p95_uses_the_nearest_rank`, and the typed end-to-end test asserts 1 of 1 routed without AI (2026-09-23)
 - [x] **BRAIN-06** · M3 · A "That's not what I meant" misroute report in the card (§2) → done: "That's not what I meant" on the Island's answer and on each Chat reply records the turn, its route and note in `misroutes` and the router's metrics (`chat.misroute`) · verified: `the_control_centers_brain_requests`, `Chat.test.tsx`, Island tests (2026-09-23)
-- [ ] **BRAIN-07** · M5 · Event tasks ("tell me when…", "watch…", "remind me…") classified by grammar first and by the brain when ambiguous, then turned into Tasks with watchers (§2)
+- [x] **BRAIN-07** · M5 · Event tasks ("tell me when…", "watch…", "remind me…") classified by grammar first and by the brain when ambiguous, then turned into Tasks with watchers (§2) → done: grammar commands `tasks.remind` / `tasks.watch` (build, download, window, process) first; brains get the same tools (`tasks` hints) when the grammar can't tell; both become tasks with watchers · verified: `reminders_and_missing_builds`, `the_build_watcher_waits_without_ai_and_tells_you`, `a_brain_turns_an_unclear_request_into_a_watcher` (2026-09-23)
 
 **Provider contract and adapters (§3–4)**
 
@@ -265,9 +265,9 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 
 **Agent path (§7)**
 
-- [ ] **BRAIN-30** · M5 · Planner: multi-step requests produce `propose_plan`, which becomes a Task graph; independent steps run concurrently (§7)
-- [ ] **BRAIN-31** · M5 · Validation: tasks declare `success_criteria`, and "done" is reported only after a verification step passes (§7)
-- [ ] **BRAIN-32** · M5 · Coding tasks are delegated to the Coding profile's ACP agent, with progress, relayed permission prompts and a summary (§7)
+- [x] **BRAIN-30** · M5 · Planner: multi-step requests produce `propose_plan`, which becomes a Task graph; independent steps run concurrently (§7) → done: `tasks.propose_plan` (always asks; risk of its highest step; steps shown on the card first); approving grants exactly those calls and runs the plan as a task, independent steps together · verified: `a_multi_step_request_becomes_an_approved_plan`, `tasks_keep_to_their_grants_and_run_independent_steps_together` (2026-09-23)
+- [x] **BRAIN-31** · M5 · Validation: tasks declare `success_criteria`, and "done" is reported only after a verification step passes (§7) → done: tasks carry success checks (command, file, window) that must pass before Done; coding work re-runs the project's tests and is called fixed only when they pass (`checks.rs`, `engine/agent.rs`) · verified: `timeouts_pauses_and_checks`, `a_coding_request_is_fixed_checked_and_reported`, `a_fix_that_still_fails_is_never_called_done` (2026-09-23)
+- [x] **BRAIN-32** · M5 · Coding tasks are delegated to the Coding profile's ACP agent, with progress, relayed permission prompts and a summary (§7) → done: coding requests go to the Coding profile's ACP agent in the workspace, with its plan and edits as steps, its permission requests on the card, one retry with the failing output, a summary, and a Coding task in Tasks · verified: `a_coding_request_is_fixed_checked_and_reported`, `claude_code_asks_for_permission_on_the_card_and_follow_ups_reuse_its_session` (2026-09-23)
 
 **Realtime, usage and personas (§8–10)**
 

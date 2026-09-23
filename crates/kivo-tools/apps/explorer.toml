@@ -3,5 +3,6 @@ name = "File Explorer"
 aliases = ["Explorer", "Files"]
 prefer = ["native", "uia"]
 
+examples = ["Find my budget spreadsheet", "Move these files to Archive", "Watch this folder for new files"]
 [match]
 exe = ["explorer.exe"]

@@ -1,7 +1,7 @@
 /**
  * Home (UX §3, UX-19, plan §81): KIVO's status at a glance, the controls that act on it (Talk,
  * Pause listening, the permission mode) and what it did recently. Everything shown comes from the
- * runtime and refreshes when the runtime reports a change. The Running list joins with tasks (M5).
+ * runtime and refreshes when the runtime reports a change. Running lists the tasks at work (UX-19).
  */
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -24,6 +24,7 @@ import { useRuntime, useRuntimeEvents } from "../ipc/runtime";
 import { entries } from "../lib/activity";
 import { cn } from "../lib/cn";
 import { modes, viewLink } from "../lib/session";
+import { currentStep, useTasks } from "./Tasks";
 
 interface Shortcuts {
   pushToTalk: string[];
@@ -81,10 +82,12 @@ export function Home({
   onOpenPermissions,
   onOpenActivity,
   onOpenVoice,
+  onOpenTasks,
 }: {
   onOpenPermissions: () => void;
   onOpenActivity: () => void;
   onOpenVoice: () => void;
+  onOpenTasks: () => void;
 }) {
   const { t, i18n } = useTranslation();
   const { link, request, start } = useRuntime();
@@ -92,6 +95,7 @@ export function Home({
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [recent, setRecent] = useState<ActivityItem[]>([]);
+  const { active: running } = useTasks();
 
   const run = (action: () => Promise<unknown>) => {
     setBusy(true);
@@ -227,6 +231,33 @@ export function Home({
           <Alert kind="warning" title={t("home.incompatible")}>
             {link.message}
           </Alert>
+        </div>
+      )}
+
+      {connected && running.length > 0 && (
+        <div className="k-home__lists">
+          <Section
+            title={t("home.running")}
+            aside={
+              <Button size="sm" variant="plain" onClick={onOpenTasks}>
+                {t("home.allTasks")}
+              </Button>
+            }
+          />
+          <Group>
+            {running.slice(0, RECENT).map((task) => (
+              <Row
+                key={task.id}
+                icon="tasks"
+                title={task.title}
+                subtitle={currentStep(task)?.title}
+                onClick={onOpenTasks}
+                end={
+                  <Tag tone={task.status === "needsYou" ? "warning" : "accent"}>{t(`tasks.status.${task.status}`)}</Tag>
+                }
+              />
+            ))}
+          </Group>
         </div>
       )}
 

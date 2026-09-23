@@ -398,6 +398,8 @@ const HINTS: &[(&str, &[&str])] = &[
             "volume",
             "mute",
             "unmute",
+            "quiet",
+            "silence",
             "louder",
             "quieter",
             "brightness",
@@ -500,6 +502,40 @@ const HINTS: &[(&str, &[&str])] = &[
         ],
     ),
     ("context", &["selected", "selection", "highlighted"]),
+    (
+        "tasks",
+        &[
+            "remind",
+            "tell me when",
+            "let me know when",
+            "notify me",
+            "watch",
+            "timer",
+            "when it finishes",
+            "when the",
+            "alert me",
+            "plan",
+            "set up",
+            "and then",
+            "steps",
+        ],
+    ),
+    (
+        "agents",
+        &[
+            "terminal", "claude", "codex", "gemini", "agent", "prompt", "send it", "tell it",
+            "yolo", "bypass",
+        ],
+    ),
+];
+
+/// Common words left out when matching a request to tool descriptions.
+const FILLER: &[&str] = &[
+    "the", "and", "then", "that", "this", "these", "those", "with", "for", "from", "into", "onto",
+    "you", "your", "can", "could", "would", "will", "need", "want", "please", "just", "also",
+    "its", "are", "was", "were", "has", "have", "had", "not", "but", "all", "any", "some", "what",
+    "when", "where", "which", "who", "how", "there", "here", "our", "out", "about", "after",
+    "before", "again", "now", "too", "very",
 ];
 
 /// The tools for a request (BRAIN-27): allowed by the profile, ranked by how well their
@@ -513,9 +549,10 @@ pub fn select_tools(
     max: usize,
 ) -> Vec<ToolDef> {
     let lower = text.to_lowercase();
+    // Words that say nothing about which tool fits ("then", "that", "need") don't count.
     let words: Vec<&str> = lower
         .split(|c: char| !c.is_alphanumeric() && c != '.')
-        .filter(|w| w.len() > 2)
+        .filter(|w| w.len() > 2 && !FILLER.contains(w))
         .collect();
     let mut scored: Vec<(i32, &ToolCandidate)> = all
         .iter()

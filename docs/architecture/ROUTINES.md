@@ -62,11 +62,15 @@ Step    = { id, tool_id, args (may reference ${vars}), when?: Condition, delay_m
 
 ## 6. Built-in starter routines (all disabled until the user turns them on)
 
-- **Work mode:** opens chosen apps and a project, turns Focus on.
+- **Work mode:** opens VS Code and the browser together, then says it's ready.
 - **Break:** pauses media, locks the PC after a confirmation.
-- **Meeting:** mutes notifications, sets the mic to the headset, opens the calendar link.
-- **Goodnight:** closes chosen apps, sleeps the PC (confirmation).
-- **Focus for {minutes}:** a timer with Focus mode and an earcon when it ends.
+- **Meeting:** unmutes the mic, opens the calendar link, says it's ready.
+- **Goodnight:** says goodnight, then sleeps the PC (confirmation).
+- **Focus for {minutes}:** pauses media and sets a reminder for the end, spoken with its earcon.
+
+Windows has no documented API for turning on Focus / Do Not Disturb, muting other apps'
+notifications or choosing the default microphone, and KIVO uses documented APIs only, so the
+starters leave those out (DECISIONS "M5 build"). Users edit the starters' apps in the builder.
 
 ## 7. Milestones
 
@@ -78,16 +82,16 @@ Step    = { id, tool_id, args (may reference ${vars}), when?: Condition, delay_m
 
 Status marks and the build protocol: [docs/README.md](../README.md).
 
-- [ ] **ROUT-01** · M5 · `Routine`, `Trigger` and `Step` data model (§5) in a versioned `routines` table with a JSON body
-- [ ] **ROUT-02** · M5 · A routine compiles to a Task graph (sequential, optional parallel groups); every step goes through `authorize()`; cancellation like any task (§3)
-- [ ] **ROUT-03** · M5 · Routine grants: the full permission list is shown on save and granted scoped to the routine and its exact arguments (§3)
-- [ ] **ROUT-04** · M5 · Error policy per step: stop (default), continue, retry(n), ask (§3)
-- [ ] **ROUT-05** · M5 · Phrase triggers (with variants and `{variables}`) resolved in the intent router's grammar stage; hotkey triggers; manual run (§1, §2)
-- [ ] **ROUT-06** · M5 · Custom commands: a phrase that runs one fast-path action without AI ("Kivo, cinema") (§1)
-- [ ] **ROUT-07** · M5 · Phrase collision check against the fast-path grammar, other routines and wake words, using the wake-word confusability checker (§5)
-- [ ] **ROUT-08** · M5 · AI steps (`brain.ask`, `brain.decide`) with a chosen profile, counted toward cost limits; routines containing AI are badged (§3)
-- [ ] **ROUT-09** · M5 · Builder UI: trigger picker → drag-to-reorder steps → tool picker with forms generated from JSON Schema → test run → save (§4)
-- [ ] **ROUT-10** · M5 · Built-in starter routines, all disabled: Work mode, Break, Meeting, Goodnight, Focus for {minutes} (§6)
+- [x] **ROUT-01** · M5 · `Routine`, `Trigger` and `Step` data model (§5) in a versioned `routines` table with a JSON body → done: `Routine`, `Trigger`, `RoutineStep` (`kivo-core/src/routine.rs`) stored as a versioned JSON body in `routines` · verified: `routine.rs` unit tests, `custom_commands_and_routines_run_from_their_phrases` (2026-09-23)
+- [x] **ROUT-02** · M5 · A routine compiles to a Task graph (sequential, optional parallel groups); every step goes through `authorize()`; cancellation like any task (§3) → done: a routine compiles to a task graph (in order, parallel groups together); every step goes through `authorize()` with the routine's grants; cancellable like any task · verified: `custom_commands_and_routines_run_from_their_phrases`, `routines_run_only_what_was_granted` (2026-09-23)
+- [x] **ROUT-03** · M5 · Routine grants: the full permission list is shown on save and granted scoped to the routine and its exact arguments (§3) → done: saving shows the full permission list (Routines → Save) and grants each tool with its exact arguments; anything else asks, and a task can't exceed them · verified: `routines_run_only_what_was_granted`, `Routines.test.tsx` builder test (2026-09-23)
+- [x] **ROUT-04** · M5 · Error policy per step: stop (default), continue, retry(n), ask (§3) → done: stop (default), continue, retry(n), ask per step, set in the builder · verified: `error_policies_retry_continue_and_ask` (2026-09-23)
+- [x] **ROUT-05** · M5 · Phrase triggers (with variants and `{variables}`) resolved in the intent router's grammar stage; hotkey triggers; manual run (§1, §2) → done: phrases with variants and `{variables}` matched before the grammar; hotkeys registered and re-registered on change; Run on the page and the jump list · verified: `custom_commands_and_routines_run_from_their_phrases`, `starters_are_added_once_and_hotkeys_run_routines`, `routine_hotkeys_replace_the_previous_ones` (2026-09-23)
+- [x] **ROUT-06** · M5 · Custom commands: a phrase that runs one fast-path action without AI ("Kivo, cinema") (§1) → done: one phrase + one tool runs as a direct action without AI · verified: `custom_commands_and_routines_run_from_their_phrases` (2026-09-23)
+- [x] **ROUT-07** · M5 · Phrase collision check against the fast-path grammar, other routines and wake words, using the wake-word confusability checker (§5) → done: phrases checked against the grammar, other routines and wake words (exact clash blocks, sound-alike warns, the wake-word confusability list), hotkeys against KIVO's and other routines' · verified: `clashing_phrases_and_hotkeys_are_caught`, `Routines.test.tsx` (2026-09-23)
+- [x] **ROUT-08** · M5 · AI steps (`brain.ask`, `brain.decide`) with a chosen profile, counted toward cost limits; routines containing AI are badged (§3) → done: `ask` / `decide` steps call a brain with a chosen profile, metered toward cost limits; routines with AI are badged · verified: `ai_steps_ask_a_brain_and_count_toward_its_cost`, `Routines.test.tsx` (2026-09-23)
+- [x] **ROUT-09** · M5 · Builder UI: trigger picker → done: `pages/Routines.tsx`: triggers (phrases, hotkey) → steps reordered by dragging or Move up / down → tool picker with forms generated from each tool's JSON Schema (`lib/schemaForm.ts`), say, wait, ask AI → error policy → save with the grant list → test run · verified: `Routines.test.tsx` (2026-09-23)
+- [x] **ROUT-10** · M5 · Built-in starter routines, all disabled: Work mode, Break, Meeting, Goodnight, Focus for {minutes} (§6) → done: Work mode, Break, Meeting, Goodnight, Focus for {minutes}, all disabled, added once; without Focus / notification / default-mic APIs (DECISIONS "Starter routines without Focus", ROUTINES §6 updated) · verified: `starters_are_added_once_and_hotkeys_run_routines` (2026-09-23)
 - [ ] **ROUT-11** · M8 · Schedule (cron-like, time zone) and event triggers (app launched, USB device, Wi-Fi network, time of day, idle/return, battery low, routine-from-routine) (§1)
 - [ ] **ROUT-12** · M8 · Unattended triggers never run High-risk steps without an on-screen confirmation (§3)
 - [ ] **ROUT-13** · M8 · Create by voice or chat (brain drafts, builder reviews, save after confirm) and "Save what you just did as a routine" (§4)

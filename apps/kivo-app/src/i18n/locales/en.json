@@ -56,7 +56,11 @@
       "allow": "allow",
       "always": "always allow",
       "deny": "deny",
-      "wait": "wait"
+      "wait": "wait",
+      "send": "send",
+      "addTo": "add …",
+      "readBack": "read it back",
+      "cancel": "cancel"
     },
     "announce": {
       "listening": "Listening",
@@ -85,7 +89,23 @@
       "shell": "Running a command"
     },
     "undo": "Undo",
-    "undoLeft": "{seconds, plural, one {# second} other {# seconds}} left to undo"
+    "undoLeft": "{seconds, plural, one {# second} other {# seconds}} left to undo",
+    "draft": {
+      "title": "Draft prompt",
+      "text": "Prompt",
+      "send": "Send",
+      "edit": "Edit",
+      "cancel": "Cancel",
+      "editTitle": "Edit the prompt"
+    },
+    "openTask": "Open in Tasks",
+    "moreActivities": "+{count}",
+    "helpPhrase": "what can I say",
+    "selection": {
+      "explain": "Explain",
+      "rewrite": "Rewrite",
+      "translate": "Translate"
+    }
   },
   "home": {
     "talk": "Talk",
@@ -107,7 +127,9 @@
     "incompatible": "Quit KIVO from the tray, then open it again.",
     "downloadingSub": "{percent, number, ::percent scale/0.01}",
     "stopEverything": "Stop everything",
-    "hotkeyRebind": "Pick other keys for push-to-talk:"
+    "hotkeyRebind": "Pick other keys for push-to-talk:",
+    "running": "Running",
+    "allTasks": "All tasks"
   },
   "activity": {
     "title": "Activity",
@@ -1022,6 +1044,36 @@
         "bottom-center": "Bottom center",
         "remember-drag": "Where I dragged it"
       }
+    },
+    "notify": {
+      "title": "Notifications",
+      "source": {
+        "tasks": "Tasks finished",
+        "reminders": "Reminders",
+        "watchers": "“Tell me when …”",
+        "routines": "Routines",
+        "agents": "Agents"
+      },
+      "mode": {
+        "speak": "Speak",
+        "toast": "Toast",
+        "silent": "Silent"
+      },
+      "asAsked": "Speaks when you said “tell me”, else a toast",
+      "quietHours": "Quiet hours",
+      "quietHoursHint": "Only toasts, no speech. For example 22:00-07:00",
+      "quietHoursBad": "Use hours like 22:00-07:00",
+      "catchUp": "Catch me up when I’m back",
+      "catchUpHint": "What happened while you were away, grouped",
+      "note": "KIVO speaks up at most once every 10 minutes, never during calls or over a fullscreen app, and groups the rest. Agents that need your answer always show."
+    },
+    "activities": {
+      "title": "Live activities",
+      "hint": "In the collapsed Island; hidden over fullscreen apps",
+      "media": "Music after a media request",
+      "timer": "Timers and reminders",
+      "download": "Downloads",
+      "agent": "Agent progress"
     }
   },
   "brains": {
@@ -1385,10 +1437,228 @@
       "neverTitle": "Stop keeping conversations?",
       "neverBody": "KIVO will forget each conversation when it ends, and chats won’t be kept.",
       "neverConfirm": "Stop keeping them"
+    },
+    "bypass": {
+      "title": "Bypass permissions",
+      "off": "Off",
+      "on": "On: KIVO acts without asking",
+      "detail": "For tasks you’re watching. KIVO acts without asking, High risk included, until it turns off.",
+      "until": "Turns off at {time}",
+      "untilOff": "Until you turn it off",
+      "turnOn": "Turn on Bypass",
+      "turnOff": "Turn off",
+      "dialogTitle": "Turn on Bypass permissions?",
+      "dialogDetail": "KIVO will act without asking, including deleting, sending and paying.",
+      "warnTitle": "Only for tasks you’re watching",
+      "warn": "Hard limits still apply: emergency stop, capabilities you turned off, blocked apps, password fields, and addresses from untrusted content. Every action is recorded.",
+      "expires": "Turn off automatically after",
+      "for15": "15 min",
+      "for60": "1 hour",
+      "forOff": "Until I turn it off",
+      "hello": "Confirm with Windows Hello",
+      "cancel": "Cancel"
     }
   },
   "undo": {
     "toast": "Done: {title}",
     "failed": "Couldn’t undo: {error}"
+  },
+  "tasks": {
+    "subtitle": "Long-running work and watchers. You can stop any of them.",
+    "stopAll": "Stop all",
+    "running": "Running",
+    "finished": "Finished",
+    "clear": "Clear finished",
+    "noneRunning": "Nothing running",
+    "noneRunningDetail": "Say “tell me when the build finishes” or “remind me in 20 minutes to stretch”.",
+    "noneFinished": "Finished tasks show here.",
+    "byYou": "For you",
+    "stepOf": "Step {n} of {count}",
+    "usesAi": "Uses AI",
+    "noAi": "No AI while waiting",
+    "showSteps": "Steps",
+    "hideSteps": "Hide steps",
+    "pause": "Pause",
+    "resume": "Resume",
+    "stop": "Stop",
+    "delete": "Delete “{title}”",
+    "attempts": "{count, plural, one {# try} other {# tries}}",
+    "status": {
+      "pending": "Starting",
+      "running": "Running",
+      "waiting": "Waiting",
+      "needsYou": "Needs you",
+      "paused": "Paused",
+      "done": "Done",
+      "failed": "Failed",
+      "cancelled": "Stopped",
+      "interrupted": "Interrupted"
+    },
+    "step": {
+      "pending": "To do",
+      "running": "Running",
+      "waiting": "Waiting",
+      "needsYou": "Needs you",
+      "done": "Done",
+      "failed": "Failed",
+      "skipped": "Skipped"
+    },
+    "choice": {
+      "retry": "Try again",
+      "skip": "Skip",
+      "stop": "Stop",
+      "allow": "Allow",
+      "always": "Always allow",
+      "deny": "Deny"
+    }
+  },
+  "risk": {
+    "safe": "Safe",
+    "low": "Low",
+    "medium": "Medium",
+    "high": "High",
+    "critical": "Critical"
+  },
+  "routines": {
+    "subtitle": "Your own commands. They run instantly, and without AI unless a step asks for it.",
+    "new": "New routine",
+    "newDetail": "Start from a template, or from scratch.",
+    "blank": "Start from scratch",
+    "templates": "Templates",
+    "none": "No routines yet",
+    "noneDetail": "Create one, or start from a template.",
+    "note": "Say a routine’s phrase or press its keys to run it. Anything it wasn’t allowed when you saved it will ask.",
+    "manual": "Run from here",
+    "usesAi": "uses AI",
+    "customCommand": "custom command",
+    "needsPermission": "Needs permission",
+    "run": "Run",
+    "runNamed": "Run “{name}”",
+    "editNamed": "Edit “{name}”",
+    "enabledNamed": "“{name}” on",
+    "started": "“{name}” started",
+    "saved": "“{name}” saved",
+    "builder": "Routine builder",
+    "name": "Name",
+    "namePlaceholder": "Name the routine",
+    "startsWhen": "Starts when",
+    "addPhrase": "Add phrase",
+    "phrasePlaceholder": "A phrase, like “work mode” or “focus for '{'minutes'}'”",
+    "removePhrase": "Remove “{phrase}”",
+    "hotkey": "Keys",
+    "removeHotkey": "Remove keys",
+    "clash": "“{phrase}” is already {with}",
+    "soundsLike": "“{phrase}” sounds like {with}",
+    "steps": "Steps",
+    "noSteps": "Add the first step.",
+    "together": "Together",
+    "editStep": "Edit step {n}",
+    "moveUp": "Move step {n} up",
+    "moveDown": "Move step {n} down",
+    "removeStep": "Remove step {n}",
+    "addAction": "Action",
+    "addSay": "Say",
+    "addDelay": "Wait",
+    "addAsk": "Ask AI",
+    "cantSave": "Can’t save yet",
+    "allowed": "Allowed for this routine: {list}. Anything else will ask.",
+    "delete": "Delete",
+    "test": "Test run",
+    "saveFirst": "Save your changes first",
+    "save": "Save",
+    "reviewTitle": "Save “{name}”?",
+    "reviewDetail": "The routine may do these without asking, with exactly these settings. Anything else asks.",
+    "saveWithout": "Save without them",
+    "allowAndSave": "Allow and save",
+    "nothingNeeded": "This routine needs no permissions.",
+    "capabilityOff": "That capability is off, so this step will be refused until you turn it on.",
+    "aiCosts": "Steps that ask AI count toward your usage limits.",
+    "sayStep": "Say “{text}”",
+    "delayStep": "Wait {seconds} s",
+    "askStep": "Ask AI: {prompt}",
+    "asksFirst": "asks first",
+    "stepKind": "Step",
+    "kind": {
+      "tool": "Action",
+      "say": "Say something",
+      "delay": "Wait",
+      "ask": "Ask AI"
+    },
+    "seconds": "Seconds",
+    "onError": "If it fails",
+    "policy": {
+      "stop": "Stop the routine",
+      "continue": "Go on",
+      "retry": "Try again",
+      "ask": "Ask me"
+    },
+    "retries": "Tries",
+    "confirm": "Ask me before this step",
+    "withPrevious": "Run together with the step before",
+    "tool": "Which action",
+    "noArgs": "This action needs nothing else.",
+    "badJson": "Not valid JSON: {error}"
+  },
+  "agents": {
+    "subtitle": "Other AIs KIVO can run and talk to for you: coding agents, terminals and desktop AI apps.",
+    "tabs": {
+      "agents": "Agents",
+      "workspaces": "Workspaces"
+    },
+    "sessions": "Sessions",
+    "noSessions": "No agent sessions yet.",
+    "kind": {
+      "acp": "In the background",
+      "terminal": "In a terminal"
+    },
+    "working": "Working",
+    "idle": "Idle",
+    "openInTerminal": "Open in terminal",
+    "openedIn": "Opened {title}",
+    "draftHint": "Say “Hey Kivo, tell Claude to also add tests”: KIVO drafts the prompt in the Island and sends it when you say “send”.",
+    "cli": "Coding agents on this PC",
+    "noneInstalled": "No coding agents found",
+    "noneInstalledDetail": "Install Claude Code, Codex or Gemini CLI, then refresh on the Brains page.",
+    "notInstalled": "Not installed: {list}.",
+    "needsSignIn": "Needs sign-in",
+    "signedIn": "Signed in",
+    "start": "Start",
+    "backgroundOnly": "Background only",
+    "desktop": "Desktop AI apps",
+    "noDesktop": "No desktop AI apps found.",
+    "desktopDetail": "KIVO can type prompts and read replies",
+    "found": "Found",
+    "safety": "Safety",
+    "bypassRisk": "Starting an agent in bypass mode",
+    "bypassRiskDetail": "Always asks first, because the agent can then change anything",
+    "reviewPrompts": "Prompts are shown before they’re sent",
+    "reviewPromptsDetail": "A draft in the Island first: Send, Edit or Cancel",
+    "startNamed": "Start {name}",
+    "startDetail": "In a terminal you can watch. Or say “Hey Kivo, open Claude in K.I.V.O with auto mode”.",
+    "noWorkspaces": "KIVO doesn’t know any project folders yet. Work in one (VS Code, a terminal) and KIVO offers to remember it.",
+    "folder": "Folder",
+    "mode": "Mode",
+    "modes": {
+      "default": "Ask",
+      "plan": "Plan",
+      "accept-edits": "Auto edits",
+      "bypass": "Bypass"
+    },
+    "bypassNote": "Bypass lets the agent change anything without asking, so KIVO confirms first."
+  },
+  "workspaces": {
+    "aboutMe": "About me",
+    "aboutMePlaceholder": "What every brain and agent should know about you: your name, how you like answers, your tools.",
+    "title": "Workspaces",
+    "none": "No workspaces yet",
+    "noneDetail": "When you work in a project folder, KIVO asks whether to remember it.",
+    "current": "Current",
+    "lastUsed": "used {date}",
+    "export": "Export as AGENTS.md",
+    "exported": "Saved {file}",
+    "forget": "Forget",
+    "instructionsPlaceholder": "Notes for work in {name}: conventions, commands, what to avoid.",
+    "instructionsSaved": "Instructions saved",
+    "note": "Instructions are also kept as Markdown files in KIVO’s data folder; edits there come back here. A project’s own CLAUDE.md, AGENTS.md or GEMINI.md is read, never changed unless you export."
   }
 }

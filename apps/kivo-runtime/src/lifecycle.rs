@@ -182,6 +182,11 @@ impl Lifecycle {
                 Ok(())
             }
             CRASH_FOLDER => self.control.reveal(&self.crashes),
+            // A task's notification: open it in Tasks (UX-58).
+            task if task.starts_with("task:") => {
+                self.core.open_control_center(Some("tasks"));
+                Ok(())
+            }
             // The body of the notification was clicked: open KIVO.
             "" => {
                 self.core.open_control_center(None);

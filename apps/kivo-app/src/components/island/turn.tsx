@@ -8,7 +8,10 @@ import { useState } from "react";
 import type {
   Capability,
   ConfirmSpec,
+  DraftView,
   GrantDuration,
+  LiveActivity,
+  Offer,
   PermissionMode,
   StateSnapshot,
   StepView,
@@ -26,7 +29,7 @@ import {
   VoiceHint,
   type IslandModel,
 } from "./Island";
-import { Icon } from "../../icons";
+import { Icon, type IconName } from "../../icons";
 
 /** What the Island's buttons do (each goes to the runtime through `island_request`). */
 export interface IslandHandlers {
@@ -54,6 +57,12 @@ export interface IslandHandlers {
   talk: () => void;
   /** "That's not what I meant" on a brain's answer (BRAIN-06). */
   misroute: (turnId: string) => void;
+  /** The Draft card's Edit (CONV-15): opens the text field with the prompt in it. */
+  editDraft: (callId: string, text: string) => void;
+  /** Answers an offer the Island makes outside a turn (CONV-10). */
+  offer: (id: string, accept: boolean) => void;
+  /** Opens a task on the Tasks page (UX-24). */
+  openTask: (id: string) => void;
 }
 
 /** The card width for text content (UX §2: up to 520 px). */
@@ -192,6 +201,46 @@ function ConfirmButtons({ confirm, t, on }: { confirm: ConfirmSpec; t: TFunction
   );
 }
 
+/** The Draft card (CONV-15): the prompt KIVO will type into another AI, where it goes, and Send ·
+ * Edit · Cancel. Voice edits it live ("add …", "remove the last sentence", "read it back") and
+ * "send" sends it. */
+function draftCard(draft: DraftView, confirm: ConfirmSpec, turn: TurnView, t: TFunction, on: IslandHandlers) {
+  const hint = turn.answering ? (
+    <VoiceHint
+      words={[t("island.voice.send"), t("island.voice.addTo"), t("island.voice.readBack"), t("island.voice.cancel")]}
+    />
+  ) : null;
+  return {
+    state: `draft-${confirm.callId}-${draft.text.length}`,
+    width: 490,
+    label: t("island.draft.title"),
+    sub: draft.target,
+    lead: <IslandDot color="#3B8BFF" />,
+    trail: guestChip(turn, t),
+    body: (
+      <>
+        <Heard turn={turn} />
+        <div className="k-island__draft" aria-label={t("island.draft.text")}>
+          {draft.text}
+        </div>
+        <IslandActions
+          hint={false}
+          actions={[
+            {
+              label: t("island.draft.send"),
+              kind: "primary",
+              onClick: () => on.answer(confirm.callId, true, false),
+            },
+            { label: t("island.draft.edit"), onClick: () => on.editDraft(confirm.callId, draft.text) },
+            { label: t("island.draft.cancel"), kind: "danger", onClick: () => on.answer(confirm.callId, false, false) },
+          ]}
+        />
+        {hint}
+      </>
+    ),
+  } satisfies IslandModel;
+}
+
 function confirmCard(confirm: ConfirmSpec, turn: TurnView, t: TFunction, on: IslandHandlers): IslandModel {
   const high = confirm.risk === "high";
   // A plan from the runtime (Plan first, SEC-02) arrives as its steps, one per line.
@@ -255,6 +304,101 @@ function InUse({ kinds, t }: { kinds: string[] | undefined; t: TFunction }) {
       })}
     </span>
   );
+}
+
+/** "What can I say?" (UX-44): examples for the app in front, then general ones. */
+function Help({ turn }: { turn: TurnView }) {
+  if (!turn.help?.length) return null;
+  return (
+    <ul className="k-island__help">
+      {turn.help.map((example) => (
+        <li key={example}>“{example}”</li>
+      ))}
+    </ul>
+  );
+}
+
+/** The task a request started ("tell me when …"): Open in Tasks (UX-24). */
+function TaskLink({ turn, t, on }: { turn: TurnView; t: TFunction; on: IslandHandlers }) {
+  const id = turn.taskId;
+  if (!id) return null;
+  return (
+    <button type="button" className="k-island__misroute" onClick={() => on.openTask(id)}>
+      {t("island.openTask")}
+    </button>
+  );
+}
+
+/** Seconds left until `until` (epoch ms). */
+function secondsLeft(until: number): number {
+  return Math.max(0, Math.ceil((until - Date.now()) / 1000));
+}
+
+const two = (n: number) => String(n).padStart(2, "0");
+
+/** "4:05", "1:02:03". */
+export function clock(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  return h > 0 ? `${h}:${two(m)}:${two(s)}` : `${m}:${two(s)}`;
+}
+
+const ACTIVITY_ICON: Record<string, IconName | undefined> = {
+  timer: "clock",
+  download: "download",
+  agent: "code",
+  media: "music",
+  task: "tasks",
+};
+
+/** Live activities in the collapsed Island (UX-15): the first one, and how many more. */
+function activityIsland(a: LiveActivity, more: number, t: TFunction, on: IslandHandlers): IslandModel {
+  const icon = ACTIVITY_ICON[a.kind] ?? "tasks";
+  const left = a.until != null ? secondsLeft(a.until) : null;
+  const progress = a.progress != null ? `${Math.round(a.progress * 100)}%` : null;
+  return {
+    state: `activity-${a.id}`,
+    width: 300,
+    label: a.title,
+    sub: [a.detail, left != null ? clock(left) : progress].filter(Boolean).join(" · ") || undefined,
+    lead: <Icon name={icon} />,
+    trail: (
+      <>
+        {more > 0 && <IslandChip>{t("island.moreActivities", { count: more })}</IslandChip>}
+        {a.taskId && (
+          <button
+            type="button"
+            className="k-island__btn"
+            aria-label={t("island.openTask")}
+            title={t("island.openTask")}
+            onClick={() => a.taskId && on.openTask(a.taskId)}
+          >
+            <Icon name="external" />
+          </button>
+        )}
+      </>
+    ),
+  };
+}
+
+/** A question the Island asks outside a turn ("Remember kivo as a workspace?", CONV-10). */
+function offerIsland(offer: Offer, on: IslandHandlers): IslandModel {
+  return {
+    state: `offer-${offer.id}`,
+    width: 420,
+    label: offer.text,
+    lead: <IslandDot color="#3B8BFF" />,
+    body: (
+      <IslandActions
+        hint={false}
+        actions={[
+          { label: offer.accept, kind: "primary", onClick: () => on.offer(offer.id, true) },
+          { label: offer.decline, onClick: () => on.offer(offer.id, false) },
+        ]}
+      />
+    ),
+  };
 }
 
 /** What KIVO did with the user's data, when the card should say so (CAP-08). */
@@ -330,6 +474,7 @@ export function islandForTurn(snapshot: StateSnapshot, t: TFunction, on: IslandH
   if (snapshot.islandHidden) return null;
   const { session, turn } = snapshot;
 
+  if (turn?.confirm && turn.draft) return draftCard(turn.draft, turn.confirm, turn, t, on);
   if (turn?.confirm) return confirmCard(turn.confirm, turn, t, on);
 
   // Over a fullscreen app or during Focus, a dot is all that shows (UX-11; "hidden" never
@@ -463,6 +608,7 @@ export function islandForTurn(snapshot: StateSnapshot, t: TFunction, on: IslandH
           <>
             <Heard turn={turn} t={t} on={on} />
             {turn.answer && <div className="k-island__answer">{turn.answer}</div>}
+            <Help turn={turn} />
             <Note turn={turn} />
             {undoOffer(turn, t, on)}
             <Footer t={t} on={on} stop />
@@ -490,8 +636,10 @@ export function islandForTurn(snapshot: StateSnapshot, t: TFunction, on: IslandH
               <Heard turn={turn} t={t} on={on} />
               {turn.steps.length > 0 && <Steps steps={turn.steps} />}
               <div className="k-island__answer">{turn.answer}</div>
+              <Help turn={turn} />
               <Note turn={turn} />
               {undoOffer(turn, t, on)}
+              <TaskLink turn={turn} t={t} on={on} />
               {turn.brain && (
                 <button type="button" className="k-island__misroute" onClick={() => on.misroute(turn.id)}>
                   {t("island.misroute")}
@@ -502,6 +650,10 @@ export function islandForTurn(snapshot: StateSnapshot, t: TFunction, on: IslandH
           ),
         };
       }
+      // Outside a turn: an offer, then live activities (UX-15).
+      if (snapshot.offer) return offerIsland(snapshot.offer, on);
+      const [first, ...more] = snapshot.activities ?? [];
+      if (session === "idle" && first) return activityIsland(first, more.length, t, on);
       return null;
   }
 }
@@ -514,6 +666,9 @@ export function hasButtons(model: IslandModel | null): boolean {
     model.state.startsWith("error-") ||
     model.state.startsWith("done-") ||
     model.state.startsWith("capability-") ||
+    model.state.startsWith("draft-") ||
+    model.state.startsWith("offer-") ||
+    model.state.startsWith("activity-") ||
     model.state === "acting" ||
     model.state === "speaking"
   );

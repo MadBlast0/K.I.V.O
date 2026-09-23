@@ -1756,3 +1756,205 @@ button.k-island__chip {
 .k-compare__cell--auto {
   color: var(--green);
 }
+
+/* ───────── Tasks (UX-24) ───────── */
+.k-task + .k-task {
+  border-top: 1px solid var(--sep);
+}
+.k-task__question {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px 10px 42px;
+  font-size: 12.5px;
+}
+.k-task__question > span {
+  flex: 1 1 100%;
+  color: var(--text-2);
+}
+.k-task__steps {
+  list-style: none;
+  margin: 0;
+  padding: 0 14px 12px 42px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.k-task__step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  min-width: 0;
+}
+.k-task__step[data-status="pending"] {
+  opacity: 0.55;
+}
+.k-task__step-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.k-task__mark {
+  display: inline-flex;
+  color: var(--text-2);
+}
+.k-task__step[data-status="done"] .k-task__mark {
+  color: var(--green);
+}
+.k-task__step[data-status="failed"] .k-task__mark {
+  color: var(--red);
+}
+.k-task__dot {
+  width: 10px;
+  height: 10px;
+  margin: 3px;
+  border-radius: 50%;
+  border: 1.5px solid var(--text-3);
+  flex: none;
+}
+
+/* ───────── Routines and the builder (UX-26, ROUT-09) ───────── */
+.k-routines {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.k-routine-row[data-selected] .k-row {
+  background: var(--acc-soft);
+}
+.k-builder {
+  background: var(--group);
+  border-radius: var(--r-l);
+  box-shadow: var(--shadow);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.k-builder__head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.k-builder__head .k-field {
+  flex: 1;
+}
+.k-builder__chips,
+.k-builder__hotkey,
+.k-builder__add,
+.k-builder__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.k-builder__hotkey > span:first-child {
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+.k-builder__chip {
+  display: inline-flex;
+  align-items: center;
+}
+.k-builder__issues {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.k-builder__steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.k-builder__step {
+  border: 1px solid var(--sep);
+  border-radius: var(--r-m);
+  padding: 6px 8px;
+  background: var(--win);
+}
+.k-builder__step-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.k-builder__grip {
+  display: inline-flex;
+  color: var(--text-3);
+  cursor: grab;
+}
+.k-builder__n {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+  width: 16px;
+  text-align: center;
+}
+.k-builder__summary {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12.5px;
+}
+.k-builder__summary > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.k-builder__editor,
+.k-builder__form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 2px 4px 30px;
+}
+.k-builder__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12.5px;
+}
+.k-builder__field > span:first-child {
+  color: var(--text-2);
+}
+.k-builder__foot {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 6px;
+}
+.k-builder__spacer {
+  flex: 1;
+}
+
+/* ───────── Agents and workspaces (UX-25, CONV-09/10) ───────── */
+.k-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.k-dialog__row {
+  margin-top: 12px;
+}
+
+/* ───────── The Island's M5 parts: help, live activities ───────── */
+.k-island__help {
+  margin: 8px 0 0;
+  padding: 0 0 0 16px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--isl-2);
+}

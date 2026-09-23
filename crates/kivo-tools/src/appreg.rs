@@ -29,6 +29,15 @@ const CORE: &[(&str, &str)] = &[
     ("notepad", include_str!("../apps/notepad.toml")),
     ("settings", include_str!("../apps/settings.toml")),
     ("calculator", include_str!("../apps/calculator.toml")),
+    ("claude-code", include_str!("../apps/claude-code.toml")),
+    ("codex", include_str!("../apps/codex.toml")),
+    ("gemini-cli", include_str!("../apps/gemini-cli.toml")),
+    (
+        "claude-desktop",
+        include_str!("../apps/claude-desktop.toml"),
+    ),
+    ("chatgpt", include_str!("../apps/chatgpt.toml")),
+    ("copilot", include_str!("../apps/copilot.toml")),
 ];
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -122,6 +131,22 @@ impl Tier {
     }
 }
 
+/// How to start a CLI agent in a visible terminal (CONVERSATION §5.2, CONV-14): the command,
+/// the flags for each mode, which modes skip the agent's own permission checks (always High risk),
+/// and how to resume a session (CONV-13). Before using a flag, KIVO checks that the installed
+/// version's `--help` lists it.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct AgentLaunch {
+    pub command: String,
+    /// Mode → extra arguments (`plan` → `["--permission-mode", "plan"]`).
+    pub modes: BTreeMap<String, Vec<String>>,
+    /// Modes that let the agent act without asking.
+    pub bypass_modes: Vec<String>,
+    /// Arguments that resume a session, with `{session}`.
+    pub resume: Vec<String>,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct AppEntry {
@@ -140,6 +165,12 @@ pub struct AppEntry {
     pub cli: Option<Cli>,
     pub uri: Option<Uri>,
     pub uia: Option<Uia>,
+    /// "What can I say?" (UX-44): example requests while this app is in front.
+    pub examples: Vec<String>,
+    /// A CLI agent KIVO can start in a visible terminal (CONV-14).
+    pub agent: Option<AgentLaunch>,
+    /// A desktop AI app (DISC-06): found in the installed apps and listed on the Agents page.
+    pub desktop_ai: bool,
     /// Where the entry came from: `core` or the file it was read from.
     #[serde(skip)]
     pub origin: String,

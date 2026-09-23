@@ -15,7 +15,9 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "../components/layout/Shell";
 import {
+  Alert,
   Button,
+  Checkbox,
   Dialog,
   Group,
   IconButton,
@@ -164,8 +166,9 @@ function ModeTab() {
         ))}
       </RadioGroup>
       <Note>
-        {t("permissions.mode.bypassLater")} {t("permissions.mode.switch")} <Keys keys={["Ctrl", "Shift", "M"]} />
+        {t("permissions.mode.switch")} <Keys keys={["Ctrl", "Shift", "M"]} />
       </Note>
+      <Bypass until={link?.status === "connected" ? link.snapshot?.bypassUntil : undefined} />
 
       <Section title={t("permissions.limits.title")} />
       <Group>
@@ -225,6 +228,104 @@ function ModeTab() {
           ))}
         </Group>
       )}
+    </>
+  );
+}
+
+/** How long Bypass lasts (SEC-03): 15 minutes, an hour (the default) or until turned off. */
+type BypassFor = "15" | "60" | "off";
+
+/**
+ * Bypass permissions (SEC-03): KIVO acts without asking, High risk included, until it expires.
+ * Only from this dialog (never the tray or a menu click), optionally confirmed with Windows Hello;
+ * hard limits still hold, every action is audited, and guests can't use it.
+ */
+function Bypass({ until }: { until: number | null | undefined }) {
+  const { t, i18n } = useTranslation();
+  const { request } = useRuntime();
+  const fail = useFail();
+  const [open, setOpen] = useState(false);
+  const [lasts, setLasts] = useState<BypassFor>("60");
+  const [hello, setHello] = useState(true);
+  const on = until != null;
+  const time = new Intl.DateTimeFormat(i18n.language, { timeStyle: "short" });
+  // The runtime sends u64::MAX for "until turned off".
+  const forever = on && until >= Number.MAX_SAFE_INTEGER;
+  const turnOn = () => {
+    request(Method.permissionsBypass, {
+      on: true,
+      ...(lasts === "off" ? {} : { minutes: Number(lasts) }),
+      hello,
+    })
+      .then(() => setOpen(false))
+      .catch(fail);
+  };
+  return (
+    <>
+      <Section title={t("permissions.bypass.title")} />
+      <Group>
+        <Row
+          icon="warning"
+          title={on ? t("permissions.bypass.on") : t("permissions.bypass.off")}
+          subtitle={
+            on
+              ? forever
+                ? t("permissions.bypass.untilOff")
+                : t("permissions.bypass.until", { time: time.format(new Date(until)) })
+              : t("permissions.bypass.detail")
+          }
+          end={
+            on ? (
+              <Button
+                variant="stop"
+                onClick={() => {
+                  request(Method.permissionsBypass, { on: false }).catch(fail);
+                }}
+              >
+                {t("permissions.bypass.turnOff")}
+              </Button>
+            ) : (
+              <Button variant="destructive" onClick={() => setOpen(true)}>
+                {t("permissions.bypass.turnOn")}
+              </Button>
+            )
+          }
+        />
+      </Group>
+      <Dialog
+        open={open}
+        onOpenChange={setOpen}
+        title={t("permissions.bypass.dialogTitle")}
+        description={t("permissions.bypass.dialogDetail")}
+        footer={
+          <>
+            <Button onClick={() => setOpen(false)}>{t("permissions.bypass.cancel")}</Button>
+            <Button variant="stop" onClick={turnOn}>
+              {t("permissions.bypass.turnOn")}
+            </Button>
+          </>
+        }
+      >
+        <Alert kind="danger" title={t("permissions.bypass.warnTitle")}>
+          {t("permissions.bypass.warn")}
+        </Alert>
+        <Section title={t("permissions.bypass.expires")} />
+        <Segmented<BypassFor>
+          label={t("permissions.bypass.expires")}
+          value={lasts}
+          onChange={setLasts}
+          options={[
+            { value: "15", label: t("permissions.bypass.for15") },
+            { value: "60", label: t("permissions.bypass.for60") },
+            { value: "off", label: t("permissions.bypass.forOff") },
+          ]}
+        />
+        <div className="k-dialog__row">
+          <Checkbox checked={hello} onChange={setHello}>
+            {t("permissions.bypass.hello")}
+          </Checkbox>
+        </div>
+      </Dialog>
     </>
   );
 }

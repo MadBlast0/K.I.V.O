@@ -29,6 +29,8 @@ pub struct Rpc {
     brains: Option<Arc<crate::brains_rpc::BrainsRpc>>,
     /// KIVO's browser extension, for its status (TOOL-24).
     browser: Option<Arc<dyn kivo_tools::Browser>>,
+    /// Tasks, routines, agents, workspaces (M5).
+    tasks: Option<Arc<crate::tasks_rpc::TasksRpc>>,
 }
 
 impl Rpc {
@@ -48,7 +50,15 @@ impl Rpc {
             voice: None,
             brains: None,
             browser: None,
+            tasks: None,
         }
+    }
+
+    /// Adds the M5 requests (tasks, routines, agents, workspaces).
+    #[must_use]
+    pub fn with_tasks(mut self, tasks: Arc<crate::tasks_rpc::TasksRpc>) -> Self {
+        self.tasks = Some(tasks);
+        self
     }
 
     /// Adds the brain requests.
@@ -95,7 +105,13 @@ impl Handler for Rpc {
         let voice = self.voice.clone();
         let brains = self.brains.clone();
         let browser = self.browser.clone();
+        let tasks = self.tasks.clone();
         Box::pin(async move {
+            if let Some(tasks) = tasks
+                && let Some(result) = tasks.call(&name, params.clone()).await
+            {
+                return result;
+            }
             if let Some(brains) = brains
                 && let Some(result) = brains.call(&name, params.clone()).await
             {

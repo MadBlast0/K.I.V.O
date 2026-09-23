@@ -41,6 +41,8 @@ const EN: Phrases = Phrases {
         "proceed",
         "do it",
         "send it",
+        "send",
+        "send that",
         "confirm",
         "allow",
         "go for it",
@@ -238,9 +240,147 @@ pub fn parse_answer(said: &str, language: &str) -> Option<Answer> {
     Some(answer)
 }
 
+/// A spoken change to a Draft card's prompt (CONVERSATION §5.4, CONV-15).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum DraftEdit {
+    /// "Add: also run the tests", "also …".
+    Add(String),
+    RemoveLastSentence,
+    ReadBack,
+    /// "Change it to …", "replace it with …".
+    Replace(String),
+}
+
+/// Reads a Draft edit from what was said, before it is taken as an answer.
+pub fn draft_edit(said: &str) -> Option<DraftEdit> {
+    let trimmed = said.trim().trim_end_matches(['.', '!']);
+    let lower = trimmed.to_lowercase();
+    let lower = lower
+        .trim_start_matches("kivo")
+        .trim_start_matches([',', ' ']);
+    let offset = trimmed.len() - lower.len();
+    let rest = |prefix: &str| {
+        let start = offset + prefix.len();
+        trimmed
+            .get(start..)
+            .map(|r| r.trim_start_matches([':', ',', ' ']).trim().to_owned())
+            .filter(|r| !r.is_empty())
+    };
+    for p in [
+        "read it back",
+        "read it to me",
+        "read the prompt",
+        "what does it say",
+    ] {
+        if lower == p || lower.starts_with(&format!("{p} ")) {
+            return Some(DraftEdit::ReadBack);
+        }
+    }
+    for p in [
+        "remove the last sentence",
+        "delete the last sentence",
+        "take out the last sentence",
+        "drop the last sentence",
+    ] {
+        if lower.starts_with(p) {
+            return Some(DraftEdit::RemoveLastSentence);
+        }
+    }
+    for p in [
+        "change it to",
+        "replace it with",
+        "make it say",
+        "instead say",
+    ] {
+        if lower.starts_with(p) {
+            return rest(p).map(DraftEdit::Replace);
+        }
+    }
+    for p in ["and add", "add", "also"] {
+        if lower.starts_with(&format!("{p} ")) || lower.starts_with(&format!("{p}:")) {
+            return rest(p).map(|r| {
+                // "also run the tests" keeps its "also".
+                if p == "also" {
+                    DraftEdit::Add(format!("Also {r}"))
+                } else {
+                    DraftEdit::Add(r)
+                }
+            });
+        }
+    }
+    None
+}
+
+/// The prompt after an edit.
+pub fn apply_draft_edit(text: &str, edit: &DraftEdit) -> String {
+    match edit {
+        DraftEdit::ReadBack => text.to_owned(),
+        DraftEdit::Replace(t) => t.clone(),
+        DraftEdit::Add(more) => {
+            let base = text.trim_end();
+            if base.is_empty() {
+                return capitalized(more);
+            }
+            let joiner = if base.ends_with(['.', '!', '?']) {
+                " "
+            } else {
+                ". "
+            };
+            format!("{base}{joiner}{}", capitalized(more))
+        }
+        DraftEdit::RemoveLastSentence => {
+            let base = text.trim_end().trim_end_matches(['.', '!', '?']);
+            match base.rfind(['.', '!', '?']) {
+                Some(i) => text[..=i].trim_end().to_owned(),
+                None => String::new(),
+            }
+        }
+    }
+}
+
+fn capitalized(s: &str) -> String {
+    let mut chars = s.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().chain(chars).collect(),
+        None => String::new(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn draft_edits_are_read_from_speech() {
+        assert_eq!(
+            draft_edit("Add: also run the tests"),
+            Some(DraftEdit::Add("also run the tests".into()))
+        );
+        assert_eq!(
+            draft_edit("also check the lint"),
+            Some(DraftEdit::Add("Also check the lint".into()))
+        );
+        assert_eq!(draft_edit("Kivo, read it back."), Some(DraftEdit::ReadBack));
+        assert_eq!(
+            draft_edit("remove the last sentence"),
+            Some(DraftEdit::RemoveLastSentence)
+        );
+        assert_eq!(
+            draft_edit("change it to fix the failing test"),
+            Some(DraftEdit::Replace("fix the failing test".into()))
+        );
+        assert_eq!(draft_edit("send"), None, "an answer, not an edit");
+        assert_eq!(parse_answer("send", "en"), Some(Answer::Approve));
+        let t = "Fix the failing test in K.I.V.O.";
+        let t = apply_draft_edit(t, &DraftEdit::Add("also run the tests".into()));
+        assert_eq!(t, "Fix the failing test in K.I.V.O. Also run the tests");
+        let t = apply_draft_edit(&t, &DraftEdit::RemoveLastSentence);
+        assert_eq!(t, "Fix the failing test in K.I.V.O.");
+        assert_eq!(
+            apply_draft_edit("One sentence", &DraftEdit::RemoveLastSentence),
+            ""
+        );
+    }
 
     #[test]
     fn english_answers_are_understood() {

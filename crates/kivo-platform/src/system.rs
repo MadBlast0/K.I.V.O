@@ -38,11 +38,26 @@ pub struct Attention {
     pub focus_mode: bool,
 }
 
+/// Whether the user is here and free to be spoken to (UX §7).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Presence {
+    /// Seconds since the last keyboard or mouse input.
+    pub idle_seconds: u32,
+    pub locked: bool,
+    /// Another app has the microphone open: probably a call.
+    pub mic_in_use_elsewhere: bool,
+}
+
 pub trait SystemInfo: Send + Sync {
     /// Everything, including a short CPU-load sample (~100 ms).
     fn snapshot(&self) -> PlatformResult<SystemSnapshot>;
     /// Only fullscreen and Focus: cheap enough for every request.
     fn attention(&self) -> PlatformResult<Attention>;
+    /// Idle time, the lock screen and a call, for proactive speech (UX-40).
+    fn presence(&self) -> Presence {
+        Presence::default()
+    }
 }
 
 /// The speaker or microphone level (TOOLS_AND_CONTROL §3, "Audio").

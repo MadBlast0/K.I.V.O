@@ -11,7 +11,7 @@ import { MotionConfig } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Icon } from "../icons";
-import { Island, IslandKeys, type IslandModel } from "../components/island/Island";
+import { Island, IslandActions, IslandKeys, type IslandModel } from "../components/island/Island";
 import { islandForMode } from "../components/island/session";
 import { hasButtons, islandForTurn, type IslandHandlers } from "../components/island/turn";
 import { NOTHING, announcements, heardFrom } from "../components/island/announce";
@@ -44,6 +44,8 @@ export function Overlay() {
   const [notice, setNotice] = useState<PermissionMode | null>(null);
   const [typing, setTyping] = useState(false);
   const [draft, setDraft] = useState("");
+  // The Draft card's Edit (CONV-15): the text field edits that prompt instead of sending a request.
+  const [editingDraft, setEditingDraft] = useState<string | null>(null);
   // Keyboard focus is on the Island's buttons (Tab / arrows move, Enter presses, Esc leaves): the
   // Island it was asked for, so it ends by itself when that Island changes.
   const [keyboardFor, setKeyboardFor] = useState<string | null>(null);
@@ -98,6 +100,15 @@ export function Overlay() {
     };
   }, []);
 
+  // A timer's countdown in the collapsed Island (UX-15) ticks once a second, only while one shows.
+  const [, setTick] = useState(0);
+  const counting = !!snapshot?.activities?.some((a) => a.until != null);
+  useEffect(() => {
+    if (!counting) return;
+    const id = window.setInterval(() => setTick((n) => n + 1), 1000);
+    return () => window.clearInterval(id);
+  }, [counting]);
+
   // Screen readers hear state changes, what KIVO heard and its answers (UX-53).
   const heard = useRef(NOTHING);
   useEffect(() => {
@@ -130,6 +141,14 @@ export function Overlay() {
       },
       talk: () => request(Method.sessionTalk),
       misroute: (turnId) => request(Method.chatMisroute, { turnId, note: "" }),
+      editDraft: (callId, text) => {
+        setEditingDraft(callId);
+        setDraft(text);
+        setTyping(true);
+        void invoke("overlay_focus");
+      },
+      offer: (id, accept) => request(Method.offerAnswer, { id, accept }),
+      openTask: (id) => request("island.openTask", { id }),
     }),
     [],
   );
@@ -142,6 +161,7 @@ export function Overlay() {
 
   const closeTyping = useCallback(() => {
     setTyping(false);
+    setEditingDraft(null);
     setDraft("");
     void invoke("overlay_typing_done");
   }, []);
@@ -149,13 +169,19 @@ export function Overlay() {
   const send = useCallback(() => {
     const text = draft.trim();
     if (!text) return;
-    request(Method.sessionSay, { text });
+    if (editingDraft) request(Method.draftAnswer, { callId: editingDraft, text });
+    else request(Method.sessionSay, { text });
     closeTyping();
-  }, [draft, closeTyping]);
+  }, [draft, editingDraft, closeTyping]);
 
   // Keyboard (UX-12): Esc cancels, Enter or Ctrl+Enter sends.
   const onKey = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Escape") {
+    if (e.key === "F1") {
+      // "What can I say?" (UX-44): the same request as saying it.
+      e.preventDefault();
+      request(Method.sessionSay, { text: t("island.helpPhrase") });
+      closeTyping();
+    } else if (e.key === "Escape") {
       e.preventDefault();
       closeTyping();
     } else if (e.key === "Enter") {
@@ -168,23 +194,38 @@ export function Overlay() {
     ? {
         state: "typing",
         width: 480,
-        label: t("island.typeTitle"),
+        label: editingDraft ? t("island.draft.editTitle") : t("island.typeTitle"),
         trail: <IslandKeys keys={["Esc"]} />,
         body: (
-          <label className="k-island__input">
-            <Icon name="chat" />
-            <input
-              ref={field}
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={onKey}
-              placeholder={t("island.typePlaceholder")}
-              aria-label={t("island.typeTitle")}
-            />
-            <button type="button" className="k-island__btn k-island__btn--primary" onClick={send}>
-              {t("island.send")}
-            </button>
-          </label>
+          <>
+            <label className="k-island__input">
+              <Icon name="chat" />
+              <input
+                ref={field}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={onKey}
+                placeholder={t("island.typePlaceholder")}
+                aria-label={t("island.typeTitle")}
+              />
+              <button type="button" className="k-island__btn k-island__btn--primary" onClick={send}>
+                {t("island.send")}
+              </button>
+            </label>
+            {!editingDraft && snapshot?.hasSelection && (
+              // The selection shortcut (UX-42): quick actions on the text selected in the app in front.
+              <IslandActions
+                hint={false}
+                actions={(["explain", "rewrite", "translate"] as const).map((action) => ({
+                  label: t(`island.selection.${action}`),
+                  onClick: () => {
+                    request(Method.selectionAction, { action });
+                    closeTyping();
+                  },
+                }))}
+              />
+            )}
+          </>
         ),
       }
     : null;
@@ -220,6 +261,11 @@ export function Overlay() {
 
   const onIslandKey = (e: KeyboardEvent<HTMLDivElement>) => {
     if (!keyboard) return;
+    if (e.key === "F1") {
+      e.preventDefault();
+      request(Method.sessionSay, { text: t("island.helpPhrase") });
+      return;
+    }
     if (e.key === "Escape") {
       e.preventDefault();
       setKeyboardFor(null);

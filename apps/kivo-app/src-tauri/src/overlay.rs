@@ -196,6 +196,26 @@ pub fn apply(
     }
 }
 
+/// Whether a fullscreen app, a game or a presentation is in front, as Windows tells notifying
+/// apps (live activities stay hidden then, UX-15).
+#[cfg(windows)]
+pub fn fullscreen_in_front() -> bool {
+    use windows::Win32::UI::Shell::SHQueryUserNotificationState;
+    // SAFETY: a plain query with no arguments besides its result.
+    unsafe { SHQueryUserNotificationState() }.is_ok_and(|state| quiet_state(state.0))
+}
+
+#[cfg(not(windows))]
+pub fn fullscreen_in_front() -> bool {
+    false
+}
+
+/// `QUNS_BUSY` (a fullscreen app), `QUNS_RUNNING_D3D_FULL_SCREEN` (a game) and
+/// `QUNS_PRESENTATION_MODE`.
+fn quiet_state(state: i32) -> bool {
+    matches!(state, 2..=4)
+}
+
 fn listening(session: Option<SessionState>) -> bool {
     matches!(
         session,
@@ -469,7 +489,7 @@ pub fn overlay_typing_done(window: tauri::WebviewWindow) {
 
 /// What the Island may ask the runtime: only the actions its own buttons offer (SECURITY §9: the
 /// overlay window gets almost nothing).
-const ISLAND_METHODS: [&str; 7] = [
+const ISLAND_METHODS: [&str; 10] = [
     kivo_ipc::method::SESSION_CANCEL,
     // The Undo button (UX-43): only takes back KIVO's own last change.
     kivo_ipc::method::SESSION_UNDO,
@@ -479,6 +499,12 @@ const ISLAND_METHODS: [&str; 7] = [
     kivo_ipc::method::SESSION_TALK,
     kivo_ipc::method::PERMISSIONS_ANSWER,
     kivo_ipc::method::SESSION_STOP_ALL,
+    // The Draft card's Edit (CONV-15): changes only the text of the prompt waiting for "send".
+    kivo_ipc::method::DRAFT_ANSWER,
+    // "Remember … as a workspace?" (CONV-10).
+    kivo_ipc::method::OFFER_ANSWER,
+    // The selection shortcut's Explain · Rewrite · Translate (UX-42).
+    kivo_ipc::method::SELECTION_ACTION,
 ];
 
 /// "Turn it on" (CAP-02) may only switch on the capability the current request needed, and only
@@ -513,6 +539,25 @@ pub async fn island_request(
         crate::show_main_window(window.app_handle(), Some("home"));
         return Ok(serde_json::Value::Null);
     }
+    // "Open in Tasks" on a card or a live activity (UX-24).
+    if method == "island.openTask" {
+        let id = params
+            .as_ref()
+            .and_then(|p| p.get("id"))
+            .and_then(serde_json::Value::as_str)
+            .filter(|id| {
+                id.chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+            })
+            .unwrap_or_default();
+        let page = if id.is_empty() {
+            "tasks".to_owned()
+        } else {
+            format!("tasks/{id}")
+        };
+        crate::show_main_window(window.app_handle(), Some(&page));
+        return Ok(serde_json::Value::Null);
+    }
     let params = params.unwrap_or(serde_json::Value::Null);
     let capability = method == kivo_ipc::method::CAPABILITIES_SET
         && allowed_capability_change(
@@ -531,7 +576,7 @@ pub async fn island_request(
 
 #[cfg(test)]
 mod tests {
-    use super::{Screen, allowed_capability_change, position};
+    use super::{Screen, allowed_capability_change, position, quiet_state};
     use kivo_core::Capability;
     use kivo_core::config::{IslandSpot, OverlayPosition};
     use kivo_ipc::protocol::IslandPlacement;
@@ -630,6 +675,14 @@ mod tests {
             position(&SECOND, &bottom, 120, Some(48), true).1,
             1440 - 120 - 12 - 72
         );
+    }
+
+    #[test]
+    fn activities_hide_over_fullscreen_apps_games_and_presentations() {
+        // QUNS_NOT_PRESENT, BUSY, RUNNING_D3D_FULL_SCREEN, PRESENTATION_MODE, ACCEPTS_NOTIFICATIONS,
+        // QUIET_TIME, APP.
+        let quiet: Vec<bool> = (1..=7).map(quiet_state).collect();
+        assert_eq!(quiet, [false, true, true, true, false, false, false]);
     }
 
     #[test]

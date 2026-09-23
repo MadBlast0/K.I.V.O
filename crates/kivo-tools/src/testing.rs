@@ -119,6 +119,7 @@ pub(crate) struct Rig {
     options: Arc<RwLock<ToolsConfig>>,
     caps: Arc<RwLock<CapabilitySettings>>,
     vision: Arc<std::sync::atomic::AtomicBool>,
+    pub terminals: Arc<kivo_testkit::FakeTerminals>,
 }
 
 fn test_app_window() -> WindowInfo {
@@ -152,6 +153,7 @@ pub(crate) fn rig() -> Rig {
         ..Default::default()
     });
     let browser = Arc::new(FakeBrowser::default());
+    let terminals = Arc::new(kivo_testkit::FakeTerminals::default());
     let secrets = Arc::new(FakeSecrets::default());
     let mut files = FakeFiles::new(&dir.path().join("bin"));
     // The temp folder stands in for the user's own folders.
@@ -214,6 +216,9 @@ pub(crate) fn rig() -> Rig {
         settings: Arc::new(move || op.read().unwrap().clone()),
         caps: Arc::new(move || ca.read().unwrap().clone()),
         vision: Arc::new(move || vi.load(std::sync::atomic::Ordering::SeqCst)),
+        terminals: terminals.clone(),
+        terminal_sessions: Arc::default(),
+        workspace_folder: Arc::new(|_| None),
     });
     let tools = controls(&c);
     Rig {
@@ -235,6 +240,7 @@ pub(crate) fn rig() -> Rig {
         options,
         caps,
         vision,
+        terminals,
     }
 }
 
@@ -301,6 +307,22 @@ impl Rig {
 
     pub(crate) fn allow_cloud_vision(&self) {
         self.vision.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// Another window on the (fake) desktop.
+    pub(crate) fn add_window(&self, id: u64, title: &str, app: &str) {
+        self.windows.windows.lock().unwrap().push(WindowInfo {
+            id: kivo_platform::WindowId(id),
+            title: title.into(),
+            app_id: app.into(),
+            bounds: Rect {
+                x: 0,
+                y: 0,
+                width: 800,
+                height: 600,
+            },
+            minimized: false,
+        });
     }
 
     pub(crate) fn app_window(&self) -> String {

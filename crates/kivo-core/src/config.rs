@@ -594,9 +594,73 @@ pub const DEFAULT_BLOCKED_APPS: &[&str] = &[
 #[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct Integrations {}
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+/// Tasks, watchers and what KIVO says without being asked (UX §7, UX-15, UX-40).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
-pub struct Automation {}
+pub struct Automation {
+    /// Toasts only in these hours, `"22:00-07:00"` (local time); off when empty.
+    pub quiet_hours: String,
+    /// How each source is told: `tasks`, `reminders`, `watchers`, `routines`, `agents`. A source
+    /// that isn't listed speaks when it's marked "tell me", else toasts.
+    pub sources: std::collections::BTreeMap<String, AnnounceMode>,
+    /// Read out what was missed when the user comes back.
+    pub catch_up_on_return: bool,
+    /// Ongoing status in the collapsed Island (UX-15); all off in fullscreen.
+    pub live_activities: LiveActivities,
+}
+
+impl Default for Automation {
+    fn default() -> Self {
+        Self {
+            quiet_hours: String::new(),
+            sources: std::collections::BTreeMap::new(),
+            catch_up_on_return: true,
+            live_activities: LiveActivities::default(),
+        }
+    }
+}
+
+impl Automation {
+    /// The quiet hours as minutes after midnight, when set and well formed.
+    pub fn quiet(&self) -> Option<(u32, u32)> {
+        let (a, b) = self.quiet_hours.split_once('-')?;
+        let minutes = |t: &str| {
+            let (h, m) = t.trim().split_once(':')?;
+            let (h, m): (u32, u32) = (h.parse().ok()?, m.parse().ok()?);
+            (h < 24 && m < 60).then_some(h * 60 + m)
+        };
+        Some((minutes(a)?, minutes(b)?))
+    }
+}
+
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AnnounceMode {
+    Speak,
+    Toast,
+    Silent,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
+pub struct LiveActivities {
+    pub media: bool,
+    pub timer: bool,
+    pub download: bool,
+    pub agent: bool,
+}
+
+impl Default for LiveActivities {
+    fn default() -> Self {
+        Self {
+            media: true,
+            timer: true,
+            download: true,
+            agent: true,
+        }
+    }
+}
 
 /// A setting that is present but not allowed.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
@@ -645,6 +709,11 @@ impl KivoConfig {
             self.performance.speech_threads <= 16,
             "performance.speech-threads",
             "must be 0–16",
+        );
+        check(
+            self.automation.quiet_hours.is_empty() || self.automation.quiet().is_some(),
+            "automation.quiet-hours",
+            "must look like 22:00-07:00",
         );
         check(
             (50..=200).contains(&self.voice.tts_speed),

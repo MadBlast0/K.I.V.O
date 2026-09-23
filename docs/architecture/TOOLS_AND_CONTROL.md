@@ -184,8 +184,8 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 
 **Watchers (§6)**
 
-- [ ] **TOOL-28** · M5 · Event-driven watchers: download finished, folder changed (`notify`), process exited / build finished, window/app state (UIA/WinEvent), time/reminders (persisted scheduler; missed runs reported on start) (§6)
-- [ ] **TOOL-29** · M5 · Every task has an owner, permissions granted at creation, history, status and cancellation; watchers use no LLM while waiting (§6)
+- [x] **TOOL-28** · M5 · Event-driven watchers: download finished, folder changed (`notify`), process exited / build finished, window/app state (UIA/WinEvent), time/reminders (persisted scheduler; missed runs reported on start) (§6) → done: `watchers.rs`: download finished and folder changed (`notify`), process exit / build finished (kernel waits), window opened/closed (UIA events), time (stored, missed ones reported on start) · verified: `watchers.rs` tests, `a_process_is_listed_and_its_exit_is_waited_for`, `the_build_watcher_waits_without_ai_and_tells_you` (2026-09-23)
+- [x] **TOOL-29** · M5 · Every task has an owner, permissions granted at creation, history, status and cancellation; watchers use no LLM while waiting (§6) → done: every task has an owner, its grants, step history, status and cancel; watchers make no brain calls while waiting · verified: `the_build_watcher_waits_without_ai_and_tells_you` (zero brain requests), `Tasks.test.tsx` (2026-09-23)
 
 **Shell (§7)**
 

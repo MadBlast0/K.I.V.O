@@ -4,6 +4,7 @@ name = "Windows Terminal"
 aliases = ["Terminal", "wt"]
 prefer = ["app-cli", "uia"]
 
+examples = ["Open a terminal in K.I.V.O", "Start Claude in this folder", "Tell me when the build finishes", "Check the repository status"]
 [match]
 exe = ["WindowsTerminal.exe"]
 aumid = ["Microsoft.WindowsTerminal_8wekyb3d8bbwe!App"]

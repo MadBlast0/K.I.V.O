@@ -131,3 +131,94 @@ patterns = ["restart", "restart the computer", "restart my computer", "restart t
 [[command]]
 tool = "system.shutdown"
 patterns = ["shut down", "shutdown", "shut down the computer", "shut down my computer", "turn off the computer", "turn off my pc", "power off", "shut down the pc"]
+
+# M5: event tasks (BRAIN-07). "Tell me when …", "remind me …" and "watch …" become tasks with a
+# watcher; the brain gets the same tools for phrasings these don't cover.
+[[command]]
+tool = "tasks.remind"
+patterns = [
+  "remind me in {number} minutes to {text}", "remind me to {text} in {number} minutes",
+  "in {number} minutes remind me to {text}", "set a reminder in {number} minutes to {text}",
+  "set a reminder for {number} minutes", "remind me in {number} minutes",
+  "remind me in {number} minute to {text}", "remind me in {number} minute",
+  "set a timer for {number} minutes", "timer for {number} minutes", "start a {number} minute timer",
+]
+args = { unit = "minutes" }
+
+[[command]]
+tool = "tasks.remind"
+patterns = [
+  "remind me in {number} hours to {text}", "remind me to {text} in {number} hours",
+  "remind me in {number} hour to {text}", "remind me in {number} hours", "remind me in {number} hour",
+]
+args = { unit = "hours" }
+
+[[command]]
+tool = "tasks.watch"
+patterns = [
+  "tell me when the build finishes", "tell me when the build is done", "let me know when the build finishes",
+  "let me know when the build is done", "notify me when the build finishes", "tell me when the build is finished",
+  "tell me when the tests finish", "let me know when the tests are done", "tell me when the compile finishes",
+  "tell me when it finishes building", "watch the build",
+]
+args = { kind = "build" }
+
+[[command]]
+tool = "tasks.watch"
+patterns = [
+  "tell me when the download finishes", "tell me when the download is done", "let me know when the download finishes",
+  "let me know when my download is done", "tell me when my download finishes", "notify me when the download is done",
+]
+args = { kind = "download" }
+
+[[command]]
+tool = "tasks.watch"
+patterns = ["tell me when {app} closes", "let me know when {app} closes", "tell me when {app} is closed", "tell me when i close {app}"]
+args = { kind = "window", event = "closed" }
+
+[[command]]
+tool = "tasks.watch"
+patterns = ["tell me when {app} opens", "let me know when {app} opens", "tell me when {app} starts", "tell me when {app} is open"]
+args = { kind = "window", event = "opened" }
+
+[[command]]
+tool = "tasks.watch"
+patterns = ["tell me when {app} finishes", "let me know when {app} finishes", "tell me when {app} is done", "tell me when {app} exits"]
+args = { kind = "process" }
+
+# "What did I miss?" (UX-40) and "What can I say?" (UX-44).
+[[command]]
+tool = "session.missed"
+patterns = ["what did i miss", "what did i miss while i was away", "anything new", "catch me up", "did i miss anything", "whats new"]
+
+# Every Island button by voice (UX-55): Retry, "That's not what I meant", Turn it on, Open.
+[[command]]
+tool = "session.retry"
+patterns = ["try again", "try that again", "do that again", "retry", "one more time"]
+
+[[command]]
+tool = "session.misroute"
+patterns = ["thats not what i meant", "that is not what i meant", "not what i meant", "wrong answer", "you got that wrong"]
+
+[[command]]
+tool = "session.enable"
+patterns = ["turn it on", "turn that on", "switch it on", "enable it", "allow that"]
+
+[[command]]
+tool = "session.open"
+patterns = ["open my tasks", "show my tasks", "open tasks", "show tasks", "show me my tasks"]
+args = { page = "tasks" }
+
+[[command]]
+tool = "session.open"
+patterns = ["open my routines", "show my routines", "open routines"]
+args = { page = "routines" }
+
+[[command]]
+tool = "session.open"
+patterns = ["open the control center", "open control center", "show the control center", "open kivo", "show kivo"]
+args = { page = "home" }
+
+[[command]]
+tool = "session.help"
+patterns = ["what can i say", "what can i say here", "help", "what can you do here", "what can i ask", "show me what i can say"]

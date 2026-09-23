@@ -23,6 +23,9 @@ import { Home } from "./pages/Home";
 import { Onboarding } from "./pages/Onboarding";
 import { Permissions } from "./pages/Permissions";
 import { Settings } from "./pages/Settings";
+import { Agents } from "./pages/Agents";
+import { Routines } from "./pages/Routines";
+import { Tasks } from "./pages/Tasks";
 
 const PAGES: ReadonlyArray<PageId> = [
   "home",
@@ -47,14 +50,21 @@ function isPage(page: string): page is PageId {
 
 export function App() {
   const [page, setPage] = useState<PageId>("home");
-  // The runtime asks for pages by name (tray "Settings", `--page`); unknown names open Home.
-  const navigate = useCallback((to: string) => setPage(isPage(to) ? to : "home"), []);
+  // What the page was opened for ("tasks/<id>" opens that task, "chat/new" a new conversation).
+  const [focus, setFocus] = useState<{ arg: string; at: number } | null>(null);
+  // The runtime asks for pages by name (tray "Settings", `--page`, a toast's "Open", the jump
+  // list); unknown names open Home.
+  const navigate = useCallback((to: string) => {
+    const [name = "", arg] = to.split("/", 2);
+    setPage(isPage(name) ? name : "home");
+    setFocus(arg ? { arg, at: Date.now() } : null);
+  }, []);
   return (
     <ThemeProvider>
       <TooltipProvider>
         <ToastProvider>
           <RuntimeProvider onNavigate={navigate}>
-            <Shell page={page} setPage={setPage} />
+            <Shell page={page} setPage={setPage} focus={focus} />
           </RuntimeProvider>
         </ToastProvider>
       </TooltipProvider>
@@ -76,7 +86,15 @@ function useOnboarded(): [boolean | null, () => void] {
   return [onboarded, () => setOnboarded(true)];
 }
 
-function Shell({ page, setPage }: { page: PageId; setPage: (page: PageId) => void }) {
+function Shell({
+  page,
+  setPage,
+  focus,
+}: {
+  page: PageId;
+  setPage: (page: PageId) => void;
+  focus: { arg: string; at: number } | null;
+}) {
   const [palette, setPalette] = useState(false);
   useCommandPaletteHotkey(setPalette);
   const { t } = useTranslation();
@@ -195,11 +213,18 @@ function Shell({ page, setPage }: { page: PageId; setPage: (page: PageId) => voi
             onOpenPermissions={() => setPage("permissions")}
             onOpenActivity={() => setPage("activity")}
             onOpenVoice={() => setPage("voice")}
+            onOpenTasks={() => setPage("tasks")}
           />
         ) : page === "activity" ? (
           <Activity />
         ) : page === "chat" ? (
-          <Chat onOpenPermissions={() => setPage("permissions")} />
+          <Chat key={focus?.at} onOpenPermissions={() => setPage("permissions")} />
+        ) : page === "tasks" ? (
+          <Tasks key={focus?.at} focus={focus?.arg} />
+        ) : page === "routines" ? (
+          <Routines />
+        ) : page === "agents" ? (
+          <Agents />
         ) : page === "brains" ? (
           <Brains />
         ) : page === "voice" ? (

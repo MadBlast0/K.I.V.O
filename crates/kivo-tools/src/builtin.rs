@@ -81,6 +81,17 @@ pub fn platform_error(e: PlatformError) -> ToolError {
     ToolError::new(code, message).with_detail(detail)
 }
 
+/// The track playing after a media command, for the Island's media activity (UX-15): `{ track:
+/// { title, artist, app, playing } }`, or nothing when Windows doesn't say.
+fn track(env: &Env) -> Value {
+    match env.control.now_playing() {
+        Ok(Some(p)) if !p.title.is_empty() => json!({
+            "track": { "title": p.title, "artist": p.artist, "app": p.app, "playing": p.playing }
+        }),
+        _ => json!({}),
+    }
+}
+
 pub(crate) fn done(say: impl Into<String>, data: Value) -> Result<Output, ToolError> {
     Ok(Output::new(say, data))
 }
@@ -405,7 +416,7 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
         undoable(
             def(
                 "audio.mute",
-                "Mute the speakers.",
+                "Mute the speakers, for quiet or silence.",
                 none(),
                 Risk::Low,
                 &[LocalWrite],
@@ -547,7 +558,7 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
                 env.control
                     .media(MediaAction::PlayPause)
                     .map_err(nothing_playing)?;
-                done(text::t("reply.okay"), json!({}))
+                done(text::t("reply.okay"), track(env))
             }),
             // Play/pause is its own undo.
             Box::new(|_, env| {
@@ -571,7 +582,7 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
                 env.control
                     .media(MediaAction::Next)
                     .map_err(nothing_playing)?;
-                done(text::t("reply.next"), json!({}))
+                done(text::t("reply.next"), track(env))
             }),
         ),
         tool(
@@ -588,7 +599,7 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
                 env.control
                     .media(MediaAction::Previous)
                     .map_err(nothing_playing)?;
-                done(text::t("reply.previous"), json!({}))
+                done(text::t("reply.previous"), track(env))
             }),
         ),
         tool(

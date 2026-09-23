@@ -48,9 +48,31 @@ pub struct Grant {
     /// `git *`); `None` for any arguments.
     #[serde(default)]
     pub pattern: Option<String>,
+    /// The exact arguments this grant is for (a routine's or a task's step, ROUT-03, SEC-09).
+    /// A string holding `${name}` stands for whatever a variable is filled with at run time.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub args: Option<serde_json::Value>,
 }
 
 impl Grant {
+    /// "Always allow" for a tool, for any target and arguments.
+    pub fn tool(tool: impl Into<String>) -> Self {
+        Self {
+            tool: tool.into(),
+            scope: None,
+            pattern: None,
+            args: None,
+        }
+    }
+
+    /// A grant for exactly this call's arguments (task and routine grants).
+    pub fn exact(tool: impl Into<String>, args: serde_json::Value) -> Self {
+        Self {
+            args: Some(args),
+            ..Self::tool(tool)
+        }
+    }
+
     /// Whether this grant covers `call`.
     pub fn covers(&self, call: &ToolCall) -> bool {
         self.tool == call.tool
@@ -62,7 +84,63 @@ impl Grant {
                 .pattern
                 .as_ref()
                 .is_none_or(|p| strings(&call.args).iter().any(|v| glob(p, v)))
+            && self
+                .args
+                .as_ref()
+                .is_none_or(|template| args_match(template, &call.args))
     }
+}
+
+/// Whether `actual` is `template`, where a `${name}` inside a template string stands for any text
+/// (and a template string that is only `${name}` also for a number or a boolean).
+pub fn args_match(template: &serde_json::Value, actual: &serde_json::Value) -> bool {
+    use serde_json::Value;
+    match (template, actual) {
+        (Value::String(t), a) if is_variable(t) => {
+            matches!(a, Value::String(_) | Value::Number(_) | Value::Bool(_))
+        }
+        (Value::String(t), Value::String(a)) if t.contains("${") => {
+            glob(&variables_as_stars(t), a) && !a.contains('\n')
+        }
+        (Value::Object(t), Value::Object(a)) => {
+            t.len() == a.len()
+                && t.iter()
+                    .all(|(k, tv)| a.get(k).is_some_and(|av| args_match(tv, av)))
+        }
+        (Value::Array(t), Value::Array(a)) => {
+            t.len() == a.len() && t.iter().zip(a).all(|(tv, av)| args_match(tv, av))
+        }
+        (t, a) => t == a,
+    }
+}
+
+fn is_variable(s: &str) -> bool {
+    s.starts_with("${")
+        && s.ends_with('}')
+        && s[2..s.len() - 1]
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '_')
+}
+
+/// `open ${file} now` → `open * now`, for matching (and a literal `*` in the template is kept).
+fn variables_as_stars(template: &str) -> String {
+    let mut out = String::new();
+    let mut rest = template;
+    while let Some(start) = rest.find("${") {
+        out.push_str(&rest[..start]);
+        match rest[start..].find('}') {
+            Some(end) => {
+                out.push('*');
+                rest = &rest[start + end + 1..];
+            }
+            None => {
+                out.push_str(&rest[start..]);
+                rest = "";
+            }
+        }
+    }
+    out.push_str(rest);
+    out
 }
 
 /// Every string in a call's arguments.
@@ -183,6 +261,9 @@ pub struct Context<'a> {
     /// The tool's own assessment of this call's risk from its arguments (SECURITY §3); the
     /// declared risk when `None`.
     pub assessed: Option<Risk>,
+    /// A background task's grants (SEC-09): what the user approved when the task was created.
+    /// A task's own calls (`Initiator::Task`) never go beyond them.
+    pub task_grants: Option<&'a [Grant]>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -199,6 +280,8 @@ pub enum DenyCode {
     /// A limit no mode lifts, found by the tool itself before anyone is asked (typing into a
     /// password field, SECURITY §1.1).
     HardLimit,
+    /// A background task asked for something it wasn't granted when it was created (SEC-09).
+    NotGranted,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, thiserror::Error)]
@@ -335,6 +418,23 @@ pub fn authorize(spec: &ToolSpec, call: &ToolCall, cx: &Context<'_>) -> Decision
     };
     if outbound && class >= DataClass::Personal && cx.privacy == PrivacyMode::StrictPrivate {
         return deny(DenyCode::Privacy, text::t("policy.privateData"));
+    }
+
+    // Task calls: exactly what was approved when the task was created, in every mode (SEC-09).
+    // The approval was the confirmation (a click, with every step shown), so High steps the
+    // user approved run; anything else is refused, never asked, since no one may be watching.
+    if call.initiated_by == Initiator::Task {
+        return if cx
+            .task_grants
+            .is_some_and(|g| g.iter().any(|g| g.covers(call)))
+        {
+            Decision::Allow(Permit::new(call, ConfirmedBy::Grant))
+        } else {
+            deny(
+                DenyCode::NotGranted,
+                text::tf("policy.taskNotGranted", &[("action", &spec.title)]),
+            )
+        };
     }
 
     // 2. Bypass: the user's explicit, time-limited override (SEC-03); owners only.
@@ -626,6 +726,7 @@ mod tests {
         tools: Tools,
         privacy: PrivacyMode,
         assessed: Option<Risk>,
+        task_grants: Option<Vec<Grant>>,
     }
 
     impl Env {
@@ -637,6 +738,7 @@ mod tests {
                 tools: Tools::default(),
                 privacy: PrivacyMode::Cloud,
                 assessed: None,
+                task_grants: None,
             }
         }
         fn cx(&self, mode: PermissionMode, session: SessionKind, taint: Taint) -> Context<'_> {
@@ -650,6 +752,7 @@ mod tests {
                 tools: &self.tools,
                 privacy: self.privacy,
                 assessed: self.assessed,
+                task_grants: self.task_grants.as_deref(),
             }
         }
     }
@@ -842,6 +945,7 @@ mod tests {
             tool: "x.tool".into(),
             scope: Some("chrome".into()),
             pattern: None,
+            args: None,
         }];
         let brain = call(Initiator::Brain);
         let tainted = || Taint::Tainted(vec!["mail".into()]);
@@ -1192,6 +1296,7 @@ mod tests {
             tool: "shell.run".into(),
             scope: None,
             pattern: Some("git *".into()),
+            args: None,
         };
         let mut c = call(Initiator::Brain);
         c.tool = "shell.run".into();
@@ -1273,5 +1378,90 @@ mod tests {
             .len(),
             3
         );
+    }
+
+    /// SEC-09: a task's calls run exactly as approved at creation, in every mode, and nothing
+    /// beyond — not asked, refused.
+    #[test]
+    fn tasks_never_exceed_their_grants() {
+        let mut env = Env::new();
+        let mut c = call(Initiator::Task);
+        c.args = json!({ "app": "chrome" });
+        let high = spec(
+            Risk::High,
+            &[SideEffect::LocalWrite],
+            Capability::AppsAndWindows,
+        );
+        for mode in [
+            PermissionMode::Ask,
+            PermissionMode::Auto,
+            PermissionMode::Plan,
+            PermissionMode::Bypass,
+        ] {
+            env.task_grants = None;
+            assert_eq!(
+                outcome(&authorize(
+                    &high,
+                    &c,
+                    &env.cx(mode, SessionKind::Owner, Taint::Clean)
+                )),
+                "deny",
+                "{mode:?}"
+            );
+            env.task_grants = Some(vec![Grant::exact("x.tool", json!({ "app": "chrome" }))]);
+            assert_eq!(
+                outcome(&authorize(
+                    &high,
+                    &c,
+                    &env.cx(mode, SessionKind::Owner, Taint::Clean)
+                )),
+                "allow",
+                "{mode:?}"
+            );
+            let mut other = c.clone();
+            other.args = json!({ "app": "notepad" });
+            assert_eq!(
+                outcome(&authorize(
+                    &high,
+                    &other,
+                    &env.cx(mode, SessionKind::Owner, Taint::Clean)
+                )),
+                "deny",
+                "{mode:?}: other arguments"
+            );
+        }
+        // The hard limits still come first.
+        env.limits.stopped = true;
+        assert_eq!(
+            outcome(&authorize(
+                &high,
+                &c,
+                &env.cx(PermissionMode::Auto, SessionKind::Owner, Taint::Clean)
+            )),
+            "deny"
+        );
+    }
+
+    #[test]
+    fn exact_argument_grants_fill_variables_only() {
+        let g = Grant::exact(
+            "timer.start",
+            json!({ "minutes": "${minutes}", "label": "Focus for ${minutes} min", "sound": true }),
+        );
+        let mut c = call(Initiator::Task);
+        c.tool = "timer.start".into();
+        c.args = json!({ "minutes": 25, "label": "Focus for 25 min", "sound": true });
+        assert!(g.covers(&c));
+        c.args = json!({ "minutes": 25, "label": "Focus for 25 min", "sound": false });
+        assert!(!g.covers(&c), "a fixed argument changed");
+        c.args = json!({ "minutes": 25, "label": "Focus for 25 min", "sound": true, "extra": 1 });
+        assert!(!g.covers(&c), "an argument was added");
+        c.args = json!({ "minutes": { "evil": 1 }, "label": "Focus for 25 min", "sound": true });
+        assert!(
+            !g.covers(&c),
+            "a variable is text or a number, not an object"
+        );
+        c.args = json!({ "minutes": 5, "label": "Something else", "sound": true });
+        assert!(!g.covers(&c));
     }
 }

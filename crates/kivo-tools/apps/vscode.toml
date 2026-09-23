@@ -5,6 +5,7 @@ aliases = ["VS Code", "Code"]
 prefer = ["app-cli", "uia"]
 quirks = ["Electron: UIA sees menus and editors but not every canvas element; prefer the CLI."]
 
+examples = ["Open the K.I.V.O folder in VS Code", "Run the tests", "What's the error on screen?", "Tell me when the build finishes"]
 [match]
 exe = ["Code.exe"]
 

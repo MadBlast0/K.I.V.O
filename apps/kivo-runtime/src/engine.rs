@@ -9,7 +9,12 @@ mod agent;
 mod brain;
 mod control;
 
-pub use agent::EnginePermissions;
+pub use agent::{EnginePermissions, agent_spec};
+
+/// A provider's failure in plain words (PLAN-05), for the task runner.
+pub fn failure_text(name: &str, error: &kivo_brain::NormalizedError) -> String {
+    brain::failure_message(name, error)
+}
 
 use crate::activity::Recorder;
 use crate::brains::Brains;
@@ -42,10 +47,15 @@ const COLLAPSE_AFTER: Duration = Duration::from_secs(4);
 const THINKING_CUE_AFTER: Duration = Duration::from_secs(1);
 /// How long a first request waits for the speech worker to come up.
 const WORKER_START: Duration = Duration::from_secs(8);
+/// The tool a Draft card sends through (CONV-15).
+const DRAFT_TOOL: &str = "agents.send_prompt";
 /// How long the Island offers Undo (UX §8.1).
 const UNDO_OFFER: Duration = Duration::from_secs(8);
 /// How long "Kivo, undo that" and the toast can still take the last change back.
 const UNDO_KEPT: Duration = Duration::from_secs(10 * 60);
+/// The media activity's id, and how long the track shows after a media command (UX-15).
+const MEDIA_ACTIVITY: &str = "media";
+const MEDIA_SHOWN_FOR: Duration = Duration::from_secs(10);
 
 /// The last change that can be taken back (UX-43).
 struct UndoEntry {
@@ -106,6 +116,8 @@ struct Running {
     tainted: Vec<String>,
     /// The tools offered to the brain in this round; only these can be called (SEC-15).
     offered: Vec<String>,
+    /// The Draft's text after the user changed it (CONV-15), for the call that sends it.
+    draft_text: Option<String>,
 }
 
 impl Running {
@@ -137,6 +149,7 @@ impl Running {
             attachments: Vec::new(),
             tainted: Vec::new(),
             offered: Vec::new(),
+            draft_text: None,
         }
     }
 }
@@ -206,6 +219,21 @@ pub struct Engine {
     commands: Option<Arc<dyn kivo_platform::CommandRunner>>,
     input_abort: Option<Arc<std::sync::atomic::AtomicBool>>,
     vision: Arc<std::sync::atomic::AtomicBool>,
+    /// Background tasks (M5), set once they exist.
+    tasks: RwLock<Option<Arc<crate::tasks::Tasks>>>,
+    /// What each app supports, for "What can I say?" (UX-44).
+    app_registry: RwLock<Option<Arc<kivo_tools::appreg::AppRegistry>>>,
+    /// Routines and custom commands (ROUTINES), set once they exist.
+    routines: RwLock<Option<Arc<crate::routines::Routines>>>,
+    /// Instructions and workspaces (CONVERSATION §4).
+    workspaces: RwLock<Option<Arc<crate::workspaces::Workspaces>>>,
+    /// Counts media activities shown, so only the newest one's timer removes it.
+    media_shown: Arc<AtomicU64>,
+    /// Reads the selection in the app in front when the text box opens (UX-42).
+    uia: RwLock<Option<Arc<dyn kivo_platform::UiAutomation>>>,
+    /// The last finished turn as the Island showed it: "try again", "that's not what I meant"
+    /// and "turn it on" act on it (UX-55).
+    previous: Mutex<Option<kivo_ipc::protocol::TurnView>>,
 }
 
 impl Engine {
@@ -238,7 +266,116 @@ impl Engine {
             commands: parts.commands,
             input_abort: parts.input_abort,
             vision: parts.vision,
+            tasks: RwLock::new(None),
+            app_registry: RwLock::new(None),
+            routines: RwLock::new(None),
+            workspaces: RwLock::new(None),
+            media_shown: Arc::new(AtomicU64::new(0)),
+            previous: Mutex::new(None),
+            uia: RwLock::new(None),
         }
+    }
+
+    pub fn set_workspaces(&self, workspaces: Arc<crate::workspaces::Workspaces>) {
+        *write(&self.workspaces) = Some(workspaces);
+    }
+
+    pub fn workspaces(&self) -> Option<Arc<crate::workspaces::Workspaces>> {
+        read(&self.workspaces).clone()
+    }
+
+    pub fn set_routines(&self, routines: Arc<crate::routines::Routines>) {
+        *write(&self.routines) = Some(routines);
+    }
+
+    pub fn routines(&self) -> Option<Arc<crate::routines::Routines>> {
+        read(&self.routines).clone()
+    }
+
+    /// A routine's hotkey was pressed (ROUT-05): it runs as a task, and says it started.
+    pub fn run_routine(&self, id: &str) -> Result<String, String> {
+        let routines = self.routines().ok_or_else(|| text::t("routine.notFound"))?;
+        let name = routines.get(id).map(|r| r.name).unwrap_or_default();
+        let task = routines.run(id, &serde_json::Map::new())?;
+        tracing::info!(routine = %name, "routine started by its hotkey");
+        Ok(task)
+    }
+
+    /// The installed apps, as last read (the Agents page's desktop AI apps, DISC-06).
+    pub fn installed_apps(&self) -> Vec<kivo_platform::AppEntry> {
+        self.app_catalog
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+
+    pub fn set_uia(&self, uia: Arc<dyn kivo_platform::UiAutomation>) {
+        *self
+            .uia
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(uia);
+    }
+
+    /// Ctrl+Shift+Space (UX-41, UX-42): before the Island takes focus, the text selected in the app
+    /// in front is read (UIA TextPattern, never a password field) and kept in the runtime, so the
+    /// text box can offer Explain · Rewrite · Translate. Needs the UI Automation capability.
+    pub async fn capture_selection(&self) {
+        let uia = self
+            .uia
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        let allowed = self
+            .core
+            .config()
+            .capabilities
+            .enabled(kivo_core::Capability::UiAutomation);
+        let text = match uia.filter(|_| allowed) {
+            Some(uia) => tokio::task::spawn_blocking(move || uia.selected_text())
+                .await
+                .ok()
+                .and_then(Result::ok)
+                .flatten()
+                .filter(|t| !t.trim().is_empty()),
+            None => None,
+        };
+        self.core.set_selection(text);
+    }
+
+    pub fn set_tasks(&self, tasks: Arc<crate::tasks::Tasks>) {
+        *write(&self.tasks) = Some(tasks);
+    }
+
+    pub fn tasks(&self) -> Option<Arc<crate::tasks::Tasks>> {
+        read(&self.tasks).clone()
+    }
+
+    pub fn set_app_registry(&self, apps: Arc<kivo_tools::appreg::AppRegistry>) {
+        *write(&self.app_registry) = Some(apps);
+    }
+
+    /// "What can I say?" (UX-44): examples for the app in front (from the App Capability
+    /// Registry), then general ones.
+    pub fn help_examples(&self) -> Vec<String> {
+        let front = self.windows.foreground().ok().flatten();
+        let mut out: Vec<String> = front
+            .and_then(|w| {
+                read(&self.app_registry)
+                    .as_ref()
+                    .and_then(|r| r.find_by_exe(&w.app_id).map(|e| e.examples.clone()))
+            })
+            .unwrap_or_default();
+        out.truncate(4);
+        for general in text::t("help.general").split('|') {
+            if out.len() >= 5 {
+                break;
+            }
+            let general = general.trim().to_owned();
+            if !general.is_empty() && !out.contains(&general) {
+                out.push(general);
+            }
+        }
+        out
     }
 
     pub fn set_voice_id(&self, voice_id: Arc<crate::voiceid::VoiceId>) {
@@ -444,9 +581,128 @@ impl Engine {
         true
     }
 
+    /// The Draft card (CONV-15): a prompt KIVO will type into another AI, shown with its target
+    /// until the user says "send", changes it or cancels.
+    pub(crate) fn show_draft(&self, call: &ToolCall) {
+        // A proposed plan (BRAIN-30) shows its steps on the card, before it is approved.
+        if call.tool == "tasks.propose_plan" {
+            let registry = &self.registry;
+            let steps: Vec<StepView> = call.args["steps"]
+                .as_array()
+                .map(|steps| {
+                    steps
+                        .iter()
+                        .enumerate()
+                        .map(|(i, s)| {
+                            let tool = s["tool"].as_str().unwrap_or_default();
+                            let title = registry.known(tool).map_or_else(
+                                || s["title"].as_str().unwrap_or(tool).to_owned(),
+                                |spec| kivo_security::render_title(&spec.title, &s["args"]),
+                            );
+                            StepView {
+                                id: format!("{}-p{i}", call.id),
+                                title,
+                                status: StepStatus::Pending,
+                                detail: None,
+                            }
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            self.core.update_turn(|view| view.steps.extend(steps));
+            return;
+        }
+        if call.tool != DRAFT_TOOL {
+            return;
+        }
+        let text = call.args["text"].as_str().unwrap_or_default().to_owned();
+        let target = call
+            .targets
+            .iter()
+            .find_map(|t| match t {
+                kivo_core::tool::Target::Window { title, .. } => {
+                    Some(text::tf("draft.target", &[("title", title)]))
+                }
+                _ => None,
+            })
+            .unwrap_or_else(|| text::t("draft.anyTerminal"));
+        self.core.update_turn(|view| {
+            view.draft = Some(kivo_ipc::protocol::DraftView {
+                target: target.clone(),
+                text: text.clone(),
+            });
+        });
+    }
+
+    /// Changes the waiting Draft's text; returns it.
+    fn change_draft(&self, change: impl FnOnce(&str) -> String) -> Option<String> {
+        let new = {
+            let mut turn = lock(&self.turn);
+            let running = turn.as_mut()?;
+            let (_, call) = running
+                .pending
+                .as_mut()
+                .filter(|(_, c)| c.tool == DRAFT_TOOL)?;
+            let new = change(call.args["text"].as_str().unwrap_or_default());
+            call.args["text"] = serde_json::Value::String(new.clone());
+            running.draft_text = Some(new.clone());
+            new
+        };
+        self.core.update_turn(|view| {
+            if let Some(d) = view.draft.as_mut() {
+                d.text.clone_from(&new);
+            }
+        });
+        Some(new)
+    }
+
+    /// The Draft card's Edit (CONV-15): the user rewrote the prompt.
+    pub fn edit_draft(&self, call_id: &str, text: &str) -> Result<(), String> {
+        let waiting = lock(&self.turn)
+            .as_ref()
+            .and_then(|t| t.pending.as_ref())
+            .is_some_and(|(spec, call)| spec.call_id == call_id && call.tool == DRAFT_TOOL);
+        if !waiting {
+            return Err(text::t("turn.nothingWaiting"));
+        }
+        self.change_draft(|_| text.trim().to_owned());
+        Ok(())
+    }
+
+    /// The Draft's text as the user left it, for the call that sends it.
+    pub(crate) fn drafted(&self, mut call: ToolCall) -> ToolCall {
+        if call.tool == DRAFT_TOOL
+            && let Some(text) = lock(&self.turn).as_mut().and_then(|t| t.draft_text.take())
+        {
+            call.args["text"] = serde_json::Value::String(text);
+        }
+        call
+    }
+
     /// What the user said to the decision (CONV-27), under the voice rules (CONV-28).
     async fn decision_answer(self: &Arc<Self>, said: &str) {
-        use kivo_intent::answers::{Answer as Said, parse_answer};
+        use kivo_intent::answers::{Answer as Said, DraftEdit, draft_edit, parse_answer};
+        // A Draft is changed by voice before anything counts as an answer (CONV-15).
+        let drafting = lock(&self.turn)
+            .as_ref()
+            .and_then(|t| t.pending.as_ref())
+            .is_some_and(|(_, c)| c.tool == DRAFT_TOOL);
+        if drafting && let Some(edit) = draft_edit(said) {
+            if let Some(t) = lock(&self.turn).as_mut() {
+                t.answering = false;
+            }
+            self.core.update_turn(|view| view.answering = false);
+            let reply = match &edit {
+                DraftEdit::ReadBack => self.change_draft(ToOwned::to_owned).unwrap_or_default(),
+                _ => {
+                    self.change_draft(|t| kivo_intent::answers::apply_draft_edit(t, &edit));
+                    text::t("draft.changed")
+                }
+            };
+            self.speak(&reply).await;
+            self.listen_for_answer();
+            return;
+        }
         let (spec, guest, audio, reasked) = {
             let mut turn = lock(&self.turn);
             let Some(t) = turn.as_mut() else { return };
@@ -990,6 +1246,40 @@ impl Engine {
             return;
         }
 
+        // An offer in the Island ("Remember kivo as a workspace?") answered by voice (UX-55).
+        if let Some(offer) = self.core.offer()
+            && let Some(answer) =
+                kivo_intent::answers::parse_answer(&text, &self.core.config().general.language)
+            && matches!(
+                answer,
+                kivo_intent::answers::Answer::Approve
+                    | kivo_intent::answers::Answer::ApproveAlways
+                    | kivo_intent::answers::Answer::Deny
+            )
+        {
+            let accept = !matches!(answer, kivo_intent::answers::Answer::Deny);
+            let reply = match self.workspaces().map(|w| w.answer(&offer.id, accept)) {
+                Some(Ok(Some(w))) => {
+                    self.agents.set_workspace(w.path.clone().into());
+                    text::tf("workspace.remembered", &[("name", &w.name)])
+                }
+                Some(Ok(None)) => text::t("reply.okay"),
+                Some(Err(e)) => e,
+                None => text::t("workspace.notFound"),
+            };
+            self.speak_and_finish(&reply).await;
+            return;
+        }
+
+        // Routines and custom commands first: the user's own phrases win, and need no AI
+        // (ROUT-05, ROUT-06).
+        if let Some(routines) = self.routines()
+            && let Some((routine, vars)) = routines.match_text(&text)
+        {
+            self.run_matched_routine(&routines, routine, &vars).await;
+            return;
+        }
+
         let apps = self.apps_index();
         let windows = self.windows_index();
         let decision = {
@@ -1024,6 +1314,34 @@ impl Engine {
                     self.undo_in_turn().await;
                     return;
                 }
+                // "What did I miss?" (UX-40).
+                if matched.tool == "session.missed" {
+                    let summary = self.tasks().map_or_else(
+                        || text::t("notify.nothingMissed"),
+                        |t| t.notifier().missed_summary(),
+                    );
+                    self.speak_and_finish(&summary).await;
+                    return;
+                }
+                // The Island's buttons by voice (UX-55).
+                if let Some(page) = matched.tool.strip_prefix("session.")
+                    && matches!(page, "retry" | "misroute" | "enable" | "open")
+                {
+                    let page_arg = matched
+                        .args
+                        .get("page")
+                        .and_then(|v| v.as_str().map(str::to_owned));
+                    Box::pin(self.island_by_voice(page, page_arg.as_deref())).await;
+                    return;
+                }
+                // "What can I say?" (UX-44).
+                if matched.tool == "session.help" {
+                    let examples = self.help_examples();
+                    self.core
+                        .update_turn(|view| view.help.clone_from(&examples));
+                    self.speak_and_finish(&text::t("help.intro")).await;
+                    return;
+                }
                 let call = ToolCall {
                     id: format!("{}-c1", self.turn_key()),
                     tool: matched.tool.clone(),
@@ -1035,6 +1353,48 @@ impl Engine {
             }
             // Everything else goes to a brain (BRAINS §1).
             Route::Unhandled => self.brain_turn(&text).await,
+        }
+    }
+
+    /// A routine the user said: a custom command runs its one action now, like a fast-path
+    /// command; a routine starts as a task.
+    async fn run_matched_routine(
+        self: &Arc<Self>,
+        routines: &Arc<crate::routines::Routines>,
+        routine: kivo_core::routine::Routine,
+        vars: &serde_json::Map<String, serde_json::Value>,
+    ) {
+        self.core
+            .bus
+            .publish(Event::new(EventKind::Turn(TurnEvent::IntentDetected {
+                path: IntentPath::FastPath,
+                intent: format!("routine:{}", routine.name),
+            })));
+        if routine.is_custom_command() {
+            let task = routine.compile(vars);
+            if let kivo_core::task::StepAction::Tool { tool, args } = &task.steps[0].action {
+                let call = ToolCall {
+                    id: format!("{}-c1", self.turn_key()),
+                    tool: tool.clone(),
+                    args: args.clone(),
+                    initiated_by: Initiator::UserDirect,
+                    targets: targets(tool, args),
+                };
+                self.run_call(call).await;
+                return;
+            }
+        }
+        match routines.run(&routine.id, vars) {
+            Ok(task) => {
+                self.core
+                    .update_turn(|view| view.task_id = Some(task.clone()));
+                let message = text::tf("routine.running", &[("name", &routine.name)]);
+                self.speak_and_finish(&message).await;
+            }
+            Err(e) => {
+                self.core.update_turn(|view| view.error = Some(e.clone()));
+                self.speak_and_finish(&e).await;
+            }
         }
     }
 
@@ -1087,6 +1447,38 @@ impl Engine {
         self.say(&text::t("turn.undoRequest")).await
     }
 
+    /// An action the user asked for with a button in the Control Center ("Start" on the Agents
+    /// page): a typed turn of its own, whose call goes through the permission engine like a
+    /// spoken one, so a High-risk launch waits for a yes in the Island (CONV-14).
+    pub async fn act(
+        self: &Arc<Self>,
+        request: &str,
+        tool: &str,
+        args: serde_json::Value,
+    ) -> Result<(), String> {
+        let id = self.turn_id();
+        self.core
+            .begin_turn(&id, TurnSource::Typed, request)
+            .map_err(|e| e.0)?;
+        self.anchor_island();
+        *lock(&self.turn) = Some(Running {
+            transcript: request.to_owned(),
+            ..Running::new(id.clone(), 0, TurnSource::Typed)
+        });
+        self.recorder.turn_started(&id, TurnSource::Typed);
+        self.core.advance(SessionInput::EndOfSpeech);
+        let call = ToolCall {
+            id: format!("{id}-c1"),
+            tool: tool.to_owned(),
+            targets: targets(tool, &args),
+            args,
+            initiated_by: Initiator::UserDirect,
+        };
+        let engine = Arc::clone(self);
+        tokio::spawn(async move { engine.run_call(call).await });
+        Ok(())
+    }
+
     /// Decides on a call and, when allowed, runs it.
     async fn run_call(self: &Arc<Self>, mut call: ToolCall) {
         let capabilities = self.core.config().capabilities;
@@ -1128,6 +1520,7 @@ impl Engine {
                     view.confirm = Some(confirm.clone());
                     view.target_app = confirm.target.clone();
                 });
+                self.show_draft(&call);
                 // A distinct cue says "this needs your answer" (CONV-26).
                 self.speaker.cue(Cue::Question);
                 let question = format!("{title}?");
@@ -1198,6 +1591,7 @@ impl Engine {
         self.core.update_turn(|view| {
             view.confirm = None;
             view.waiting = false;
+            view.draft = None;
         });
         // A brain or an agent is waiting for this decision: it carries on from here.
         let waiter = lock(&self.turn).as_mut().and_then(|t| t.waiter.take());
@@ -1257,7 +1651,10 @@ impl Engine {
     ) {
         let (result, output) = self.run_step(tool, &call, permit, title).await;
         match (&result.status, output) {
-            (Ok(_), Some(output)) => self.speak_and_finish(&output.say).await,
+            (Ok(_), Some(output)) => {
+                self.show_track(&output.data);
+                self.speak_and_finish(&output.say).await;
+            }
             (Err(error), _) => {
                 self.speaker.cue(Cue::Error);
                 let message = retry_hint(error);
@@ -1267,6 +1664,98 @@ impl Engine {
             }
             (Ok(_), None) => self.finish_turn("done", None),
         }
+    }
+
+    /// "Try again", "that's not what I meant", "turn it on" and "open my tasks": what the Island's
+    /// buttons do, by voice (UX-55). The first three act on the last finished turn.
+    async fn island_by_voice(self: &Arc<Self>, action: &str, page: Option<&str>) {
+        let previous = lock(&self.previous).clone();
+        match action {
+            "retry" => match previous.filter(|p| !p.transcript.is_empty()) {
+                Some(p) => {
+                    let again = p.transcript;
+                    self.core
+                        .update_turn(|view| view.transcript.clone_from(&again));
+                    if let Some(running) = lock(&self.turn).as_mut() {
+                        running.transcript.clone_from(&again);
+                    }
+                    Box::pin(self.handle_transcript(&again)).await;
+                }
+                None => {
+                    self.speak_and_finish(&text::t("voice.nothingToRetry"))
+                        .await
+                }
+            },
+            "misroute" => match previous.filter(|p| p.brain.is_some()) {
+                Some(p) => {
+                    self.misroute(&p.id, "");
+                    self.speak_and_finish(&text::t("voice.misrouteNoted")).await;
+                }
+                None => self.speak_and_finish(&text::t("voice.noBrainAnswer")).await,
+            },
+            "enable" => match previous.and_then(|p| p.capability_off) {
+                Some(capability) => {
+                    let mut changed = false;
+                    self.core.update_config(|config| {
+                        changed = config.capabilities.set(capability, true);
+                        config.tools.preset = config.capabilities.preset();
+                    });
+                    if changed {
+                        self.recorder.capability_changed(capability, true);
+                    }
+                    let reply = text::tf("voice.turnedOn", &[("capability", &capability.label())]);
+                    self.speak_and_finish(&reply).await;
+                }
+                None => {
+                    self.speak_and_finish(&text::t("voice.nothingToTurnOn"))
+                        .await
+                }
+            },
+            _ => {
+                let page = page.unwrap_or("home");
+                self.core.open_control_center(Some(page));
+                self.finish_turn("done", None);
+            }
+        }
+    }
+
+    /// After a media command, the track playing shows as a live activity for a few seconds (UX-15,
+    /// Settings → Live activities → Media).
+    fn show_track(&self, data: &serde_json::Value) {
+        let Some(track) = data.get("track") else {
+            return;
+        };
+        if !self.core.config().automation.live_activities.media {
+            return;
+        }
+        let Some(title) = track["title"].as_str().filter(|t| !t.is_empty()) else {
+            return;
+        };
+        let detail = [track["artist"].as_str(), track["app"].as_str()]
+            .into_iter()
+            .flatten()
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>()
+            .join(" · ");
+        self.core.set_activity(kivo_ipc::protocol::LiveActivity {
+            id: MEDIA_ACTIVITY.to_owned(),
+            kind: "media".to_owned(),
+            title: title.to_owned(),
+            detail: (!detail.is_empty()).then_some(detail),
+            progress: None,
+            until: None,
+            task_id: None,
+        });
+        let core = Arc::clone(&self.core);
+        let generation = self.media_shown.fetch_add(1, Ordering::SeqCst) + 1;
+        let shown = Arc::clone(&self.media_shown);
+        tokio::spawn(async move {
+            tokio::time::sleep(MEDIA_SHOWN_FOR).await;
+            // A newer track keeps showing for its own time.
+            if shown.load(Ordering::SeqCst) == generation {
+                core.remove_activity(MEDIA_ACTIVITY);
+            }
+        });
     }
 
     /// Runs an approved call as a step in the Island and records it; returns what it did.
@@ -1330,6 +1819,11 @@ impl Engine {
                     status: StepStatus::Done,
                     detail: Some(output.say.clone()),
                 });
+                // It started a task (a reminder, a watcher, a plan): "Open in Tasks".
+                if let Some(task) = output.data["task"].as_str() {
+                    let task = task.to_owned();
+                    self.core.update_turn(|view| view.task_id = Some(task));
+                }
                 // Undoable (not an undo itself): offer to take it back (UX-43).
                 if undoable && call.args.get("undo").is_none() {
                     *lock(&self.last_undo) = Some(UndoEntry {
@@ -1348,6 +1842,17 @@ impl Engine {
                             until,
                         });
                     });
+                }
+                // A command or an app CLI ran in a folder: KIVO works in that project (CONV-10).
+                if matches!(call.tool.as_str(), "shell.run" | "apps.cli")
+                    && let Some(folder) = call
+                        .args
+                        .get("cwd")
+                        .or_else(|| call.args.get("path"))
+                        .and_then(serde_json::Value::as_str)
+                    && let Some(workspaces) = self.workspaces()
+                {
+                    workspaces.worked_in(std::path::Path::new(folder));
                 }
                 // An app was launched or closed: the window list changed.
                 if call.tool.starts_with("apps.") {
@@ -1525,6 +2030,7 @@ impl Engine {
         let Some(running) = lock(&self.turn).take() else {
             return;
         };
+        *lock(&self.previous) = self.core.turn_view();
         self.infer.touch();
         let state = self.core.state().borrow().session;
         let follow_up_seconds = self.core.config().voice.follow_up_seconds;
@@ -1695,6 +2201,10 @@ impl Engine {
         let Ok(Some(front)) = self.windows.foreground() else {
             return;
         };
+        // The folder open in VS Code is a folder the user works in (CONV-10).
+        if let Some(workspaces) = self.workspaces() {
+            workspaces.front_window(&front.title, &front.app_id);
+        }
         let b = front.bounds;
         let anchor = kivo_ipc::protocol::ScreenPoint {
             x: b.x.saturating_add(i32::try_from(b.width / 2).unwrap_or(0)),
@@ -1730,6 +2240,13 @@ impl Engine {
     /// Stop everything (SEC-25): the turn, the voice and (from M5) tasks.
     pub fn stop_everything(&self) {
         self.cancel(CancelReason::EmergencyStop);
+        // Background tasks go to Paused; only the user resumes them (SECURITY §8).
+        if let Some(tasks) = self.tasks() {
+            let paused = tasks.pause_all();
+            if paused > 0 {
+                tracing::warn!(paused, "tasks paused by the emergency stop");
+            }
+        }
         // An agent's prompt runs under the turn's token: cancelling it sent session/cancel.
         self.stop_controls();
         self.speaker.stop();
@@ -1920,4 +2437,38 @@ fn read<T>(l: &RwLock<T>) -> std::sync::RwLockReadGuard<'_, T> {
 
 fn write<T>(l: &RwLock<T>) -> std::sync::RwLockWriteGuard<'_, T> {
     l.write().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Announcements outside a turn (UX-40): Windows' voice or KIVO's, and the notification earcon.
+#[async_trait::async_trait]
+impl crate::notifier::Voice for Engine {
+    async fn say(&self, text: &str) {
+        if !self
+            .core
+            .config()
+            .capabilities
+            .enabled(kivo_core::Capability::SpeakResponses)
+        {
+            return;
+        }
+        if lock(&self.turn).is_some() {
+            return;
+        }
+        if self.infer.wait_ready(Duration::from_millis(500)).await {
+            let id = self.infer.next_utterance();
+            lock(&self.previews).insert(id);
+            let voice = self.core.config().voice.tts_voice;
+            let voice = (!voice.is_empty()).then_some(voice);
+            if self.infer.speak(id, text, voice.as_deref()).await.is_err() {
+                lock(&self.previews).remove(&id);
+                self.say_in_process(text);
+            }
+        } else {
+            self.say_in_process(text);
+        }
+    }
+
+    fn earcon(&self) {
+        self.speaker.cue(Cue::Notification);
+    }
 }

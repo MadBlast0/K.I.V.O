@@ -101,7 +101,7 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 
 - [x] **DISC-04** · M3 · CLI agent detector: PATH and known install dirs, `--version`, sign-in state where exposed, cross-checked with the ACP registry → "Found on this PC · signed in / needs sign-in" + Use (§1.1) → done: PATH (as Windows has it now) plus npm, WinGet, pnpm, Scoop and Bun folders; `--version`; signed-in files; ACP adapter presence from KIVO's catalog (DECISIONS "CLI agents found") · verified: `cli_agents_are_found_with_version_and_sign_in_state_without_reading_credentials` (2026-09-23)
 - [x] **DISC-05** · M3 · Local model server detector: ports 11434, 1234, 8080 with model lists → "Running on this PC · N models" + Use (§1.1) → done: probes 11434, 1234, 8080 `/v1/models` with a short timeout, listing models · verified: `local_servers_are_found_with_their_models` (2026-09-23)
-- [ ] **DISC-06** · M5 · Desktop AI apps detector (Claude Desktop, ChatGPT, Copilot) from the installed-apps index (§1.1)
+- [x] **DISC-06** · M5 · Desktop AI apps detector (Claude Desktop, ChatGPT, Copilot) from the installed-apps index (§1.1) → done: Claude Desktop, ChatGPT and Copilot from the installed-apps index via the app registry's `desktop_ai` entries; listed on the Agents page · verified: `the_agents_page_requests`, `Agents.test.tsx` (2026-09-23)
 - [ ] **DISC-07** · M8 · In-app CLI install: explain + exact command from the catalog, dependency check (Node via winget with consent), visible progress sheet, verify, start sign-in, test prompt (§1.1)
 
 **Extensions (§1.2)**

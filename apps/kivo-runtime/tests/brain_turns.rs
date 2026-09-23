@@ -731,7 +731,13 @@ async fn claude_code_asks_for_permission_on_the_card_and_follow_ups_reuse_its_se
         .await
         .unwrap();
     let view = answered(&r.rig).await;
-    assert_eq!(view.answer.as_deref(), Some("Prompt 1. I fixed the bug."));
+    // A fix is only called done after a check (BRAIN-31); this folder has no project to check.
+    assert_eq!(
+        view.answer.as_deref(),
+        Some(
+            "Prompt 1. I fixed the bug.\n\nI couldn’t find how to check this project, so I can’t confirm it’s fixed."
+        )
+    );
     assert!(
         view.steps
             .iter()
@@ -766,7 +772,12 @@ async fn claude_code_asks_for_permission_on_the_card_and_follow_ups_reuse_its_se
         .await
         .unwrap();
     let view = answered(&r.rig).await;
-    assert_eq!(view.answer.as_deref(), Some("Prompt 2. I left it alone."));
+    assert_eq!(
+        view.answer.as_deref(),
+        Some(
+            "Prompt 2. I left it alone.\n\nI couldn’t find how to check this project, so I can’t confirm it’s fixed."
+        )
+    );
     assert_eq!(r.rig.agents.running().await.len(), 1);
     r.rig.agents.stop_all().await;
     r.stop().await;

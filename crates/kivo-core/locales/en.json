@@ -181,6 +181,16 @@
     },
     "context": {
       "selection": "Read the selected text"
+    },
+    "tasks": {
+      "remind": "Set a reminder",
+      "watch": "Watch for it",
+      "proposePlan": "Run a plan: {title}"
+    },
+    "agents": {
+      "open_terminal": "Start {agent} in a terminal",
+      "send_prompt": "Send the prompt to the terminal agent",
+      "read_reply": "Read the terminal agent’s reply"
     }
   },
   "reply": {
@@ -294,7 +304,11 @@
     "context": {
       "noSelection": "Nothing is selected."
     },
-    "nothingToUndo": "There’s nothing to undo."
+    "nothingToUndo": "There’s nothing to undo.",
+    "agents": {
+      "opened": "{name} is starting in {place}.",
+      "sent": "Sent to {name}."
+    }
   },
   "error": {
     "notFound": "I couldn’t find {what}.",
@@ -383,6 +397,15 @@
     },
     "shell": {
       "readOnly": "Only read-only commands are allowed. Change this in Permissions → Capabilities → Shell."
+    },
+    "agents": {
+      "noFolder": "KIVO can’t find a folder or workspace called {name}.",
+      "notAgent": "That isn’t an agent KIVO can start in a terminal.",
+      "noMode": "{name} has no {mode} mode.",
+      "flagMissing": "This version of {name} doesn’t support {flag}, so KIVO didn’t start it.",
+      "unknown": "KIVO doesn’t know an agent called {name}.",
+      "windowGone": "The {name} terminal isn’t open anymore.",
+      "noSession": "There’s no terminal agent session to send to."
     }
   },
   "policy": {
@@ -412,7 +435,8 @@
     "privacyLocal": "Your privacy setting keeps this on your PC.",
     "privacyCloudOff": "Cloud AI is off, so this stays on your PC.",
     "planTitle": "Plan:\n{steps}",
-    "privateData": "Strict Private keeps personal data on this PC, so KIVO won’t send it."
+    "privateData": "Strict Private keeps personal data on this PC, so KIVO won’t send it.",
+    "taskNotGranted": "This task wasn’t given permission to {action}, so KIVO skipped it."
   },
   "turn": {
     "notUnderstood": "I can’t do that yet.",
@@ -517,7 +541,12 @@
     "switched": "Now using {engine}",
     "noHardware": "KIVO couldn’t read this PC’s hardware, so it can’t recommend engines right now.",
     "notDownloaded": "Download it first; then you can try it.",
-    "notAnEngine": "That model isn’t a speech engine KIVO can use for this language."
+    "notAnEngine": "That model isn’t a speech engine KIVO can use for this language.",
+    "nothingToRetry": "There’s nothing to try again.",
+    "misrouteNoted": "Noted. I’ll use that to route requests like it better.",
+    "noBrainAnswer": "That last answer didn’t come from a brain.",
+    "turnedOn": "{capability} is on now. Say your request again.",
+    "nothingToTurnOn": "There’s nothing to turn on."
   },
   "brain": {
     "noBrain": "No AI brain is connected yet. You can connect one on the Brains page; some are free.",
@@ -580,5 +609,186 @@
       "elevationOrRemoteCode": "It runs downloaded code or asks for administrator rights.",
       "unreadable": "KIVO can’t read what it does."
     }
+  },
+  "notify": {
+    "openTask": "Open",
+    "nothingMissed": "Nothing new while you were away.",
+    "missed": "While you were away: {items}",
+    "send": "Send"
+  },
+  "watch": {
+    "nothingToWatch": "There’s nothing KIVO can watch for that.",
+    "notRunning": "{name} isn’t running.",
+    "processDone": "{name} finished.",
+    "processFailed": "{name} finished with errors (exit code {code}).",
+    "windowOpened": "{name} opened.",
+    "windowClosed": "{name} closed.",
+    "timeUp": "It’s time.",
+    "noFolder": "KIVO can’t find the folder {path}.",
+    "folderChanged": "{name} changed.",
+    "downloadDone": "{name} finished downloading."
+  },
+  "task": {
+    "couldntSave": "KIVO couldn’t save the task.",
+    "step": {
+      "say": "Tell you: {text}",
+      "delay": "Wait {seconds} s",
+      "time": "Wait until {time}",
+      "process": "Wait for {name} to finish",
+      "folder": "Watch {path}",
+      "download": "Wait for the download to finish",
+      "windowOpen": "Wait for {name} to open",
+      "windowClose": "Wait for {name} to close"
+    },
+    "check": {
+      "command": "Run {command} to check",
+      "file": "Check that {path} exists",
+      "window": "Check that {title} is open"
+    },
+    "timedOut": "It took too long, so KIVO stopped it.",
+    "failed": "It didn’t work.",
+    "failedSay": "{title} didn’t finish: {reason}",
+    "askFailed": "{step} failed: {reason}. Try again, skip it or stop?",
+    "notVerified": "The work finished, but the check didn’t pass: {check}",
+    "done": "{title} is done.",
+    "missedWhileOff": "{what} (it came due while KIVO was off)",
+    "decidePrompt": "{question}\nAnswer with exactly one of: {options}",
+    "noDecision": "The brain’s answer wasn’t one of the choices: {answer}",
+    "unknownTool": "KIVO has no action called {tool}.",
+    "checkNotAllowed": "This task wasn’t given permission to {check}.",
+    "checkPassed": "Checked: {check}",
+    "needsChatBrain": "This step needs a chat brain, and none is connected.",
+    "limitReached": "A spending limit was reached, so KIVO didn’t ask the brain.",
+    "brainSystem": "You are answering one step of a routine the user set up in KIVO. Answer briefly and plainly, with no preamble.",
+    "emptyAnswer": "The brain didn’t answer.",
+    "noAgent": "No coding agent is set up for this.",
+    "agentDone": "The agent finished.",
+    "agentAsks": "The agent asks: {title}. Allow it?",
+    "notRunning": "That task isn’t running.",
+    "alreadyRunning": "That task is already running.",
+    "notFound": "KIVO can’t find that task.",
+    "cantResume": "That task can’t be resumed.",
+    "stillRunning": "Stop the task before deleting it.",
+    "interruptedTitle": "Tasks interrupted",
+    "interrupted": "These were stopped when KIVO closed: {names}. Open Tasks to run them again.",
+    "notReady": "Tasks aren’t ready yet.",
+    "ownerYou": "you",
+    "badTime": "KIVO didn’t understand when.",
+    "reminderPlain": "It’s time.",
+    "reminderSay": "Reminder: {text}",
+    "reminderTitle": "Reminder",
+    "reminderSet": "OK, I’ll remind you at {when}.",
+    "noBuild": "I don’t see a build running.",
+    "watchBuild": "The {name} build",
+    "watchProcess": "{name}",
+    "watchDownload": "The download",
+    "watchFolder": "Changes in {path}",
+    "watching": "OK, I’ll tell you: {title}.",
+    "confirmStep": "{step}?",
+    "skippedByYou": "Skipped: you said no.",
+    "planNoTitle": "The plan needs a title.",
+    "planNoSteps": "The plan has no steps.",
+    "planInvalid": "The plan can’t run: {reason}.",
+    "planStarted": "Started {title} ({steps} steps). I’ll tell you when it’s done."
+  },
+  "help": {
+    "intro": "Here are some things you can say.",
+    "general": "Remind me in 10 minutes to stretch|Tell me when the build finishes|What did I miss?|Open Chrome|Kivo, stop"
+  },
+  "routine": {
+    "noName": "Give the routine a name.",
+    "noSteps": "Add at least one step.",
+    "duplicateStep": "Two steps have the id {id}.",
+    "clash": "“{phrase}” clashes with {with}.",
+    "notFound": "KIVO can’t find that routine.",
+    "needsGrant": "Review and allow the routine’s permissions before turning it on.",
+    "notGranted": "{name} changed since its permissions were allowed. Open it in Routines to allow them again.",
+    "running": "Running {name}.",
+    "keys": {
+      "talk": "push-to-talk",
+      "type": "type to KIVO",
+      "mode": "the mode switch",
+      "stop": "the emergency stop"
+    },
+    "starter": {
+      "work-mode": {
+        "name": "Work mode",
+        "about": "Opens your work apps side by side. Change the apps to yours.",
+        "say": "Work mode is on.",
+        "phrases": "work mode|start work mode|let’s get to work"
+      },
+      "break": {
+        "name": "Break",
+        "about": "Pauses what’s playing and locks the PC after asking.",
+        "phrases": "break time|take a break|i’m taking a break"
+      },
+      "meeting": {
+        "name": "Meeting",
+        "about": "Turns your microphone on and opens your calendar.",
+        "say": "Your calendar is open. Good meeting.",
+        "phrases": "meeting mode|i have a meeting|start my meeting"
+      },
+      "goodnight": {
+        "name": "Goodnight",
+        "about": "Says goodnight and puts the PC to sleep after asking.",
+        "say": "Goodnight.",
+        "phrases": "goodnight|good night kivo|i’m going to bed"
+      },
+      "focus": {
+        "name": "Focus",
+        "about": "Pauses what’s playing and sets a timer; you’ll hear when time’s up.",
+        "say": "Focus time started.",
+        "over": "Focus time is over",
+        "phrases": "focus for {minutes}|focus for {minutes} minutes|start a focus session for {minutes} minutes"
+      }
+    }
+  },
+  "workspace": {
+    "badScope": "Instructions are either global or for one workspace.",
+    "remember": "Remember {name} as a workspace?",
+    "yes": "Remember",
+    "no": "Not now",
+    "notFound": "KIVO can’t find that workspace.",
+    "context": "The user is working in the workspace {name} ({path}).",
+    "nothingToExport": "This workspace has no notes to export yet.",
+    "remembered": "I’ll remember {name} as a workspace."
+  },
+  "draft": {
+    "target": "{title} · terminal",
+    "anyTerminal": "Terminal agent",
+    "changed": "Changed. Say send when it’s ready."
+  },
+  "coding": {
+    "noCheck": "I couldn’t find how to check this project, so I can’t confirm it’s fixed.",
+    "passed": "I ran {command}: it passes.",
+    "passedAfterRetry": "After another pass by {name}, {command} passes.",
+    "retrying": "{command} still fails. I’ve asked {name} to look again.",
+    "retryPrompt": "I ran `{command}` after your changes and it still fails. The end of the output:\n{output}\nPlease fix it.",
+    "stillFailing": "{command} still fails, so it isn’t fixed yet:\n{output}",
+    "stillFailingShort": "{command} still fails, so it isn’t fixed yet. The details are on the card.",
+    "couldntCheck": "I couldn’t run the check: {reason}",
+    "checkStep": "Run {command}"
+  },
+  "bypass": {
+    "off": "Bypass permissions turned off",
+    "noHello": "Windows Hello isn’t set up on this PC.",
+    "helloPrompt": "Turn on Bypass permissions? KIVO will act without asking, including High-risk actions.",
+    "notVerified": "Windows Hello didn’t confirm it, so Bypass stays off.",
+    "badDuration": "Bypass can last up to a day.",
+    "onFor": "Bypass permissions on for {minutes} minutes",
+    "onUntilOff": "Bypass permissions on until turned off"
+  },
+  "agents": {
+    "noSession": "KIVO can’t find that agent session.",
+    "cantResume": "This agent can’t continue a session in a terminal.",
+    "startRequest": "Start {name} in {place} ({mode} mode)"
+  },
+  "selection": {
+    "nothing": "Select some text first.",
+    "explain": "Explain the selected text.",
+    "rewrite": "Rewrite the selected text so it reads better, and keep its meaning.",
+    "translate": "Translate the selected text into {language}.",
+    "unknown": "KIVO can explain, rewrite or translate a selection.",
+    "source": "the selected text"
   }
 }

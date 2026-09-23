@@ -30,6 +30,8 @@ pub struct Agents {
     workspace: RwLock<PathBuf>,
     /// Answers the agents' permission requests (the turn engine, set once it exists).
     permissions: RwLock<Option<Arc<dyn PermissionHandler>>>,
+    /// Sessions a background task is driving: their requests go to the task (BRAIN-32).
+    routed: Mutex<HashMap<String, Arc<dyn PermissionHandler>>>,
 }
 
 /// Hands permission requests to whatever answers them now.
@@ -38,6 +40,10 @@ struct Relay(Arc<Agents>);
 #[async_trait::async_trait]
 impl PermissionHandler for Relay {
     async fn ask(&self, ask: PermissionAsk) -> PermissionAnswer {
+        let routed = lock(&self.0.routed).get(&ask.session_id).cloned();
+        if let Some(task) = routed {
+            return task.ask(ask).await;
+        }
         let handler = read(&self.0.permissions).clone();
         match handler {
             Some(h) => h.ask(ask).await,
@@ -56,11 +62,21 @@ impl Agents {
             commands: RwLock::default(),
             workspace: RwLock::new(workspace),
             permissions: RwLock::new(None),
+            routed: Mutex::default(),
         })
     }
 
     pub fn set_permissions(&self, handler: Arc<dyn PermissionHandler>) {
         *write(&self.permissions) = Some(handler);
+    }
+
+    /// A background task drives `session` for now: its permission requests go to `handler`.
+    pub fn route_session(&self, session: &str, handler: Arc<dyn PermissionHandler>) {
+        lock(&self.routed).insert(session.to_owned(), handler);
+    }
+
+    pub fn unroute_session(&self, session: &str) {
+        lock(&self.routed).remove(session);
     }
 
     /// Uses `command` for agent `id` (tests run a scripted agent this way).

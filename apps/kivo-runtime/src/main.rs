@@ -299,6 +299,7 @@ async fn run(
             Arc::clone(&commands),
             input,
             Arc::clone(&browser),
+            Arc::clone(&db),
         ),
         &core,
         kivo_runtime::controls::app_registry(
@@ -307,8 +308,11 @@ async fn run(
         Arc::clone(&vision),
         workspace,
     );
+    // Event tasks' tools (BRAIN-07); the task manager they create tasks in comes below.
+    let task_handle: kivo_runtime::task_tools::TaskHandle = Arc::default();
     let mut tools = kivo_tools::builtin(&tools_env);
     tools.extend(kivo_tools::controls(&controls));
+    tools.extend(kivo_runtime::task_tools::tools(&task_handle));
     let registry = Arc::new(kivo_tools::Registry::new(tools));
     speaker.configure(&config.sounds);
     let grammar = match Grammar::bundled(&config.general.language) {
@@ -351,6 +355,64 @@ async fn run(
     }));
     // Agents' permission requests go to the turn engine's permission flow (BRAIN-15).
     agents.set_permissions(Arc::new(engine::EnginePermissions(Arc::downgrade(&engine))));
+    // Background tasks (M5): watchers that wait on the system's own events, what KIVO says
+    // without being asked (UX-40), and the task manager, which reports tasks a crash
+    // interrupted and arms waiting watchers again (ARCH-27).
+    kivo_runtime::tasks::set_utc_offset(kivo_platform_windows::utc_offset_minutes());
+    engine.set_app_registry(Arc::clone(&controls.apps));
+    engine.set_uia(Arc::clone(&controls.uia));
+    let notifier = kivo_runtime::notifier::Notifier::new(
+        Arc::clone(&core),
+        Arc::clone(&platform.system),
+        Arc::clone(&platform.notifications),
+        kivo_platform_windows::utc_offset_minutes(),
+    );
+    {
+        let voice: Arc<dyn kivo_runtime::notifier::Voice> = engine.clone();
+        notifier.set_voice(Arc::downgrade(&voice));
+    }
+    let tasks = kivo_runtime::tasks::Tasks::new(kivo_runtime::tasks::TaskParts {
+        core: Arc::clone(&core),
+        recorder: recorder.clone(),
+        registry: Arc::clone(&registry),
+        watchers: Arc::new(kivo_runtime::watchers::Watchers::new(
+            Arc::new(kivo_platform_windows::WindowsProcesses),
+            Arc::clone(&platform.windows),
+            Arc::clone(&controls.uia),
+            dirs::download_dir().unwrap_or_else(std::env::temp_dir),
+        )),
+        notifier,
+        brains: Arc::clone(&brains),
+        agents: Arc::clone(&agents),
+        windows: Arc::clone(&platform.windows),
+    });
+    let _ = task_handle.set(Arc::downgrade(&tasks));
+    engine.set_tasks(Arc::clone(&tasks));
+    // Routines and custom commands (ROUTINES): the starters are added once, all off.
+    let routines = kivo_runtime::routines::Routines::new(
+        Arc::clone(&core),
+        Arc::clone(&db),
+        Arc::clone(&tasks),
+        Arc::clone(&registry),
+    );
+    routines.seed_starters();
+    engine.set_routines(Arc::clone(&routines));
+    // Instructions and workspaces (CONVERSATION §4): the Markdown mirrors are watched for edits.
+    let workspaces = kivo_runtime::workspaces::Workspaces::new(
+        Arc::clone(&core),
+        Arc::clone(&db),
+        dirs::config_dir()
+            .unwrap_or_else(std::env::temp_dir)
+            .join("KIVO"),
+    );
+    workspaces.watch();
+    engine.set_workspaces(Arc::clone(&workspaces));
+    {
+        let tasks = Arc::clone(&tasks);
+        tokio::spawn(async move {
+            tasks.startup().await;
+        });
+    }
     // What's already on this PC: CLI agents and local model servers (DISCOVERY §1.1).
     let home = dirs::home_dir().unwrap_or_else(std::env::temp_dir);
     let discovery = kivo_runtime::discovery::Discovery::new(
@@ -538,10 +600,22 @@ async fn run(
     #[cfg(windows)]
     {
         let lifecycle = Arc::clone(&lifecycle);
+        let engine = Arc::clone(&engine);
+        let handle = tokio::runtime::Handle::current();
         std::thread::Builder::new()
             .name("kivo-toasts".into())
             .spawn(move || {
                 while let Ok(answer) = toast_answers.recv() {
+                    // A reply typed into a notification is a request to KIVO (UX-58).
+                    if let Some(reply) =
+                        kivo_runtime::notifier::reply_request(answer.reply.as_deref())
+                    {
+                        let engine = Arc::clone(&engine);
+                        handle.spawn(async move {
+                            let _ = engine.say(&reply).await;
+                        });
+                        continue;
+                    }
                     lifecycle.answered(&answer.action);
                 }
             })
@@ -569,7 +643,21 @@ async fn run(
                     paths.voice(),
                 )))
                 .with_brains(Arc::clone(&brains_rpc))
-                .with_browser(Arc::clone(&browser)),
+                .with_browser(Arc::clone(&browser))
+                .with_tasks(Arc::new(kivo_runtime::tasks_rpc::TasksRpc {
+                    core: Arc::clone(&core),
+                    engine: Arc::clone(&engine),
+                    tasks: Arc::clone(&tasks),
+                    routines: Arc::clone(&routines),
+                    workspaces: Arc::clone(&workspaces),
+                    verifier: Arc::new(kivo_platform_windows::WindowsHello),
+                    terminals: Arc::new(kivo_platform_windows::WindowsTerminals),
+                    terminal_sessions: Arc::clone(&controls.terminal_sessions),
+                    apps: Arc::clone(&controls.apps),
+                    uia: Arc::clone(&controls.uia),
+                    clipboard: Arc::clone(&controls.clipboard),
+                    db: Arc::clone(&db),
+                })),
             ),
             core.bus.clone(),
             core.state(),
@@ -659,8 +747,11 @@ async fn run(
     let mut code = ExitCode::SUCCESS;
     // Stop new work, then the voice pipeline and the worker (plan §127).
     engine.cancel(kivo_core::event::CancelReason::Shutdown);
+    // Running task steps stop; watchers stay waiting for the next start.
+    tasks.shutdown();
     let _ = wake_task.await;
     drop(wake);
+    listener.shutdown(std::time::Duration::from_secs(3));
     drop(listener);
     infer.shutdown().await;
     let _ = worker.await;
@@ -752,6 +843,7 @@ fn windows_controls(
     commands: Arc<kivo_platform_windows::WindowsCommands>,
     input: Arc<kivo_platform_windows::WindowsInput>,
     browser: Arc<dyn kivo_tools::Browser>,
+    db: Arc<Mutex<kivo_store::Database>>,
 ) -> kivo_runtime::controls::Platform {
     let uia: Arc<dyn kivo_platform::UiAutomation> =
         match kivo_platform_windows::WindowsUiAutomation::new() {
@@ -808,6 +900,8 @@ fn windows_controls(
             voice_speaker.set_output_device(device.clone().map(kivo_platform::DeviceId));
             voice_core.update_config(|c| c.voice.output_device = device);
         }),
+        terminals: Arc::new(kivo_platform_windows::WindowsTerminals),
+        workspace_folder: Arc::new(move |name| kivo_runtime::workspaces::folder_named(&db, name)),
     }
 }
 

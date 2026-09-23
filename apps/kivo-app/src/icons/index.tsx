@@ -39,6 +39,8 @@ import {
   Gauge,
   Globe,
   GripVertical,
+  ArrowUp,
+  ArrowDown,
   Hand,
   Headphones,
   HelpCircle,
@@ -165,6 +167,8 @@ export const ICONS = {
   upload: Upload,
   link: Link,
   grip: GripVertical,
+  up: ArrowUp,
+  down: ArrowDown,
   chevronRight: ChevronRight,
   chevronDown: ChevronDown,
   // things

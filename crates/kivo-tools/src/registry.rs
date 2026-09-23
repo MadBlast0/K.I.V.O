@@ -120,6 +120,16 @@ impl Registry {
     }
 
     /// The spec of any known tool, registered or not (to explain *why* it isn't available: CAP-02).
+    /// Every tool, whatever the capabilities.
+    pub fn all_tools(&self) -> impl Iterator<Item = &Arc<dyn Tool>> {
+        self.tools.iter()
+    }
+
+    /// Every tool's spec, whatever the capabilities (the routine builder's catalog).
+    pub fn all_specs(&self) -> impl Iterator<Item = &ToolSpec> {
+        self.tools.iter().map(|t| t.spec())
+    }
+
     pub fn known(&self, id: &str) -> Option<&ToolSpec> {
         self.tools.iter().map(|t| t.spec()).find(|s| s.id == id)
     }
@@ -294,6 +304,7 @@ mod tests {
             tools: &tools,
             privacy: kivo_core::config::PrivacyMode::Cloud,
             assessed: None,
+            task_grants: None,
         };
         match authorize(tool.spec(), call, &cx) {
             Decision::Allow(p) => p,

@@ -41,6 +41,9 @@ function handlers(): IslandHandlers {
     edit: vi.fn<IslandHandlers["edit"]>(),
     talk: vi.fn<IslandHandlers["talk"]>(),
     misroute: vi.fn<IslandHandlers["misroute"]>(),
+    editDraft: vi.fn<IslandHandlers["editDraft"]>(),
+    offer: vi.fn<IslandHandlers["offer"]>(),
+    openTask: vi.fn<IslandHandlers["openTask"]>(),
   };
 }
 
@@ -281,5 +284,114 @@ describe("Island M4 (SEC-02, SEC-11, UX-43, UX-46, CAP-06, CAP-08)", () => {
     render(<>{islandForTurn(snapshot, t, handlers())?.trail}</>);
     expect(screen.getByRole("img", { name: "Reading the screen" })).toBeTruthy();
     expect(screen.getByRole("img", { name: "Running a command" })).toBeTruthy();
+  });
+});
+
+describe("Island M5 parts", () => {
+  const t = i18n.t.bind(i18n);
+
+  it("shows a prompt draft with Send, Edit and Cancel, and voice hints while listening (CONV-15)", () => {
+    const snapshot = acting("auto");
+    snapshot.session = "awaitingConfirmation";
+    snapshot.turn!.answering = true;
+    snapshot.turn!.draft = { target: "Claude Code · terminal · K.I.V.O", text: "Run the tests and fix what fails." };
+    snapshot.turn!.confirm = {
+      callId: "c9",
+      tool: "agents.send_prompt",
+      action: "Send a prompt to Claude Code",
+      target: "Claude Code",
+      why: "Sending a prompt can't be taken back.",
+      provenance: "You asked",
+      risk: "medium",
+      strength: "normal",
+      allowAlways: false,
+      plan: false,
+      hello: false,
+    };
+    const on = handlers();
+    const model = islandForTurn(snapshot, t, on);
+    expect(model?.state.startsWith("draft-")).toBe(true);
+    expect(hasButtons(model)).toBe(true);
+    render(
+      <>
+        <span>{model?.label}</span>
+        <span>{model?.sub}</span>
+        {model?.body}
+      </>,
+    );
+    expect(screen.getByText("Claude Code · terminal · K.I.V.O")).toBeTruthy();
+    expect(screen.getByText("Run the tests and fix what fails.")).toBeTruthy();
+    expect(screen.getByText(/read it back/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    expect(on.editDraft).toHaveBeenCalledWith("c9", "Run the tests and fix what fails.");
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(on.answer).toHaveBeenCalledWith("c9", true, false);
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(on.answer).toHaveBeenCalledWith("c9", false, false);
+  });
+
+  it("lists help examples and links the task a request started (UX-44, UX-24)", () => {
+    const snapshot = acting("auto");
+    snapshot.session = "idle";
+    snapshot.turn!.answer = "Here's what you can say.";
+    snapshot.turn!.help = ["new tab", "reopen the closed tab"];
+    snapshot.turn!.taskId = "task-7";
+    const on = handlers();
+    render(<>{islandForTurn(snapshot, t, on)?.body}</>);
+    expect(screen.getByText("“new tab”")).toBeTruthy();
+    expect(screen.getByText("“reopen the closed tab”")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Open in Tasks" }));
+    expect(on.openTask).toHaveBeenCalledWith("task-7");
+  });
+
+  it("shows a live activity with its countdown, and how many more there are (UX-15)", () => {
+    const now = Date.now();
+    const snapshot: StateSnapshot = {
+      ...acting("auto"),
+      session: "idle",
+      turn: null,
+      activities: [
+        { id: "a1", kind: "timer", title: "Stretch", detail: null, progress: null, until: now + 65_000, taskId: "t1" },
+        { id: "a2", kind: "download", title: "dataset.zip", detail: null, progress: 0.6, until: null, taskId: null },
+      ],
+    };
+    const on = handlers();
+    const model = islandForTurn(snapshot, t, on);
+    expect(model?.state).toBe("activity-a1");
+    render(
+      <>
+        <span>{model?.label}</span>
+        <span>{model?.sub}</span>
+        {model?.trail}
+      </>,
+    );
+    expect(screen.getByText("Stretch")).toBeTruthy();
+    expect(screen.getByText(/^1:0[45]$/)).toBeTruthy();
+    expect(screen.getByText("+1")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Open in Tasks" }));
+    expect(on.openTask).toHaveBeenCalledWith("t1");
+  });
+
+  it("asks an offer outside a turn and sends the answer (CONV-10)", () => {
+    const snapshot: StateSnapshot = {
+      ...acting("auto"),
+      session: "idle",
+      turn: null,
+      offer: {
+        id: "w1",
+        kind: "workspace",
+        text: "Remember kivo as a workspace?",
+        accept: "Remember",
+        decline: "Not now",
+      },
+    };
+    const on = handlers();
+    const model = islandForTurn(snapshot, t, on);
+    expect(hasButtons(model)).toBe(true);
+    render(<>{model?.body}</>);
+    fireEvent.click(screen.getByRole("button", { name: "Remember" }));
+    expect(on.offer).toHaveBeenCalledWith("w1", true);
+    fireEvent.click(screen.getByRole("button", { name: "Not now" }));
+    expect(on.offer).toHaveBeenCalledWith("w1", false);
   });
 });

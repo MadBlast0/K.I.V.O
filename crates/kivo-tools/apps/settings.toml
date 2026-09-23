@@ -3,6 +3,7 @@ name = "Settings"
 aliases = ["Windows Settings", "Settings"]
 prefer = ["uri", "uia"]
 
+examples = ["Turn on Do not disturb", "Set brightness to 60", "Open sound settings"]
 [match]
 exe = ["SystemSettings.exe"]
 aumid = ["windows.immersivecontrolpanel_cw5n1h2txyewy!microsoft.windows.immersivecontrolpanel"]

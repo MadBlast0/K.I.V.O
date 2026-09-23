@@ -1,0 +1,8 @@
+# The ChatGPT desktop app (DISC-06), found by its name in the installed apps.
+id = "chatgpt"
+name = "ChatGPT"
+aliases = ["ChatGPT app", "Chat GPT"]
+desktop_ai = true
+prefer = ["uia"]
+examples = ["Open ChatGPT", "In ChatGPT, prompt: plan my week"]
+

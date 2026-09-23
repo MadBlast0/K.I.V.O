@@ -51,6 +51,8 @@ struct Pattern {
 struct Command {
     tool: String,
     patterns: Vec<Pattern>,
+    /// Arguments every match carries (`unit = "hours"`).
+    args: Map<String, Value>,
 }
 
 pub struct Grammar {
@@ -89,6 +91,8 @@ struct Fillers {
 struct CommandFile {
     tool: String,
     patterns: Vec<String>,
+    #[serde(default)]
+    args: Map<String, Value>,
 }
 
 /// The grammars KIVO ships, by language (VOICE §9: `grammar/<lang>/*.toml`).
@@ -118,6 +122,7 @@ impl Grammar {
             commands.push(Command {
                 tool: c.tool,
                 patterns,
+                args: c.args,
             });
         }
         Ok(Self {
@@ -156,9 +161,12 @@ impl Grammar {
         let mut best: Option<Match> = None;
         for command in &self.commands {
             for pattern in &command.patterns {
-                let Some((args, confidence)) = match_tokens(&pattern.tokens, &words, cx) else {
+                let Some((mut args, confidence)) = match_tokens(&pattern.tokens, &words, cx) else {
                     continue;
                 };
+                for (k, v) in &command.args {
+                    args.entry(k.clone()).or_insert_with(|| v.clone());
+                }
                 // Earlier commands win ties; a later one must be strictly more confident.
                 if best
                     .as_ref()

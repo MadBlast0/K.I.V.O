@@ -230,6 +230,8 @@ fn pixels_for(state: TrayIcon) -> PlatformResult<(Vec<u8>, u32, u32)> {
         TrayIcon::Updating => dot(&mut rgba, w, h, [0xF5, 0xA5, 0x24]),
         // The screen, input or shell in use: a violet badge on the other corner.
         TrayIcon::InUse => dot_left(&mut rgba, w, h, [0x8E, 0x5C, 0xFF]),
+        // Bypass permissions (SEC-03): a red ring, as loud as listening's blue one.
+        TrayIcon::Bypass => ring(&mut rgba, w, h, [0xFF, 0x3B, 0x30]),
     }
     Ok((rgba, w, h))
 }
@@ -344,6 +346,7 @@ mod tests {
             TrayIcon::Error,
             TrayIcon::Updating,
             TrayIcon::InUse,
+            TrayIcon::Bypass,
         ];
         let images: Vec<Vec<u8>> = states.iter().map(|&s| pixels_for(s).unwrap().0).collect();
         for i in 0..images.len() {

@@ -33,7 +33,18 @@ tokio-util.workspace = true
 webview2-com = "0.38"
 windows-core = "0.61"
 # UI Automation notifications for screen readers (announce.rs, UX-53).
-windows = { version = "0.61", features = ["Win32_UI_Accessibility", "Win32_Foundation"] }
+# The taskbar jump list (jumplist.rs, UX-58).
+windows = { version = "0.61", features = [
+    "Win32_UI_Accessibility",
+    "Win32_Foundation",
+    "Win32_System_Com",
+    "Win32_UI_Shell",
+    "Win32_UI_Shell_Common",
+    "Win32_UI_Shell_PropertiesSystem",
+    "Win32_Storage_EnhancedStorage",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_Variant",
+] }
 
 [lints]
 workspace = true

@@ -310,12 +310,15 @@ impl Secrets for FakeSecrets {
 /// System info: returns whatever snapshot the test sets.
 pub struct FakeSystemInfo {
     pub snapshot: Mutex<SystemSnapshot>,
+    /// Idle time, lock and "in a call", as the test sets them.
+    pub presence: Mutex<kivo_platform::Presence>,
 }
 
 impl Default for FakeSystemInfo {
     /// A mid-tier laptop on mains power (BENCHMARKS §2).
     fn default() -> Self {
         Self {
+            presence: Mutex::default(),
             snapshot: Mutex::new(SystemSnapshot {
                 cpu_name: "Fake 8-core".into(),
                 logical_cpus: 16,
@@ -335,6 +338,9 @@ impl Default for FakeSystemInfo {
 impl SystemInfo for FakeSystemInfo {
     fn snapshot(&self) -> PlatformResult<SystemSnapshot> {
         Ok(lock(&self.snapshot).clone())
+    }
+    fn presence(&self) -> kivo_platform::Presence {
+        *lock(&self.presence)
     }
     fn attention(&self) -> PlatformResult<kivo_platform::Attention> {
         let s = lock(&self.snapshot);

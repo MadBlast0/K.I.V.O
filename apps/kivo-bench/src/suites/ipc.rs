@@ -54,6 +54,11 @@ impl Ipc {
             hotkey_conflict: None,
             in_use: Vec::new(),
             island: Default::default(),
+            activities: Vec::new(),
+            tasks_active: 0,
+            bypass_until: None,
+            offer: None,
+            has_selection: false,
             revision: 0,
         });
         let shutdown = CancellationToken::new();

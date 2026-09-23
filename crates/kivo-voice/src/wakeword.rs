@@ -124,7 +124,7 @@ pub fn sound_alike(a: &str, b: &str) -> f32 {
 }
 
 /// Phrases at least this alike are confusable.
-const CONFUSABLE: f32 = 0.75;
+pub const CONFUSABLE: f32 = 0.75;
 
 /// Checks `phrase` against the guidance, the other wake words and the fast-path command phrases.
 /// `spellable` says whether the keyword model can spell it (`None` if the model isn't here).

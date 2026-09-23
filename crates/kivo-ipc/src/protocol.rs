@@ -182,6 +182,55 @@ pub mod method {
     pub const MEMORY_PREFERENCES: &str = "memory.preferences";
     pub const MEMORY_SET_PREFERENCE: &str = "memory.setPreference";
     pub const MEMORY_DELETE_PREFERENCE: &str = "memory.deletePreference";
+
+    // M5: tasks, routines, agents, workspaces and instructions.
+    /// Tasks for the Tasks page and Home (UX-24): `{ finished: bool }` → `TaskView[]`.
+    pub const TASKS_LIST: &str = "tasks.list";
+    pub const TASKS_GET: &str = "tasks.get";
+    pub const TASKS_CANCEL: &str = "tasks.cancel";
+    pub const TASKS_PAUSE: &str = "tasks.pause";
+    pub const TASKS_RESUME: &str = "tasks.resume";
+    /// The user's answer to a task's question: `{ id, choice }`.
+    pub const TASKS_ANSWER: &str = "tasks.answer";
+    pub const TASKS_DELETE: &str = "tasks.delete";
+    pub const TASKS_CLEAR: &str = "tasks.clearFinished";
+    /// Routines (ROUTINES §4): list, save (with the grants shown), delete, run now, enable.
+    pub const ROUTINES_LIST: &str = "routines.list";
+    pub const ROUTINES_SAVE: &str = "routines.save";
+    pub const ROUTINES_DELETE: &str = "routines.delete";
+    pub const ROUTINES_RUN: &str = "routines.run";
+    pub const ROUTINES_ENABLE: &str = "routines.enable";
+    /// Phrase and hotkey collisions and the permissions a draft needs (ROUT-03, ROUT-07).
+    pub const ROUTINES_CHECK: &str = "routines.check";
+    /// The tools a step can use, with their JSON Schemas for the builder's forms (ROUT-09).
+    pub const ROUTINES_TOOLS: &str = "routines.tools";
+    /// The Agents page (UX-25): CLI agents, desktop AI apps, sessions.
+    pub const AGENTS_OVERVIEW: &str = "agents.overview";
+    /// Hands an agent session to a visible terminal (CONV-13).
+    pub const AGENTS_OPEN_TERMINAL: &str = "agents.openInTerminal";
+    /// Starts a CLI agent in a visible terminal: `{ agent, folder, mode }` (CONV-14), as a request
+    /// of its own through the permission engine.
+    pub const AGENTS_START: &str = "agents.start";
+    /// Workspaces and instructions (CONV-09/10/11).
+    pub const WORKSPACES_LIST: &str = "workspaces.list";
+    pub const WORKSPACES_REMEMBER: &str = "workspaces.remember";
+    pub const WORKSPACES_FORGET: &str = "workspaces.forget";
+    pub const WORKSPACES_EXPORT_AGENTS: &str = "workspaces.exportAgentsMd";
+    pub const INSTRUCTIONS_GET: &str = "instructions.get";
+    pub const INSTRUCTIONS_SET: &str = "instructions.set";
+    /// Bypass permissions, with its opt-in and expiry (SEC-03).
+    pub const PERMISSIONS_BYPASS: &str = "permissions.bypass";
+    /// The Draft card's Edit (CONV-15): `{ callId, text }`; Send and Cancel answer the card's
+    /// decision (`permissions.answer`).
+    pub const DRAFT_ANSWER: &str = "draft.answer";
+    /// "What can I say?" (UX-44) for the app in front.
+    pub const SESSION_HELP: &str = "session.help";
+    /// "What did I miss?" (UX-40).
+    pub const SESSION_MISSED: &str = "session.missed";
+    /// The selection shortcut (UX-42): `{ action: "explain" | "rewrite" | "translate" }`.
+    pub const SELECTION_ACTION: &str = "selection.action";
+    /// Offers the Island makes outside a turn: `{ id, accept }` ("Remember … as a workspace?").
+    pub const OFFER_ANSWER: &str = "offer.answer";
 }
 
 /// The name the desktop app gives in `hello`; the runtime supervises the client with this name.
@@ -236,8 +285,64 @@ pub struct StateSnapshot {
     #[serde(default)]
     #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub island: IslandPlacement,
+    /// Ongoing status the collapsed Island shows (UX-15): a timer, a download, an agent.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[cfg_attr(feature = "ts", ts(as = "Option<Vec<LiveActivity>>", optional))]
+    pub activities: Vec<LiveActivity>,
+    /// Tasks running or waiting now: the tray tooltip and Home count them (UX-56, UX-19).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    #[cfg_attr(feature = "ts", ts(as = "Option<u32>", optional))]
+    pub tasks_active: u32,
+    /// Bypass permissions is on until then (epoch ms; `u64::MAX`: until turned off), SEC-03.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional, type = "number"))]
+    pub bypass_until: Option<u64>,
+    /// Something the Island offers outside a turn ("Remember kivo as a workspace?").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub offer: Option<Offer>,
+    /// Text was selected in the app in front when the text box opened: the Island offers
+    /// Explain · Rewrite · Translate (UX-42). The text itself stays in the runtime.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[cfg_attr(feature = "ts", ts(as = "Option<bool>", optional))]
+    pub has_selection: bool,
     /// Increases with every state change, so a client can tell whether its view is current.
     pub revision: u64,
+}
+
+fn is_zero(n: &u32) -> bool {
+    *n == 0
+}
+
+/// Ongoing status in the collapsed Island (UX-15).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LiveActivity {
+    pub id: String,
+    /// `timer`, `download`, `agent`, `media` or `task`.
+    pub kind: String,
+    pub title: String,
+    pub detail: Option<String>,
+    /// 0–1, when known.
+    pub progress: Option<f32>,
+    /// When it ends (epoch ms), for a timer's countdown.
+    #[cfg_attr(feature = "ts", ts(type = "number | null"))]
+    pub until: Option<u64>,
+    pub task_id: Option<String>,
+}
+
+/// A question the Island asks outside a turn.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Offer {
+    pub id: String,
+    /// `workspace`.
+    pub kind: String,
+    pub text: String,
+    pub accept: String,
+    pub decline: String,
 }
 
 /// The Island's placement setting and remembered spots (UX-13).
@@ -323,6 +428,28 @@ pub struct TurnView {
     /// `until` (milliseconds since the Unix epoch, about 8 s).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub undo: Option<UndoOffer>,
+    /// A prompt KIVO will type into another AI, waiting for "send" (CONV-15).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub draft: Option<DraftView>,
+    /// "What can I say?" (UX-44): examples for the app in front, then general ones.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[cfg_attr(feature = "ts", ts(as = "Option<Vec<String>>", optional))]
+    pub help: Vec<String>,
+    /// The task this turn started, for "Open in Tasks".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub task_id: Option<String>,
+}
+
+/// The Draft card (CONV-15): what KIVO will type, where, before it presses send.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DraftView {
+    /// "Claude · terminal · K.I.V.O".
+    pub target: String,
+    pub text: String,
 }
 
 /// An Undo the Island offers (UX-43).
@@ -771,6 +898,198 @@ impl Response {
             outcome: Outcome::Error(error),
         }
     }
+}
+
+/// A task as the Tasks page, Home and the tray show it (UX-24).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskView {
+    pub id: String,
+    pub title: String,
+    pub kind: kivo_core::task::TaskKind,
+    /// Who it's for or who made it: "you", a routine's name.
+    pub owner: String,
+    pub status: kivo_core::task::TaskStatus,
+    pub steps: Vec<TaskStepView>,
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
+    pub created_at: i64,
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
+    pub updated_at: i64,
+    #[cfg_attr(feature = "ts", ts(type = "number | null"))]
+    pub finished_at: Option<i64>,
+    pub result: Option<String>,
+    pub error: Option<String>,
+    /// Kept instead of the steps once the task is 90 days old (MEM-02).
+    pub summary: Option<String>,
+    /// A step calls a brain (it costs, ROUT-08).
+    pub uses_ai: bool,
+    /// What the task waits for the user to decide.
+    pub question: Option<TaskQuestion>,
+    pub routine_id: Option<String>,
+}
+
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskStepView {
+    pub id: String,
+    pub title: String,
+    /// `pending`, `running`, `waiting`, `needsYou`, `done`, `failed` or `skipped`.
+    pub status: String,
+    pub detail: Option<String>,
+    #[cfg_attr(feature = "ts", ts(type = "number | null"))]
+    pub started_at: Option<i64>,
+    #[cfg_attr(feature = "ts", ts(type = "number | null"))]
+    pub finished_at: Option<i64>,
+    pub attempts: u32,
+}
+
+/// A decision a task waits for: a failed step with the "ask" policy, or an agent's request.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskQuestion {
+    pub step: String,
+    pub text: String,
+    /// `retry`, `skip`, `stop`, `allow`, `always`, `deny`.
+    pub choices: Vec<String>,
+}
+
+/// A routine for the Routines page (UX-26).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RoutineView {
+    pub routine: kivo_core::routine::Routine,
+    pub contains_ai: bool,
+    pub custom_command: bool,
+    /// Every step is covered by what was granted when it was saved.
+    pub granted: bool,
+    #[cfg_attr(feature = "ts", ts(type = "number | null"))]
+    pub last_run: Option<i64>,
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
+    pub updated_at: i64,
+}
+
+/// One permission a routine needs, as the save sheet lists it (ROUT-03).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GrantLine {
+    pub tool: String,
+    /// "Open Slack", in plain words.
+    pub title: String,
+    pub risk: kivo_core::tool::Risk,
+    pub capability: kivo_core::Capability,
+    /// The capability is off: the step would be refused until it's turned on.
+    pub capability_off: bool,
+}
+
+/// A phrase or hotkey that clashes with something (ROUT-07).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Collision {
+    pub phrase: String,
+    /// `command` (a built-in command), `routine`, `wakeWord` or `hotkey`.
+    pub kind: String,
+    /// What it clashes with ("volume up", "Work mode", "Hey Kivo").
+    pub with: String,
+    /// Blocks saving (an exact clash) or only warns (sounds alike).
+    pub blocking: bool,
+}
+
+/// What `routines.check` finds for a draft.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RoutineCheck {
+    pub collisions: Vec<Collision>,
+    pub grants: Vec<GrantLine>,
+    /// Problems that stop it from saving (an empty name, an unknown tool).
+    pub problems: Vec<String>,
+}
+
+/// A tool for the builder's catalog (ROUT-09).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolItem {
+    pub id: String,
+    pub title: String,
+    pub description: String,
+    /// Its arguments' JSON Schema: the builder generates the form from it.
+    #[cfg_attr(feature = "ts", ts(type = "unknown"))]
+    pub params: serde_json::Value,
+    pub risk: kivo_core::tool::Risk,
+    pub capability: kivo_core::Capability,
+}
+
+/// A remembered workspace (CONV-10).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceItem {
+    pub id: String,
+    pub path: String,
+    pub name: String,
+    pub instructions: String,
+    /// The project's own agent files found there (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`).
+    pub agent_files: Vec<String>,
+    pub preferred_agent: Option<String>,
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
+    pub last_used: i64,
+}
+
+/// The Agents page (UX-25).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentsOverview {
+    pub cli: Vec<AgentItem>,
+    /// Claude Desktop, ChatGPT, Copilot found in the installed apps (DISC-06).
+    pub desktop: Vec<DesktopAiItem>,
+    pub sessions: Vec<AgentSessionItem>,
+}
+
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentItem {
+    pub id: String,
+    pub name: String,
+    pub installed: bool,
+    pub signed_in: Option<bool>,
+    pub version: Option<String>,
+    /// It can be run in a visible terminal (CONV-14).
+    pub terminal: bool,
+}
+
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DesktopAiItem {
+    pub id: String,
+    pub name: String,
+    /// The installed app's id (AUMID or Start-menu path) to open it.
+    pub app_id: String,
+}
+
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionItem {
+    pub id: String,
+    pub agent: String,
+    pub workspace: String,
+    /// `acp` (KIVO runs it) or `terminal` (a visible terminal KIVO started).
+    pub kind: String,
+    pub running: bool,
+    /// Can be continued in a terminal (the agent supports resuming).
+    pub resumable: bool,
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
+    pub last_used: i64,
 }
 
 #[cfg(test)]

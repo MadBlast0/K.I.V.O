@@ -23,6 +23,9 @@ use tokio_util::sync::CancellationToken;
 /// Opens something by name or URI (a settings page, an app URI).
 pub type Opener = Arc<dyn Fn(&str) -> Result<(), ToolError> + Send + Sync>;
 
+/// A remembered workspace's folder by its name ("open Claude in K.I.V.O").
+pub type FolderLookup = Arc<dyn Fn(&str) -> Option<PathBuf> + Send + Sync>;
+
 /// What the control tools act through.
 pub struct Controls {
     pub uia: Arc<dyn UiAutomation>,
@@ -62,6 +65,12 @@ pub struct Controls {
     /// Whether a screenshot may go to the brain of the current turn (a vision model, and the
     /// privacy mode and the cloud-vision option allow it; CAP-08).
     pub vision: Arc<dyn Fn() -> bool + Send + Sync>,
+    /// Visible terminals for CLI agents (CONV-14).
+    pub terminals: Arc<dyn kivo_platform::Terminals>,
+    /// The terminal agent sessions KIVO started.
+    pub terminal_sessions: Arc<crate::agents_tools::TerminalSessions>,
+    /// A remembered workspace's folder by its name ("K.I.V.O", CONV-10).
+    pub workspace_folder: FolderLookup,
 }
 
 impl Controls {
@@ -198,6 +207,7 @@ pub fn controls(c: &Arc<Controls>) -> Vec<Arc<dyn Tool>> {
     out.extend(crate::system_tools::tools(c));
     out.extend(crate::browser::tools(c));
     out.extend(crate::router::tools(c));
+    out.extend(crate::agents_tools::tools(c));
     out
 }
 

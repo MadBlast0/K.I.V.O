@@ -192,6 +192,10 @@ impl Engine {
             return;
         }
         let cwd = self.agents.workspace();
+        // The agent works in this folder: KIVO works in that project too (CONV-10).
+        if let Some(workspaces) = self.workspaces() {
+            workspaces.worked_in(&cwd);
+        }
         let session = match self
             .agents
             .session(&id, found.as_ref().map(|f| f.program.as_path()), &cwd)
@@ -247,6 +251,27 @@ impl Engine {
         }
         if let Some(running) = lock(&self.turn).as_mut() {
             running.streaming = true;
+        }
+        // Coding work on tests or a build is checked before it's called done (BRAIN-31/32), and
+        // shows in Tasks as a Coding task.
+        let check = crate::checks::wanted(text);
+        let check_command =
+            check.and_then(|c| crate::checks::command(&cwd, &self.workspace_notes(&cwd), c));
+        let coding_task = check.and_then(|_| {
+            self.tasks().and_then(|tasks| {
+                tasks.record(&coding_spec(
+                    text,
+                    &name,
+                    &turn,
+                    &cwd,
+                    check_command.as_deref(),
+                ))
+            })
+        });
+        if let (Some(tasks), Some(task)) = (self.tasks(), &coding_task) {
+            tasks.record_step(task, "agent", "running", None);
+            self.core
+                .update_turn(|view| view.task_id = Some(task.clone()));
         }
         self.core.set_step(StepView {
             id: format!("{turn}-agent"),
@@ -361,6 +386,24 @@ impl Engine {
                     answer = text::tf("brain.agentDone", &[("name", &name)]);
                     self.say_phrase(answer.clone()).await;
                 }
+                if let (Some(tasks), Some(task)) = (self.tasks(), &coding_task) {
+                    tasks.record_step(task, "agent", "done", Some(&clip(&answer)));
+                }
+                // BRAIN-31: "done" only once the project's own check passes.
+                if check.is_some() {
+                    let verdict = self
+                        .verify_coding(
+                            &session,
+                            &name,
+                            check_command.as_deref(),
+                            &cwd,
+                            coding_task.as_deref(),
+                            &cancel,
+                        )
+                        .await;
+                    answer.push_str("\n\n");
+                    answer.push_str(&verdict);
+                }
                 self.core
                     .update_turn(|view| view.answer = Some(answer.clone()));
                 self.recorder.answer(&turn, &answer, "done");
@@ -374,6 +417,10 @@ impl Engine {
                 }
             }
             Some(e) => {
+                if let (Some(tasks), Some(task)) = (self.tasks(), &coding_task) {
+                    tasks.record_step(task, "agent", "failed", Some(&e.to_string()));
+                    tasks.record_end(task, false, &failure_message(&name, &e));
+                }
                 // The agent died or failed: it is started afresh next time (M3-X3).
                 self.provider_failed(&id, &e);
                 if matches!(e, NormalizedError::ProviderDown(_)) {
@@ -397,6 +444,236 @@ impl Engine {
             }
         }
         self.end_stream();
+    }
+}
+
+fn clip(s: &str) -> String {
+    s.chars().take(400).collect()
+}
+
+/// The Coding task a turn records: the agent's work, then the check (BRAIN-32).
+fn coding_spec(
+    request: &str,
+    agent: &str,
+    turn: &str,
+    cwd: &std::path::Path,
+    check: Option<&str>,
+) -> kivo_core::task::TaskSpec {
+    use kivo_core::task::{Criterion, Notify, OnError, StepAction, TaskKind, TaskSpec, TaskStep};
+    let step = |id: &str, title: String, action: StepAction| TaskStep {
+        id: id.into(),
+        title,
+        action,
+        depends_on: Vec::new(),
+        on_error: OnError::Stop,
+        delay_ms: None,
+        confirm: false,
+    };
+    TaskSpec {
+        title: request.chars().take(80).collect(),
+        kind: TaskKind::Coding,
+        owner: agent.to_owned(),
+        steps: std::iter::once(step(
+            "agent",
+            text::tf("brain.agentWorking", &[("name", &agent)]),
+            StepAction::Agent {
+                prompt: request.to_owned(),
+                agent: None,
+                cwd: Some(cwd.display().to_string()),
+            },
+        ))
+        .chain(check.map(|command| {
+            let mut s = step(
+                "check",
+                String::new(),
+                StepAction::Verify {
+                    criterion: Criterion::CommandSucceeds {
+                        command: command.to_owned(),
+                        cwd: Some(cwd.display().to_string()),
+                    },
+                },
+            );
+            s.depends_on = vec!["agent".into()];
+            s
+        }))
+        .collect(),
+        success: Vec::new(),
+        grants: Vec::new(),
+        timeout_ms: None,
+        notify: Notify::Silent,
+        routine_id: None,
+        turn_id: Some(turn.to_owned()),
+        cwd: Some(cwd.display().to_string()),
+    }
+}
+
+impl Engine {
+    /// The current workspace's notes when it is `cwd` (they may name the test command).
+    fn workspace_notes(&self, cwd: &std::path::Path) -> String {
+        self.workspaces()
+            .and_then(|w| {
+                w.current()
+                    .filter(|c| std::path::Path::new(&c.path) == cwd)
+                    .map(|c| w.instructions(&format!("workspace:{}", c.id)))
+            })
+            .unwrap_or_default()
+    }
+
+    /// Runs the project's check after an agent's coding work (BRAIN-31): the tests (or the build)
+    /// again. If it still fails, the agent gets the failure once more; KIVO says "fixed" only when
+    /// the check passes. Returns what to add to the answer, already spoken.
+    async fn verify_coding(
+        self: &Arc<Self>,
+        session: &Arc<kivo_brain::acp::AcpSession>,
+        agent: &str,
+        command: Option<&str>,
+        cwd: &std::path::Path,
+        task: Option<&str>,
+        cancel: &tokio_util::sync::CancellationToken,
+    ) -> String {
+        let turn = self.turn_key();
+        let tasks = self.tasks();
+        let finish = |ok: bool, text: String| {
+            if let (Some(tasks), Some(task)) = (&tasks, task) {
+                tasks.record_step(
+                    task,
+                    "check",
+                    if ok { "done" } else { "failed" },
+                    Some(&text),
+                );
+                tasks.record_end(task, ok, &text);
+            }
+            text
+        };
+        let Some(command) = command.map(str::to_owned) else {
+            let said = text::t("coding.noCheck");
+            self.say_phrase(said.clone()).await;
+            return finish(false, said);
+        };
+        if let (Some(tasks), Some(task)) = (&tasks, task) {
+            tasks.record_step(task, "check", "running", Some(&command));
+        }
+        for attempt in 0..2 {
+            if cancel.is_cancelled() {
+                return finish(false, text::t("reply.cancelled"));
+            }
+            let outcome = self.run_check(&command, cwd, attempt).await;
+            match outcome {
+                Ok((true, _)) => {
+                    let said = if attempt == 0 {
+                        text::tf("coding.passed", &[("command", &command)])
+                    } else {
+                        text::tf(
+                            "coding.passedAfterRetry",
+                            &[("command", &command), ("name", &agent)],
+                        )
+                    };
+                    self.say_phrase(said.clone()).await;
+                    return finish(true, said);
+                }
+                Ok((false, tail)) if attempt == 0 => {
+                    // Once more, with what still fails.
+                    let said = text::tf(
+                        "coding.retrying",
+                        &[("command", &command), ("name", &agent)],
+                    );
+                    self.say_phrase(said).await;
+                    let prompt = text::tf(
+                        "coding.retryPrompt",
+                        &[("command", &command), ("output", &tail)],
+                    );
+                    let mut events = session.prompt(&prompt, cancel.child_token());
+                    while let Some(event) = events.recv().await {
+                        match event {
+                            AgentEvent::Tool {
+                                id: tool,
+                                title,
+                                kind,
+                                status,
+                            } => {
+                                self.core.set_step(StepView {
+                                    id: format!("{turn}-r{tool}"),
+                                    title: if title.is_empty() { kind } else { title },
+                                    status: step_status(&status),
+                                    detail: None,
+                                });
+                            }
+                            AgentEvent::Done(_) | AgentEvent::Error(_) => break,
+                            _ => {}
+                        }
+                    }
+                }
+                Ok((false, tail)) => {
+                    let said = text::tf(
+                        "coding.stillFailing",
+                        &[("command", &command), ("output", &tail)],
+                    );
+                    let short = text::tf("coding.stillFailingShort", &[("command", &command)]);
+                    self.say_phrase(short).await;
+                    if let Some(running) = lock(&self.turn).as_mut() {
+                        running.outcome = "failed";
+                    }
+                    return finish(false, said);
+                }
+                Err(reason) => {
+                    let said = text::tf("coding.couldntCheck", &[("reason", &reason)]);
+                    self.say_phrase(said.clone()).await;
+                    return finish(false, said);
+                }
+            }
+        }
+        finish(false, text::t("coding.noCheck"))
+    }
+
+    /// Runs one check command in the turn, through the permission engine (asking when the mode
+    /// says so): whether it passed, and the end of its output.
+    async fn run_check(
+        self: &Arc<Self>,
+        command: &str,
+        cwd: &std::path::Path,
+        attempt: usize,
+    ) -> Result<(bool, String), String> {
+        let capabilities = self.core.config().capabilities;
+        let Some(tool) = self.registry.get("shell.run", &capabilities) else {
+            return Err(text::tf(
+                "policy.capabilityOff",
+                &[("capability", &Capability::Shell.label())],
+            ));
+        };
+        let mut call = ToolCall {
+            id: format!("{}-check{attempt}", self.turn_key()),
+            tool: "shell.run".into(),
+            args: json!({ "command": command, "cwd": cwd.display().to_string() }),
+            initiated_by: Initiator::UserDirect,
+            targets: Vec::new(),
+        };
+        let decision = self.authorize_call(tool.as_ref(), &mut call);
+        self.recorder
+            .tool_decision(&self.turn_key(), &call, tool.spec(), &decision);
+        let permit = match decision {
+            Decision::Allow(p) => p,
+            Decision::Deny(d) => return Err(d.message),
+            Decision::Confirm(spec) => match self.decide(spec.clone(), call.clone()).await {
+                Some((true, _, by)) => {
+                    kivo_security::confirmed(&spec, &call, kivo_security::Answer::Allow { by })
+                        .map_err(|d| d.message)?
+                }
+                _ => return Err(text::t("reply.cancelled")),
+            },
+        };
+        let title = text::tf("coding.checkStep", &[("command", &command)]);
+        let (result, output) = self.run_step(tool, &call, permit, &title).await;
+        if let Err(e) = &result.status {
+            return Err(e.message.clone());
+        }
+        let data = output.map(|o| o.data).unwrap_or_default();
+        let passed = data["exitCode"].as_i64() == Some(0);
+        let tail = crate::checks::tail(
+            data["stdout"].as_str().unwrap_or_default(),
+            data["stderr"].as_str().unwrap_or_default(),
+            6,
+        );
+        Ok((passed, tail))
     }
 }
 

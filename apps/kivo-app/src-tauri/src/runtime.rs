@@ -84,7 +84,13 @@ impl Runtime {
         crate::overlay::apply(
             app,
             snapshot.map(|s| s.session).filter(|_| !island_hidden),
-            snapshot.is_some_and(|s| s.turn.is_some()),
+            // A turn, an offer ("Remember … as a workspace?"), or live activities (UX-15), which stay
+            // out of the way over a fullscreen app or a presentation.
+            snapshot.is_some_and(|s| {
+                s.turn.is_some()
+                    || s.offer.is_some()
+                    || (!s.activities.is_empty() && !crate::overlay::fullscreen_in_front())
+            }),
             snapshot
                 .and_then(|s| s.turn.as_ref())
                 .and_then(|t| t.anchor)

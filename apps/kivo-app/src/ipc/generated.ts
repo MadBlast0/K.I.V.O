@@ -148,7 +148,19 @@ note?: string | null,
  * The last change can be taken back (UX-43): the Island shows Undo with a ring until
  * `until` (milliseconds since the Unix epoch, about 8 s).
  */
-undo?: UndoOffer | null, };
+undo?: UndoOffer | null, 
+/**
+ * A prompt KIVO will type into another AI, waiting for "send" (CONV-15).
+ */
+draft?: DraftView, 
+/**
+ * "What can I say?" (UX-44): examples for the app in front, then general ones.
+ */
+help?: Array<string>, 
+/**
+ * The task this turn started, for "Open in Tasks".
+ */
+taskId?: string, };
 
 export type BrainChip = { 
 /**
@@ -189,6 +201,32 @@ title: string,
  * When the Island stops offering it (epoch ms); voice and the toast still work after.
  */
 until: number, };
+
+export type DraftView = { 
+/**
+ * "Claude · terminal · K.I.V.O".
+ */
+target: string, text: string, };
+
+export type LiveActivity = { id: string, 
+/**
+ * `timer`, `download`, `agent`, `media` or `task`.
+ */
+kind: string, title: string, detail: string | null, 
+/**
+ * 0–1, when known.
+ */
+progress: number | null, 
+/**
+ * When it ends (epoch ms), for a timer's countdown.
+ */
+until: number | null, taskId: string | null, };
+
+export type Offer = { id: string, 
+/**
+ * `workspace`.
+ */
+kind: string, text: string, accept: string, decline: string, };
 
 export type StepView = { 
 /**
@@ -288,6 +326,27 @@ inUse?: Array<string>,
  * Where the Island goes (UX-13): the setting and the spots it was dragged to.
  */
 island?: IslandPlacement, 
+/**
+ * Ongoing status the collapsed Island shows (UX-15): a timer, a download, an agent.
+ */
+activities?: Array<LiveActivity>, 
+/**
+ * Tasks running or waiting now: the tray tooltip and Home count them (UX-56, UX-19).
+ */
+tasksActive?: number, 
+/**
+ * Bypass permissions is on until then (epoch ms; `u64::MAX`: until turned off), SEC-03.
+ */
+bypassUntil?: number, 
+/**
+ * Something the Island offers outside a turn ("Remember kivo as a workspace?").
+ */
+offer?: Offer, 
+/**
+ * Text was selected in the app in front when the text box opened: the Island offers
+ * Explain · Rewrite · Translate (UX-42). The text itself stays in the runtime.
+ */
+hasSelection?: boolean, 
 /**
  * Increases with every state change, so a client can tell whether its view is current.
  */
@@ -443,6 +502,157 @@ export type CapabilityItem = { capability: Capability, label: string, enabled: b
  */
 lastUsed: number | null, };
 
+export type TaskKind = "plan" | "watch" | "reminder" | "coding" | "routine";
+
+export type TaskStatus = "pending" | "running" | "waiting" | "needsYou" | "paused" | "done" | "failed" | "cancelled" | "interrupted";
+
+export type OnError = { "policy": "stop" } | { "policy": "continue" } | { "policy": "retry", times: number, } | { "policy": "ask" };
+
+export type WindowEvent = "opened" | "closed";
+
+export type WatchSpec = { "type": "time", atMs: number, } | { "type": "processExit", pid: number | null, name: string | null, } | { "type": "folder", path: string, pattern: string | null, } | { "type": "download", folder: string | null, } | { "type": "window", app: string | null, title: string | null, event: WindowEvent, };
+
+export type Criterion = { "type": "commandSucceeds", command: string, cwd: string | null, } | { "type": "fileExists", path: string, } | { "type": "windowExists", title: string, };
+
+export type StepAction = { "type": "tool", tool: string, args: unknown, } | { "type": "watch", watch: WatchSpec, } | { "type": "say", text: string, } | { "type": "ask", prompt: string, profile: string | null, } | { "type": "decide", question: string, options: Array<string>, profile: string | null, } | { "type": "agent", prompt: string, agent: string | null, cwd: string | null, } | { "type": "verify", criterion: Criterion, } | { "type": "delay", ms: number, };
+
+export type Notify = "speak" | "toast" | "silent";
+
+export type TaskGrant = { tool: string, args: unknown, };
+
+export type TaskView = { id: string, title: string, kind: TaskKind, 
+/**
+ * Who it's for or who made it: "you", a routine's name.
+ */
+owner: string, status: TaskStatus, steps: Array<TaskStepView>, createdAt: number, updatedAt: number, finishedAt: number | null, result: string | null, error: string | null, 
+/**
+ * Kept instead of the steps once the task is 90 days old (MEM-02).
+ */
+summary: string | null, 
+/**
+ * A step calls a brain (it costs, ROUT-08).
+ */
+usesAi: boolean, 
+/**
+ * What the task waits for the user to decide.
+ */
+question: TaskQuestion | null, routineId: string | null, };
+
+export type TaskStepView = { id: string, title: string, 
+/**
+ * `pending`, `running`, `waiting`, `needsYou`, `done`, `failed` or `skipped`.
+ */
+status: string, detail: string | null, startedAt: number | null, finishedAt: number | null, attempts: number, };
+
+export type TaskQuestion = { step: string, text: string, 
+/**
+ * `retry`, `skip`, `stop`, `allow`, `always`, `deny`.
+ */
+choices: Array<string>, };
+
+export type Trigger = { "type": "phrase", phrases: Array<string>, lang: string, } | { "type": "hotkey", chord: string, } | { "type": "manual" };
+
+export type VarKind = "text" | "number";
+
+export type VarDef = { name: string, kind: VarKind, };
+
+export type RoutineStep = { id: string, action: StepAction, onError: OnError, delayMs?: number | null, 
+/**
+ * Steps in the same group run together; the next group waits for the whole group.
+ */
+parallelGroup?: string | null, 
+/**
+ * Asks the user before this step ("Lock the PC?"); a no skips it.
+ */
+confirm?: boolean, };
+
+export type Routine = { id: string, name: string, description: string, enabled: boolean, triggers: Array<Trigger>, steps: Array<RoutineStep>, variables: Array<VarDef>, 
+/**
+ * What the user granted when saving it (ROUT-03): each step's tool with its exact
+ * arguments.
+ */
+grants: Array<TaskGrant>, 
+/**
+ * A starter routine KIVO ships (ROUT-10): its key, so it isn't added twice.
+ */
+starter?: string | null, };
+
+export type RoutineView = { routine: Routine, containsAi: boolean, customCommand: boolean, 
+/**
+ * Every step is covered by what was granted when it was saved.
+ */
+granted: boolean, lastRun: number | null, updatedAt: number, };
+
+export type GrantLine = { tool: string, 
+/**
+ * "Open Slack", in plain words.
+ */
+title: string, risk: Risk, capability: Capability, 
+/**
+ * The capability is off: the step would be refused until it's turned on.
+ */
+capabilityOff: boolean, };
+
+export type Collision = { phrase: string, 
+/**
+ * `command` (a built-in command), `routine`, `wakeWord` or `hotkey`.
+ */
+kind: string, 
+/**
+ * What it clashes with ("volume up", "Work mode", "Hey Kivo").
+ */
+with: string, 
+/**
+ * Blocks saving (an exact clash) or only warns (sounds alike).
+ */
+blocking: boolean, };
+
+export type RoutineCheck = { collisions: Array<Collision>, grants: Array<GrantLine>, 
+/**
+ * Problems that stop it from saving (an empty name, an unknown tool).
+ */
+problems: Array<string>, };
+
+export type ToolItem = { id: string, title: string, description: string, 
+/**
+ * Its arguments' JSON Schema: the builder generates the form from it.
+ */
+params: unknown, risk: Risk, capability: Capability, };
+
+export type WorkspaceItem = { id: string, path: string, name: string, instructions: string, 
+/**
+ * The project's own agent files found there (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`).
+ */
+agentFiles: Array<string>, preferredAgent: string | null, lastUsed: number, };
+
+export type AgentsOverview = { cli: Array<AgentItem>, 
+/**
+ * Claude Desktop, ChatGPT, Copilot found in the installed apps (DISC-06).
+ */
+desktop: Array<DesktopAiItem>, sessions: Array<AgentSessionItem>, };
+
+export type AgentItem = { id: string, name: string, installed: boolean, signedIn: boolean | null, version: string | null, 
+/**
+ * It can be run in a visible terminal (CONV-14).
+ */
+terminal: boolean, };
+
+export type DesktopAiItem = { id: string, name: string, 
+/**
+ * The installed app's id (AUMID or Start-menu path) to open it.
+ */
+appId: string, };
+
+export type AgentSessionItem = { id: string, agent: string, workspace: string, 
+/**
+ * `acp` (KIVO runs it) or `terminal` (a visible terminal KIVO started).
+ */
+kind: string, running: boolean, 
+/**
+ * Can be continued in a terminal (the agent supports resuming).
+ */
+resumable: boolean, lastUsed: number, };
+
 export type ProtocolVersion = { major: number, minor: number, };
 
 export type Welcome = { protocolVersion: ProtocolVersion, runtimeVersion: string, snapshot: StateSnapshot, };
@@ -554,6 +764,36 @@ export const Method = {
   memoryPreferences: "memory.preferences",
   memorySetPreference: "memory.setPreference",
   memoryDeletePreference: "memory.deletePreference",
+  tasksList: "tasks.list",
+  tasksGet: "tasks.get",
+  tasksCancel: "tasks.cancel",
+  tasksPause: "tasks.pause",
+  tasksResume: "tasks.resume",
+  tasksAnswer: "tasks.answer",
+  tasksDelete: "tasks.delete",
+  tasksClear: "tasks.clearFinished",
+  routinesList: "routines.list",
+  routinesSave: "routines.save",
+  routinesDelete: "routines.delete",
+  routinesRun: "routines.run",
+  routinesEnable: "routines.enable",
+  routinesCheck: "routines.check",
+  routinesTools: "routines.tools",
+  agentsOverview: "agents.overview",
+  agentsOpenInTerminal: "agents.openInTerminal",
+  agentsStart: "agents.start",
+  workspacesList: "workspaces.list",
+  workspacesRemember: "workspaces.remember",
+  workspacesForget: "workspaces.forget",
+  workspacesExportAgentsMd: "workspaces.exportAgentsMd",
+  instructionsGet: "instructions.get",
+  instructionsSet: "instructions.set",
+  permissionsBypass: "permissions.bypass",
+  draftAnswer: "draft.answer",
+  sessionHelp: "session.help",
+  sessionMissed: "session.missed",
+  selectionAction: "selection.action",
+  offerAnswer: "offer.answer",
 } as const;
 
 export type Method = (typeof Method)[keyof typeof Method];

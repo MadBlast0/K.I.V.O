@@ -579,12 +579,15 @@ async fn the_m1_commands_act_within_500_ms_of_the_end_of_speech() {
         eprintln!("{said} end of speech → action: {took} ms");
         assert!(took <= BUDGET_MS, "{said} took {took} ms");
     }
-    assert!(
-        std::fs::read_dir(&rig.screenshots)
-            .map(|d| d.count() == 1)
-            .unwrap_or(false),
-        "the screenshot was saved in the rig's folder"
-    );
+    // The rig's folder also holds its downloads and data folders; one picture was saved.
+    let pictures = std::fs::read_dir(&rig.screenshots)
+        .map(|d| {
+            d.filter_map(Result::ok)
+                .filter(|e| e.path().extension().is_some_and(|x| x == "png"))
+                .count()
+        })
+        .unwrap_or(0);
+    assert_eq!(pictures, 1, "the screenshot was saved in the rig's folder");
     assert_eq!(*rig.apps.launched.lock().unwrap(), ["Chrome"]);
     rig.core.quit();
     let _ = tokio::time::timeout(Duration::from_secs(5), worker_task).await;

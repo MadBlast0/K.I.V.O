@@ -1,0 +1,8 @@
+# Microsoft Copilot (DISC-06), found by its name in the installed apps.
+id = "copilot"
+name = "Microsoft Copilot"
+aliases = ["Copilot"]
+desktop_ai = true
+prefer = ["uia"]
+examples = ["Open Copilot"]
+

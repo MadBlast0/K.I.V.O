@@ -191,6 +191,9 @@ pub struct Listener {
     busy: Arc<AtomicBool>,
     hands_free: Arc<AtomicBool>,
     keep_audio: Arc<AtomicBool>,
+    /// The detection thread, joined on shutdown so the process never exits while it is inside
+    /// the speech models' native code.
+    thread: Mutex<Option<std::thread::JoinHandle<()>>>,
 }
 
 impl Listener {
@@ -287,6 +290,26 @@ impl Listener {
     }
 }
 
+impl Listener {
+    /// Stops the detection thread and waits for it, at most `timeout`.
+    pub fn shutdown(&self, timeout: std::time::Duration) {
+        let _ = self.commands.send(Command::Quit);
+        let handle = self
+            .thread
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
+        let Some(handle) = handle else { return };
+        let deadline = Instant::now() + timeout;
+        while !handle.is_finished() && Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        if handle.is_finished() {
+            let _ = handle.join();
+        }
+    }
+}
+
 impl Drop for Listener {
     fn drop(&mut self) {
         let _ = self.commands.send(Command::Quit);
@@ -326,7 +349,7 @@ pub fn start(pipeline: Pipeline) -> Listener {
         hands_free: Arc::clone(&hands_free),
         keep_audio: Arc::clone(&keep_audio),
     };
-    std::thread::Builder::new()
+    let thread = std::thread::Builder::new()
         .name("kivo-detect".into())
         .spawn(move || run(pipeline, &rx, &flags))
         .expect("thread spawn");
@@ -336,6 +359,7 @@ pub fn start(pipeline: Pipeline) -> Listener {
         busy,
         hands_free,
         keep_audio,
+        thread: Mutex::new(Some(thread)),
     }
 }
 

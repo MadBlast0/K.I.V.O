@@ -90,7 +90,18 @@ tool set after taint, Plan first, Windows Hello, scoped and timed grants, per-ap
 presets, in-use indicators, Undo in the Island, Island placement, the Permissions page, the
 `testenv/` dummy app and fixtures, and the security suite v1. Still open in M4: the UIA journey's
 first CI run (M4-X1, on the first `v*` tag), a live `SendInput` run (Windows Sandbox or a VM
-only), and pausing background tasks on the emergency stop (with tasks, M5). **Next: M5.** Progress per milestone is in the
+only). **M5 — agents, background tasks and routines** is built: persisted task graphs with
+their own grants, error policies, timeouts and success checks (interrupted, never resumed, after
+a crash); event-driven watchers (process and build exit, folders, downloads, windows, time) that
+make no brain calls while waiting; proactive speech rules and "what did I miss?"; the planner
+(`tasks.propose_plan`); coding work delegated to the Coding agent and called fixed only after
+KIVO re-runs the project's tests; routines and custom commands (phrases with variables, hotkeys,
+collision checks, grants shown on save, AI steps, starters) with the builder; workspaces and
+instructions mirrored to Markdown; terminal agents in Windows Terminal with Draft cards before any
+prompt is sent; Bypass permissions; the Tasks, Routines and Agents pages, live activities, the
+selection shortcut, "What can I say?", every Island button by voice, toast replies and the jump
+list. Still open in M5: nothing beyond the M3 note that a live Claude Code run needs its ACP
+adapter. **Next: M6.** Progress per milestone is in the
 table at the top of [docs/ROADMAP.md](docs/ROADMAP.md).
 Update this section as milestones land.
 

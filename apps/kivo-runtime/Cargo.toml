@@ -22,6 +22,7 @@ kivo-voice = { path = "../../crates/kivo-voice" }
 # runtime binary itself never uses them.
 kivo-testkit = { path = "../../crates/kivo-testkit" }
 dirs.workspace = true
+notify.workspace = true
 serde.workspace = true
 uuid.workspace = true
 serde_json.workspace = true

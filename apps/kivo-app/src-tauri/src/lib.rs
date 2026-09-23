@@ -3,6 +3,7 @@
 //! its window only hides it while KIVO keeps running (UX §1).
 
 mod announce;
+mod jumplist;
 mod memory;
 mod overlay;
 mod runtime;
@@ -24,6 +25,9 @@ struct Launch {
     background: bool,
     /// Open the Control Center on this page.
     page: Option<String>,
+    /// A jump list item (UX-58): `routines`, `new-conversation`, `pause-listening`,
+    /// `stop-everything`.
+    action: Option<String>,
 }
 
 impl Launch {
@@ -34,6 +38,7 @@ impl Launch {
             match arg.as_str() {
                 "--background" => launch.background = true,
                 "--page" => launch.page = args.next().cloned(),
+                "--action" => launch.action = args.next().cloned(),
                 _ => {}
             }
         }
@@ -57,6 +62,35 @@ pub(crate) fn show_main_window(app: &AppHandle, page: Option<&str>) {
     }
     if let Some(page) = page {
         let _ = app.emit(NAVIGATE_EVENT, page);
+    }
+}
+
+/// Does a jump list item (UX-58), once the runtime is connected for the ones that need it.
+fn run_action(app: &AppHandle, action: &str) {
+    match action {
+        "routines" => show_main_window(app, Some("routines")),
+        "new-conversation" => show_main_window(app, Some("chat/new")),
+        "pause-listening" | "stop-everything" => {
+            let method = if action == "pause-listening" {
+                kivo_ipc::method::SESSION_PAUSE
+            } else {
+                kivo_ipc::method::SESSION_STOP_ALL
+            };
+            let app = app.clone();
+            tauri::async_runtime::spawn(async move {
+                let runtime = app.state::<Runtime>();
+                for _ in 0..100 {
+                    if runtime.connected() {
+                        break;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                }
+                if let Err(e) = runtime.request(method, Value::Null).await {
+                    eprintln!("KIVO: the jump list action didn't reach the runtime: {e}");
+                }
+            });
+        }
+        other => eprintln!("KIVO: unknown action {other}"),
     }
 }
 
@@ -111,6 +145,10 @@ pub fn run() {
         // First, so a second KIVO.exe hands over and exits before anything else starts.
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             let again = Launch::parse(argv.get(1..).unwrap_or_default());
+            if let Some(action) = &again.action {
+                run_action(app, action);
+                return;
+            }
             show_main_window(app, again.page.as_deref());
             // KIVO was quit or crashed while this window stayed: launching KIVO starts it again.
             if !app.state::<Runtime>().connected()
@@ -170,10 +208,17 @@ pub fn run() {
                 if let Some(window) = app.get_webview_window(MAIN) {
                     memory::apply(&window, Visibility::Hidden, true);
                 }
-            } else {
+            } else if launch.action.is_none() {
                 show_main_window(app.handle(), None);
             }
             tauri::async_runtime::spawn(runtime::maintain(app.handle().clone()));
+            if let Some(action) = &launch.action {
+                run_action(app.handle(), action);
+            }
+            // The taskbar jump list (UX-58).
+            if let Err(e) = jumplist::install() {
+                eprintln!("KIVO: couldn't set the jump list: {e}");
+            }
             Ok(())
         })
         .build(tauri::generate_context!())
@@ -191,6 +236,20 @@ mod tests {
 
     fn parse(args: &[&str]) -> Launch {
         Launch::parse(&args.iter().map(ToString::to_string).collect::<Vec<_>>())
+    }
+
+    #[test]
+    fn jump_list_items_launch_with_their_action() {
+        assert_eq!(
+            parse(&["--action", "stop-everything"]).action.as_deref(),
+            Some("stop-everything")
+        );
+        assert_eq!(jumplist::TASKS.len(), 4);
+        assert!(
+            jumplist::TASKS
+                .iter()
+                .any(|(_, action)| *action == "pause-listening")
+        );
     }
 
     #[test]

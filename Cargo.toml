@@ -23,6 +23,8 @@ toml = "1.1.6"
 rusqlite = { version = "0.40.2", features = ["bundled"] }
 rusqlite_migration = "2.6.0"
 dirs = "7.0.0"
+# Folder and download watchers (TOOL-28): ReadDirectoryChangesW on Windows.
+notify = { version = "8.2.0", default-features = false }
 tracing-subscriber = { version = "0.3.23", features = ["json", "env-filter"] }
 tracing-appender = "0.2.5"
 regex = "1.13.1"
@@ -62,6 +64,16 @@ unsafe_op_in_unsafe_fn = "deny"
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
+
+# Dev and test builds stay small on disk: every integration test links its own copy of the
+# runtime, and full debug info for the `windows` and ONNX crates made `target/` grow into the
+# hundreds of GB. Line tables keep panics' backtraces readable; incremental caches aren't kept.
+[profile.dev]
+debug = "line-tables-only"
+incremental = false
+
+[profile.dev.package."*"]
+debug = false
 
 [profile.release]
 lto = "thin"

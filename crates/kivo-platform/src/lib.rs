@@ -31,7 +31,7 @@ pub use automation::{
 pub use capabilities::{Capabilities, OsFamily};
 pub use control::{
     Battery, Clipboard, CommandOutput, CommandRunner, CommandSpec, Displays, FileHit, FileOps,
-    Monitor, Power, ShellKind, Snap, UserVerifier,
+    Monitor, Power, ProcessInfo, ProcessWait, Processes, ShellKind, Snap, Terminals, UserVerifier,
 };
 pub use error::{PlatformError, PlatformResult};
 pub use kivo_core::Secret;
@@ -44,7 +44,7 @@ pub use shell::{
 };
 pub use speech::{SpeechSynth, SynthAudio, SystemVoice};
 pub use system::{
-    Attention, Autostart, GpuInfo, MediaAction, NowPlaying, PowerAction, SystemControl, SystemInfo,
-    SystemSnapshot, ThreadQos, VolumeState,
+    Attention, Autostart, GpuInfo, MediaAction, NowPlaying, PowerAction, Presence, SystemControl,
+    SystemInfo, SystemSnapshot, ThreadQos, VolumeState,
 };
 pub use types::{DeviceId, Point, Rect, WindowId};

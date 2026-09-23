@@ -498,6 +498,9 @@ impl Engine {
             view.confirm = Some(spec.clone());
             view.target_app.clone_from(&spec.target);
         });
+        if let Some((_, call)) = lock(&self.turn).as_ref().and_then(|t| t.pending.clone()) {
+            self.show_draft(&call);
+        }
         self.speaker.cue(Cue::Question);
         self.say_phrase(question).await;
         // Nothing more is being said: listen for the spoken answer now.
@@ -994,8 +997,16 @@ impl Engine {
         let (preferences, vocabulary) = self
             .recorder_db(|db| Ok((db.preferences()?, db.vocabulary(40)?)))
             .unwrap_or_default();
-        let mut instructions = String::new();
+        // "About me" (CONV-09), then stated preferences.
+        let about = self
+            .workspaces()
+            .map(|w| w.instructions("global"))
+            .unwrap_or_default();
+        let mut instructions = about.trim().to_owned();
         if !preferences.is_empty() {
+            if !instructions.is_empty() {
+                instructions.push('\n');
+            }
             instructions.push_str("The user's stated preferences:");
             for (key, value) in &preferences {
                 instructions.push_str(&format!("\n- {key}: {value}"));
@@ -1009,6 +1020,8 @@ impl Engine {
             ));
         }
         layers.instructions = instructions;
+        // The current workspace's notes and the project's own agent files (CONV-11).
+        layers.workspace = self.workspaces().map(|w| w.context()).unwrap_or_default();
         // Live context: the whole block, plus what changed since this thread's last request.
         let (snapshot, title) = self.live_snapshot(config);
         let mut live = snapshot.block();
@@ -1237,6 +1250,8 @@ impl Engine {
                     if !allow {
                         return None;
                     }
+                    // A Draft the user changed goes out as they left it (CONV-15).
+                    let call = self.drafted(call);
                     match kivo_security::confirmed(&confirm, &call, Answer::Allow { by }) {
                         Ok(permit) => (wire, tool, call, permit),
                         Err(denial) => return Some(vec![result(&wire, denial.message, true)]),
@@ -1528,11 +1543,16 @@ impl Engine {
             .unwrap_or_default();
         let system = persona::system_prompt(&persona, true, &addendum);
         let preferences = self.recorder_db(|db| db.preferences()).unwrap_or_default();
-        let instructions = preferences
-            .iter()
-            .map(|(k, v)| format!("- {k}: {v}"))
+        let about = self
+            .workspaces()
+            .map(|w| w.instructions("global"))
+            .unwrap_or_default();
+        let instructions = std::iter::once(about.trim().to_owned())
+            .filter(|a| !a.is_empty())
+            .chain(preferences.iter().map(|(k, v)| format!("- {k}: {v}")))
             .collect::<Vec<_>>()
             .join("\n");
+        let workspace = self.workspaces().map(|w| w.context()).unwrap_or_default();
         let (snapshot, _) = self.live_snapshot(&config);
         let live = snapshot.block();
         let (summary, turns) = thread
@@ -1582,6 +1602,7 @@ impl Engine {
             "layers": [
                 { "id": "system", "text": system, "tokens": context::tokens(&system), "max": context::SYSTEM_MAX },
                 { "id": "instructions", "text": instructions, "tokens": context::tokens(&instructions), "max": context::INSTRUCTIONS_MAX },
+                { "id": "workspace", "text": workspace, "tokens": context::tokens(&workspace), "max": context::WORKSPACE_MAX },
                 { "id": "live", "text": live, "tokens": context::tokens(&live), "max": context::LIVE_MAX },
                 { "id": "summary", "text": summary, "tokens": context::tokens(&summary), "max": context::SUMMARY_MAX },
                 { "id": "turns", "tokens": turns },

@@ -488,6 +488,8 @@ impl FileOps for FakeFiles {
 pub struct FakeCommands {
     pub ran: Mutex<Vec<CommandSpec>>,
     pub reply: Mutex<CommandOutput>,
+    /// Replies used first, one per run, before `reply`.
+    pub replies: Mutex<std::collections::VecDeque<CommandOutput>>,
     pub killed: AtomicU64,
     /// Waits until cancelled (a long-running command).
     pub hang: AtomicBool,
@@ -510,6 +512,9 @@ impl CommandRunner for FakeCommands {
                 timed_out: !cancelled(),
                 ..CommandOutput::default()
             });
+        }
+        if let Some(next) = lock(&self.replies).pop_front() {
+            return Ok(next);
         }
         Ok(lock(&self.reply).clone())
     }
@@ -650,5 +655,107 @@ impl UserVerifier for FakeVerifier {
         }
         lock(&self.prompts).push(message.into());
         Ok(self.answer.load(Ordering::SeqCst))
+    }
+}
+
+/// One fake process's fate: `None` while it runs, `Some(code)` once it exited.
+type Fate = std::sync::Arc<(Mutex<Option<Option<i32>>>, std::sync::Condvar)>;
+
+/// Processes the test starts and ends on cue (`start`, `exit`); a watcher's wait wakes when the
+/// test ends the process, or when it is cancelled.
+#[derive(Default)]
+pub struct FakeProcesses {
+    running: Mutex<Vec<kivo_platform::ProcessInfo>>,
+    fates: Mutex<HashMap<u32, Fate>>,
+    /// Waits started, by pid.
+    pub watched: Mutex<Vec<u32>>,
+}
+
+impl FakeProcesses {
+    pub fn start(&self, pid: u32, name: &str) {
+        lock(&self.running).push(kivo_platform::ProcessInfo {
+            pid,
+            name: name.to_owned(),
+            parent: 1,
+        });
+        lock(&self.fates).insert(pid, Fate::default());
+    }
+
+    pub fn exit(&self, pid: u32, code: i32) {
+        lock(&self.running).retain(|p| p.pid != pid);
+        if let Some(fate) = lock(&self.fates).get(&pid) {
+            *lock(&fate.0) = Some(Some(code));
+            fate.1.notify_all();
+        }
+    }
+}
+
+struct FakeWait {
+    fate: Fate,
+    cancelled: std::sync::Arc<AtomicBool>,
+}
+
+impl kivo_platform::ProcessWait for FakeWait {
+    fn wait(&self) -> Option<i32> {
+        let mut state = lock(&self.fate.0);
+        loop {
+            if let Some(code) = *state {
+                return code;
+            }
+            if self.cancelled.load(Ordering::SeqCst) {
+                return None;
+            }
+            state = self
+                .fate
+                .1
+                .wait(state)
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+        }
+    }
+
+    fn cancel(&self) {
+        self.cancelled.store(true, Ordering::SeqCst);
+        let _guard = lock(&self.fate.0);
+        self.fate.1.notify_all();
+    }
+}
+
+impl kivo_platform::Processes for FakeProcesses {
+    fn list(&self) -> PlatformResult<Vec<kivo_platform::ProcessInfo>> {
+        Ok(lock(&self.running).clone())
+    }
+
+    fn watch(&self, pid: u32) -> PlatformResult<Box<dyn kivo_platform::ProcessWait>> {
+        let fate = lock(&self.fates)
+            .get(&pid)
+            .cloned()
+            .filter(|f| lock(&f.0).is_none())
+            .ok_or_else(|| PlatformError::NotFound(format!("process {pid}")))?;
+        lock(&self.watched).push(pid);
+        Ok(Box::new(FakeWait {
+            fate,
+            cancelled: std::sync::Arc::default(),
+        }))
+    }
+}
+
+/// A terminal opened by a fake: (folder, title, program, arguments).
+pub type OpenedTerminal = (PathBuf, String, String, Vec<String>);
+
+/// Terminals that are only recorded, never opened.
+#[derive(Default)]
+pub struct FakeTerminals {
+    pub opened: Mutex<Vec<OpenedTerminal>>,
+}
+
+impl kivo_platform::Terminals for FakeTerminals {
+    fn open(&self, cwd: &Path, title: &str, program: &str, args: &[String]) -> PlatformResult<()> {
+        lock(&self.opened).push((
+            cwd.to_path_buf(),
+            title.to_owned(),
+            program.to_owned(),
+            args.to_vec(),
+        ));
+        Ok(())
     }
 }

@@ -233,6 +233,72 @@ const SCHEMA: &[&str] = &[
     // 7: grants scoped by an argument pattern, and grants for this session only (SEC-08).
     "ALTER TABLE permissions_grants ADD COLUMN pattern TEXT;
      ALTER TABLE permissions_grants ADD COLUMN session TEXT;",
+    // 8: tasks and their steps (ARCH-27, MEM-02), routines (ROUT-01), workspaces and
+    // instructions (CONV-09/10).
+    "CREATE TABLE tasks (
+             id          TEXT PRIMARY KEY,
+             profile_id  TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+             title       TEXT NOT NULL,
+             kind        TEXT NOT NULL,
+             owner       TEXT NOT NULL,
+             status      TEXT NOT NULL,
+             spec        TEXT NOT NULL CHECK (json_valid(spec)),
+             result      TEXT,
+             error       TEXT,
+             summary     TEXT,
+             routine_id  TEXT,
+             turn_id     TEXT,
+             created_at  INTEGER NOT NULL,
+             updated_at  INTEGER NOT NULL,
+             finished_at INTEGER
+         ) STRICT;
+     CREATE INDEX tasks_by_status ON tasks (status, updated_at);
+     CREATE TABLE task_steps (
+             task_id     TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+             profile_id  TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+             step_id     TEXT NOT NULL,
+             position    INTEGER NOT NULL,
+             title       TEXT NOT NULL,
+             status      TEXT NOT NULL,
+             detail      TEXT,
+             result      TEXT,
+             attempts    INTEGER NOT NULL DEFAULT 0,
+             started_at  INTEGER,
+             finished_at INTEGER,
+             PRIMARY KEY (task_id, step_id)
+         ) STRICT;
+     CREATE TABLE routines (
+             id         TEXT PRIMARY KEY,
+             profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+             name       TEXT NOT NULL,
+             enabled    INTEGER NOT NULL DEFAULT 0 CHECK (enabled IN (0, 1)),
+             version    INTEGER NOT NULL,
+             body       TEXT NOT NULL CHECK (json_valid(body)),
+             starter    TEXT,
+             created_at INTEGER NOT NULL,
+             updated_at INTEGER NOT NULL,
+             last_run   INTEGER
+         ) STRICT;
+     CREATE UNIQUE INDEX routines_one_starter ON routines (profile_id, starter) WHERE starter IS NOT NULL;
+     CREATE TABLE workspaces (
+             id              TEXT PRIMARY KEY,
+             profile_id      TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+             path            TEXT NOT NULL COLLATE NOCASE,
+             name            TEXT NOT NULL,
+             remembered      INTEGER NOT NULL CHECK (remembered IN (0, 1)),
+             preferred_agent TEXT,
+             agent_mode      TEXT,
+             created_at      INTEGER NOT NULL,
+             last_used       INTEGER NOT NULL
+         ) STRICT;
+     CREATE UNIQUE INDEX workspaces_by_path ON workspaces (profile_id, path);
+     CREATE TABLE instructions (
+             profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+             scope      TEXT NOT NULL,
+             text       TEXT NOT NULL,
+             updated_at INTEGER NOT NULL,
+             PRIMARY KEY (profile_id, scope)
+         ) STRICT;",
 ];
 
 static MIGRATIONS: LazyLock<Migrations<'static>> =

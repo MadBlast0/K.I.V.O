@@ -26,7 +26,16 @@ pub struct Core {
     /// Each speech engine's residency as the worker last reported it (PLAN-02).
     residency: Mutex<std::collections::HashMap<String, String>>,
     shutdown: CancellationToken,
+    /// Bypass permissions is on (SEC-03): the mode to go back to, and the timer's generation.
+    bypass: Mutex<Option<(PermissionMode, u64)>>,
+    /// The text selected when the text box opened (UX-42), with when.
+    selection: Mutex<Option<(String, std::time::Instant)>>,
 }
+
+/// "Until turned off" for Bypass.
+pub const BYPASS_UNTIL_OFF: u64 = u64::MAX;
+/// How long a selection captured with the text box stays usable (UX-42).
+const SELECTION_KEPT: std::time::Duration = std::time::Duration::from_secs(120);
 
 /// A core with default settings that are never saved (tests).
 #[cfg(test)]
@@ -50,7 +59,11 @@ fn placement(config: &KivoConfig) -> kivo_ipc::protocol::IslandPlacement {
 
 impl Core {
     /// A core that starts from `config` and saves changes to `config_file`.
-    pub fn with_config(config: KivoConfig, config_file: Option<PathBuf>) -> Self {
+    pub fn with_config(mut config: KivoConfig, config_file: Option<PathBuf>) -> Self {
+        // Bypass never survives a restart (SEC-03: it is switched on each time, and expires).
+        if config.permissions.mode == PermissionMode::Bypass {
+            config.permissions.mode = PermissionMode::Auto;
+        }
         let mode = config.permissions.mode;
         let island = placement(&config);
         Self {
@@ -67,11 +80,18 @@ impl Core {
                 hotkey_conflict: None,
                 in_use: Vec::new(),
                 island,
+                activities: Vec::new(),
+                tasks_active: 0,
+                bypass_until: None,
+                offer: None,
+                has_selection: false,
                 revision: 0,
             }),
             settings: watch::Sender::new(0),
             residency: Mutex::default(),
             shutdown: CancellationToken::new(),
+            bypass: Mutex::new(None),
+            selection: Mutex::new(None),
         }
     }
 
@@ -354,6 +374,9 @@ impl Core {
         if mode == PermissionMode::Bypass {
             return Err(Refused(kivo_core::text::t("turn.bypassNeedsStep")));
         }
+        // Choosing another mode ends Bypass.
+        *self.bypass.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        self.state.send_modify(|s| s.bypass_until = None);
         let saved = {
             let mut config = self.config.lock().unwrap_or_else(|e| e.into_inner());
             config.permissions.mode = mode;
@@ -370,6 +393,180 @@ impl Core {
         }
         tracing::info!(?mode, "permission mode changed");
         Ok(mode)
+    }
+
+    /// Switches Bypass permissions on (SEC-03), after the opt-in dialog: until `until` (epoch ms,
+    /// or `BYPASS_UNTIL_OFF`), then the previous mode comes back by itself. It isn't saved, so a
+    /// restart never starts in Bypass. Must run inside the async runtime (it sets a timer).
+    pub fn enable_bypass(self: &std::sync::Arc<Self>, until: u64) {
+        let previous = {
+            let current = self.state.borrow().mode;
+            let mut bypass = self.bypass.lock().unwrap_or_else(|e| e.into_inner());
+            let previous = bypass.map_or(current, |(p, _)| p);
+            let generation = bypass.map_or(0, |(_, g)| g) + 1;
+            *bypass = Some((previous, generation));
+            (previous, generation)
+        };
+        self.state.send_modify(|s| {
+            s.mode = PermissionMode::Bypass;
+            s.bypass_until = Some(until);
+            s.revision += 1;
+        });
+        tracing::warn!(until, "bypass permissions on");
+        if until == BYPASS_UNTIL_OFF {
+            return;
+        }
+        let core = std::sync::Arc::clone(self);
+        let shutdown = self.shutdown();
+        let wait = Duration::from_millis(until.saturating_sub(now_ms()));
+        tokio::spawn(async move {
+            tokio::select! {
+                () = tokio::time::sleep(wait) => {
+                    let current = core.bypass.lock().unwrap_or_else(|e| e.into_inner()).map(|(_, g)| g);
+                    if current == Some(previous.1) {
+                        core.disable_bypass();
+                    }
+                }
+                () = shutdown.cancelled() => {}
+            }
+        });
+    }
+
+    /// Bypass ends (it expired, or the user turned it off): back to the mode before it.
+    pub fn disable_bypass(&self) -> Option<PermissionMode> {
+        let previous = self
+            .bypass
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take()
+            .map(|(p, _)| p)?;
+        self.state.send_modify(|s| {
+            s.mode = previous;
+            s.bypass_until = None;
+            s.revision += 1;
+        });
+        tracing::warn!(?previous, "bypass permissions off");
+        Some(previous)
+    }
+
+    /// Bypass is on now.
+    pub fn bypass_on(&self) -> bool {
+        self.state.borrow().bypass_until.is_some()
+    }
+
+    /// The collapsed Island's live activities (UX-15): adds or replaces one by id.
+    pub fn set_activity(&self, activity: kivo_ipc::protocol::LiveActivity) {
+        self.state.send_if_modified(|s| {
+            match s.activities.iter_mut().find(|a| a.id == activity.id) {
+                Some(a) if *a == activity => return false,
+                Some(a) => *a = activity,
+                None => s.activities.push(activity),
+            }
+            s.revision += 1;
+            true
+        });
+    }
+
+    pub fn remove_activity(&self, id: &str) {
+        self.state.send_if_modified(|s| {
+            let before = s.activities.len();
+            s.activities.retain(|a| a.id != id);
+            let changed = s.activities.len() != before;
+            if changed {
+                s.revision += 1;
+            }
+            changed
+        });
+    }
+
+    /// How many tasks are running or waiting (the tray and Home show it, UX-56).
+    pub fn set_tasks_active(&self, count: u32) {
+        self.state.send_if_modified(|s| {
+            if s.tasks_active == count {
+                return false;
+            }
+            s.tasks_active = count;
+            s.revision += 1;
+            true
+        });
+    }
+
+    /// Shows (or clears) a question the Island asks outside a turn.
+    pub fn set_offer(&self, offer: Option<kivo_ipc::protocol::Offer>) {
+        self.state.send_if_modified(|s| {
+            if s.offer == offer {
+                return false;
+            }
+            s.offer = offer;
+            s.revision += 1;
+            true
+        });
+    }
+
+    /// The text selected when the text box opened (UX-42), kept for a couple of minutes; only
+    /// whether there is one reaches the UI.
+    pub fn set_selection(&self, text: Option<String>) {
+        let has = text.is_some();
+        *self
+            .selection
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+            text.map(|t| (t, std::time::Instant::now()));
+        self.state.send_if_modified(|s| {
+            if s.has_selection == has {
+                return false;
+            }
+            s.has_selection = has;
+            s.revision += 1;
+            true
+        });
+    }
+
+    /// The selection captured with the text box, if still fresh; taking it clears it.
+    pub fn take_selection(&self) -> Option<String> {
+        let taken = self
+            .selection
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take()
+            .filter(|(_, at)| at.elapsed() < SELECTION_KEPT)
+            .map(|(text, _)| text);
+        self.set_selection(None);
+        taken
+    }
+
+    pub fn offer(&self) -> Option<kivo_ipc::protocol::Offer> {
+        self.state.borrow().offer.clone()
+    }
+
+    /// A short message in the Island when there is no turn (a task finished, a reminder), cleared
+    /// after `for_how_long`. Must run inside the async runtime.
+    pub fn flash_notice(self: &std::sync::Arc<Self>, message: &str, for_how_long: Duration) {
+        let id = format!("notice-{}", self.state.borrow().revision);
+        let shown = self.state.send_if_modified(|s| {
+            // Over nothing, or over a finished request's card that is still showing.
+            if s.turn.is_some() && s.session != SessionState::Idle {
+                return false;
+            }
+            s.turn = Some(TurnView {
+                id: id.clone(),
+                source: TurnSource::Routine,
+                answer: Some(message.to_owned()),
+                ..TurnView::default()
+            });
+            s.revision += 1;
+            true
+        });
+        if !shown {
+            return;
+        }
+        let core = std::sync::Arc::clone(self);
+        tokio::spawn(async move {
+            tokio::time::sleep(for_how_long).await;
+            if core.turn_view().is_some_and(|t| t.id == id) {
+                core.clear_turn();
+            }
+        });
     }
 
     /// Stop everything (SEC-25: tray, emergency hotkey, Island button): whatever KIVO is doing now
@@ -479,6 +676,12 @@ pub fn describe(state: SessionState) -> String {
     kivo_core::text::t(&format!("state.{}", kivo_core::text::key_of(&state)))
 }
 
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -500,6 +703,11 @@ mod tests {
                 hotkey_conflict: None,
                 in_use: Vec::new(),
                 island: kivo_ipc::protocol::IslandPlacement::default(),
+                activities: Vec::new(),
+                tasks_active: 0,
+                bypass_until: None,
+                offer: None,
+                has_selection: false,
                 revision: 1
             }
         );

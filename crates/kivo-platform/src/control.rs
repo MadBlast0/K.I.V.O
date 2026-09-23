@@ -190,6 +190,36 @@ pub trait UserVerifier: Send + Sync {
     fn verify(&self, message: &str) -> PlatformResult<bool>;
 }
 
+/// Visible terminals for CLI agents (CONVERSATION §5.2): opened in a folder with a title, running
+/// one program the user can see and take over.
+pub trait Terminals: Send + Sync {
+    fn open(&self, cwd: &Path, title: &str, program: &str, args: &[String]) -> PlatformResult<()>;
+}
+
+/// A running process, as a watcher sees it (TOOL-28).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProcessInfo {
+    pub pid: u32,
+    /// The program's file name (`cargo.exe`).
+    pub name: String,
+    pub parent: u32,
+}
+
+/// A wait for one process to end: `wait` blocks until it does (its exit code, when readable)
+/// or until `cancel` is called from another thread. A kernel wait, not polling.
+pub trait ProcessWait: Send + Sync {
+    fn wait(&self) -> Option<i32>;
+    fn cancel(&self);
+}
+
+/// Processes, for "tell me when the build finishes" (TOOL-28).
+pub trait Processes: Send + Sync {
+    fn list(&self) -> PlatformResult<Vec<ProcessInfo>>;
+    /// A wait for `pid` to exit; `NotFound` when it's already gone.
+    fn watch(&self, pid: u32) -> PlatformResult<Box<dyn ProcessWait>>;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

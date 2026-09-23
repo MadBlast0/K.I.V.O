@@ -4,6 +4,7 @@ name = "Git"
 aliases = ["git"]
 cli_only = true
 
+examples = ["Check the repository status", "Show the last five commits", "What changed since yesterday?"]
 [cli]
 program = "git"
 [cli.verbs.status]

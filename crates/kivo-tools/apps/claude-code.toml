@@ -1,0 +1,21 @@
+# Claude Code, Anthropic's CLI agent. KIVO prefers running it over ACP (CONVERSATION §5.1);
+# these are the flags for a visible terminal (§5.2). KIVO checks each flag against the installed
+# CLI's `--help` before using it.
+id = "claude-code"
+name = "Claude Code"
+aliases = ["Claude", "Claude Code CLI"]
+cli_only = true
+examples = ["Start Claude in this folder", "Open a terminal and start Claude in plan mode", "Tell Claude to also add tests"]
+
+[match]
+exe = ["claude.exe", "claude.cmd"]
+
+[agent]
+command = "claude"
+bypass_modes = ["bypass"]
+resume = ["--resume", "{session}"]
+[agent.modes]
+default = []
+plan = ["--permission-mode", "plan"]
+accept-edits = ["--permission-mode", "acceptEdits"]
+bypass = ["--dangerously-skip-permissions"]

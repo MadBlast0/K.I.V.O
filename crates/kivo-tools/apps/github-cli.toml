@@ -4,6 +4,7 @@ name = "GitHub CLI"
 aliases = ["gh", "GitHub"]
 cli_only = true
 
+examples = ["Show my open pull requests", "What's the status of the checks?"]
 [cli]
 program = "gh"
 [cli.verbs.prs]

@@ -55,6 +55,8 @@ pub enum TrayIcon {
     Updating,
     /// A sensitive capability is in use: the screen, input control or the shell (CAP-06).
     InUse,
+    /// Bypass permissions is on (SEC-03): KIVO acts without asking.
+    Bypass,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

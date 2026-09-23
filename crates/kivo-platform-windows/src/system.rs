@@ -30,6 +30,10 @@ impl SystemInfo for WindowsSystemInfo {
         })
     }
 
+    fn presence(&self) -> kivo_platform::Presence {
+        crate::presence::presence()
+    }
+
     fn snapshot(&self) -> PlatformResult<SystemSnapshot> {
         let (on_battery, battery_percent) = power();
         let (fullscreen_app, focus_mode) = notification_state();

@@ -3,6 +3,7 @@
 //! built-in native tools; and the M4 computer-control tools with the capability-ladder router and
 //! the App Capability Registry.
 
+pub mod agents_tools;
 pub mod appreg;
 pub mod browser;
 pub mod builtin;

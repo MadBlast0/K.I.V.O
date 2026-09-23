@@ -3,6 +3,7 @@ name = "Calculator"
 aliases = ["Calculator", "calc"]
 prefer = ["uri", "uia"]
 
+examples = ["What's 18 percent of 240?", "Close Calculator"]
 [match]
 exe = ["CalculatorApp.exe", "calc.exe"]
 aumid = ["Microsoft.WindowsCalculator_8wekyb3d8bbwe!App"]

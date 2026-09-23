@@ -1,0 +1,18 @@
+# Google's Gemini CLI for a visible terminal (CONVERSATION §5.2). KIVO checks each flag against
+# the installed CLI's `--help` before using it.
+id = "gemini-cli"
+name = "Gemini CLI"
+aliases = ["Gemini"]
+cli_only = true
+examples = ["Start Gemini in this folder"]
+
+[match]
+exe = ["gemini.exe", "gemini.cmd"]
+
+[agent]
+command = "gemini"
+bypass_modes = ["bypass"]
+[agent.modes]
+default = []
+accept-edits = ["--approval-mode", "auto_edit"]
+bypass = ["--yolo"]

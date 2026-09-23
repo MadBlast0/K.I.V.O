@@ -4,5 +4,6 @@ aliases = ["Edge"]
 browser = true
 prefer = ["browser-dom", "uia"]
 
+examples = ["Search for Rust async traits", "Summarize this page", "Tell me when the download finishes"]
 [match]
 exe = ["msedge.exe"]

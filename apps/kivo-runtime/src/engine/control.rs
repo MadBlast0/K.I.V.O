@@ -144,6 +144,7 @@ impl Engine {
                 tools: &config.tools,
                 privacy: config.privacy.mode,
                 assessed: Some(assessed),
+                task_grants: None,
             },
         )
     }

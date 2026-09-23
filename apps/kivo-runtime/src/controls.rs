@@ -39,6 +39,10 @@ pub struct Platform {
     pub output_devices: Arc<dyn Fn() -> Vec<(String, String, bool)> + Send + Sync>,
     /// Switches KIVO's own voice output.
     pub voice_output: Arc<dyn Fn(Option<String>) + Send + Sync>,
+    /// Visible terminals for CLI agents (CONV-14).
+    pub terminals: Arc<dyn kivo_platform::Terminals>,
+    /// A remembered workspace's folder by its name (CONV-10).
+    pub workspace_folder: kivo_tools::controls::FolderLookup,
 }
 
 fn failed(e: String) -> ToolError {
@@ -104,6 +108,9 @@ pub fn build(
         settings: Arc::new(move || settings_core.config().tools),
         caps: Arc::new(move || caps_core.config().capabilities),
         vision: Arc::new(move || vision.load(std::sync::atomic::Ordering::SeqCst)),
+        terminals: platform.terminals,
+        terminal_sessions: Arc::default(),
+        workspace_folder: platform.workspace_folder,
     })
 }
 

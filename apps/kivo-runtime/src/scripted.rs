@@ -78,10 +78,25 @@ pub struct Rig {
     pub commands: Arc<FakeCommands>,
     pub verifier: Arc<FakeVerifier>,
     pub clipboard: Arc<FakeClipboard>,
+    /// Background tasks (M5): watchers on fake processes, a notifier that toasts into
+    /// `notifications`, and a downloads folder of this rig's own.
+    pub tasks: Arc<crate::tasks::Tasks>,
+    pub processes: Arc<kivo_testkit::FakeProcesses>,
+    pub notifications: Arc<FakeNotifications>,
+    pub downloads: PathBuf,
+    pub registry: Arc<kivo_tools::Registry>,
+    pub routines: Arc<crate::routines::Routines>,
+    pub terminals: Arc<kivo_testkit::FakeTerminals>,
+    pub workspaces: Arc<crate::workspaces::Workspaces>,
+    /// The M5 requests the Control Center makes (Tasks, Routines, Agents, Bypass), as the app
+    /// sends them.
+    pub rpc: Arc<crate::tasks_rpc::TasksRpc>,
 }
 
 impl Drop for Rig {
     fn drop(&mut self) {
+        // The detection thread may still be loading its model: a test must not end inside it.
+        self.listener.shutdown(Duration::from_secs(10));
         let _ = std::fs::remove_dir_all(&self.screenshots);
     }
 }
@@ -132,8 +147,15 @@ pub fn rig_with_voice(
         aliases: vec!["Chrome".into()],
         exe: None,
     };
+    // A desktop AI app, for the Agents page (DISC-06).
+    let claude_desktop = AppEntry {
+        id: "Claude_pzs8sxrjxfjjc!Claude".into(),
+        name: "Claude".into(),
+        aliases: Vec::new(),
+        exe: None,
+    };
     let apps = Arc::new(FakeApps {
-        installed: vec![chrome.clone()],
+        installed: vec![chrome.clone(), claude_desktop],
         ..Default::default()
     });
     let windows = Arc::new(FakeWindows::default());
@@ -148,12 +170,13 @@ pub fn rig_with_voice(
         RIGS.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     ));
     let control = Arc::new(FakeSystemControl::default());
+    let notifications = Arc::new(FakeNotifications::default());
     let env = Arc::new(kivo_tools::Env {
         apps: apps.clone(),
         windows: windows.clone(),
         control: control.clone(),
         screen: Arc::new(PlainScreen),
-        notifications: Arc::new(FakeNotifications::default()),
+        notifications: notifications.clone(),
         catalog: Arc::clone(&catalog),
         screenshots: screenshots.clone(),
     });
@@ -163,6 +186,7 @@ pub fn rig_with_voice(
     let commands = Arc::new(FakeCommands::default());
     let verifier = Arc::new(FakeVerifier::default());
     let clipboard = Arc::new(FakeClipboard::default());
+    let terminals = Arc::new(kivo_testkit::FakeTerminals::default());
     let vision = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let mut files = FakeFiles::new(&screenshots.join("bin"));
     files.folders = vec![screenshots.clone()];
@@ -185,14 +209,22 @@ pub fn rig_with_voice(
             open_uri: Arc::new(|_| Ok(())),
             output_devices: Arc::new(Vec::new),
             voice_output: Arc::new(|_| {}),
+            terminals: terminals.clone(),
+            workspace_folder: {
+                let db = Arc::clone(&db);
+                Arc::new(move |name| crate::workspaces::folder_named(&db, name))
+            },
         },
         &core,
         crate::controls::app_registry(None),
         Arc::clone(&vision),
         screenshots.clone(),
     );
+    let app_registry = Arc::clone(&controls.apps);
+    let task_handle: crate::task_tools::TaskHandle = Arc::default();
     let mut tools = kivo_tools::builtin(&env);
     tools.extend(kivo_tools::controls(&controls));
+    tools.extend(crate::task_tools::tools(&task_handle));
     let registry = Arc::new(kivo_tools::Registry::new(tools));
     let heard = Arc::new(Heard::default());
     // Brains are put in by each test (scripted brains, a fake agent); none by default.
@@ -207,7 +239,7 @@ pub fn rig_with_voice(
         core: Arc::clone(&core),
         infer: infer.clone(),
         speaker: Arc::clone(&speaker),
-        registry,
+        registry: Arc::clone(&registry),
         recorder: recorder.clone(),
         apps: apps.clone(),
         windows: windows.clone(),
@@ -224,6 +256,61 @@ pub fn rig_with_voice(
     }));
     agents.set_permissions(Arc::new(engine::EnginePermissions(Arc::downgrade(&engine))));
     engine.refresh_apps();
+    engine.set_app_registry(app_registry);
+    engine.set_uia(uia.clone());
+    // Background tasks (M5) on fakes.
+    let processes = Arc::new(kivo_testkit::FakeProcesses::default());
+    let downloads = screenshots.join("downloads");
+    let _ = std::fs::create_dir_all(&downloads);
+    let watchers = Arc::new(crate::watchers::Watchers::new(
+        processes.clone(),
+        windows.clone(),
+        uia.clone(),
+        downloads.clone(),
+    ));
+    let notifier =
+        crate::notifier::Notifier::new(Arc::clone(&core), system.clone(), notifications.clone(), 0);
+    let voice: Arc<dyn crate::notifier::Voice> = engine.clone();
+    notifier.set_voice(Arc::downgrade(&voice));
+    let tasks = crate::tasks::Tasks::new(crate::tasks::TaskParts {
+        core: Arc::clone(&core),
+        recorder: recorder.clone(),
+        registry: Arc::clone(&registry),
+        watchers,
+        notifier,
+        brains: Arc::clone(&brains),
+        agents: Arc::clone(&agents),
+        windows: windows.clone(),
+    });
+    let _ = task_handle.set(Arc::downgrade(&tasks));
+    engine.set_tasks(Arc::clone(&tasks));
+    let routines = crate::routines::Routines::new(
+        Arc::clone(&core),
+        Arc::clone(&db),
+        Arc::clone(&tasks),
+        Arc::clone(&registry),
+    );
+    engine.set_routines(Arc::clone(&routines));
+    let workspaces = crate::workspaces::Workspaces::new(
+        Arc::clone(&core),
+        Arc::clone(&db),
+        screenshots.join("kivo-data"),
+    );
+    engine.set_workspaces(Arc::clone(&workspaces));
+    let rpc = Arc::new(crate::tasks_rpc::TasksRpc {
+        core: Arc::clone(&core),
+        engine: Arc::clone(&engine),
+        tasks: Arc::clone(&tasks),
+        routines: Arc::clone(&routines),
+        workspaces: Arc::clone(&workspaces),
+        verifier: verifier.clone(),
+        terminals: terminals.clone(),
+        terminal_sessions: Arc::clone(&controls.terminal_sessions),
+        apps: Arc::clone(&controls.apps),
+        uia: uia.clone(),
+        clipboard: clipboard.clone(),
+        db: Arc::clone(&db),
+    });
     let (signals, mut voice_signals) = tokio::sync::mpsc::unbounded_channel();
     let (levels, _levels_rx) = tokio::sync::watch::channel(0.0);
     let listener = Arc::new(voice::start(voice::Pipeline {
@@ -284,6 +371,15 @@ pub fn rig_with_voice(
             commands,
             verifier,
             clipboard,
+            tasks,
+            processes,
+            notifications,
+            downloads,
+            registry,
+            routines,
+            terminals,
+            workspaces,
+            rpc,
         },
         worker_task,
         pump,
