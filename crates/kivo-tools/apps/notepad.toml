@@ -1,0 +1,11 @@
+id = "notepad"
+name = "Notepad"
+aliases = ["Notepad"]
+prefer = ["uia"]
+
+[match]
+exe = ["notepad.exe", "Notepad.exe"]
+aumid = ["Microsoft.WindowsNotepad_8wekyb3d8bbwe!App"]
+
+[uia.hints]
+text = { role = "Document" }

@@ -14,6 +14,12 @@
     "tasks": {
       "one": "{count} task running",
       "other": "{count} tasks running"
+    },
+    "using": "Using {what}",
+    "inUse": {
+      "screen": "the screen",
+      "input": "the mouse and keyboard",
+      "shell": "shell commands"
     }
   },
   "mode": {
@@ -68,13 +74,17 @@
     "apps": {
       "launch": "Open {app}",
       "close": "Close {app}",
-      "restart": "Restart {app}"
+      "restart": "Restart {app}",
+      "cli": "Run {app} {verb}",
+      "open_uri": "Open {uri}"
     },
     "windows": {
       "focus": "Switch to {window}",
       "minimize": "Minimize {window}",
       "maximize": "Maximize {window}",
-      "close": "Close {window}"
+      "close": "Close {window}",
+      "move_to_monitor": "Move a window to monitor {monitor}",
+      "snap": "Snap a window {position}"
     },
     "audio": {
       "mute": "Mute the sound",
@@ -83,7 +93,9 @@
       "volume_up": "Turn the volume up",
       "volume_down": "Turn the volume down",
       "mic_mute": "Mute the microphone",
-      "mic_unmute": "Unmute the microphone"
+      "mic_unmute": "Unmute the microphone",
+      "outputs": "List the sound outputs",
+      "set_output": "Switch the sound to {device}"
     },
     "media": {
       "play_pause": "Play or pause",
@@ -93,20 +105,82 @@
     },
     "screen": {
       "screenshot": "Take a screenshot",
-      "screenshot_window": "Take a screenshot of {window}"
+      "screenshot_window": "Take a screenshot of {window}",
+      "read": "Read the screen",
+      "ocr": "Read the text on screen",
+      "look": "Send a screenshot to the AI"
     },
     "system": {
       "lock": "Lock the computer",
       "sleep": "Put the computer to sleep",
       "restart": "Restart the computer",
-      "shutdown": "Shut down the computer"
+      "shutdown": "Shut down the computer",
+      "brightness": "Check the brightness",
+      "set_brightness": "Set the brightness to {number}%",
+      "battery": "Check the battery",
+      "focus_state": "Check Do not disturb"
     },
     "notifications": {
       "show": "Show a notification"
     },
     "browser": {
       "open_url": "Open {url}",
-      "search": "Search the web for “{text}”"
+      "search": "Search the web for “{text}”",
+      "tabs": "List your browser tabs",
+      "active_tab": "Check the page you’re on",
+      "read": "Read the page",
+      "selection": "Read the selected text",
+      "click": "Click “{text}” on the page",
+      "type": "Type into the page",
+      "auto": {
+        "open": "Open {url} in KIVO’s browser",
+        "read": "Read the page in KIVO’s browser",
+        "click": "Click “{text}” in KIVO’s browser",
+        "type": "Type into KIVO’s browser",
+        "close": "Close KIVO’s browser"
+      }
+    },
+    "uia": {
+      "find": "Look for controls in a window",
+      "get_tree": "Read the controls of a window",
+      "invoke": "Press a button in an app",
+      "set_value": "Type “{value}” into a field",
+      "toggle": "Switch an option on or off",
+      "select": "Select an item in an app",
+      "expand": "Open a menu or list",
+      "scroll_into_view": "Scroll to a control",
+      "get_bounds": "Find where a control is",
+      "wait": "Wait for the app"
+    },
+    "files": {
+      "search": "Search your files for “{query}”",
+      "read": "Read {path}",
+      "open": "Open {path}",
+      "reveal": "Show {path} in File Explorer",
+      "create": "Create {path}",
+      "rename": "Rename {path} to {name}",
+      "move": "Move files to {to}",
+      "copy": "Copy files to {to}",
+      "delete": "Move files to the Recycle Bin"
+    },
+    "shell": {
+      "run": "Run the command “{command}”"
+    },
+    "input": {
+      "click": "Click on the screen",
+      "type": "Type “{text}”",
+      "press": "Press keys",
+      "scroll": "Scroll"
+    },
+    "clipboard": {
+      "read": "Read the clipboard",
+      "write": "Copy text to the clipboard"
+    },
+    "control": {
+      "act": "{action} “{target}” in {app}"
+    },
+    "context": {
+      "selection": "Read the selected text"
     }
   },
   "reply": {
@@ -136,12 +210,98 @@
     "searching": "Searching for {text}.",
     "cancelled": "Cancelled.",
     "restartingApp": "Restarting {name}.",
-    "undone": "Undone."
+    "undone": "Undone.",
+    "audio": {
+      "output": "KIVO now speaks on {name}. Pick it for everything else in the list that opened."
+    },
+    "browser": {
+      "tabs": {
+        "one": "{count} tab open.",
+        "other": "{count} tabs open."
+      }
+    },
+    "clipboard": {
+      "copied": "Copied.",
+      "empty": "The clipboard is empty."
+    },
+    "files": {
+      "copied": {
+        "one": "Copied {count} item to {folder}.",
+        "other": "Copied {count} items to {folder}."
+      },
+      "created": "Created {name}.",
+      "found": {
+        "one": "Found {count} item.",
+        "other": "Found {count} items."
+      },
+      "moved": {
+        "one": "Moved {count} item to {folder}.",
+        "other": "Moved {count} items to {folder}."
+      },
+      "recycled": {
+        "one": "Moved {count} item to the Recycle Bin.",
+        "other": "Moved {count} items to the Recycle Bin."
+      },
+      "renamed": "Renamed to {name}.",
+      "revealed": "Showing {name}."
+    },
+    "input": {
+      "clicked": "Clicked.",
+      "pressed": "Pressed {keys}.",
+      "typed": "Typed it."
+    },
+    "router": {
+      "ran": "Ran {name}."
+    },
+    "screen": {
+      "read": "Read {name}."
+    },
+    "shell": {
+      "done": "Done.",
+      "failed": "The command failed (exit code {code}).",
+      "timedOut": "The command took too long, so I stopped it."
+    },
+    "system": {
+      "battery": "The battery is at {percent}%.",
+      "brightness": "Brightness {percent}%.",
+      "charging": "The battery is at {percent}% and charging.",
+      "noBattery": "This PC has no battery.",
+      "focusOn": "Do not disturb is on.",
+      "focusOff": "Do not disturb is off."
+    },
+    "uia": {
+      "customDrawn": "This app draws its own controls, so I can only see it as a picture.",
+      "found": {
+        "one": "Found {count} control.",
+        "other": "Found {count} controls."
+      },
+      "pressed": "Pressed {name}.",
+      "selected": "Selected {name}.",
+      "tree": {
+        "one": "{count} control.",
+        "other": "{count} controls."
+      },
+      "typed": "Filled in {name}.",
+      "on": "{name} is on.",
+      "off": "{name} is off.",
+      "expanded": "Opened.",
+      "collapsed": "Closed."
+    },
+    "windows": {
+      "moved": "Moved to monitor {number}.",
+      "snapped": "Snapped."
+    },
+    "context": {
+      "noSelection": "Nothing is selected."
+    },
+    "nothingToUndo": "There’s nothing to undo."
   },
   "error": {
     "notFound": "I couldn’t find {what}.",
     "unsupported": "That isn’t supported on this PC.",
     "accessDenied": "Windows didn’t allow that.",
+    "elevated": "{name} is running as administrator, so Windows won’t let KIVO control it. KIVO never makes itself administrator.",
+    "appHung": "The app didn’t respond.",
     "failed": "Something went wrong doing that.",
     "missing": {
       "app": "I didn’t get which app.",
@@ -161,7 +321,69 @@
       "timeout": "{message} Try again."
     },
     "cantUndo": "That can’t be undone.",
-    "stillOpen": "{name} is still open. It may be asking you to save something."
+    "stillOpen": "{name} is still open. It may be asking you to save something.",
+    "missingArg": "I didn’t get the {name}.",
+    "what": {
+      "window": "that window"
+    },
+    "browser": {
+      "noExtension": "KIVO’s browser extension isn’t connected. Install it from Settings → Integrations to read and act on pages.",
+      "noTab": "There’s no open tab.",
+      "notInFront": "A browser isn’t the window in front.",
+      "siteBlocked": "KIVO isn’t allowed on {site}.",
+      "noElement": "I couldn’t find that on the page.",
+      "notAWebPage": "That tab isn’t a web page.",
+      "tooLarge": "The page sent too much at once.",
+      "managedFailed": "KIVO’s browser couldn’t do that."
+    },
+    "clipboard": {
+      "readOff": "Reading the clipboard is turned off.",
+      "writeOff": "Writing to the clipboard is turned off."
+    },
+    "files": {
+      "binary": "That isn’t a text file.",
+      "exists": "{name} already exists.",
+      "network": "KIVO only works with files on this PC, not network or device paths.",
+      "relative": "I need the full path of the file.",
+      "traversal": "That path steps outside its folder, so I won’t use it.",
+      "stream": "That path isn’t a plain file name.",
+      "badName": "A new name can’t contain slashes or colons.",
+      "outside": "That’s outside the folders KIVO may use.",
+      "private": "That folder is private, so KIVO won’t touch it."
+    },
+    "input": {
+      "moved": "The window moved or changed, so I didn’t click.",
+      "notInFront": "That window isn’t in front anymore, so I stopped.",
+      "outside": "That point is outside the window."
+    },
+    "router": {
+      "noCli": "{name} has no commands KIVO knows.",
+      "noVerb": "{name} has no “{verb}” command KIVO knows.",
+      "noWay": "I couldn’t find a way to do that with “{target}”.",
+      "notOpen": "{name} isn’t open.",
+      "uriRefused": "KIVO only opens links for apps it knows."
+    },
+    "screen": {
+      "noOcr": "Text recognition isn’t available: add a language with OCR in Windows Settings → Language.",
+      "visionOff": "Sending screenshots to an AI is off. KIVO can still read the screen locally."
+    },
+    "uia": {
+      "noEvent": "Nothing happened in time.",
+      "password": "That’s a password field. KIVO never types into those.",
+      "unsupportedAction": "That control can’t do that."
+    },
+    "windows": {
+      "noMonitor": {
+        "one": "There’s no monitor {number} (there is {count}).",
+        "other": "There’s no monitor {number} (there are {count})."
+      }
+    },
+    "system": {
+      "noBrightness": "This screen’s brightness can’t be changed from Windows."
+    },
+    "shell": {
+      "readOnly": "Only read-only commands are allowed. Change this in Permissions → Capabilities → Shell."
+    }
   },
   "policy": {
     "stopped": "Stopped. KIVO won’t continue this request.",
@@ -188,7 +410,9 @@
       "mcp": "Requested by a connected tool"
     },
     "privacyLocal": "Your privacy setting keeps this on your PC.",
-    "privacyCloudOff": "Cloud AI is off, so this stays on your PC."
+    "privacyCloudOff": "Cloud AI is off, so this stays on your PC.",
+    "planTitle": "Plan:\n{steps}",
+    "privateData": "Strict Private keeps personal data on this PC, so KIVO won’t send it."
   },
   "turn": {
     "notUnderstood": "I can’t do that yet.",
@@ -207,7 +431,8 @@
     "notBusy": "KIVO isn’t busy ({state})",
     "bypassNeedsStep": "Bypass permissions needs its confirmation step, which isn’t available yet",
     "permissionGone": "That permission is already gone.",
-    "unknownModel": "KIVO doesn’t know a model called {id}"
+    "unknownModel": "KIVO doesn’t know a model called {id}",
+    "undoRequest": "undo that"
   },
   "activity": {
     "notKept": "(not kept)",
@@ -268,7 +493,10 @@
     "notOwner": "I didn't recognize your voice, so I can't approve this by voice. Tap Approve on the card.",
     "explain": "{action}. {why} Say allow, deny, or wait.",
     "editLater": "I can't change the request by voice yet. Say allow, deny, or wait.",
-    "sayAgain": "Sorry, say allow, deny, or wait."
+    "sayAgain": "Sorry, say allow, deny, or wait.",
+    "noHello": "Windows Hello isn’t set up on this PC, so please click Allow.",
+    "helloPrompt": "KIVO wants to: {action}",
+    "helloFailed": "Windows Hello didn’t confirm it, so KIVO won’t do it."
   },
   "voice": {
     "removeActive": "KIVO listens with this model and no other can take over. Download another one first, or confirm removing it.",
@@ -326,6 +554,31 @@
     "agentWhy": "{name} asked for permission to do this.",
     "agentNotFound": "{name} isn’t installed on this PC.",
     "agentSignIn": "{name} needs you to sign in first. Open the Brains page to sign in.",
-    "sensitive": "because it contains sensitive data"
+    "sensitive": "because it contains sensitive data",
+    "sentScreenshot": "Sent a screenshot of {source} to {brain}.",
+    "toolNotOffered": "That tool isn’t available for this request."
+  },
+  "source": {
+    "browserTabs": "the browser’s tabs",
+    "clipboard": "the clipboard",
+    "commandOutput": "command output",
+    "fileNames": "file names",
+    "page": "a web page",
+    "screenRegion": "part of the screen",
+    "window": "a window"
+  },
+  "shell": {
+    "risk": {
+      "readOnly": "It only reads.",
+      "writes": "It can change files or settings.",
+      "subexpression": "It runs other commands inside it.",
+      "network": "It uses the network.",
+      "deletes": "It deletes something.",
+      "deletesMany": "It deletes files, possibly many.",
+      "system": "It changes the system (registry, services, disks or users).",
+      "encoded": "It hides what it runs (encoded).",
+      "elevationOrRemoteCode": "It runs downloaded code or asks for administrator rights.",
+      "unreadable": "KIVO can’t read what it does."
+    }
   }
 }

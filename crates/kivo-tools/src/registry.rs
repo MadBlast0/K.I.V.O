@@ -9,7 +9,7 @@
 
 use kivo_core::capability::CapabilitySettings;
 use kivo_core::text;
-use kivo_core::tool::{Provenance, ToolCall, ToolError, ToolErrorCode, ToolResult, ToolSpec};
+use kivo_core::tool::{Provenance, Risk, ToolCall, ToolError, ToolErrorCode, ToolResult, ToolSpec};
 use kivo_security::Permit;
 use serde_json::Value;
 use std::sync::Arc;
@@ -17,17 +17,66 @@ use std::time::{Duration, Instant};
 use tokio_util::sync::CancellationToken;
 
 /// What a tool produced: data for the brain and Activity, and a short sentence to say.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Output {
     pub data: Value,
     /// Spoken and shown in the Island ("Opening Chrome.").
     pub say: String,
+    /// Where the data came from when it is someone else's content (a page, a window, the
+    /// clipboard, a file, command output): it is `Untrusted` and taints the turn (SECURITY §4).
+    pub source: Option<String>,
+    /// A PNG for a vision brain (`screen.look`); held in memory, never saved.
+    pub image: Option<Vec<u8>>,
+}
+
+impl Output {
+    pub fn new(say: impl Into<String>, data: Value) -> Self {
+        Self {
+            data,
+            say: say.into(),
+            source: None,
+            image: None,
+        }
+    }
+
+    /// Marks the data as untrusted content from `source`.
+    #[must_use]
+    pub fn untrusted(mut self, source: impl Into<String>) -> Self {
+        self.source = Some(source.into());
+        self
+    }
 }
 
 /// A tool implementation. `run` is blocking; the executor runs it off the async threads.
 pub trait Tool: Send + Sync {
     fn spec(&self) -> &ToolSpec;
     fn run(&self, args: &Value) -> Result<Output, ToolError>;
+    /// `run` for tools that can stop midway (a command, a long search): `cancel` fires on the
+    /// turn's cancellation, the emergency stop and the timeout.
+    fn run_cancellable(
+        &self,
+        args: &Value,
+        _cancel: &CancellationToken,
+    ) -> Result<Output, ToolError> {
+        self.run(args)
+    }
+    /// The risk of this particular call (SECURITY §3): arguments can raise it (a protected
+    /// folder, a destructive command) or, for input, a direct user request can lower it. The
+    /// permission engine decides on this, never on the tool's own say-so at run time.
+    fn assess(&self, _args: &Value, _initiator: kivo_core::tool::Initiator) -> Risk {
+        self.spec().risk
+    }
+    /// A hard limit this call runs into (SECURITY §1.1, e.g. typing into a password field),
+    /// checked before the permission engine so no one is ever asked to approve it; `run` checks
+    /// again. Read-only lookups only.
+    fn hard_limit(&self, _args: &Value) -> Result<(), ToolError> {
+        Ok(())
+    }
+    /// What this call acts on (the app behind a window or element, a folder, a destination),
+    /// for the hard limits and the confirmation card.
+    fn targets(&self, _args: &Value) -> Vec<kivo_core::tool::Target> {
+        Vec::new()
+    }
     /// Takes back what `run` did, from the data it returned (UX §8.1). Only tools declared
     /// `Reversibility::Undoable` have one.
     fn undo(&self, _data: &Value) -> Result<Output, ToolError> {
@@ -94,7 +143,15 @@ pub async fn execute(
     cancel: &CancellationToken,
 ) -> (ToolResult, Option<Output>) {
     let args = call.args.clone();
-    run_permitted(tool, call, permit, cancel, move |t| t.run(&args)).await
+    // The tool's own token: cancelled with the turn, and on timeout, so a blocking tool that
+    // watches it (a command) stops instead of running on unseen.
+    let own = cancel.child_token();
+    let stop = own.clone();
+    let _guard = own.clone().drop_guard();
+    run_permitted(tool, call, permit, cancel, move |t| {
+        t.run_cancellable(&args, &stop)
+    })
+    .await
 }
 
 /// Undoes an earlier run of `tool` from the data it returned. The undo is a call of its own
@@ -119,10 +176,15 @@ async fn run_permitted(
     let started = Instant::now();
     let finish = |status: Result<Value, ToolError>, output: Option<Output>| {
         let duration_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+        let provenance = if output.as_ref().is_some_and(|o| o.source.is_some()) {
+            Provenance::Untrusted
+        } else {
+            Provenance::System
+        };
         (
             ToolResult {
                 status,
-                provenance: Provenance::System,
+                provenance,
                 duration_ms,
             },
             output,
@@ -185,10 +247,7 @@ mod tests {
         }
         fn run(&self, _args: &Value) -> Result<Output, ToolError> {
             std::thread::sleep(self.delay);
-            Ok(Output {
-                data: json!({"ok": true}),
-                say: "Done.".into(),
-            })
+            Ok(Output::new("Done.", json!({"ok": true})))
         }
     }
 
@@ -224,6 +283,7 @@ mod tests {
     fn permit(tool: &Arc<dyn Tool>, call: &ToolCall) -> Permit {
         let caps = CapabilitySettings::default();
         let limits = HardLimits::default();
+        let tools = kivo_core::config::Tools::default();
         let cx = Context {
             mode: PermissionMode::Auto,
             session: SessionKind::Owner,
@@ -231,6 +291,9 @@ mod tests {
             capabilities: &caps,
             limits: &limits,
             grants: &[],
+            tools: &tools,
+            privacy: kivo_core::config::PrivacyMode::Cloud,
+            assessed: None,
         };
         match authorize(tool.spec(), call, &cx) {
             Decision::Allow(p) => p,

@@ -1,0 +1,32 @@
+# Visual Studio Code. The `code` CLI opens folders, files and diffs.
+id = "vscode"
+name = "Visual Studio Code"
+aliases = ["VS Code", "Code"]
+prefer = ["app-cli", "uia"]
+quirks = ["Electron: UIA sees menus and editors but not every canvas element; prefer the CLI."]
+
+[match]
+exe = ["Code.exe"]
+
+[cli]
+program = "code"
+[cli.verbs.open]
+args = ["{path}"]
+risk = "low"
+description = "Open a file or folder"
+[cli.verbs.new-window]
+args = ["-n", "{path}"]
+risk = "low"
+description = "Open a folder in a new window"
+[cli.verbs.diff]
+args = ["-d", "{a}", "{b}"]
+risk = "low"
+description = "Compare two files"
+[cli.verbs.goto]
+args = ["-g", "{path}:{line}"]
+risk = "low"
+description = "Open a file at a line"
+
+[uri]
+schemes = ["vscode"]
+

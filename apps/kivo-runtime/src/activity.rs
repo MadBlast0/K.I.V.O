@@ -20,7 +20,12 @@ pub struct Recorder {
     db: Arc<Mutex<Database>>,
     /// Log transcripts and spoken replies (Privacy → conversation history).
     keep_content: bool,
+    /// This runtime session: "for this session" grants end with it (SEC-08).
+    session: Arc<str>,
 }
+
+/// 24 hours, for "Allow for 24 hours".
+const DAY_MS: i64 = 24 * 60 * 60 * 1000;
 
 fn now_ms() -> i64 {
     SystemTime::now()
@@ -34,7 +39,20 @@ fn optional(id: &str) -> Option<String> {
 
 impl Recorder {
     pub fn new(db: Arc<Mutex<Database>>, keep_content: bool) -> Self {
-        Self { db, keep_content }
+        let session: Arc<str> = uuid::Uuid::now_v7().to_string().into();
+        // Session grants from earlier runs are over.
+        if let Err(e) = db
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .drop_session_grants(&session)
+        {
+            tracing::warn!(%e, "couldn't clear old session permissions");
+        }
+        Self {
+            db,
+            keep_content,
+            session,
+        }
     }
 
     fn db(&self) -> std::sync::MutexGuard<'_, Database> {
@@ -191,36 +209,66 @@ impl Recorder {
 
     /// "Always allow this" (SEC-08).
     pub fn add_grant(&self, call: &ToolCall) {
+        self.add_grant_for(call, kivo_core::tool::GrantDuration::Always, None);
+    }
+
+    /// "Always allow" for this tool and target, for a while, optionally only for arguments
+    /// matching `pattern` (SEC-08).
+    pub fn add_grant_for(
+        &self,
+        call: &ToolCall,
+        duration: kivo_core::tool::GrantDuration,
+        pattern: Option<&str>,
+    ) {
+        use kivo_core::tool::GrantDuration;
         let scope = call.targets.iter().find_map(|t| match t {
             kivo_core::tool::Target::App { id, .. } => Some(id.clone()),
             _ => None,
         });
-        if let Err(e) = self
-            .db()
-            .add_grant(&call.tool, scope.as_deref(), now_ms(), None)
-        {
+        let now = now_ms();
+        let (expires_at, session) = match duration {
+            GrantDuration::Once => return,
+            GrantDuration::Session => (None, Some(&*self.session)),
+            GrantDuration::Day => (Some(now + DAY_MS), None),
+            GrantDuration::Always => (None, None),
+        };
+        let grant = kivo_store::records::NewGrant {
+            tool: &call.tool,
+            scope: scope.as_deref(),
+            pattern,
+            now,
+            expires_at,
+            session,
+        };
+        if let Err(e) = self.db().add_scoped_grant(&grant) {
             tracing::warn!(%e, "couldn't save the permission");
         }
     }
 
-    /// The grants in force now.
-    pub fn grants(&self) -> Vec<Grant> {
+    fn live_grants(&self) -> Vec<kivo_store::records::StoredGrant> {
         self.db()
             .grants(now_ms())
             .unwrap_or_default()
             .into_iter()
+            .filter(|g| g.session.as_deref().is_none_or(|s| s == &*self.session))
+            .collect()
+    }
+
+    /// The grants in force now.
+    pub fn grants(&self) -> Vec<Grant> {
+        self.live_grants()
+            .into_iter()
             .map(|g| Grant {
                 tool: g.tool,
                 scope: g.scope,
+                pattern: g.pattern,
             })
             .collect()
     }
 
     /// The grants as the Permissions page shows them (with their ids, so they can be revoked).
     pub fn grants_in_force(&self) -> Vec<GrantItem> {
-        self.db()
-            .grants(now_ms())
-            .unwrap_or_default()
+        self.live_grants()
             .into_iter()
             .map(|g| GrantItem {
                 id: g.id,
@@ -228,12 +276,34 @@ impl Recorder {
                 scope: g.scope,
                 created_at: g.created_at,
                 expires_at: g.expires_at,
+                pattern: g.pattern,
+                session_only: g.session.is_some(),
             })
             .collect()
     }
 
+    /// When each tool last ran: (tool, epoch ms).
+    pub fn last_tool_uses(&self) -> Vec<(String, i64)> {
+        self.db().last_tool_uses().unwrap_or_default()
+    }
+
     pub fn revoke_grant(&self, id: i64) -> bool {
         self.db().revoke_grant(id).unwrap_or(false)
+    }
+
+    /// A screenshot went to a brain (CAP-08): always kept in Activity, whatever the history
+    /// setting, since it is about the user's data leaving the device.
+    pub fn screenshot_sent(&self, turn: &str, note: &str) {
+        self.add(NewActivity {
+            ts: now_ms(),
+            turn_id: optional(turn),
+            task_id: None,
+            kind: "privacy".into(),
+            title: note.to_owned(),
+            detail: None,
+            status: "done".into(),
+            data: None,
+        });
     }
 
     /// What KIVO said.
@@ -594,8 +664,24 @@ mod tests {
             r.grants(),
             [Grant {
                 tool: "apps.launch".into(),
-                scope: Some("chrome".into())
+                scope: Some("chrome".into()),
+                pattern: None,
             }]
+        );
+        // Durations: once stores nothing; a day expires; a session grant is this run's only.
+        use kivo_core::tool::GrantDuration;
+        r.add_grant_for(&call(), GrantDuration::Once, None);
+        r.add_grant_for(&call(), GrantDuration::Day, Some("x*"));
+        r.add_grant_for(&call(), GrantDuration::Session, None);
+        let items = r.grants_in_force();
+        assert_eq!(items.len(), 3);
+        assert!(items[1].expires_at.is_some() && items[1].pattern.as_deref() == Some("x*"));
+        assert!(items[2].session_only);
+        let next_run = Recorder::new(Arc::clone(&r.db), true);
+        assert_eq!(
+            next_run.grants_in_force().len(),
+            2,
+            "session grants end with the session"
         );
         assert_eq!(
             summarize(&json!({"app": {"id": "c", "name": "Chrome"}})),

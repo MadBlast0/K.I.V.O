@@ -279,6 +279,10 @@ impl Apps for WindowsApps {
         enumerate_apps()
     }
 
+    fn icon(&self, id: &str, size: u32) -> Option<kivo_platform::Image> {
+        crate::icons::app_icon(id, size)
+    }
+
     fn launch(&self, app: &AppEntry, args: &[String]) -> PlatformResult<()> {
         let _com = Com::init()?;
         // With arguments, a desktop app is started directly; otherwise through the shell, which
@@ -362,6 +366,55 @@ fn check(id: WindowId) -> PlatformResult<HWND> {
 impl Windows for WindowsWindows {
     fn list(&self) -> PlatformResult<Vec<WindowInfo>> {
         Ok(list_windows())
+    }
+
+    fn title_bar(&self, id: WindowId) -> PlatformResult<Option<kivo_platform::Rect>> {
+        let h = check(id)?;
+        let mut frame = windows::Win32::Foundation::RECT::default();
+        let mut buttons = windows::Win32::Foundation::RECT::default();
+        // SAFETY: plain queries into RECTs owned here.
+        unsafe {
+            use windows::Win32::Graphics::Dwm::{
+                DWMWA_CAPTION_BUTTON_BOUNDS, DWMWA_EXTENDED_FRAME_BOUNDS,
+            };
+            let size = u32::try_from(size_of::<windows::Win32::Foundation::RECT>()).unwrap_or(0);
+            if DwmGetWindowAttribute(
+                h,
+                DWMWA_EXTENDED_FRAME_BOUNDS,
+                (&raw mut frame).cast(),
+                size,
+            )
+            .is_err()
+            {
+                return Ok(None);
+            }
+            // The caption buttons' height is the title bar's (or a browser's tab strip's).
+            let height = if DwmGetWindowAttribute(
+                h,
+                DWMWA_CAPTION_BUTTON_BOUNDS,
+                (&raw mut buttons).cast(),
+                size,
+            )
+            .is_ok()
+                && buttons.bottom > buttons.top
+            {
+                buttons.bottom
+            } else {
+                use windows::Win32::UI::HiDpi::GetDpiForWindow;
+                use windows::Win32::UI::WindowsAndMessaging::{
+                    SM_CXPADDEDBORDER, SM_CYCAPTION, SM_CYFRAME,
+                };
+                let dpi = GetDpiForWindow(h);
+                let m = |i| windows::Win32::UI::HiDpi::GetSystemMetricsForDpi(i, dpi);
+                m(SM_CYCAPTION) + m(SM_CYFRAME) + m(SM_CXPADDEDBORDER)
+            };
+            Ok(Some(kivo_platform::Rect {
+                x: frame.left,
+                y: frame.top,
+                width: u32::try_from(frame.right - frame.left).unwrap_or(0),
+                height: u32::try_from(height.max(0)).unwrap_or(0),
+            }))
+        }
     }
 
     fn foreground(&self) -> PlatformResult<Option<WindowInfo>> {

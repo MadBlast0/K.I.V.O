@@ -228,6 +228,8 @@ fn pixels_for(state: TrayIcon) -> PlatformResult<(Vec<u8>, u32, u32)> {
         }
         TrayIcon::Error => dot(&mut rgba, w, h, [0xFF, 0x51, 0x47]),
         TrayIcon::Updating => dot(&mut rgba, w, h, [0xF5, 0xA5, 0x24]),
+        // The screen, input or shell in use: a violet badge on the other corner.
+        TrayIcon::InUse => dot_left(&mut rgba, w, h, [0x8E, 0x5C, 0xFF]),
     }
     Ok((rgba, w, h))
 }
@@ -299,6 +301,20 @@ fn dot(rgba: &mut [u8], w: u32, h: u32, color: [u8; 3]) {
     }
 }
 
+/// The badge on the bottom-left corner.
+fn dot_left(rgba: &mut [u8], w: u32, h: u32, color: [u8; 3]) {
+    let r = f64::from(w.min(h)) * 0.2;
+    let (cx, cy) = (r + 1.0, f64::from(h) - r - 1.0);
+    for y in 0..h {
+        for x in 0..w {
+            let (dx, dy) = (f64::from(x) + 0.5 - cx, f64::from(y) + 0.5 - cy);
+            if dx * dx + dy * dy <= r * r {
+                set(rgba, w, x, y, color);
+            }
+        }
+    }
+}
+
 fn os_error(e: &dyn std::fmt::Display) -> PlatformError {
     PlatformError::Os {
         code: 0,
@@ -327,6 +343,7 @@ mod tests {
             TrayIcon::Paused,
             TrayIcon::Error,
             TrayIcon::Updating,
+            TrayIcon::InUse,
         ];
         let images: Vec<Vec<u8>> = states.iter().map(|&s| pixels_for(s).unwrap().0).collect();
         for i in 0..images.len() {

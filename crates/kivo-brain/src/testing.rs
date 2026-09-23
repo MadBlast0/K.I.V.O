@@ -214,6 +214,25 @@ impl Script {
         }
     }
 
+    /// Several tool calls in one round (the brain asks for them together).
+    pub fn parallel(calls: Vec<(&str, Value)>) -> Self {
+        let mut events: Vec<BrainEvent> = calls
+            .into_iter()
+            .enumerate()
+            .map(|(i, (name, args))| BrainEvent::ToolCall {
+                id: format!("call_{i}_{name}"),
+                name: name.to_owned(),
+                args,
+            })
+            .collect();
+        events.push(BrainEvent::Done(StopReason::ToolUse));
+        Self {
+            events,
+            pause: Duration::ZERO,
+            hang: false,
+        }
+    }
+
     pub fn error(error: NormalizedError) -> Self {
         Self {
             events: vec![BrainEvent::Error(error)],
@@ -228,6 +247,8 @@ pub struct ScriptedBrain {
     pub info: ProviderInfo,
     script: Mutex<VecDeque<Script>>,
     pub requests: Mutex<Vec<ChatRequest>>,
+    /// Its model takes images (for the screenshot journeys).
+    pub vision: std::sync::atomic::AtomicBool,
 }
 
 impl ScriptedBrain {
@@ -246,11 +267,16 @@ impl ScriptedBrain {
             },
             script: Mutex::new(script.into()),
             requests: Mutex::default(),
+            vision: std::sync::atomic::AtomicBool::new(false),
         }
     }
 
     pub fn push(&self, script: Script) {
         self.script.lock().expect("script").push_back(script);
+    }
+
+    pub fn push_all(&self, scripts: Vec<Script>) {
+        self.script.lock().expect("script").extend(scripts);
     }
 }
 
@@ -261,7 +287,9 @@ impl BrainProvider for ScriptedBrain {
     }
 
     async fn models(&self) -> Result<Vec<ModelInfo>, NormalizedError> {
-        Ok(vec![ModelInfo::named("scripted")])
+        let mut model = ModelInfo::named("scripted");
+        model.vision = self.vision.load(std::sync::atomic::Ordering::SeqCst);
+        Ok(vec![model])
     }
 
     fn chat(&self, request: ChatRequest, cancel: CancellationToken) -> BrainStream {

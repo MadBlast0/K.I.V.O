@@ -445,3 +445,52 @@ async fn tool_results_go_back_in_each_providers_shape() {
         "apps_launch"
     );
 }
+
+#[test]
+fn screenshots_reach_vision_models_in_each_providers_shape() {
+    use crate::types::{Part, Role};
+    let mut r = request();
+    r.messages.push(crate::types::Message {
+        role: Role::Assistant,
+        parts: vec![Part::ToolCall {
+            id: "call_1".into(),
+            name: "screen_look".into(),
+            args: json!({}),
+        }],
+    });
+    r.messages.push(crate::types::Message {
+        role: Role::Tool,
+        parts: vec![
+            Part::ToolResult {
+                id: "call_1".into(),
+                name: "screen_look".into(),
+                content: "{}".into(),
+                is_error: false,
+            },
+            Part::Image {
+                media_type: "image/png".into(),
+                data: "iVBORw0KGgo=".into(),
+            },
+        ],
+    });
+    let a = crate::anthropic::body(&r);
+    let content = &a["messages"][2]["content"];
+    assert_eq!(content[0]["type"], "tool_result");
+    assert_eq!(content[1]["type"], "image");
+    assert_eq!(content[1]["source"]["media_type"], "image/png");
+    let o = crate::openai::body(&OpenAiConfig::openai(), &r);
+    assert_eq!(o["messages"][3]["role"], "tool");
+    assert_eq!(
+        o["messages"][4]["role"], "user",
+        "images follow the tool message"
+    );
+    assert_eq!(
+        o["messages"][4]["content"][1]["image_url"]["url"],
+        "data:image/png;base64,iVBORw0KGgo="
+    );
+    let g = crate::gemini::body(&r);
+    assert_eq!(
+        g["contents"][2]["parts"][1]["inlineData"]["mimeType"],
+        "image/png"
+    );
+}

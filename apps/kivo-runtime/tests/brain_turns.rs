@@ -280,7 +280,7 @@ async fn declining_the_brains_action_ends_the_turn() {
     r.rig.brains.insert(b.clone());
     r.rig
         .engine
-        .say("I'm done for the day, wrap up the PC")
+        .say("I'm done for the day, shut down the PC")
         .await
         .unwrap();
     until("the question", Duration::from_secs(10), || {

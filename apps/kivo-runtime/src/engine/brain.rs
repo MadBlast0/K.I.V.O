@@ -23,7 +23,7 @@ use kivo_core::text;
 use kivo_core::tool::{ConfirmSpec, ConfirmedBy, Initiator, Risk, Strength, ToolCall};
 use kivo_core::{Event, SessionInput, SessionState};
 use kivo_ipc::protocol::BrainChip;
-use kivo_security::{Answer, Context as SecurityContext, Decision, HardLimits, SessionKind, Taint};
+use kivo_security::{Answer, Decision, Taint};
 use kivo_store::brains::now_ms;
 use serde_json::json;
 use std::sync::Arc;
@@ -471,6 +471,7 @@ impl Engine {
             strength: Strength::Normal,
             allow_always: false,
             plan: false,
+            hello: false,
         };
         matches!(self.decide(spec, call).await, Some((true, _, _)))
     }
@@ -482,6 +483,7 @@ impl Engine {
         spec: ConfirmSpec,
         call: ToolCall,
     ) -> Option<(bool, bool, ConfirmedBy)> {
+        let spec = self.with_hello(spec);
         let (tx, rx) = tokio::sync::oneshot::channel();
         let cancel = {
             let mut turn = lock(&self.turn);
@@ -565,6 +567,17 @@ impl Engine {
                     .map(|m| m.id)
                     .unwrap_or_default();
             }
+            // May this brain be shown a screenshot (CAP-08)? A model that sees, and a local
+            // brain or cloud vision allowed by the settings and the privacy mode.
+            let sees = self.brains.sees(&attempt.provider, &attempt.model)
+                && (info.privacy == PrivacyClass::Local
+                    || (config.tools.cloud_vision
+                        && matches!(
+                            config.privacy.mode,
+                            kivo_core::config::PrivacyMode::Cloud
+                                | kivo_core::config::PrivacyMode::Custom
+                        )));
+            self.vision.store(sees, std::sync::atomic::Ordering::SeqCst);
             let request = self.brain_request(
                 &config,
                 &route,
@@ -705,6 +718,7 @@ impl Engine {
                 role: Role::Tool,
                 parts: Vec::new(),
             };
+            let mut prepared = Vec::new();
             for (id, name, args) in round.calls {
                 calls_made += 1;
                 asked.parts.push(Part::ToolCall {
@@ -712,11 +726,58 @@ impl Engine {
                     name: name.clone(),
                     args: args.clone(),
                 });
-                let Some(result) = self.brain_tool(&id, &name, args, calls_made).await else {
+                prepared.push(self.prepare_brain_tool(&id, &name, args, calls_made));
+            }
+            // Plan first: the round's changes are shown as one plan and approved together
+            // (SECURITY §1.1); reads run as they come.
+            let plan_mode =
+                self.core.state().borrow().mode == kivo_core::config::PermissionMode::Plan;
+            let mut approved: std::collections::HashMap<String, kivo_security::Permit> =
+                std::collections::HashMap::new();
+            if plan_mode {
+                let steps: Vec<(ConfirmSpec, ToolCall)> = prepared
+                    .iter()
+                    .filter_map(|p| match p {
+                        Prepared::Ask { confirm, call, .. } if confirm.plan => {
+                            Some((confirm.clone(), call.clone()))
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                if !steps.is_empty() {
+                    let card = self.plan_card(&steps, rounds);
+                    let placeholder = ToolCall {
+                        id: card.call_id.clone(),
+                        tool: "plan".into(),
+                        args: json!({ "steps": steps.len() }),
+                        initiated_by: Initiator::Brain,
+                        targets: Vec::new(),
+                    };
+                    let Some((allow, _, by)) = self.decide(card, placeholder).await else {
+                        return;
+                    };
+                    if !allow {
+                        return;
+                    }
+                    match kivo_security::approve_plan(&steps, Answer::Allow { by }) {
+                        Ok(permits) => {
+                            for permit in permits {
+                                approved.insert(permit.call_id().to_owned(), permit);
+                            }
+                        }
+                        Err(denial) => {
+                            self.say_phrase(denial.message).await;
+                            return;
+                        }
+                    }
+                }
+            }
+            for p in prepared {
+                let Some(parts) = self.finish_brain_tool(p, &mut approved).await else {
                     // Declined or cancelled: the turn has ended.
                     return;
                 };
-                results.parts.push(result);
+                results.parts.extend(parts);
             }
             extra.push(asked);
             extra.push(results);
@@ -1026,9 +1087,13 @@ impl Engine {
         layers.turns.extend(extra.iter().cloned());
         // Tools, by task class and relevance, at most 20 (BRAIN-27).
         let capabilities = config.capabilities.clone();
+        // A tainted turn gets only what the task needs, and nothing that sends, deletes or runs
+        // commands (SEC-15).
+        let tainted = matches!(self.taint(), Taint::Tainted(_));
         let candidates: Vec<ToolCandidate> = self
             .registry
             .available(&capabilities)
+            .filter(|spec| !tainted || !risky_after_taint(spec))
             .map(|spec| ToolCandidate {
                 id: spec.id.clone(),
                 description: spec.description.clone(),
@@ -1041,7 +1106,16 @@ impl Engine {
                 p.allowed_tools.clone()
             });
         let task = classify_task(text);
-        layers.tools = context::select_tools(&candidates, text, task, &scope, 20);
+        let limit = if tainted { 8 } else { 20 };
+        layers.tools = context::select_tools(&candidates, text, task, &scope, limit);
+        // Only what was offered can be called (SEC-15): a brain naming another tool is refused.
+        if let Some(t) = lock(&self.turn).as_mut() {
+            t.offered = layers
+                .tools
+                .iter()
+                .map(|d| context::tool_id(&d.name))
+                .collect();
+        }
         let window = self.brains.window(&attempt.provider, &attempt.model);
         let class = model_class(kind, window);
         let budget_tokens = budget(
@@ -1067,29 +1141,32 @@ impl Engine {
         (request, used, budget_tokens, assembled.to_compact)
     }
 
-    /// One tool call from a brain, through the permission engine (invariant 4). Returns what to
-    /// tell the brain, or `None` when the turn ended (declined or cancelled).
-    async fn brain_tool(
-        self: &Arc<Self>,
+    /// One tool call from a brain, through the permission engine (invariant 4): decided now,
+    /// run later by `finish_brain_tool`.
+    fn prepare_brain_tool(
+        &self,
         wire_id: &str,
         name: &str,
         args: serde_json::Value,
         n: usize,
-    ) -> Option<Part> {
+    ) -> Prepared {
         let tool_id = context::tool_id(name);
-        let call = ToolCall {
+        let mut call = ToolCall {
             id: format!("{}-b{n}", self.turn_key()),
-            tool: tool_id.clone(),
-            targets: kivo_tools::targets(&tool_id, &args),
+            tool: tool_id,
+            targets: Vec::new(),
             args,
             initiated_by: Initiator::Brain,
         };
-        let result = |content: String, is_error: bool| Part::ToolResult {
-            id: wire_id.to_owned(),
-            name: name.to_owned(),
-            content,
-            is_error,
-        };
+        let wire = (wire_id.to_owned(), name.to_owned());
+        let offered = lock(&self.turn)
+            .as_ref()
+            .is_none_or(|t| t.offered.contains(&call.tool));
+        if !offered {
+            let reason = text::t("brain.toolNotOffered");
+            self.recorder.tool_denied(&self.turn_key(), &call, &reason);
+            return Prepared::Done(wire, reason);
+        }
         let capabilities = self.core.config().capabilities;
         let Some(tool) = self.registry.get(&call.tool, &capabilities) else {
             let reason = self.registry.known(&call.tool).map_or_else(
@@ -1102,50 +1179,68 @@ impl Engine {
                 },
             );
             self.recorder.tool_denied(&self.turn_key(), &call, &reason);
-            return Some(result(
-                text::tf("brain.toolMissing", &[("reason", &reason)]),
-                true,
-            ));
+            return Prepared::Done(wire, text::tf("brain.toolMissing", &[("reason", &reason)]));
         };
-        let spec = tool.spec().clone();
-        let (stopped, guest) = lock(&self.turn)
-            .as_ref()
-            .map_or((true, false), |t| (t.cancel.is_cancelled(), t.guest));
-        let limits = HardLimits {
-            stopped,
-            blocked_apps: self.core.config().permissions.blocked_apps,
-        };
-        let grants = self.recorder.grants();
-        let decision = kivo_security::authorize(
-            &spec,
-            &call,
-            &SecurityContext {
-                mode: self.core.state().borrow().mode,
-                session: if guest {
-                    SessionKind::Guest
-                } else {
-                    SessionKind::Owner
-                },
-                taint: Taint::Clean,
-                capabilities: &capabilities,
-                limits: &limits,
-                grants: &grants,
-            },
-        );
+        let decision = self.authorize_call(tool.as_ref(), &mut call);
         self.mark("t7Permission");
         self.recorder
-            .tool_decision(&self.turn_key(), &call, &spec, &decision);
-        let permit = match decision {
-            Decision::Allow(permit) => permit,
-            Decision::Deny(denial) => return Some(result(denial.message, true)),
-            Decision::Confirm(confirm) => {
-                let (allow, _, by) = self.decide(confirm.clone(), call.clone()).await?;
-                if !allow {
-                    return None;
-                }
-                match kivo_security::confirmed(&confirm, &call, Answer::Allow { by }) {
-                    Ok(permit) => permit,
-                    Err(denial) => return Some(result(denial.message, true)),
+            .tool_decision(&self.turn_key(), &call, tool.spec(), &decision);
+        match decision {
+            Decision::Allow(permit) => Prepared::Run {
+                wire,
+                tool,
+                call,
+                permit,
+            },
+            Decision::Deny(denial) => Prepared::Done(wire, denial.message),
+            Decision::Confirm(confirm) => Prepared::Ask {
+                wire,
+                tool,
+                call,
+                confirm,
+            },
+        }
+    }
+
+    /// Runs a prepared call (asking first if it must) and returns what to tell the brain, or
+    /// `None` when the turn ended (declined or cancelled).
+    async fn finish_brain_tool(
+        self: &Arc<Self>,
+        prepared: Prepared,
+        approved: &mut std::collections::HashMap<String, kivo_security::Permit>,
+    ) -> Option<Vec<Part>> {
+        let result = |wire: &(String, String), content: String, is_error: bool| Part::ToolResult {
+            id: wire.0.clone(),
+            name: wire.1.clone(),
+            content,
+            is_error,
+        };
+        let (wire, tool, call, permit) = match prepared {
+            Prepared::Done(wire, message) => return Some(vec![result(&wire, message, true)]),
+            Prepared::Run {
+                wire,
+                tool,
+                call,
+                permit,
+            } => (wire, tool, call, permit),
+            Prepared::Ask {
+                wire,
+                tool,
+                call,
+                confirm,
+            } => {
+                // Approved with the plan: exactly this step.
+                if let Some(permit) = approved.remove(&call.id) {
+                    (wire, tool, call, permit)
+                } else {
+                    let (allow, _, by) = self.decide(confirm.clone(), call.clone()).await?;
+                    if !allow {
+                        return None;
+                    }
+                    match kivo_security::confirmed(&confirm, &call, Answer::Allow { by }) {
+                        Ok(permit) => (wire, tool, call, permit),
+                        Err(denial) => return Some(vec![result(&wire, denial.message, true)]),
+                    }
                 }
             }
         };
@@ -1153,15 +1248,45 @@ impl Engine {
         if matches!(state, SessionState::Thinking | SessionState::Speaking) {
             self.core.advance(SessionInput::StartActing);
         }
-        let title = spec.title.clone();
+        let title = tool.spec().title.clone();
         let (outcome, output) = self.run_step(tool, &call, permit, &title).await;
         Some(match (outcome.status, output) {
-            (Ok(_), Some(output)) => result(
-                json!({ "ok": true, "said": output.say, "data": output.data }).to_string(),
-                false,
-            ),
-            (Ok(_), None) => result(json!({ "ok": true }).to_string(), false),
-            (Err(error), _) => result(error.message, true),
+            (Ok(_), Some(output)) => {
+                let body =
+                    json!({ "ok": true, "said": output.say, "data": output.data }).to_string();
+                // Someone else's content goes to the brain fenced and labelled (SEC-15).
+                let content = match &output.source {
+                    Some(source) => {
+                        ContextItem::new(body, source.clone(), Trust::Untrusted).render()
+                    }
+                    None => body,
+                };
+                let mut parts = vec![result(&wire, content, false)];
+                if let Some(png) = output.image
+                    && self.vision.load(std::sync::atomic::Ordering::SeqCst)
+                {
+                    use base64::Engine as _;
+                    let source = output.source.clone().unwrap_or_default();
+                    let brain = lock(&self.turn)
+                        .as_ref()
+                        .and_then(|_| self.core.state().borrow().turn.clone())
+                        .and_then(|t| t.brain.map(|b| b.name))
+                        .unwrap_or_default();
+                    let note = text::tf(
+                        "brain.sentScreenshot",
+                        &[("source", &source), ("brain", &brain)],
+                    );
+                    self.recorder.screenshot_sent(&self.turn_key(), &note);
+                    self.core.update_turn(|view| view.note = Some(note.clone()));
+                    parts.push(Part::Image {
+                        media_type: "image/png".into(),
+                        data: base64::engine::general_purpose::STANDARD.encode(png),
+                    });
+                }
+                parts
+            }
+            (Ok(_), None) => vec![result(&wire, json!({ "ok": true }).to_string(), false)],
+            (Err(error), _) => vec![result(&wire, error.message, true)],
         })
     }
 
@@ -1493,6 +1618,44 @@ impl Engine {
     pub fn stop_brain(&self) {
         self.cancel(CancelReason::UserButton);
     }
+}
+
+/// A brain's tool call after the permission engine decided: `(wire id, wire name)` travels
+/// with it so the result goes back under the brain's own names.
+pub(super) enum Prepared {
+    Done((String, String), String),
+    Run {
+        wire: (String, String),
+        tool: Arc<dyn kivo_tools::Tool>,
+        call: ToolCall,
+        permit: kivo_security::Permit,
+    },
+    Ask {
+        wire: (String, String),
+        tool: Arc<dyn kivo_tools::Tool>,
+        call: ToolCall,
+        confirm: ConfirmSpec,
+    },
+}
+
+/// Tools a tainted turn doesn't get: anything that sends, deletes, spends, runs commands or
+/// turns the PC off (SEC-15).
+fn risky_after_taint(spec: &kivo_core::tool::ToolSpec) -> bool {
+    use kivo_core::tool::SideEffect;
+    spec.data_egress
+        || spec.side_effects.iter().any(|e| {
+            matches!(
+                e,
+                SideEffect::ExternalComms
+                    | SideEffect::Destructive
+                    | SideEffect::Financial
+                    | SideEffect::SecuritySensitive
+            )
+        })
+        || matches!(
+            spec.capability,
+            kivo_core::Capability::Shell | kivo_core::Capability::PowerActions
+        )
 }
 
 /// What the spending limits allow.

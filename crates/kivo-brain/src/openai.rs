@@ -140,6 +140,27 @@ impl OpenAi {
     }
 }
 
+fn image_part(part: &Part) -> Option<Value> {
+    match part {
+        Part::Image { media_type, data } => Some(json!({
+            "type": "image_url",
+            "image_url": { "url": format!("data:{media_type};base64,{data}") },
+        })),
+        _ => None,
+    }
+}
+
+/// A user message's content: plain text, or text and images.
+fn user_content(message: &crate::types::Message) -> Value {
+    let images: Vec<Value> = message.parts.iter().filter_map(image_part).collect();
+    if images.is_empty() {
+        return Value::String(message.text());
+    }
+    let mut content = vec![json!({ "type": "text", "text": message.text() })];
+    content.extend(images);
+    Value::Array(content)
+}
+
 /// The request body for `request`.
 pub fn body(config: &OpenAiConfig, request: &ChatRequest) -> Value {
     let mut messages = Vec::new();
@@ -149,7 +170,9 @@ pub fn body(config: &OpenAiConfig, request: &ChatRequest) -> Value {
     }
     for message in &request.messages {
         match message.role {
-            Role::User => messages.push(json!({ "role": "user", "content": message.text() })),
+            Role::User => {
+                messages.push(json!({ "role": "user", "content": user_content(message) }))
+            }
             Role::Assistant => {
                 let calls: Vec<Value> = message
                     .parts
@@ -176,6 +199,15 @@ pub fn body(config: &OpenAiConfig, request: &ChatRequest) -> Value {
                             json!({ "role": "tool", "tool_call_id": id, "content": content }),
                         );
                     }
+                }
+                // Tool messages carry text only: a screenshot follows as a user message.
+                let images: Vec<Value> = message.parts.iter().filter_map(image_part).collect();
+                if !images.is_empty() {
+                    let mut content = vec![
+                        json!({ "type": "text", "text": "The screenshot the tool returned:" }),
+                    ];
+                    content.extend(images);
+                    messages.push(json!({ "role": "user", "content": content }));
                 }
             }
         }

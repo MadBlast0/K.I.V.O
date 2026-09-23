@@ -8,6 +8,8 @@
 
 use crate::memory::{self, Visibility};
 use kivo_core::SessionState;
+use kivo_core::config::OverlayPosition;
+use kivo_ipc::protocol::IslandPlacement;
 use std::sync::Mutex;
 use std::time::Duration;
 use tauri::window::Color;
@@ -28,6 +30,12 @@ const TOP: f64 = 8.0;
 const HIDE_AFTER: Duration = Duration::from_millis(450);
 /// How long a mode-change notice shows (the page uses the same time).
 const NOTICE: Duration = Duration::from_millis(1600);
+/// A drag has ended when the Island hasn't moved for this long (UX-13).
+const DRAG_SETTLE: Duration = Duration::from_millis(500);
+/// Below a title bar, this much space (UX-14).
+const BELOW_TITLE: f64 = 4.0;
+/// Only a title bar this close to the monitor's top edge is under the Island.
+const TITLE_REACH: f64 = 120.0;
 
 #[derive(Default)]
 struct State {
@@ -46,6 +54,14 @@ struct State {
     hovering: bool,
     /// Where the current request began (the centre of the window in front), in physical pixels.
     anchor: Option<(i32, i32)>,
+    /// The placement setting and remembered spots (UX-13).
+    placement: IslandPlacement,
+    /// The bottom of the title bar or tabs of the window in front (UX-14).
+    title_bar_bottom: Option<i32>,
+    /// A drag is in progress: moves are reported once it settles (UX-13).
+    dragging: bool,
+    /// Bumped on every move while dragging.
+    drag_generation: u64,
 }
 
 #[derive(Default)]
@@ -70,7 +86,78 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
     window.set_ignore_cursor_events(true)?;
     window.as_ref().hide()?;
     memory::apply(&window, Visibility::Hidden, false);
+    // A drag moves the window; once it settles, the spot is remembered for that monitor.
+    let app_handle = app.clone();
+    window.on_window_event(move |event| {
+        if let tauri::WindowEvent::Moved(_) = event {
+            moved(&app_handle);
+        }
+    });
     Ok(())
+}
+
+/// The Island asks to be dragged (the user pressed on it, UX-13).
+#[tauri::command]
+pub fn overlay_drag(window: tauri::WebviewWindow) {
+    if window.label() != LABEL {
+        return;
+    }
+    {
+        let state = window.app_handle().state::<Overlay>();
+        let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        guard.dragging = true;
+    }
+    let _ = window.start_dragging();
+}
+
+fn moved(app: &AppHandle) {
+    let generation = {
+        let state = app.state::<Overlay>();
+        let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        if !guard.dragging {
+            return;
+        }
+        guard.drag_generation += 1;
+        guard.drag_generation
+    };
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(DRAG_SETTLE).await;
+        {
+            let state = app.state::<Overlay>();
+            let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
+            if guard.drag_generation != generation || !guard.dragging {
+                return;
+            }
+            guard.dragging = false;
+        }
+        let Some(window) = app.get_webview_window(LABEL) else {
+            return;
+        };
+        let (Ok(pos), Ok(size)) = (window.outer_position(), window.outer_size()) else {
+            return;
+        };
+        let centre = (
+            f64::from(pos.x) + f64::from(size.width) / 2.0,
+            f64::from(pos.y) + 20.0,
+        );
+        let Some(monitor) = app.monitor_from_point(centre.0, centre.1).ok().flatten() else {
+            return;
+        };
+        let origin = monitor.position();
+        let params = serde_json::json!({
+            "monitor": monitor.name().cloned().unwrap_or_default(),
+            "x": pos.x - origin.x,
+            "y": pos.y - origin.y,
+        });
+        let runtime = app.state::<crate::runtime::Runtime>();
+        if let Err(e) = runtime
+            .request(kivo_ipc::method::ISLAND_MOVED, params)
+            .await
+        {
+            eprintln!("kivo-app: couldn't remember the Island's place: {e}");
+        }
+    });
 }
 
 /// The session changed (`None`: not connected, or the Island is set to hide right now): show the
@@ -80,23 +167,40 @@ pub fn apply(
     session: Option<SessionState>,
     turn: bool,
     anchor: Option<(i32, i32)>,
+    placement: IslandPlacement,
+    title_bar_bottom: Option<i32>,
 ) {
     let state = app.state::<Overlay>();
     let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    let was_listening = listening(guard.session);
     guard.session = session;
     guard.turn = turn && session.is_some();
-    let moved = anchor.is_some() && anchor != guard.anchor;
+    let moved = (anchor.is_some() && anchor != guard.anchor)
+        || placement != guard.placement
+        || title_bar_bottom != guard.title_bar_bottom
+        || was_listening != listening(session);
     if anchor.is_some() {
         guard.anchor = anchor;
     }
+    guard.placement = placement;
+    guard.title_bar_bottom = title_bar_bottom;
     update(app, &mut guard);
-    // The request's window is known a moment after the Island appears: move there if needed.
+    // The request's window is known a moment after the Island appears, and the Island moves
+    // below a title bar only while listening: place it again when either changes.
     if moved
         && guard.shown
+        && !guard.dragging
         && let Some(window) = app.get_webview_window(LABEL)
     {
-        place(app, &window, guard.anchor);
+        place(app, &window, &guard);
     }
+}
+
+fn listening(session: Option<SessionState>) -> bool {
+    matches!(
+        session,
+        Some(SessionState::Listening | SessionState::FollowUp)
+    )
 }
 
 /// Ctrl+Shift+Space (UX-41): open the Island with a text field that has focus.
@@ -174,7 +278,7 @@ fn update(app: &AppHandle, state: &mut State) {
     if visible {
         if !state.shown {
             state.shown = true;
-            show(app, state.anchor);
+            show(app, state);
         }
     } else if state.shown {
         let expected = state.generation;
@@ -191,11 +295,11 @@ fn update(app: &AppHandle, state: &mut State) {
     }
 }
 
-fn show(app: &AppHandle, anchor: Option<(i32, i32)>) {
+fn show(app: &AppHandle, state: &State) {
     let Some(window) = app.get_webview_window(LABEL) else {
         return;
     };
-    place(app, &window, anchor);
+    place(app, &window, state);
     // Re-assert topmost so the Island also rises above other always-on-top windows (a video's
     // picture-in-picture, another app's floating toolbar). The window is still hidden here, and
     // setting the same value again is ignored, so it is turned off and on.
@@ -237,9 +341,12 @@ pub fn overlay_fit(window: tauri::WebviewWindow, height: f64) {
     let _ = window.set_size(PhysicalSize::new(width, height));
 }
 
-/// Top center of the monitor with the request's window (else the one under the pointer), 8 px
-/// down. The height follows the Island (`overlay_fit`).
-fn place(app: &AppHandle, window: &tauri::WebviewWindow, anchor: Option<(i32, i32)>) {
+/// On the monitor with the request's window (else the one under the pointer): top center 8 px
+/// down, bottom center, or where the user dragged it on that monitor (UX-13). While only
+/// listening, a title bar or tab strip under it pushes it just below (UX-14). The height
+/// follows the Island (`overlay_fit`).
+fn place(app: &AppHandle, window: &tauri::WebviewWindow, state: &State) {
+    let anchor = state.anchor;
     let monitor = anchor
         .and_then(|(x, y)| {
             app.monitor_from_point(f64::from(x), f64::from(y))
@@ -253,8 +360,41 @@ fn place(app: &AppHandle, window: &tauri::WebviewWindow, anchor: Option<(i32, i3
         })
         .or_else(|| app.primary_monitor().ok().flatten());
     let Some(monitor) = monitor else { return };
-    let scale = monitor.scale_factor();
-    let (area, origin) = (monitor.size(), monitor.position());
+    let screen = Screen {
+        name: monitor.name().map(String::as_str),
+        origin: (monitor.position().x, monitor.position().y),
+        size: (monitor.size().width, monitor.size().height),
+        scale: monitor.scale_factor(),
+    };
+    let height = window.outer_size().map_or(0, |s| s.height);
+    let (x, y) = position(
+        &screen,
+        &state.placement,
+        height,
+        state.title_bar_bottom,
+        listening(state.session),
+    );
+    let _ = window.set_position(PhysicalPosition::new(x, y));
+}
+
+/// A monitor as placement sees it, in physical pixels.
+struct Screen<'a> {
+    name: Option<&'a str>,
+    origin: (i32, i32),
+    size: (u32, u32),
+    scale: f64,
+}
+
+/// Where the Island's top-left corner goes on `screen` (see `place`).
+fn position(
+    screen: &Screen,
+    placement: &IslandPlacement,
+    height: u32,
+    title_bar_bottom: Option<i32>,
+    listening: bool,
+) -> (i32, i32) {
+    let scale = screen.scale;
+    let ((ox, oy), (area_w, area_h)) = (screen.origin, screen.size);
     #[allow(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
@@ -262,9 +402,39 @@ fn place(app: &AppHandle, window: &tauri::WebviewWindow, anchor: Option<(i32, i3
     )]
     let width = (WIDTH * scale).round() as u32;
     #[allow(clippy::cast_possible_truncation, reason = "a pixel offset")]
-    let top = (TOP * scale).round() as i32;
-    let left = origin.x + i32::try_from(area.width.saturating_sub(width) / 2).unwrap_or(0);
-    let _ = window.set_position(PhysicalPosition::new(left, origin.y + top));
+    let px = |v: f64| (v * scale).round() as i32;
+    let left = ox + i32::try_from(area_w.saturating_sub(width) / 2).unwrap_or(0);
+    let bottom_edge = oy + i32::try_from(area_h).unwrap_or(0);
+    let spot = placement
+        .spots
+        .iter()
+        .find(|s| screen.name.is_some_and(|n| n == s.monitor));
+    let (x, y) = match (placement.position, spot) {
+        (OverlayPosition::RememberDrag, Some(s)) => {
+            // Kept on the monitor even if its size changed since.
+            let max_x = i32::try_from(area_w.saturating_sub(width)).unwrap_or(0);
+            let max_y = i32::try_from(area_h.saturating_sub(height.max(1))).unwrap_or(0);
+            (ox + s.x.clamp(0, max_x), oy + s.y.clamp(0, max_y))
+        }
+        (OverlayPosition::BottomCenter, _) => (
+            left,
+            bottom_edge - i32::try_from(height).unwrap_or(0) - px(TOP) - px(48.0),
+        ),
+        _ => (left, oy + px(TOP)),
+    };
+    // UX-14: only near the top, only while listening, only over a title bar.
+    let y = match title_bar_bottom {
+        Some(bar)
+            if listening
+                && placement.position != OverlayPosition::BottomCenter
+                && bar > y
+                && bar - oy <= px(TITLE_REACH) =>
+        {
+            bar + px(BELOW_TITLE)
+        }
+        _ => y,
+    };
+    (x, y)
 }
 
 /// The Island's buttons (Allow, Deny, Stop, the text field) must receive clicks; the rest of the
@@ -299,8 +469,10 @@ pub fn overlay_typing_done(window: tauri::WebviewWindow) {
 
 /// What the Island may ask the runtime: only the actions its own buttons offer (SECURITY §9: the
 /// overlay window gets almost nothing).
-const ISLAND_METHODS: [&str; 6] = [
+const ISLAND_METHODS: [&str; 7] = [
     kivo_ipc::method::SESSION_CANCEL,
+    // The Undo button (UX-43): only takes back KIVO's own last change.
+    kivo_ipc::method::SESSION_UNDO,
     // "That's not what I meant" on a brain's answer (BRAIN-06): it only records a report.
     kivo_ipc::method::CHAT_MISROUTE,
     kivo_ipc::method::SESSION_SAY,
@@ -359,9 +531,106 @@ pub async fn island_request(
 
 #[cfg(test)]
 mod tests {
-    use super::allowed_capability_change;
+    use super::{Screen, allowed_capability_change, position};
     use kivo_core::Capability;
+    use kivo_core::config::{IslandSpot, OverlayPosition};
+    use kivo_ipc::protocol::IslandPlacement;
     use serde_json::json;
+
+    const SECOND: Screen<'static> = Screen {
+        name: Some(r"\\.\DISPLAY2"),
+        origin: (1920, 0),
+        size: (2560, 1440),
+        scale: 1.5,
+    };
+
+    fn placed(position_: OverlayPosition, spots: Vec<IslandSpot>) -> IslandPlacement {
+        IslandPlacement {
+            position: position_,
+            spots,
+        }
+    }
+
+    /// UX-13: top center 8 px down, bottom center above the taskbar's reach, or the spot the
+    /// user dragged it to on this monitor — kept on screen if the monitor shrank.
+    #[test]
+    fn place_top_bottom_and_remembered_spots() {
+        let width = 840; // WIDTH at 150 %
+        let centre_x = 1920 + (2560 - width) / 2;
+        let top = position(
+            &SECOND,
+            &placed(OverlayPosition::TopCenter, vec![]),
+            120,
+            None,
+            false,
+        );
+        assert_eq!(top, (centre_x, 12));
+        let bottom = position(
+            &SECOND,
+            &placed(OverlayPosition::BottomCenter, vec![]),
+            120,
+            None,
+            false,
+        );
+        assert_eq!(bottom, (centre_x, 1440 - 120 - 12 - 72));
+        let spot = |monitor: &str, x, y| IslandSpot {
+            monitor: monitor.into(),
+            x,
+            y,
+        };
+        let remembered = placed(
+            OverlayPosition::RememberDrag,
+            vec![spot(r"\\.\DISPLAY1", 5, 5), spot(r"\\.\DISPLAY2", 300, 900)],
+        );
+        assert_eq!(
+            position(&SECOND, &remembered, 120, None, false),
+            (1920 + 300, 900),
+            "this monitor's own spot"
+        );
+        let off_screen = placed(
+            OverlayPosition::RememberDrag,
+            vec![spot(r"\\.\DISPLAY2", 5000, -40)],
+        );
+        assert_eq!(
+            position(&SECOND, &off_screen, 120, None, false),
+            (1920 + 2560 - width, 0),
+            "clamped onto the monitor"
+        );
+        let elsewhere = placed(
+            OverlayPosition::RememberDrag,
+            vec![spot(r"\\.\DISPLAY1", 5, 5)],
+        );
+        assert_eq!(
+            position(&SECOND, &elsewhere, 120, None, false),
+            (centre_x, 12),
+            "no spot on this monitor yet: top center"
+        );
+    }
+
+    /// UX-14: while listening, a title bar under the Island moves it just below; not while it
+    /// shows anything else, not at the bottom, and not for a bar far down the screen.
+    #[test]
+    fn listening_moves_below_a_title_bar_only_while_listening() {
+        let top = placed(OverlayPosition::TopCenter, vec![]);
+        let (_, y) = position(&SECOND, &top, 120, Some(48), true);
+        assert_eq!(y, 48 + 6);
+        assert_eq!(position(&SECOND, &top, 120, Some(48), false).1, 12);
+        assert_eq!(
+            position(&SECOND, &top, 120, Some(400), true).1,
+            12,
+            "a bar out of reach"
+        );
+        assert_eq!(
+            position(&SECOND, &top, 120, Some(8), true).1,
+            12,
+            "a bar above the Island"
+        );
+        let bottom = placed(OverlayPosition::BottomCenter, vec![]);
+        assert_eq!(
+            position(&SECOND, &bottom, 120, Some(48), true).1,
+            1440 - 120 - 12 - 72
+        );
+    }
 
     #[test]
     fn the_island_may_only_turn_on_the_capability_the_request_needed() {

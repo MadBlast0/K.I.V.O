@@ -2,11 +2,15 @@
 //! Allow, Confirm or Deny for every tool call. An Allow carries a `Permit`, the only thing the tool
 //! executor accepts, and permits can only be made here (TOOL-02): AI output can never bypass this.
 //!
-//! Order: hard limits (every mode, even Bypass) → Bypass → guest → irreversible → the mode table,
-//! tightened for tainted or AI-initiated turns.
+//! Order: hard limits (every mode, even Bypass: the stop, capabilities, blocked apps and the
+//! per-capability app scopes, destination binding, private data in Strict Private) → the risk of
+//! this call (the tool's assessment of its arguments, raised for sensitive data leaving the
+//! device) → Bypass → guest → irreversible → the mode table, tightened for tainted or
+//! AI-initiated turns.
 
+use crate::classify::{DataClass, classify};
 use kivo_core::capability::{Capability, CapabilitySettings};
-use kivo_core::config::PermissionMode;
+use kivo_core::config::{AppScope, PermissionMode, PrivacyMode, Tools};
 use kivo_core::text;
 use kivo_core::tool::{
     ConfirmSpec, ConfirmedBy, Initiator, Provenance, Reversibility, Risk, SideEffect, Strength,
@@ -31,13 +35,130 @@ pub enum Taint {
     Tainted(Vec<String>),
 }
 
-/// "Always allow" for a tool, optionally only for one target (SEC-08).
+/// "Always allow" for a tool, optionally only for one target and for arguments matching a
+/// pattern, for a while (once, this session, 24 h or always; SEC-08). Expired grants are never
+/// handed to the engine.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Grant {
     pub tool: String,
     /// A target id the grant is limited to (an app id, a folder); `None` for any.
     pub scope: Option<String>,
+    /// A `*` pattern one of the call's arguments must match (`C:\Users\me\Documents\*`,
+    /// `git *`); `None` for any arguments.
+    #[serde(default)]
+    pub pattern: Option<String>,
+}
+
+impl Grant {
+    /// Whether this grant covers `call`.
+    pub fn covers(&self, call: &ToolCall) -> bool {
+        self.tool == call.tool
+            && self
+                .scope
+                .as_ref()
+                .is_none_or(|scope| call.targets.iter().any(|t| target_id(t) == Some(scope)))
+            && self
+                .pattern
+                .as_ref()
+                .is_none_or(|p| strings(&call.args).iter().any(|v| glob(p, v)))
+    }
+}
+
+/// Every string in a call's arguments.
+fn strings(v: &serde_json::Value) -> Vec<String> {
+    match v {
+        serde_json::Value::String(s) => vec![s.clone()],
+        serde_json::Value::Array(a) => a.iter().flat_map(strings).collect(),
+        serde_json::Value::Object(o) => o.values().flat_map(strings).collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// Case-insensitive `*` wildcard match of the whole text.
+pub fn glob(pattern: &str, text: &str) -> bool {
+    let p: Vec<char> = pattern.to_lowercase().chars().collect();
+    let t: Vec<char> = text.to_lowercase().chars().collect();
+    let (mut pi, mut ti, mut star, mut mark) = (0, 0, None, 0);
+    while ti < t.len() {
+        if pi < p.len() && p[pi] == '*' {
+            star = Some(pi);
+            mark = ti;
+            pi += 1;
+        } else if pi < p.len() && p[pi] == t[ti] {
+            pi += 1;
+            ti += 1;
+        } else if let Some(s) = star {
+            pi = s + 1;
+            mark += 1;
+            ti = mark;
+        } else {
+            return false;
+        }
+    }
+    while pi < p.len() && p[pi] == '*' {
+        pi += 1;
+    }
+    pi == p.len()
+}
+
+/// Whether an app list entry names this app: its id, its name, its program's name, or a
+/// `*pattern*` over those (CAP-07).
+pub fn app_matches(entry: &str, id: &str, name: &str) -> bool {
+    let stem = std::path::Path::new(id)
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let entry = entry.trim();
+    if entry.is_empty() {
+        return false;
+    }
+    [id, name, stem.as_str()]
+        .iter()
+        .filter(|c| !c.is_empty())
+        .any(|c| {
+            if entry.contains('*') {
+                glob(entry, c)
+            } else {
+                c.eq_ignore_ascii_case(entry)
+            }
+        })
+}
+
+/// The per-app list for a capability, if it has one (UIA, screen awareness, computer use).
+pub fn app_scope(tools: &Tools, capability: Capability) -> Option<&AppScope> {
+    match capability {
+        Capability::UiAutomation => Some(&tools.ui_automation_apps),
+        Capability::ScreenAwareness => Some(&tools.screen_apps),
+        Capability::ComputerUse => Some(&tools.computer_use_apps),
+        _ => None,
+    }
+}
+
+/// Destination binding (SECURITY §4): an address is the user's only when their own words for
+/// this task contain it (or its host); one that appeared while the turn was tainted is untrusted;
+/// otherwise it is the system's (a link the brain knew).
+pub fn bind(address: &str, user_text: &[String], tainted: bool) -> Provenance {
+    let a = address.trim().to_lowercase();
+    let host = a
+        .split_once("://")
+        .map_or(a.as_str(), |(_, r)| r)
+        .split(['/', '?', '#'])
+        .next()
+        .unwrap_or("")
+        .trim_start_matches("www.")
+        .to_owned();
+    let said = user_text.iter().any(|t| {
+        let t = t.to_lowercase();
+        (!a.is_empty() && t.contains(&a)) || (host.len() > 3 && t.contains(&host))
+    });
+    if said {
+        Provenance::User
+    } else if tainted {
+        Provenance::Untrusted
+    } else {
+        Provenance::System
+    }
 }
 
 /// Limits no mode or brain can lift (SECURITY §1.1).
@@ -56,6 +177,12 @@ pub struct Context<'a> {
     pub capabilities: &'a CapabilitySettings,
     pub limits: &'a HardLimits,
     pub grants: &'a [Grant],
+    /// The per-capability options (app scopes, CAP-07).
+    pub tools: &'a Tools,
+    pub privacy: PrivacyMode,
+    /// The tool's own assessment of this call's risk from its arguments (SECURITY §3); the
+    /// declared risk when `None`.
+    pub assessed: Option<Risk>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -69,6 +196,9 @@ pub enum DenyCode {
     NotConfirmed,
     /// The privacy mode keeps this on the device (SECURITY §6).
     Privacy,
+    /// A limit no mode lifts, found by the tool itself before anyone is asked (typing into a
+    /// password field, SECURITY §1.1).
+    HardLimit,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, thiserror::Error)]
@@ -157,6 +287,12 @@ pub fn authorize(spec: &ToolSpec, call: &ToolCall, cx: &Context<'_>) -> Decision
             ),
         );
     }
+    let scope = app_scope(cx.tools, spec.capability);
+    let outbound = spec.data_egress
+        || spec
+            .side_effects
+            .iter()
+            .any(|e| matches!(e, SideEffect::ExternalComms | SideEffect::Financial));
     for target in &call.targets {
         match target {
             Target::App { id, name }
@@ -164,17 +300,25 @@ pub fn authorize(spec: &ToolSpec, call: &ToolCall, cx: &Context<'_>) -> Decision
                     .limits
                     .blocked_apps
                     .iter()
-                    .any(|b| b == id || b.eq_ignore_ascii_case(name)) =>
+                    .any(|b| app_matches(b, id, name))
+                    || scope.is_some_and(|s| {
+                        s.block.iter().any(|b| app_matches(b, id, name))
+                            || (!s.allow.is_empty()
+                                && !s.allow.iter().any(|a| app_matches(a, id, name)))
+                    }) =>
             {
                 return deny(
                     DenyCode::BlockedApp,
                     text::tf("policy.blockedApp", &[("name", name)]),
                 );
             }
+            // Untrusted destinations never; and data goes out only to what the user named.
             Target::Destination {
                 address,
-                provenance: Provenance::Untrusted,
-            } => {
+                provenance,
+            } if *provenance == Provenance::Untrusted
+                || (spec.data_egress && *provenance != Provenance::User) =>
+            {
                 return deny(
                     DenyCode::UntrustedDestination,
                     text::tf("policy.untrustedDestination", &[("address", address)]),
@@ -183,18 +327,36 @@ pub fn authorize(spec: &ToolSpec, call: &ToolCall, cx: &Context<'_>) -> Decision
             _ => {}
         }
     }
+    // Personal or sensitive data leaving the device: never in Strict Private, High otherwise.
+    let class = if outbound {
+        classify(&call.args.to_string())
+    } else {
+        DataClass::Public
+    };
+    if outbound && class >= DataClass::Personal && cx.privacy == PrivacyMode::StrictPrivate {
+        return deny(DenyCode::Privacy, text::t("policy.privateData"));
+    }
 
     // 2. Bypass: the user's explicit, time-limited override (SEC-03); owners only.
     if cx.mode == PermissionMode::Bypass && cx.session == SessionKind::Owner {
         return Decision::Allow(Permit::new(call, ConfirmedBy::Policy));
     }
 
-    let risk = spec.risk;
+    let mut risk = cx.assessed.unwrap_or(spec.risk);
+    if outbound && class >= DataClass::Personal {
+        risk = Risk::High;
+    }
+    let spec = &ToolSpec {
+        risk,
+        ..spec.clone()
+    };
     let tainted =
         matches!(cx.taint, Taint::Tainted(_)) || call.initiated_by != Initiator::UserDirect;
     // `why` is a key under `policy.` in the text catalog.
+    // In Plan first every change waits for the plan (SECURITY §1.1).
     let confirm = |strength: Strength, why: &str, plan: bool| {
         let why = text::t(&format!("policy.{why}"));
+        let plan = plan || cx.mode == PermissionMode::Plan;
         Decision::Confirm(confirm_spec(spec, call, cx, strength, &why, plan))
     };
 
@@ -226,12 +388,7 @@ pub fn authorize(spec: &ToolSpec, call: &ToolCall, cx: &Context<'_>) -> Decision
         .side_effects
         .iter()
         .all(|e| matches!(e, SideEffect::None | SideEffect::LocalRead));
-    let granted = cx.grants.iter().any(|g| {
-        g.tool == call.tool
-            && g.scope
-                .as_ref()
-                .is_none_or(|scope| call.targets.iter().any(|t| target_id(t) == Some(scope)))
-    });
+    let granted = cx.grants.iter().any(|g| g.covers(call));
     let allow = |by| Decision::Allow(Permit::new(call, by));
 
     // 5. Tainted or AI-initiated turns: medium risk asks unless granted (SECURITY §2).
@@ -286,6 +443,42 @@ pub fn authorize(spec: &ToolSpec, call: &ToolCall, cx: &Context<'_>) -> Decision
 pub enum Answer {
     Allow { by: ConfirmedBy },
     Deny,
+}
+
+/// Approving a plan (Plan first, SECURITY §1.1): one answer grants exactly the planned steps,
+/// nothing more. Voice can't approve a plan with a High-risk step.
+pub fn approve_plan(
+    steps: &[(ConfirmSpec, ToolCall)],
+    answer: Answer,
+) -> Result<Vec<Permit>, Denial> {
+    let refuse = |key: &str| Denial {
+        code: DenyCode::NotConfirmed,
+        message: text::t(key),
+    };
+    let by = match answer {
+        Answer::Deny => return Err(refuse("reply.cancelled")),
+        Answer::Allow { by } => by,
+    };
+    if !matches!(
+        by,
+        ConfirmedBy::Click | ConfirmedBy::Voice | ConfirmedBy::Hello
+    ) {
+        return Err(refuse("policy.notAWay"));
+    }
+    let strong = steps.iter().any(|(s, _)| s.strength == Strength::Strong);
+    if strong && by == ConfirmedBy::Voice {
+        return Err(refuse("policy.voiceNotEnough"));
+    }
+    steps
+        .iter()
+        .map(|(spec, call)| {
+            if spec.call_id != call.id || spec.tool != call.tool {
+                Err(refuse("policy.differentAction"))
+            } else {
+                Ok(Permit::new(call, by))
+            }
+        })
+        .collect()
 }
 
 /// Turns the user's answer to `spec` into a permit (SEC-10, CONVERSATION §7).
@@ -356,6 +549,7 @@ fn confirm_spec(
         strength,
         allow_always: spec.risk < Risk::High && cx.session == SessionKind::Owner,
         plan,
+        hello: false,
     }
 }
 
@@ -429,6 +623,9 @@ mod tests {
         caps: CapabilitySettings,
         limits: HardLimits,
         grants: Vec<Grant>,
+        tools: Tools,
+        privacy: PrivacyMode,
+        assessed: Option<Risk>,
     }
 
     impl Env {
@@ -437,6 +634,9 @@ mod tests {
                 caps: CapabilitySettings::default(),
                 limits: HardLimits::default(),
                 grants: Vec::new(),
+                tools: Tools::default(),
+                privacy: PrivacyMode::Cloud,
+                assessed: None,
             }
         }
         fn cx(&self, mode: PermissionMode, session: SessionKind, taint: Taint) -> Context<'_> {
@@ -447,6 +647,9 @@ mod tests {
                 capabilities: &self.caps,
                 limits: &self.limits,
                 grants: &self.grants,
+                tools: &self.tools,
+                privacy: self.privacy,
+                assessed: self.assessed,
             }
         }
     }
@@ -638,6 +841,7 @@ mod tests {
         env.grants = vec![Grant {
             tool: "x.tool".into(),
             scope: Some("chrome".into()),
+            pattern: None,
         }];
         let brain = call(Initiator::Brain);
         let tainted = || Taint::Tainted(vec!["mail".into()]);
@@ -742,6 +946,332 @@ mod tests {
         assert_eq!(
             render_title("Lock the computer", &json!({})),
             "Lock the computer"
+        );
+    }
+
+    #[test]
+    fn app_scopes_block_password_managers_banking_and_windows_security_by_default() {
+        let mut env = Env::new();
+        env.caps.set(Capability::ScreenAwareness, true);
+        let uia = spec(
+            Risk::Safe,
+            &[SideEffect::LocalRead],
+            Capability::UiAutomation,
+        );
+        let on = |id: &str, name: &str| {
+            let mut c = call(Initiator::Brain);
+            c.targets = vec![Target::App {
+                id: id.into(),
+                name: name.into(),
+            }];
+            c
+        };
+        for (id, name) in [
+            (r"C:\Program Files\KeePassXC\KeePassXC.exe", "KeePassXC"),
+            (
+                r"C:\Users\me\AppData\Local\1Password\app\8\1Password.exe",
+                "1Password",
+            ),
+            (r"C:\Apps\MyBankApp.exe", "MyBankApp"),
+            (r"C:\Windows\SystemApps\SecHealthUI.exe", "SecHealthUI"),
+        ] {
+            let d = authorize(
+                &uia,
+                &on(id, name),
+                &env.cx(PermissionMode::Bypass, SessionKind::Owner, Taint::Clean),
+            );
+            assert!(
+                matches!(
+                    d,
+                    Decision::Deny(Denial {
+                        code: DenyCode::BlockedApp,
+                        ..
+                    })
+                ),
+                "{name}"
+            );
+        }
+        assert!(matches!(
+            authorize(
+                &uia,
+                &on(r"C:\Windows\notepad.exe", "notepad"),
+                &env.cx(PermissionMode::Auto, SessionKind::Owner, Taint::Clean)
+            ),
+            Decision::Allow(_)
+        ));
+        // An allow list: only those apps.
+        env.tools.ui_automation_apps.allow = vec!["notepad".into()];
+        assert!(matches!(
+            authorize(
+                &uia,
+                &on(r"C:\x\Code.exe", "Code"),
+                &env.cx(PermissionMode::Auto, SessionKind::Owner, Taint::Clean)
+            ),
+            Decision::Deny(_)
+        ));
+        // Other capabilities aren't scoped by these lists.
+        let apps = spec(
+            Risk::Low,
+            &[SideEffect::LocalWrite],
+            Capability::AppsAndWindows,
+        );
+        assert!(matches!(
+            authorize(
+                &apps,
+                &on(r"C:\x\KeePassXC.exe", "KeePassXC"),
+                &env.cx(PermissionMode::Auto, SessionKind::Owner, Taint::Clean)
+            ),
+            Decision::Allow(_)
+        ));
+    }
+
+    #[test]
+    fn destinations_are_bound_to_the_users_own_words() {
+        let words = vec!["email the report to sam@example.com".to_owned()];
+        assert_eq!(bind("sam@example.com", &words, true), Provenance::User);
+        assert_eq!(bind("x@evil.test", &words, true), Provenance::Untrusted);
+        assert_eq!(
+            bind("https://github.com/kivo", &[], false),
+            Provenance::System
+        );
+        let open = vec!["open github.com please".to_owned()];
+        assert_eq!(
+            bind("https://www.github.com/x", &open, true),
+            Provenance::User
+        );
+
+        let env = Env::new();
+        let mut send = spec(
+            Risk::Medium,
+            &[SideEffect::ExternalComms],
+            Capability::AppsAndWindows,
+        );
+        send.data_egress = true;
+        let mut c = call(Initiator::Brain);
+        c.targets = vec![Target::Destination {
+            address: "https://docs.example".into(),
+            provenance: Provenance::System,
+        }];
+        // Outbound to somewhere the user didn't name: denied even in Bypass.
+        assert!(matches!(
+            authorize(
+                &send,
+                &c,
+                &env.cx(PermissionMode::Bypass, SessionKind::Owner, Taint::Clean)
+            ),
+            Decision::Deny(Denial {
+                code: DenyCode::UntrustedDestination,
+                ..
+            })
+        ));
+        c.targets = vec![Target::Destination {
+            address: "https://docs.example".into(),
+            provenance: Provenance::User,
+        }];
+        assert!(!matches!(
+            authorize(
+                &send,
+                &c,
+                &env.cx(PermissionMode::Auto, SessionKind::Owner, Taint::Clean)
+            ),
+            Decision::Deny(_)
+        ));
+        // Opening a link isn't sending: a known link on a clean turn is fine.
+        let open_link = spec(
+            Risk::Low,
+            &[SideEffect::LocalWrite],
+            Capability::BrowserOpenLinks,
+        );
+        c.targets = vec![Target::Destination {
+            address: "https://github.com".into(),
+            provenance: Provenance::System,
+        }];
+        assert!(matches!(
+            authorize(
+                &open_link,
+                &c,
+                &env.cx(PermissionMode::Auto, SessionKind::Owner, Taint::Clean)
+            ),
+            Decision::Allow(_)
+        ));
+    }
+
+    #[test]
+    fn arguments_raise_the_risk_and_private_data_stays_home_in_strict_private() {
+        let mut env = Env::new();
+        let files = spec(
+            Risk::Medium,
+            &[SideEffect::Destructive],
+            Capability::FilesModify,
+        );
+        let user = call(Initiator::UserDirect);
+        // The tool assessed a protected path: High confirms strongly even in Auto.
+        env.assessed = Some(Risk::High);
+        assert_eq!(
+            outcome(&authorize(
+                &files,
+                &user,
+                &env.cx(PermissionMode::Auto, SessionKind::Owner, Taint::Clean)
+            )),
+            "confirm!"
+        );
+        env.assessed = None;
+        let mut send = spec(
+            Risk::Low,
+            &[SideEffect::ExternalComms],
+            Capability::AppsAndWindows,
+        );
+        send.data_egress = true;
+        let mut c = call(Initiator::UserDirect);
+        c.targets.clear();
+        c.args = json!({ "text": "my card is 4111 1111 1111 1111" });
+        assert_eq!(
+            outcome(&authorize(
+                &send,
+                &c,
+                &env.cx(PermissionMode::Auto, SessionKind::Owner, Taint::Clean)
+            )),
+            "confirm!"
+        );
+        env.privacy = PrivacyMode::StrictPrivate;
+        assert!(matches!(
+            authorize(
+                &send,
+                &c,
+                &env.cx(PermissionMode::Bypass, SessionKind::Owner, Taint::Clean)
+            ),
+            Decision::Deny(Denial {
+                code: DenyCode::Privacy,
+                ..
+            })
+        ));
+        // Input the user asked for directly can be assessed lower than declared.
+        env.privacy = PrivacyMode::Cloud;
+        env.assessed = Some(Risk::Low);
+        let input = spec(
+            Risk::Medium,
+            &[SideEffect::LocalWrite],
+            Capability::ComputerUse,
+        );
+        env.caps.set(Capability::ComputerUse, true);
+        assert_eq!(
+            outcome(&authorize(
+                &input,
+                &user,
+                &env.cx(PermissionMode::Ask, SessionKind::Owner, Taint::Clean)
+            )),
+            "confirm"
+        );
+        assert_eq!(
+            outcome(&authorize(
+                &input,
+                &user,
+                &env.cx(
+                    PermissionMode::AcceptEdits,
+                    SessionKind::Owner,
+                    Taint::Clean
+                )
+            )),
+            "allow"
+        );
+    }
+
+    #[test]
+    fn grants_match_argument_patterns() {
+        assert!(glob(
+            "C:\\Users\\me\\Documents\\*",
+            "c:\\users\\me\\documents\\a\\b.txt"
+        ));
+        assert!(!glob(
+            "C:\\Users\\me\\Documents\\*",
+            "C:\\Users\\me\\Desktop\\b.txt"
+        ));
+        assert!(glob("git *", "git status"));
+        assert!(!glob("git *", "gitk"));
+        let g = Grant {
+            tool: "shell.run".into(),
+            scope: None,
+            pattern: Some("git *".into()),
+        };
+        let mut c = call(Initiator::Brain);
+        c.tool = "shell.run".into();
+        c.args = json!({ "command": "git status" });
+        assert!(g.covers(&c));
+        c.args = json!({ "command": "Remove-Item x" });
+        assert!(!g.covers(&c));
+    }
+
+    #[test]
+    fn a_plan_is_approved_as_exactly_its_steps() {
+        let env = Env::new();
+        let medium = spec(
+            Risk::Medium,
+            &[SideEffect::LocalWrite],
+            Capability::AppsAndWindows,
+        );
+        let mut steps = Vec::new();
+        for i in 0..2 {
+            let mut c = call(Initiator::Brain);
+            c.id = format!("step-{i}");
+            let Decision::Confirm(card) = authorize(
+                &medium,
+                &c,
+                &env.cx(PermissionMode::Plan, SessionKind::Owner, Taint::Clean),
+            ) else {
+                panic!("Plan first asks");
+            };
+            assert!(card.plan);
+            steps.push((card, c));
+        }
+        let permits = approve_plan(
+            &steps,
+            Answer::Allow {
+                by: ConfirmedBy::Click,
+            },
+        )
+        .unwrap();
+        assert_eq!(permits.len(), 2);
+        assert!(permits[0].covers(&steps[0].1) && permits[1].covers(&steps[1].1));
+        assert!(
+            !permits[0].covers(&steps[1].1),
+            "each permit is for its own step only"
+        );
+        assert!(approve_plan(&steps, Answer::Deny).is_err());
+        // A plan with a High step needs more than a spoken yes.
+        let high = spec(
+            Risk::High,
+            &[SideEffect::Destructive],
+            Capability::PowerActions,
+        );
+        let mut c = call(Initiator::Brain);
+        c.id = "step-h".into();
+        let Decision::Confirm(card) = authorize(
+            &high,
+            &c,
+            &env.cx(PermissionMode::Plan, SessionKind::Owner, Taint::Clean),
+        ) else {
+            panic!()
+        };
+        steps.push((card, c));
+        assert!(
+            approve_plan(
+                &steps,
+                Answer::Allow {
+                    by: ConfirmedBy::Voice
+                }
+            )
+            .is_err()
+        );
+        assert_eq!(
+            approve_plan(
+                &steps,
+                Answer::Allow {
+                    by: ConfirmedBy::Hello
+                }
+            )
+            .unwrap()
+            .len(),
+            3
         );
     }
 }

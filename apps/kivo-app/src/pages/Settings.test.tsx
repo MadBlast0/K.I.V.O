@@ -69,3 +69,46 @@ describe("Settings → Sounds (VOICE-27)", () => {
     expect(calls).toContainEqual({ method: "settings.set", params: { sounds: { "thinking-cue": true } } });
   });
 });
+
+describe("Settings → Island (UX-13)", () => {
+  beforeEach(() => {
+    calls.length = 0;
+  });
+
+  it("shows where the Island appears and changes it", async () => {
+    const link = runtime.link as { snapshot: unknown };
+    link.snapshot = { island: { position: "top-center", spots: [] } };
+    try {
+      render(
+        <ToastProvider>
+          <Settings />
+        </ToastProvider>,
+      );
+      await settle();
+      const trigger = screen.getByRole("combobox", { name: "Where the Island appears" });
+      expect(trigger.textContent).toContain("Top center");
+      fireEvent.click(trigger);
+      const option = await screen.findByRole("option", { name: "Where I dragged it" });
+      // Base UI selects on the pointer's release, as a real click does.
+      fireEvent.pointerDown(option, { pointerType: "mouse" });
+      fireEvent.mouseDown(option);
+      fireEvent.pointerUp(option, { pointerType: "mouse" });
+      fireEvent.mouseUp(option);
+      fireEvent.click(option);
+      await settle();
+      expect(calls).toContainEqual({ method: "settings.set", params: { overlay: { position: "remember-drag" } } });
+    } finally {
+      link.snapshot = null;
+    }
+  });
+
+  it("stays hidden until the runtime says where the Island is", async () => {
+    render(
+      <ToastProvider>
+        <Settings />
+      </ToastProvider>,
+    );
+    await settle();
+    expect(screen.queryByRole("combobox", { name: "Where the Island appears" })).toBeNull();
+  });
+});

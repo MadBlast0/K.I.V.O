@@ -10,7 +10,10 @@ use crate::{activity, speaker, voice};
 use kivo_ipc::protocol::SpeechStatus;
 use kivo_platform::{AppEntry, SpeechSynth};
 use kivo_store::Database;
-use kivo_testkit::{FakeApps, FakeAudio, FakeNotifications, FakeSystemControl, FakeWindows};
+use kivo_testkit::{
+    FakeApps, FakeAudio, FakeClipboard, FakeCommands, FakeDisplays, FakeFiles, FakeInput,
+    FakeNotifications, FakeOcr, FakePower, FakeSystemControl, FakeUia, FakeVerifier, FakeWindows,
+};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
@@ -68,6 +71,13 @@ pub struct Rig {
     pub control: Arc<FakeSystemControl>,
     pub brains: Arc<crate::brains::Brains>,
     pub agents: Arc<crate::agents::Agents>,
+    /// The computer-control fakes (M4): UI Automation shaped like the dummy app, input that
+    /// only records, a command runner that records, Windows Hello that answers as told.
+    pub uia: Arc<FakeUia>,
+    pub input: Arc<FakeInput>,
+    pub commands: Arc<FakeCommands>,
+    pub verifier: Arc<FakeVerifier>,
+    pub clipboard: Arc<FakeClipboard>,
 }
 
 impl Drop for Rig {
@@ -147,7 +157,43 @@ pub fn rig_with_voice(
         catalog: Arc::clone(&catalog),
         screenshots: screenshots.clone(),
     });
-    let registry = Arc::new(kivo_tools::Registry::new(kivo_tools::builtin(&env)));
+    // The computer-control tools on fakes (M4).
+    let uia = Arc::new(FakeUia::default());
+    let input = Arc::new(FakeInput::default());
+    let commands = Arc::new(FakeCommands::default());
+    let verifier = Arc::new(FakeVerifier::default());
+    let clipboard = Arc::new(FakeClipboard::default());
+    let vision = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let mut files = FakeFiles::new(&screenshots.join("bin"));
+    files.folders = vec![screenshots.clone()];
+    let controls = crate::controls::build(
+        crate::controls::Platform {
+            uia: uia.clone(),
+            input: input.clone(),
+            ocr: Arc::new(FakeOcr::default()),
+            screen: Arc::new(PlainScreen),
+            clipboard: clipboard.clone(),
+            files: Arc::new(files),
+            commands: commands.clone(),
+            displays: Arc::new(FakeDisplays::default()),
+            power: Arc::new(FakePower::default()),
+            windows: windows.clone(),
+            secrets: Arc::new(kivo_testkit::FakeSecrets::default()),
+            browser: Arc::new(kivo_tools::NoExtension),
+            managed: None,
+            open_settings: Arc::new(|_| Ok(())),
+            open_uri: Arc::new(|_| Ok(())),
+            output_devices: Arc::new(Vec::new),
+            voice_output: Arc::new(|_| {}),
+        },
+        &core,
+        crate::controls::app_registry(None),
+        Arc::clone(&vision),
+        screenshots.clone(),
+    );
+    let mut tools = kivo_tools::builtin(&env);
+    tools.extend(kivo_tools::controls(&controls));
+    let registry = Arc::new(kivo_tools::Registry::new(tools));
     let heard = Arc::new(Heard::default());
     // Brains are put in by each test (scripted brains, a fake agent); none by default.
     let brains = Arc::new(crate::brains::Brains::new(
@@ -171,6 +217,10 @@ pub fn rig_with_voice(
         fallback_voice: Some(heard.clone()),
         brains: Arc::clone(&brains),
         agents: Arc::clone(&agents),
+        verifier: verifier.clone(),
+        commands: Some(commands.clone()),
+        input_abort: None,
+        vision,
     }));
     agents.set_permissions(Arc::new(engine::EnginePermissions(Arc::downgrade(&engine))));
     engine.refresh_apps();
@@ -229,6 +279,11 @@ pub fn rig_with_voice(
             control,
             brains,
             agents,
+            uia,
+            input,
+            commands,
+            verifier,
+            clipboard,
         },
         worker_task,
         pump,

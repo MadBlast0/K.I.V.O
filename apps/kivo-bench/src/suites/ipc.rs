@@ -52,6 +52,8 @@ impl Ipc {
             turn: None,
             speech: kivo_ipc::protocol::SpeechStatus::Ready,
             hotkey_conflict: None,
+            in_use: Vec::new(),
+            island: Default::default(),
             revision: 0,
         });
         let shutdown = CancellationToken::new();

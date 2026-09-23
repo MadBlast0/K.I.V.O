@@ -1,0 +1,20 @@
+# Git: a command-line tool with no window. Read-only verbs are Low; nothing here writes.
+id = "git"
+name = "Git"
+aliases = ["git"]
+cli_only = true
+
+[cli]
+program = "git"
+[cli.verbs.status]
+args = ["-C", "{path}", "status", "--short", "--branch"]
+risk = "low"
+description = "Show what changed in a repository"
+[cli.verbs.log]
+args = ["-C", "{path}", "log", "--oneline", "-20"]
+risk = "low"
+description = "Recent commits"
+[cli.verbs.branch]
+args = ["-C", "{path}", "branch", "--show-current"]
+risk = "low"
+description = "The current branch"

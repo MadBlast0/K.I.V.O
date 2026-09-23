@@ -1219,6 +1219,31 @@
   margin-block-start: 6px;
   font-weight: 600;
 }
+/* A plan (Plan first, SEC-02): its steps one per line. */
+.k-island__action--plan {
+  white-space: pre-line;
+  font-weight: 500;
+}
+.k-island__note {
+  font-style: italic;
+}
+/* The screen, input or shell in use (CAP-06). */
+.k-island__inuse {
+  display: inline-flex;
+  gap: 4px;
+  color: #b89cff;
+}
+.k-island__inuse svg {
+  width: 14px;
+  height: 14px;
+}
+/* Undo with its ring (UX-43). */
+.k-island__undo {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-block-start: 8px;
+}
 .k-island__meta {
   margin-block-start: 4px;
   color: var(--isl-2);
@@ -1389,6 +1414,10 @@ button.k-island__chip {
   height: 18px;
   border-radius: 50%;
   flex: none;
+}
+.k-island__app--icon {
+  object-fit: contain;
+  background: transparent;
 }
 .k-island__app {
   width: 18px;
@@ -1685,4 +1714,45 @@ button.k-island__chip {
 .k-island__misroute:hover {
   color: var(--isl-fg);
   text-decoration: underline;
+}
+
+/* Permissions → Mode: the modes side by side (UX-28). */
+.k-compare {
+  display: flex;
+  flex-direction: column;
+  background: var(--group);
+  border-radius: var(--r-m);
+  box-shadow: 0 0 0 1px var(--border);
+  overflow: hidden;
+}
+.k-compare__head,
+.k-compare__row {
+  display: grid;
+  grid-template-columns: 1fr repeat(4, 56px);
+  align-items: center;
+  padding: 8px 12px;
+  gap: 4px;
+}
+.k-compare__head {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-3);
+}
+.k-compare__head span:not(:first-child),
+.k-compare__cell {
+  text-align: center;
+}
+.k-compare__row + .k-compare__row,
+.k-compare__head + .k-compare__row {
+  border-top: 1px solid var(--border);
+}
+.k-compare__cell {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.k-compare__cell--ask {
+  color: var(--orange);
+}
+.k-compare__cell--auto {
+  color: var(--green);
 }

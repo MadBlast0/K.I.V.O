@@ -1,0 +1,15 @@
+# Spotify: the spotify: protocol for search and open; playback through Windows media controls.
+id = "spotify"
+name = "Spotify"
+aliases = ["Spotify"]
+prefer = ["uri", "native", "uia"]
+
+[match]
+exe = ["Spotify.exe"]
+aumid = ["SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify"]
+
+[uri]
+schemes = ["spotify"]
+[uri.verbs.search]
+uri = "spotify:search:{query}"
+description = "Search Spotify"

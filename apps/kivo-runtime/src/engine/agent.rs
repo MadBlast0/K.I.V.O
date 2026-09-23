@@ -19,7 +19,7 @@ use kivo_core::tool::{
 };
 use kivo_core::{SessionInput, SessionState};
 use kivo_ipc::protocol::StepView;
-use kivo_security::{Context as SecurityContext, Decision, HardLimits, SessionKind, Taint};
+use kivo_security::Decision;
 use serde_json::json;
 use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
@@ -114,34 +114,15 @@ impl Engine {
             return pick(&ask, false, false);
         };
         let spec = agent_spec(&ask.kind);
-        let call = ToolCall {
+        let mut call = ToolCall {
             id: format!("{turn}-a{}", ask.tool_call_id),
             tool: spec.id.clone(),
             args: json!({ "agent": agent, "title": ask.title }),
             initiated_by: Initiator::Brain,
             targets: Vec::new(),
         };
-        let config = self.core.config();
-        let grants = self.recorder.grants();
-        let decision = kivo_security::authorize(
-            &spec,
-            &call,
-            &SecurityContext {
-                mode: self.core.state().borrow().mode,
-                session: if guest {
-                    SessionKind::Guest
-                } else {
-                    SessionKind::Owner
-                },
-                taint: Taint::Clean,
-                capabilities: &config.capabilities,
-                limits: &HardLimits {
-                    stopped,
-                    blocked_apps: config.permissions.blocked_apps.clone(),
-                },
-                grants: &grants,
-            },
-        );
+        let _ = (guest, stopped);
+        let decision = self.authorize_spec(&spec, spec.risk, &mut call);
         self.recorder
             .tool_decision(&self.turn_key(), &call, &spec, &decision);
         match decision {

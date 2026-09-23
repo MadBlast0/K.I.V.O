@@ -21,6 +21,7 @@ import { Chat } from "./pages/Chat";
 import { Voice } from "./pages/Voice";
 import { Home } from "./pages/Home";
 import { Onboarding } from "./pages/Onboarding";
+import { Permissions } from "./pages/Permissions";
 import { Settings } from "./pages/Settings";
 
 const PAGES: ReadonlyArray<PageId> = [
@@ -88,6 +89,21 @@ function Shell({ page, setPage }: { page: PageId; setPage: (page: PageId) => voi
   useRuntimeEvents((event) => {
     if (event.group === "system" && event.event.type === "speechFallback") toast(event.event.message);
   });
+
+  // A change KIVO can take back (UX-43): the toast offers Undo too, beside the Island's ring.
+  const undo = link?.status === "connected" ? link.snapshot?.turn?.undo : undefined;
+  const undoUntil = undo?.until;
+  const undoTitle = undo?.title;
+  useEffect(() => {
+    if (!undoUntil || !undoTitle) return;
+    toast(t("undo.toast", { title: undoTitle }), {
+      onUndo: () => {
+        request(Method.sessionUndo).catch((e: unknown) =>
+          toast(t("undo.failed", { error: e instanceof Error ? e.message : String(e) })),
+        );
+      },
+    });
+  }, [undoUntil, undoTitle, request, t, toast]);
 
   const commands = useMemo<Command[]>(() => {
     const run = (method: Method) => () => {
@@ -190,6 +206,8 @@ function Shell({ page, setPage }: { page: PageId; setPage: (page: PageId) => voi
           <Voice />
         ) : page === "settings" ? (
           <Settings />
+        ) : page === "permissions" ? (
+          <Permissions />
         ) : (
           <>
             <PageHeader title={t(`nav.${page}`)} />

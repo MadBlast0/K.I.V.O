@@ -40,10 +40,19 @@ impl Default for Core {
 #[derive(Debug, PartialEq, Eq)]
 pub struct Refused(pub String);
 
+/// The Island's placement from the settings (UX-13).
+fn placement(config: &KivoConfig) -> kivo_ipc::protocol::IslandPlacement {
+    kivo_ipc::protocol::IslandPlacement {
+        position: config.overlay.position,
+        spots: config.overlay.spots.clone(),
+    }
+}
+
 impl Core {
     /// A core that starts from `config` and saves changes to `config_file`.
     pub fn with_config(config: KivoConfig, config_file: Option<PathBuf>) -> Self {
         let mode = config.permissions.mode;
+        let island = placement(&config);
         Self {
             bus: EventBus::new(),
             session: Mutex::new(Session::new()),
@@ -56,6 +65,8 @@ impl Core {
                 turn: None,
                 speech: SpeechStatus::Missing,
                 hotkey_conflict: None,
+                in_use: Vec::new(),
+                island,
                 revision: 0,
             }),
             settings: watch::Sender::new(0),
@@ -151,6 +162,16 @@ impl Core {
             tracing::error!(%e, "couldn't save the settings");
         }
         self.settings.send_modify(|n| *n += 1);
+        // The Island's placement is part of the live state the app reads (UX-13).
+        let island = placement(&updated);
+        self.state.send_if_modified(|s| {
+            if s.island == island {
+                return false;
+            }
+            s.island = island;
+            s.revision += 1;
+            true
+        });
         updated
     }
 
@@ -390,6 +411,31 @@ impl Core {
         });
     }
 
+    /// Marks a sensitive capability as in use or not (CAP-06).
+    pub fn set_in_use(&self, kind: &str, on: bool) {
+        self.state.send_if_modified(|s| {
+            let has = s.in_use.iter().any(|k| k == kind);
+            match (on, has) {
+                (true, false) => s.in_use.push(kind.to_owned()),
+                (false, true) => s.in_use.retain(|k| k != kind),
+                _ => return false,
+            }
+            s.revision += 1;
+            true
+        });
+    }
+
+    pub fn clear_in_use(&self) {
+        self.state.send_if_modified(|s| {
+            if s.in_use.is_empty() {
+                return false;
+            }
+            s.in_use.clear();
+            s.revision += 1;
+            true
+        });
+    }
+
     pub fn set_island_hidden(&self, hidden: bool) {
         self.state.send_if_modified(|s| {
             if s.island_hidden == hidden {
@@ -452,6 +498,8 @@ mod tests {
                 turn: None,
                 speech: SpeechStatus::Missing,
                 hotkey_conflict: None,
+                in_use: Vec::new(),
+                island: kivo_ipc::protocol::IslandPlacement::default(),
                 revision: 1
             }
         );

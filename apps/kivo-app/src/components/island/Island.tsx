@@ -35,9 +35,12 @@ export function Island({
   model,
   level,
   className,
+  onDrag,
   "aria-label": ariaLabel,
 }: {
   model: IslandModel | null;
+  /** Pressing on the Island's row (not a button) starts dragging it (UX-13). */
+  onDrag?: () => void;
   /** The live audio level (0–1) for the waveform; without it the waveform shows a sample envelope
    * (the component gallery). */
   level?: () => number;
@@ -86,7 +89,16 @@ export function Island({
                 animate={{ opacity: 1, transition: reduce ? { duration: 0 } : { delay: 0.12, duration: 0.18 } }}
                 exit={{ opacity: 0, transition: { duration: reduce ? 0 : 0.08 } }}
               >
-                <div className="k-island__row">
+                <div
+                  className="k-island__row"
+                  onPointerDown={
+                    onDrag
+                      ? (e) => {
+                          if (e.button === 0 && !(e.target instanceof Element && e.target.closest("button"))) onDrag();
+                        }
+                      : undefined
+                  }
+                >
                   {model.lead ?? <Orb />}
                   <span className="k-island__label">
                     {model.label}

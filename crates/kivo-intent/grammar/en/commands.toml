@@ -52,6 +52,10 @@ tool = "windows.close"
 patterns = ["close this window", "close the window", "close this", "close it", "close window"]
 
 [[command]]
+tool = "session.undo"
+patterns = ["undo", "undo that", "undo it", "undo the last thing", "take that back", "revert that", "cancel that change"]
+
+[[command]]
 tool = "audio.mute"
 patterns = ["mute", "mute the sound", "mute the volume", "mute audio", "mute the audio", "mute sound", "silence", "sound off", "turn the sound off"]
 

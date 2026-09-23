@@ -292,6 +292,14 @@ pub enum SystemEvent {
         url: String,
         title: String,
     },
+    /// A UI Automation event KIVO subscribed to on demand (TOOL-21): `kind` is
+    /// `focusChanged`, `windowOpened`, `windowClosed`, `structureChanged` or `propertyChanged`.
+    /// Names and values are the app's content (untrusted).
+    Automation {
+        kind: String,
+        element: String,
+        name: String,
+    },
     /// The runtime is quitting (tray or Control Center "Quit KIVO"); UIs close too (UX §1).
     ShuttingDown,
     /// A model's download moved on, finished, failed or it was removed (DIST-12/13): the Voice

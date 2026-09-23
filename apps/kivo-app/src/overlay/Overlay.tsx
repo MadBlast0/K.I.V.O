@@ -110,7 +110,15 @@ export function Overlay() {
   const handlers = useMemo<IslandHandlers>(
     () => ({
       stop: () => request(Method.sessionCancel),
-      answer: (callId, allow, always) => request(Method.permissionsAnswer, { callId, allow, always }),
+      answer: (callId, allow, always, extra) =>
+        request(Method.permissionsAnswer, {
+          callId,
+          allow,
+          always,
+          ...(extra?.duration ? { duration: extra.duration } : {}),
+          ...(extra?.hello ? { hello: true } : {}),
+        }),
+      undo: () => request(Method.sessionUndo),
       openControlCenter: () => request("island.openControlCenter"),
       openMode: () => request("island.openMode"),
       retry: (text) => request(Method.sessionSay, { text }),
@@ -285,6 +293,9 @@ export function Overlay() {
         <Island
           model={model}
           level={readLevel}
+          onDrag={() => {
+            if (isTauri()) void invoke("overlay_drag").catch(() => {});
+          }}
           aria-label={typeof model?.label === "string" ? model.label : undefined}
         />
       </div>

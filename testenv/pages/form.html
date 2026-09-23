@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>KIVO test form</title></head>
+<body>
+  <h1>Contact form</h1>
+  <form id="contact" onsubmit="event.preventDefault(); document.getElementById('result').textContent = 'Sent: ' + document.getElementById('name').value;">
+    <label for="name">Name</label> <input id="name" name="name">
+    <label for="email">Email</label> <input id="email" name="email" type="email">
+    <label for="topic">Topic</label>
+    <select id="topic"><option>Question</option><option>Feedback</option><option>Bug</option></select>
+    <label><input id="subscribe" type="checkbox"> Subscribe</label>
+    <textarea id="message" aria-label="Message"></textarea>
+    <button id="send" type="submit">Send</button>
+  </form>
+  <p id="result" role="status"></p>
+</body>
+</html>

@@ -10,5 +10,5 @@ pub use classify::{DataClass, classify};
 pub use kivo_core::tool::{ConfirmSpec, ConfirmedBy, Strength};
 pub use policy::{
     Answer, Context, Decision, Denial, DenyCode, Grant, HardLimits, Permit, SessionKind, Taint,
-    authorize, confirmed, render_title,
+    app_matches, app_scope, approve_plan, authorize, bind, confirmed, glob, render_title,
 };

@@ -5,18 +5,18 @@
 #![cfg(feature = "ts")]
 
 use kivo_core::capability::{Badge, Capability};
-use kivo_core::config::{PermissionMode, SoundCue, SoundSet};
+use kivo_core::config::{IslandSpot, OverlayPosition, PermissionMode, Preset, SoundCue, SoundSet};
 use kivo_core::event::{
     CancelReason, DeviceKind, EventKind, IntentPath, PermissionDecision, ProviderEvent, StepStatus,
     SystemEvent, TaskEvent, ToolEvent, TtsStopReason, TurnEvent, TurnSource, UiEvent, VoiceEvent,
 };
-use kivo_core::tool::{ConfirmSpec, ConfirmedBy, Risk, Strength};
+use kivo_core::tool::{ConfirmSpec, ConfirmedBy, GrantDuration, Risk, Strength};
 use kivo_core::{Event, EventMeta, ProfileId, SessionState, TaskId, Timestamp, TraceId, TurnId};
 use kivo_ipc::infer::Residency;
 use kivo_ipc::protocol::{
-    ActivityItem, AuditItem, BrainChip, CapabilityItem, GrantItem, MeasuredItem, ModelItem,
-    ProfileItem, ProtocolVersion, QuietIsland, RecommendationItem, ScreenPoint, SpeechChoices,
-    SpeechEngineItem, SpeechStatus, StepView, TurnView, VoiceItem,
+    ActivityItem, AuditItem, BrainChip, CapabilityItem, GrantItem, IslandPlacement, MeasuredItem,
+    ModelItem, ProfileItem, ProtocolVersion, QuietIsland, RecommendationItem, ScreenPoint,
+    SpeechChoices, SpeechEngineItem, SpeechStatus, StepView, TurnView, UndoOffer, VoiceItem,
 };
 use kivo_ipc::{Link, LinkStatus, RpcError, StateSnapshot, Welcome, method};
 use std::path::PathBuf;
@@ -58,6 +58,7 @@ fn render() -> String {
         // what KIVO is doing now
         TurnView::decl(&cfg),
         BrainChip::decl(&cfg),
+        UndoOffer::decl(&cfg),
         StepView::decl(&cfg),
         SpeechStatus::decl(&cfg),
         QuietIsland::decl(&cfg),
@@ -68,9 +69,14 @@ fn render() -> String {
         Strength::decl(&cfg),
         ConfirmedBy::decl(&cfg),
         ConfirmSpec::decl(&cfg),
+        GrantDuration::decl(&cfg),
+        Preset::decl(&cfg),
         Capability::decl(&cfg),
         Badge::decl(&cfg),
         StateSnapshot::decl(&cfg),
+        IslandPlacement::decl(&cfg),
+        IslandSpot::decl(&cfg),
+        OverlayPosition::decl(&cfg),
         // Control Center lists
         ActivityItem::decl(&cfg),
         AuditItem::decl(&cfg),
@@ -109,11 +115,14 @@ fn render() -> String {
         ("sessionSay", method::SESSION_SAY),
         ("sessionCancel", method::SESSION_CANCEL),
         ("sessionStopEverything", method::SESSION_STOP_ALL),
+        ("sessionUndo", method::SESSION_UNDO),
         ("permissionsAnswer", method::PERMISSIONS_ANSWER),
         ("permissionsGrants", method::PERMISSIONS_GRANTS),
         ("permissionsRevoke", method::PERMISSIONS_REVOKE),
         ("capabilitiesGet", method::CAPABILITIES_GET),
         ("capabilitiesSet", method::CAPABILITIES_SET),
+        ("capabilitiesPreset", method::CAPABILITIES_PRESET),
+        ("browserStatus", method::BROWSER_STATUS),
         ("activityList", method::ACTIVITY_LIST),
         ("auditList", method::AUDIT_LIST),
         ("modelsList", method::MODELS_LIST),

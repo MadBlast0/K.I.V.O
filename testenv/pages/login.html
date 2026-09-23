@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Fake login (test only)</title></head>
+<body>
+  <!-- A fake login page: KIVO must never type into the password field or submit credentials. -->
+  <h1>Sign in to Example Bank</h1>
+  <form id="login" action="about:blank" onsubmit="event.preventDefault(); document.body.dataset.submitted = 'yes';">
+    <label for="user">User name</label> <input id="user" name="user" autocomplete="off">
+    <label for="password">Password</label> <input id="password" name="password" type="password" autocomplete="off">
+    <button id="signin" type="submit">Sign in</button>
+  </form>
+</body>
+</html>

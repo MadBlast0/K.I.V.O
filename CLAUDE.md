@@ -80,7 +80,17 @@ conversation threads with compaction, usage, cost estimates and limits; no-key s
 Credential Manager, discovery with Refresh, and the Chat, Brains (with Context) and Voice pages,
 onboarding step 6 and the Island's brain chip. Still open in M3: a live run with Claude Code and
 Codex (their ACP adapters aren't installed here), semantic recall of old messages (full-text
-today), and the brain benchmark (M3-X1, deferred). **Next: M4.** Progress per milestone is in the
+today), and the brain benchmark (M3-X1, deferred). **M4 — tools and computer control** is built:
+UI Automation on its own COM thread (find, tree, invoke, set value, toggle, select, expand,
+events), the capability-ladder router `control.act` and the app registry (`apps/*.toml`), files,
+clipboard, shell in Job Objects with a risk parser, OCR, screen reading and vision on request,
+input under Computer use, display, brightness and audio tools, the browser extension with its
+native messaging host and KIVO's own CDP browser; taint, fencing, destination binding, the reduced
+tool set after taint, Plan first, Windows Hello, scoped and timed grants, per-app lists, capability
+presets, in-use indicators, Undo in the Island, Island placement, the Permissions page, the
+`testenv/` dummy app and fixtures, and the security suite v1. Still open in M4: the UIA journey's
+first CI run (M4-X1, on the first `v*` tag), a live `SendInput` run (Windows Sandbox or a VM
+only), and pausing background tasks on the emergency stop (with tasks, M5). **Next: M5.** Progress per milestone is in the
 table at the top of [docs/ROADMAP.md](docs/ROADMAP.md).
 Update this section as milestones land.
 
@@ -100,6 +110,8 @@ Update this section as milestones land.
 | Is the running runtime healthy? (exit code 0/1) | `kivo-runtime --health` |
 | Sync ROADMAP from the spec checklists | `pnpm docs:sync` |
 | Real CLI agents' ACP handshake (no prompt, no quota) | `KIVO_TEST_REAL_AGENTS=1 cargo test -p kivo-brain speaks_acp` |
+| UIA journey on the dummy app (`testenv/app`, acts only on its own window) | `cargo test -p kivo-platform-windows --test uia_testenv` |
+| Security suite v1 (injection, shell strings, traversal, bypass attempts) | `cargo test -p kivo-tools --lib security_suite` · `cargo test -p kivo-runtime --test security_suite` |
 | Regenerate the UI's IPC types | `KIVO_WRITE_TS=1 cargo test -p kivo-ipc --features ts --test ts_bindings` |
 
 The tree must stay free of warnings from tsc, Vite, rustc and clippy. The native title

@@ -37,6 +37,17 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked
       - name: Test
         run: cargo test --workspace --locked
+      # TOOL-39: the UI Automation journey against the dummy app (testenv/app), named so a
+      # failure shows here. It only acts on its own window and writes only into a temp folder;
+      # nothing in the suite is destructive, so no Windows Sandbox step is needed yet.
+      - name: UI Automation journey (dummy app)
+        run: cargo test -p kivo-platform-windows --test uia_testenv --locked
+      # TOOL-40: the security suite v1 (injection pages and documents, shell injection strings,
+      # path traversal, permission-bypass attempts).
+      - name: Security suite
+        run: |
+          cargo test -p kivo-tools --lib security_suite --locked
+          cargo test -p kivo-runtime --test security_suite --locked
       - name: Generated IPC types are up to date
         run: cargo test -p kivo-ipc --features ts --test ts_bindings --locked
       # BENCHMARKS §4 smoke subset: the IPC round trip over the real pipe (the state-machine and

@@ -8,6 +8,8 @@ pub mod app;
 pub mod args;
 pub mod brains;
 pub mod brains_rpc;
+pub mod browser_bridge;
+pub mod controls;
 pub mod core;
 pub mod discovery;
 pub mod engine;
@@ -15,6 +17,7 @@ pub mod engine;
 pub mod hotkeys;
 pub mod infer;
 pub mod lifecycle;
+pub mod managed_browser;
 pub mod models;
 pub mod rpc;
 #[cfg(windows)]

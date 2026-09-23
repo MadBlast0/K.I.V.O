@@ -1,0 +1,20 @@
+# Windows Terminal. `wt` opens tabs and folders.
+id = "windows-terminal"
+name = "Windows Terminal"
+aliases = ["Terminal", "wt"]
+prefer = ["app-cli", "uia"]
+
+[match]
+exe = ["WindowsTerminal.exe"]
+aumid = ["Microsoft.WindowsTerminal_8wekyb3d8bbwe!App"]
+
+[cli]
+program = "wt"
+[cli.verbs.open]
+args = ["-d", "{path}"]
+risk = "low"
+description = "Open a terminal in a folder"
+[cli.verbs.new-tab]
+args = ["-w", "0", "nt", "-d", "{path}"]
+risk = "low"
+description = "Open a new tab in a folder"

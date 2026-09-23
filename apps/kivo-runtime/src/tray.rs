@@ -45,6 +45,20 @@ struct Shown {
     session: SessionState,
     mode: PermissionMode,
     island_hidden: bool,
+    /// Sensitive capabilities in use (CAP-06): screen, input, shell.
+    in_use: u8,
+}
+
+/// The in-use set as bits (so `Shown` stays `Copy`).
+fn in_use_bits(kinds: &[String]) -> u8 {
+    kinds.iter().fold(0, |bits, k| {
+        bits | match k.as_str() {
+            "screen" => 1,
+            "input" => 2,
+            "shell" => 4,
+            _ => 0,
+        }
+    })
 }
 
 impl From<&StateSnapshot> for Shown {
@@ -53,6 +67,7 @@ impl From<&StateSnapshot> for Shown {
             session: s.session,
             mode: s.mode,
             island_hidden: s.island_hidden,
+            in_use: in_use_bits(&s.in_use),
         }
     }
 }
@@ -62,6 +77,7 @@ fn menu(shown: Shown) -> Vec<TrayMenuItem> {
         session: state,
         mode,
         island_hidden,
+        ..
     } = shown;
     // `key` is under `tray.` in the text catalog.
     let item = |id: &str, key: &str, enabled: bool| TrayMenuItem::Item {
@@ -121,7 +137,17 @@ fn icon(state: SessionState) -> TrayIcon {
     }
 }
 
-/// "KIVO · Ready", then the permission mode and running tasks (UX-56).
+/// The icon, with the in-use badge while the screen, input or shell is in use (CAP-06); an
+/// error still shows first.
+fn icon_shown(shown: Shown) -> TrayIcon {
+    match icon(shown.session) {
+        TrayIcon::Normal if shown.in_use != 0 => TrayIcon::InUse,
+        other => other,
+    }
+}
+
+/// "KIVO · Ready", then the permission mode and running tasks (UX-56), and what sensitive
+/// capability is in use (CAP-06).
 fn tooltip(state: SessionState, mode: PermissionMode) -> String {
     // Tasks arrive in M5; until then nothing runs in the background.
     text::tf(
@@ -132,6 +158,20 @@ fn tooltip(state: SessionState, mode: PermissionMode) -> String {
             ("tasks", &text::plural("tray.tasks", 0, &[])),
         ],
     )
+}
+
+fn tooltip_shown(shown: Shown) -> String {
+    let mut tip = tooltip(shown.session, shown.mode);
+    let using: Vec<String> = [(1, "screen"), (2, "input"), (4, "shell")]
+        .iter()
+        .filter(|(bit, _)| shown.in_use & bit != 0)
+        .map(|(_, k)| text::t(&format!("tray.inUse.{k}")))
+        .collect();
+    if !using.is_empty() {
+        tip.push('\n');
+        tip.push_str(&text::tf("tray.using", &[("what", &using.join(", "))]));
+    }
+    tip
 }
 
 /// What a tray choice does.
@@ -214,7 +254,7 @@ pub async fn run(core: Arc<Core>, engine: Arc<Engine>) {
             return;
         }
     };
-    if let Err(e) = tray.set_icon(icon(shown.session)) {
+    if let Err(e) = tray.set_icon(icon_shown(shown)) {
         tracing::warn!(%e, "tray icon update failed");
     }
     let shutdown = core.shutdown();
@@ -227,8 +267,8 @@ pub async fn run(core: Arc<Core>, engine: Arc<Engine>) {
                 if now == shown { continue }
                 shown = now;
                 let updated = tray
-                    .set_icon(icon(now.session))
-                    .and_then(|()| tray.set_tooltip(&tooltip(now.session, now.mode)))
+                    .set_icon(icon_shown(now))
+                    .and_then(|()| tray.set_tooltip(&tooltip_shown(now)))
                     .and_then(|()| tray.set_menu(&menu(now)));
                 if let Err(e) = updated {
                     tracing::warn!(%e, "tray update failed");
@@ -259,6 +299,7 @@ mod tests {
             session,
             mode: PermissionMode::Auto,
             island_hidden: false,
+            in_use: 0,
         };
         assert_eq!(
             ids(&menu(shown(SessionState::Idle))),
@@ -286,6 +327,7 @@ mod tests {
             session: SessionState::Idle,
             mode: PermissionMode::Plan,
             island_hidden: false,
+            in_use: 0,
         });
         let Some(TrayMenuItem::Submenu { items, .. }) = menu.get(2) else {
             panic!("the third item is the permission-mode submenu");
@@ -325,6 +367,16 @@ mod tests {
         assert_eq!(icon(SessionState::Paused), TrayIcon::Paused);
         assert_eq!(icon(SessionState::Error), TrayIcon::Error);
         assert_eq!(icon(SessionState::Thinking), TrayIcon::Normal);
+        let busy = Shown {
+            session: SessionState::Acting,
+            mode: PermissionMode::Auto,
+            island_hidden: false,
+            in_use: in_use_bits(&["shell".to_owned(), "screen".to_owned()]),
+        };
+        assert_eq!(icon_shown(busy), TrayIcon::InUse);
+        let tip = tooltip_shown(busy);
+        assert!(tip.ends_with("Using the screen, shell commands"), "{tip}");
+        assert_eq!(icon_shown(Shown { in_use: 0, ..busy }), TrayIcon::Normal);
         assert_eq!(
             tooltip(SessionState::Idle, PermissionMode::Auto),
             "KIVO · Ready\nAuto mode · 0 tasks running"

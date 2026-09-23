@@ -230,6 +230,9 @@ const SCHEMA: &[&str] = &[
          ) STRICT;
      -- The brain's hidden reasoning, only when the user turns the reasoning log on (BRAIN-09).
      ALTER TABLE turns ADD COLUMN reasoning TEXT;",
+    // 7: grants scoped by an argument pattern, and grants for this session only (SEC-08).
+    "ALTER TABLE permissions_grants ADD COLUMN pattern TEXT;
+     ALTER TABLE permissions_grants ADD COLUMN session TEXT;",
 ];
 
 static MIGRATIONS: LazyLock<Migrations<'static>> =

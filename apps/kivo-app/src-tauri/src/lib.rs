@@ -131,6 +131,7 @@ pub fn run() {
             overlay::overlay_typing_done,
             overlay::overlay_focus,
             overlay::overlay_hover,
+            overlay::overlay_drag,
             overlay::island_request,
             announce::announce
         ])

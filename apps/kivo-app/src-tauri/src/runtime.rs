@@ -89,6 +89,10 @@ impl Runtime {
                 .and_then(|s| s.turn.as_ref())
                 .and_then(|t| t.anchor)
                 .map(|p| (p.x, p.y)),
+            snapshot.map(|s| s.island.clone()).unwrap_or_default(),
+            snapshot
+                .and_then(|s| s.turn.as_ref())
+                .and_then(|t| t.title_bar_bottom),
         );
         // A change of mode while connected (not the first state seen) shows the Island's notice.
         if let (Some(before), Some(now)) = (previous_mode, snapshot.map(|s| s.mode))

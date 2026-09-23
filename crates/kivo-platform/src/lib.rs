@@ -10,6 +10,7 @@ mod apps;
 mod audio;
 mod automation;
 mod capabilities;
+mod control;
 mod error;
 mod paths;
 mod screen;
@@ -23,8 +24,15 @@ pub use apps::{AppEntry, Apps, WindowInfo, Windows};
 pub use audio::{
     AecKind, AudioDevice, AudioIo, AudioStream, EchoCancel, FrameSink, FrameSource, StreamFormat,
 };
-pub use automation::{ElementQuery, ElementRef, Input, MouseButton, UiAutomation, UiNode};
+pub use automation::{
+    ElementQuery, ElementRef, Input, MouseButton, UiAction, UiAutomation, UiEvent, UiEventKind,
+    UiEventSink, UiNode, UiSubscription,
+};
 pub use capabilities::{Capabilities, OsFamily};
+pub use control::{
+    Battery, Clipboard, CommandOutput, CommandRunner, CommandSpec, Displays, FileHit, FileOps,
+    Monitor, Power, ShellKind, Snap, UserVerifier,
+};
 pub use error::{PlatformError, PlatformResult};
 pub use kivo_core::Secret;
 pub use paths::Paths;

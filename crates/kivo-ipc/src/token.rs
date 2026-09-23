@@ -5,6 +5,7 @@
 use std::fmt;
 use std::path::Path;
 
+#[derive(Clone)]
 pub struct SessionToken(String);
 
 impl SessionToken {

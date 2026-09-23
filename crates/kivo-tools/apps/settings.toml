@@ -1,0 +1,14 @@
+id = "settings"
+name = "Settings"
+aliases = ["Windows Settings", "Settings"]
+prefer = ["uri", "uia"]
+
+[match]
+exe = ["SystemSettings.exe"]
+aumid = ["windows.immersivecontrolpanel_cw5n1h2txyewy!microsoft.windows.immersivecontrolpanel"]
+
+[uri]
+schemes = ["ms-settings"]
+[uri.verbs.open]
+uri = "ms-settings:{page}"
+description = "Open a Settings page"

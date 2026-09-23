@@ -14,6 +14,7 @@
     "allow-overlay-typing-done",
     "allow-overlay-focus",
     "allow-overlay-hover",
+    "allow-overlay-drag",
     "allow-island-request",
     "allow-announce"
   ]

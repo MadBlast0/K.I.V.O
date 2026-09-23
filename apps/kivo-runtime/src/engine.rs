@@ -7,6 +7,7 @@
 
 mod agent;
 mod brain;
+mod control;
 
 pub use agent::EnginePermissions;
 
@@ -25,9 +26,7 @@ use kivo_intent::{Context as GrammarContext, Index, IndexEntry, IntentRouter, Ro
 use kivo_ipc::infer::InferSlot;
 use kivo_ipc::protocol::{QuietIsland, SpeechStatus, StepView};
 use kivo_platform::{Apps, Windows};
-use kivo_security::{
-    Answer, Context as SecurityContext, Decision, Grant, HardLimits, SessionKind, Taint,
-};
+use kivo_security::{Answer, Decision};
 use kivo_tools::{Registry, targets};
 use serde_json::json;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -43,6 +42,19 @@ const COLLAPSE_AFTER: Duration = Duration::from_secs(4);
 const THINKING_CUE_AFTER: Duration = Duration::from_secs(1);
 /// How long a first request waits for the speech worker to come up.
 const WORKER_START: Duration = Duration::from_secs(8);
+/// How long the Island offers Undo (UX §8.1).
+const UNDO_OFFER: Duration = Duration::from_secs(8);
+/// How long "Kivo, undo that" and the toast can still take the last change back.
+const UNDO_KEPT: Duration = Duration::from_secs(10 * 60);
+
+/// The last change that can be taken back (UX-43).
+struct UndoEntry {
+    tool: String,
+    data: serde_json::Value,
+    title: String,
+    at: Instant,
+}
+
 /// The turn in progress.
 struct Running {
     id: String,
@@ -89,6 +101,11 @@ struct Running {
     thread: Option<String>,
     /// Files attached in Chat: (name, text). Their contents are untrusted data (SECURITY §4).
     attachments: Vec<(String, String)>,
+    /// Where untrusted content entered this turn (a page, a window, the clipboard, a file):
+    /// non-empty means the turn is tainted (SEC-13).
+    tainted: Vec<String>,
+    /// The tools offered to the brain in this round; only these can be called (SEC-15).
+    offered: Vec<String>,
 }
 
 impl Running {
@@ -118,6 +135,8 @@ impl Running {
             brain_choice: None,
             thread: None,
             attachments: Vec::new(),
+            tainted: Vec::new(),
+            offered: Vec::new(),
         }
     }
 }
@@ -143,6 +162,14 @@ pub struct Parts {
     pub brains: Arc<Brains>,
     /// CLI agents over ACP (BRAINS §4, §7).
     pub agents: Arc<crate::agents::Agents>,
+    /// Windows Hello, for High-risk confirmations (SEC-11).
+    pub verifier: Arc<dyn kivo_platform::UserVerifier>,
+    /// The command runner, so the emergency stop can kill every command's process tree.
+    pub commands: Option<Arc<dyn kivo_platform::CommandRunner>>,
+    /// Raised by the emergency stop to halt synthetic input between keys.
+    pub input_abort: Option<Arc<std::sync::atomic::AtomicBool>>,
+    /// Whether this turn's brain may be shown a screenshot (CAP-08); the tools read it.
+    pub vision: Arc<std::sync::atomic::AtomicBool>,
 }
 
 pub struct Engine {
@@ -171,6 +198,14 @@ pub struct Engine {
     pub agents: Arc<crate::agents::Agents>,
     /// The voice session and its thread (CONVERSATION §1).
     session: Mutex<brain::VoiceSession>,
+    verifier: Arc<dyn kivo_platform::UserVerifier>,
+    /// The last undoable change (UX-43).
+    last_undo: Mutex<Option<UndoEntry>>,
+    /// App icons already looked up, as data URLs (UX-46).
+    icons: Mutex<std::collections::HashMap<String, Option<String>>>,
+    commands: Option<Arc<dyn kivo_platform::CommandRunner>>,
+    input_abort: Option<Arc<std::sync::atomic::AtomicBool>>,
+    vision: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl Engine {
@@ -197,6 +232,12 @@ impl Engine {
             brains: parts.brains,
             agents: parts.agents,
             session: Mutex::new(brain::VoiceSession::default()),
+            verifier: parts.verifier,
+            last_undo: Mutex::new(None),
+            icons: Mutex::new(std::collections::HashMap::new()),
+            commands: parts.commands,
+            input_abort: parts.input_abort,
+            vision: parts.vision,
         }
     }
 
@@ -420,10 +461,11 @@ impl Engine {
         match parse_answer(said, &language) {
             Some(answer @ (Said::Approve | Said::ApproveAlways)) => {
                 // A spoken approval that doesn't count is said aloud and kept in Activity.
+                let strong = spec.strength == kivo_core::tool::Strength::Strong;
                 let refused = if guest {
                     Some("decision.guest")
-                } else if spec.strength == kivo_core::tool::Strength::Strong {
-                    // High risk: a click (Windows Hello from M4); voice alone is never enough.
+                } else if strong && !self.verifier.available() {
+                    // High risk without Windows Hello: only a click; voice alone is never enough.
                     Some("decision.click")
                 } else if !self.owner_said_it(audio).await {
                     Some("decision.notOwner")
@@ -436,7 +478,16 @@ impl Engine {
                     self.speak(&message).await;
                     return;
                 }
-                let always = answer == Said::ApproveAlways && spec.allow_always;
+                // High risk: the spoken "approve" starts Windows Hello, which must finish it
+                // (CONV-29).
+                if strong {
+                    if let Err(e) = self.approve_with_hello(&spec.call_id).await {
+                        self.speak(&e).await;
+                    }
+                    return;
+                }
+                let always = (answer == Said::ApproveAlways && spec.allow_always)
+                    .then_some(kivo_core::tool::GrantDuration::Always);
                 if let Err(e) = self
                     .answer_by(&spec.call_id, true, always, ConfirmedBy::Voice)
                     .await
@@ -446,7 +497,7 @@ impl Engine {
             }
             Some(Said::Deny) => {
                 let _ = self
-                    .answer_by(&spec.call_id, false, false, ConfirmedBy::Voice)
+                    .answer_by(&spec.call_id, false, None, ConfirmedBy::Voice)
                     .await;
             }
             Some(Said::Defer) => {
@@ -968,6 +1019,11 @@ impl Engine {
                         path: IntentPath::FastPath,
                         intent: matched.tool.clone(),
                     })));
+                // "Kivo, undo that" (UX-43).
+                if matched.tool == "session.undo" {
+                    self.undo_in_turn().await;
+                    return;
+                }
                 let call = ToolCall {
                     id: format!("{}-c1", self.turn_key()),
                     tool: matched.tool.clone(),
@@ -982,8 +1038,57 @@ impl Engine {
         }
     }
 
+    /// An app's icon as a `data:image/png` URL, looked up once (UX-46).
+    fn app_icon(&self, id: &str) -> Option<String> {
+        if let Some(known) = lock(&self.icons).get(id) {
+            return known.clone();
+        }
+        let url = self.apps.icon(id, 32).and_then(|image| {
+            use base64::Engine as _;
+            let png = kivo_tools::screen_tools::png(&image).ok()?;
+            Some(format!(
+                "data:image/png;base64,{}",
+                base64::engine::general_purpose::STANDARD.encode(png)
+            ))
+        });
+        lock(&self.icons).insert(id.to_owned(), url.clone());
+        url
+    }
+
+    /// The last change, as a call that takes it back (`None` when there is none, or it's too old).
+    fn undo_call(&self) -> Option<ToolCall> {
+        let entry = lock(&self.last_undo).take()?;
+        if entry.at.elapsed() > UNDO_KEPT {
+            return None;
+        }
+        Some(ToolCall {
+            id: format!("{}-undo", self.turn_key()),
+            tool: entry.tool,
+            args: json!({ "undo": entry.data, "title": entry.title }),
+            initiated_by: Initiator::UserDirect,
+            targets: Vec::new(),
+        })
+    }
+
+    /// Undo inside a turn (voice or typed "undo that").
+    async fn undo_in_turn(self: &Arc<Self>) {
+        self.core.update_turn(|view| view.undo = None);
+        match self.undo_call() {
+            Some(call) => self.run_call(call).await,
+            None => self.speak_and_finish(&text::t("reply.nothingToUndo")).await,
+        }
+    }
+
+    /// The Island's Undo button and the Control Center's toast (UX-43): a turn of its own.
+    pub async fn undo_last(self: &Arc<Self>) -> Result<(), String> {
+        if lock(&self.last_undo).is_none() {
+            return Err(text::t("reply.nothingToUndo"));
+        }
+        self.say(&text::t("turn.undoRequest")).await
+    }
+
     /// Decides on a call and, when allowed, runs it.
-    async fn run_call(self: &Arc<Self>, call: ToolCall) {
+    async fn run_call(self: &Arc<Self>, mut call: ToolCall) {
         let capabilities = self.core.config().capabilities;
         let Some(tool) = self.registry.get(&call.tool, &capabilities) else {
             // The capability is off (or the tool doesn't exist here): say so plainly (CAP-02).
@@ -1004,29 +1109,7 @@ impl Engine {
             return;
         };
         let spec = tool.spec().clone();
-        let limits = HardLimits {
-            stopped: lock(&self.turn)
-                .as_ref()
-                .is_some_and(|t| t.cancel.is_cancelled()),
-            blocked_apps: self.core.config().permissions.blocked_apps,
-        };
-        let grants: Vec<Grant> = self.recorder.grants();
-        let decision = kivo_security::authorize(
-            &spec,
-            &call,
-            &SecurityContext {
-                mode: self.core.state().borrow().mode,
-                session: if lock(&self.turn).as_ref().is_some_and(|t| t.guest) {
-                    SessionKind::Guest
-                } else {
-                    SessionKind::Owner
-                },
-                taint: Taint::Clean,
-                capabilities: &capabilities,
-                limits: &limits,
-                grants: &grants,
-            },
-        );
+        let decision = self.authorize_call(tool.as_ref(), &mut call);
         self.mark("t7Permission");
         self.recorder
             .tool_decision(&self.turn_key(), &call, &spec, &decision);
@@ -1035,6 +1118,7 @@ impl Engine {
                 self.execute(tool, call, permit, &spec.title).await;
             }
             Decision::Confirm(confirm) => {
+                let confirm = self.with_hello(confirm);
                 let title = confirm.action.clone();
                 if let Some(running) = lock(&self.turn).as_mut() {
                     running.pending = Some((confirm.clone(), call.clone()));
@@ -1068,6 +1152,17 @@ impl Engine {
         allow: bool,
         always: bool,
     ) -> Result<(), String> {
+        let duration = always.then_some(kivo_core::tool::GrantDuration::Always);
+        self.answer_confirmation_for(call_id, allow, duration).await
+    }
+
+    /// The user answered, with how long an "Always allow" should last (SEC-08).
+    pub async fn answer_confirmation_for(
+        self: &Arc<Self>,
+        call_id: &str,
+        allow: bool,
+        duration: Option<kivo_core::tool::GrantDuration>,
+    ) -> Result<(), String> {
         // A click while KIVO listens for a spoken answer: stop listening.
         let answering = lock(&self.turn).as_mut().is_some_and(|t| {
             let was = t.answering;
@@ -1078,7 +1173,7 @@ impl Engine {
             self.cancel_listening();
             self.core.update_turn(|view| view.answering = false);
         }
-        self.answer_by(call_id, allow, always, ConfirmedBy::Click)
+        self.answer_by(call_id, allow, duration, ConfirmedBy::Click)
             .await
     }
 
@@ -1086,9 +1181,10 @@ impl Engine {
         self: &Arc<Self>,
         call_id: &str,
         allow: bool,
-        always: bool,
+        duration: Option<kivo_core::tool::GrantDuration>,
         by: ConfirmedBy,
     ) -> Result<(), String> {
+        let duration = duration.filter(|d| *d != kivo_core::tool::GrantDuration::Once);
         let pending = lock(&self.turn).as_mut().and_then(|t| {
             t.pending
                 .as_ref()
@@ -1108,16 +1204,17 @@ impl Engine {
         if let Some(waiter) = waiter {
             self.recorder
                 .confirmation(&self.turn_key(), &call, allow, by);
-            if allow && always && spec.allow_always {
-                self.recorder.add_grant(&call);
+            let always = duration.is_some() && spec.allow_always;
+            if allow && always {
+                self.grant(&call, duration);
             }
             if allow {
                 if by == ConfirmedBy::Voice {
                     self.speaker.cue(Cue::Approved);
                 }
-                self.core.advance(SessionInput::Confirmed);
+                self.confirmed_state();
             }
-            let _ = waiter.send((allow, always && spec.allow_always, by));
+            let _ = waiter.send((allow, always, by));
             return Ok(());
         }
         if !allow {
@@ -1137,8 +1234,8 @@ impl Engine {
         }
         self.recorder
             .confirmation(&self.turn_key(), &call, true, by);
-        if always && spec.allow_always {
-            self.recorder.add_grant(&call);
+        if spec.allow_always {
+            self.grant(&call, duration);
         }
         self.core.advance(SessionInput::Confirmed);
         let capabilities = self.core.config().capabilities;
@@ -1193,12 +1290,15 @@ impl Engine {
             status: StepStatus::Running,
             detail: None,
         });
+        let target = call.targets.iter().find_map(|t| match t {
+            kivo_core::tool::Target::App { id, name } => Some((id.clone(), name.clone())),
+            _ => None,
+        });
+        let icon = target.as_ref().and_then(|(id, _)| self.app_icon(id));
         self.core.update_turn(|view| {
             if view.target_app.is_none() {
-                view.target_app = call.targets.iter().find_map(|t| match t {
-                    kivo_core::tool::Target::App { name, .. } => Some(name.clone()),
-                    _ => None,
-                });
+                view.target_app = target.as_ref().map(|(_, name)| name.clone());
+                view.target_icon.clone_from(&icon);
             }
         });
         self.core.bus.publish(Event::new(EventKind::Tool(
@@ -1206,17 +1306,49 @@ impl Engine {
                 call_id: call.id.clone(),
             },
         )));
-        let (result, output) = kivo_tools::execute(tool, call, permit, &cancel).await;
+        let capability = tool.spec().capability;
+        let undoable = tool.spec().reversibility == kivo_core::tool::Reversibility::Undoable;
+        let undoing = call.args.get("undo").is_some();
+        self.in_use(capability, true);
+        let (result, output) = if undoing {
+            kivo_tools::registry::undo(tool, call, permit, &cancel).await
+        } else {
+            kivo_tools::execute(tool, call, permit, &cancel).await
+        };
+        self.in_use(capability, false);
         self.mark("t8ToolDone");
+        // Someone else's content entered the turn: it is tainted from here on (SEC-13).
+        if let Some(source) = output.as_ref().and_then(|o| o.source.as_deref()) {
+            self.taint_with(source);
+        }
         self.recorder.tool_result(&self.turn_key(), call, &result);
         match (&result.status, &output) {
             (Ok(_), Some(output)) => {
                 self.core.set_step(StepView {
                     id: call.id.clone(),
-                    title: step_title,
+                    title: step_title.clone(),
                     status: StepStatus::Done,
                     detail: Some(output.say.clone()),
                 });
+                // Undoable (not an undo itself): offer to take it back (UX-43).
+                if undoable && call.args.get("undo").is_none() {
+                    *lock(&self.last_undo) = Some(UndoEntry {
+                        tool: call.tool.clone(),
+                        data: output.data.clone(),
+                        title: step_title.clone(),
+                        at: Instant::now(),
+                    });
+                    let until = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(0))
+                        + u64::try_from(UNDO_OFFER.as_millis()).unwrap_or(0);
+                    self.core.update_turn(|view| {
+                        view.undo = Some(kivo_ipc::protocol::UndoOffer {
+                            title: step_title.clone(),
+                            until,
+                        });
+                    });
+                }
                 // An app was launched or closed: the window list changed.
                 if call.tool.starts_with("apps.") {
                     let engine = Arc::clone(self);
@@ -1568,7 +1700,17 @@ impl Engine {
             x: b.x.saturating_add(i32::try_from(b.width / 2).unwrap_or(0)),
             y: b.y.saturating_add(i32::try_from(b.height / 2).unwrap_or(0)),
         };
-        self.core.update_turn(|view| view.anchor = Some(anchor));
+        // UX-14: the window's title bar or tabs, so the listening Island can sit below them.
+        let title_bar_bottom = self
+            .windows
+            .title_bar(front.id)
+            .ok()
+            .flatten()
+            .map(|t| t.y.saturating_add(i32::try_from(t.height).unwrap_or(0)));
+        self.core.update_turn(|view| {
+            view.anchor = Some(anchor);
+            view.title_bar_bottom = title_bar_bottom;
+        });
     }
 
     /// How requests have been routed: the fast-path share and per-stage p95 (BRAIN-05).
@@ -1588,6 +1730,8 @@ impl Engine {
     /// Stop everything (SEC-25): the turn, the voice and (from M5) tasks.
     pub fn stop_everything(&self) {
         self.cancel(CancelReason::EmergencyStop);
+        // An agent's prompt runs under the turn's token: cancelling it sent session/cancel.
+        self.stop_controls();
         self.speaker.stop();
         self.core.stop_everything();
         self.recorder.emergency_stop();

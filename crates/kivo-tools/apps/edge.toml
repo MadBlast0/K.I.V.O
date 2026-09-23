@@ -1,0 +1,8 @@
+id = "edge"
+name = "Microsoft Edge"
+aliases = ["Edge"]
+browser = true
+prefer = ["browser-dom", "uia"]
+
+[match]
+exe = ["msedge.exe"]

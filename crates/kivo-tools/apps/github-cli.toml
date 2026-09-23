@@ -1,0 +1,22 @@
+# GitHub CLI. Uses the user's own `gh auth login`; KIVO never handles the token.
+id = "github-cli"
+name = "GitHub CLI"
+aliases = ["gh", "GitHub"]
+cli_only = true
+
+[cli]
+program = "gh"
+[cli.verbs.prs]
+args = ["pr", "list", "--limit", "20"]
+risk = "low"
+description = "Open pull requests in this repository"
+cwd = "{path}"
+[cli.verbs.issues]
+args = ["issue", "list", "--limit", "20"]
+risk = "low"
+description = "Open issues in this repository"
+cwd = "{path}"
+[cli.verbs.status]
+args = ["status"]
+risk = "low"
+description = "What needs your attention on GitHub"

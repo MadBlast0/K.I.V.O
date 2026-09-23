@@ -71,7 +71,21 @@
       "answer": "KIVO: {text}"
     },
     "brainChip": "Answered by {reason}",
-    "misroute": "That’s not what I meant"
+    "misroute": "That’s not what I meant",
+    "duration": {
+      "session": "For this session",
+      "day": "For 24 hours",
+      "always": "Always"
+    },
+    "back": "Back",
+    "hello": "Confirm with Windows Hello",
+    "inUse": {
+      "screen": "Reading the screen",
+      "input": "Using the mouse and keyboard",
+      "shell": "Running a command"
+    },
+    "undo": "Undo",
+    "undoLeft": "{seconds, plural, one {# second} other {# seconds}} left to undo"
   },
   "home": {
     "talk": "Talk",
@@ -998,7 +1012,17 @@
   },
   "settings": {
     "subtitle": "How KIVO behaves. More settings are on their way.",
-    "sounds": "Sounds"
+    "sounds": "Sounds",
+    "island": {
+      "title": "Island",
+      "position": "Where the Island appears",
+      "positionHint": "Drag the Island to put it anywhere; KIVO remembers the spot on each monitor.",
+      "positions": {
+        "top-center": "Top center",
+        "bottom-center": "Bottom center",
+        "remember-drag": "Where I dragged it"
+      }
+    }
   },
   "brains": {
     "subtitle": "How KIVO thinks. Sign in with something you already use; no API keys needed.",
@@ -1173,5 +1197,198 @@
     "stop": "Stop",
     "send": "Send",
     "voice": "Voice"
+  },
+  "permissions": {
+    "subtitle": "What KIVO may do, and how much it asks first.",
+    "tabs": {
+      "mode": "Mode",
+      "capabilities": "Capabilities",
+      "privacy": "Privacy"
+    },
+    "recommended": "Recommended",
+    "add": "Add",
+    "remove": "Remove {item}",
+    "cancel": "Cancel",
+    "mode": {
+      "title": "Permission mode",
+      "ask": "Asks before anything that changes something. Reading and looking never ask.",
+      "accept-edits": "Edits files and works with apps and windows on its own; asks before commands, settings and anything high-risk.",
+      "plan": "Only reads and looks. Shows a plan and changes nothing until you approve it; approving runs exactly those steps.",
+      "auto": "Does everyday things on its own. High-risk actions always ask.",
+      "bypassLater": "Bypass permissions arrives with its own confirmation step and time limit.",
+      "switch": "Switch anytime from the Island, the tray, chat or"
+    },
+    "limits": {
+      "title": "Always enforced, in every mode",
+      "stop": "Emergency stop works",
+      "capabilities": "Capabilities you turned off stay off",
+      "passwords": "Password fields are never typed into",
+      "apps": "Blocked apps are never touched",
+      "appsHint": "Password managers, banking apps and Windows Security by default",
+      "destinations": "Nothing is sent to addresses that came from web pages or files",
+      "destinationsHint": "Protects against instructions hidden in content KIVO reads"
+    },
+    "compare": {
+      "title": "Compare modes",
+      "action": "Action",
+      "short": {
+        "ask": "Ask",
+        "accept-edits": "Edits",
+        "plan": "Plan",
+        "auto": "Auto"
+      },
+      "rows": {
+        "read": "Read and look",
+        "apps": "Open apps, media, windows",
+        "files": "Edit files in allowed folders",
+        "commands": "Run commands, change settings",
+        "high": "Delete, send, pay, security"
+      },
+      "values": {
+        "none": "—",
+        "ask": "Ask",
+        "auto": "Auto",
+        "plan": "Plan"
+      }
+    },
+    "grants": {
+      "title": "Things you’ve allowed",
+      "hint": "From “Always for…” on a question",
+      "none": "Nothing yet. When KIVO asks, “Always for…” adds a permission here.",
+      "revoke": "Revoke",
+      "session": "until KIVO restarts",
+      "until": "until {when}",
+      "always": "always"
+    },
+    "capabilities": {
+      "preset": "Start from a preset",
+      "presets": {
+        "minimal": "Minimal",
+        "balanced": "Balanced",
+        "power-user": "Power user"
+      },
+      "presetHint": {
+        "minimal": "Minimal: voice, apps and system controls only",
+        "balanced": "Balanced: everyday things on; the screen, input and commands off",
+        "power-user": "Power user: Balanced plus commands, screen awareness and the clipboard",
+        "custom": "Custom: your own choices"
+      },
+      "sections": {
+        "voice": "Listening and speaking",
+        "computer": "Your computer",
+        "screen": "Apps and the screen",
+        "browser": "Browser",
+        "intelligence": "Intelligence and data"
+      },
+      "options": "Options",
+      "used": "used {when}",
+      "neverUsed": "not used yet",
+      "footer": "When something is off, nothing can use it: not a brain, an agent, a routine or a connected tool.",
+      "about": {
+        "mic-listening": "Wake word listening, on this PC only",
+        "push-to-talk": "Hold a key to talk",
+        "speak-responses": "KIVO answers out loud",
+        "apps-and-windows": "Open, switch, snap and close apps and windows",
+        "system-controls": "Volume, media, brightness, lock and sleep",
+        "power-actions": "Restart and shut down; always asks",
+        "files-read": "Search, open and read files in allowed folders",
+        "files-modify": "Create, rename, move and copy; deletes go to the Recycle Bin",
+        "clipboard": "Read and write the clipboard",
+        "browser-open-links": "Open links and searches in your browser",
+        "browser-pages": "Your open tabs, through KIVO’s extension",
+        "browser-autonomous": "Browse for you in KIVO’s own browser profile",
+        "ui-automation": "Read and use the controls in app windows",
+        "screen-awareness": "On request: “what’s on my screen?”",
+        "computer-use": "AI uses the mouse and keyboard when nothing else works",
+        "shell": "Run commands in PowerShell or cmd",
+        "background-tasks": "Tasks that keep going after you ask",
+        "routines": "Your custom commands and routines",
+        "memory": "Only what you ask it to remember",
+        "cloud-brains": "AI services on the internet",
+        "realtime-voice": "Natural speech-to-speech conversation",
+        "cli-agents": "Coding agents in allowed project folders",
+        "mcp-servers": "Tools from MCP servers you add",
+        "integrations": "Connected accounts such as Google or Microsoft",
+        "speaker-recognition": "Knows your voice; stored on this PC",
+        "remote-access": "From your paired phone",
+        "notifications": "Notifications and proactive speech"
+      }
+    },
+    "badges": {
+      "local": "Local",
+      "cloud": "Cloud",
+      "costly": "Costs",
+      "sensitive": "Sensitive"
+    },
+    "options": {
+      "block": "Never use on these apps",
+      "blockHint": "Password managers, banking and Windows Security are here by default",
+      "allow": "Only these apps",
+      "allowHint": "Empty: any app not blocked",
+      "appPlaceholder": "App name, program or *pattern*",
+      "blockedApps": "Blocked apps",
+      "blockedAppsHint": "KIVO never acts on these apps, in any mode.",
+      "allowedFolders": "Allowed folders",
+      "allowedFoldersHint": "Empty: your own folders and the workspace",
+      "privateFolders": "Private folders",
+      "privateFoldersHint": "Never read, changed or searched",
+      "folderPlaceholder": "A full folder path",
+      "clipboardRead": "Read the clipboard",
+      "clipboardReadHint": "What’s read is treated as someone else’s content",
+      "clipboardWrite": "Write to the clipboard",
+      "shellReadOnly": "Read-only commands only",
+      "shellReadOnlyHint": "Off: other commands run with confirmation",
+      "cloudVision": "Allow cloud vision",
+      "cloudVisionHint": "Off: screens are read on this PC only (controls and text recognition)",
+      "blockedSites": "Never on these sites",
+      "allowedSites": "Only on these sites",
+      "allowedSitesHint": "Empty: any site not blocked",
+      "sitePlaceholder": "example.com",
+      "extension": "KIVO browser extension",
+      "extensionOn": "Chrome, Edge or Brave is connected",
+      "extensionOff": "Not connected. Without it, KIVO reads the address and page text through the window.",
+      "connected": "Connected",
+      "notConnected": "Not connected",
+      "install": "Install it",
+      "installHow": "In Chrome, Edge or Brave, open the extensions page, turn on Developer mode, choose Load unpacked, then pick {folder}."
+    },
+    "privacy": {
+      "where": "Where your requests go",
+      "modes": {
+        "cloud": "Cloud allowed",
+        "cloudHint": "Use cloud AI when it gives a better answer.",
+        "local": "Prefer this PC",
+        "localHint": "Local models first. Cloud AI only when you allow it.",
+        "strict-private": "Strict private",
+        "strict-privateHint": "Nothing leaves this PC. Personal data is never sent anywhere."
+      },
+      "stays": "Always stays on this PC",
+      "wake": "Wake word listening",
+      "wakeHint": "Audio is only used after you speak to KIVO",
+      "voice": "Your voice profile",
+      "secrets": "Passwords and sign-ins",
+      "secretsHint": "Stored in Windows Credential Manager",
+      "screenshots": "Screenshots",
+      "screenshotsHint": "Held in memory only, never saved; sent to an AI only when you allow cloud vision",
+      "onPc": "On this PC",
+      "data": "Your data",
+      "keep": "Keep conversations",
+      "keepFor": {
+        "week": "7 days",
+        "month": "30 days",
+        "forever": "Forever",
+        "never": "Never"
+      },
+      "transcripts": "Save transcripts in logs",
+      "transcriptsHint": "Only for troubleshooting",
+      "privateHint": "Files here are never read, searched or sent",
+      "neverTitle": "Stop keeping conversations?",
+      "neverBody": "KIVO will forget each conversation when it ends, and chats won’t be kept.",
+      "neverConfirm": "Stop keeping them"
+    }
+  },
+  "undo": {
+    "toast": "Done: {title}",
+    "failed": "Couldn’t undo: {error}"
   }
 }

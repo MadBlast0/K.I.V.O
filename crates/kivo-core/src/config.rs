@@ -150,6 +150,8 @@ pub enum SpeakerMode {
 pub struct Overlay {
     pub style: OverlayStyle,
     pub position: OverlayPosition,
+    /// Where the Island was dragged to, per monitor (UX-13), used with Remember drag.
+    pub spots: Vec<IslandSpot>,
     pub wake_glow: bool,
     pub in_fullscreen: FullscreenBehavior,
     /// Motion: follow Windows "Animation effects", or always reduced.
@@ -161,6 +163,7 @@ impl Default for Overlay {
         Self {
             style: OverlayStyle::PillAndCard,
             position: OverlayPosition::TopCenter,
+            spots: Vec::new(),
             wake_glow: false,
             in_fullscreen: FullscreenBehavior::Hide,
             reduce_motion: false,
@@ -177,6 +180,19 @@ pub enum OverlayStyle {
     Off,
 }
 
+/// The Island's place on one monitor: its top-left, from the monitor's top-left, in physical
+/// pixels (UX-13).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
+pub struct IslandSpot {
+    /// The monitor as Windows names it (`\\.\DISPLAY2`).
+    pub monitor: String,
+    pub x: i32,
+    pub y: i32,
+}
+
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum OverlayPosition {
@@ -478,9 +494,101 @@ pub struct BrainConnection {
     pub enabled: bool,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+/// The per-capability controls (CAPABILITIES §1 "Controls when on", TOOLS_AND_CONTROL).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
-pub struct Tools {}
+pub struct Tools {
+    /// The last preset applied (CAP-05); `custom` once a toggle differs from it.
+    pub preset: Preset,
+    /// Per-app lists for UI Automation, screen awareness and computer use (CAP-07).
+    pub ui_automation_apps: AppScope,
+    pub screen_apps: AppScope,
+    pub computer_use_apps: AppScope,
+    /// Screen awareness may send a screenshot to a cloud vision brain (off: local OCR only).
+    pub cloud_vision: bool,
+    pub clipboard_read: bool,
+    pub clipboard_write: bool,
+    /// Shell: only read-only commands (Low risk) run; anything else is refused.
+    pub shell_read_only: bool,
+    /// Files: the folders file tools may use (empty: the user's folders).
+    pub allowed_folders: Vec<String>,
+    /// Folders never read or changed, and never searched.
+    pub private_folders: Vec<String>,
+    /// Browser pages: sites the extension tools may read and act on (empty: any) and never.
+    pub allowed_sites: Vec<String>,
+    pub blocked_sites: Vec<String>,
+}
+
+impl Default for Tools {
+    fn default() -> Self {
+        Self {
+            preset: Preset::Balanced,
+            ui_automation_apps: AppScope::default(),
+            screen_apps: AppScope::default(),
+            computer_use_apps: AppScope::default(),
+            cloud_vision: false,
+            clipboard_read: true,
+            clipboard_write: true,
+            shell_read_only: true,
+            allowed_folders: Vec::new(),
+            private_folders: Vec::new(),
+            allowed_sites: Vec::new(),
+            blocked_sites: Vec::new(),
+        }
+    }
+}
+
+/// Capability presets (CAPABILITIES §2).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Preset {
+    Minimal,
+    Balanced,
+    PowerUser,
+    Custom,
+}
+
+/// Which apps a capability may act on. `allow` empty means any app not blocked.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
+pub struct AppScope {
+    pub allow: Vec<String>,
+    pub block: Vec<String>,
+}
+
+impl Default for AppScope {
+    fn default() -> Self {
+        Self {
+            allow: Vec::new(),
+            block: DEFAULT_BLOCKED_APPS
+                .iter()
+                .map(|s| (*s).to_owned())
+                .collect(),
+        }
+    }
+}
+
+/// Never touched by default (CAP-07): password managers, banking apps and Windows Security.
+/// Entries match an app's program name (`KeePassXC`), its id, or a `*pattern*`.
+pub const DEFAULT_BLOCKED_APPS: &[&str] = &[
+    "1Password",
+    "Bitwarden",
+    "KeePass",
+    "KeePassXC",
+    "LastPass",
+    "Dashlane",
+    "NordPass",
+    "RoboForm",
+    "Enpass",
+    "Keeper",
+    "ProtonPass",
+    "*bank*",
+    "*banking*",
+    "SecHealthUI",
+    "SecurityHealthHost",
+    "SecurityHealthSystray",
+];
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "kebab-case", deny_unknown_fields)]

@@ -1,0 +1,14 @@
+id = "calculator"
+name = "Calculator"
+aliases = ["Calculator", "calc"]
+prefer = ["uri", "uia"]
+
+[match]
+exe = ["CalculatorApp.exe", "calc.exe"]
+aumid = ["Microsoft.WindowsCalculator_8wekyb3d8bbwe!App"]
+
+[uri]
+schemes = ["calculator"]
+[uri.verbs.open]
+uri = "calculator:"
+description = "Open Calculator"

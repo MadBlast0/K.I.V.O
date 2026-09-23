@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "../components/layout/Shell";
 import { Button, Group, IconButton, Note, Row, Section, Select, Slider, Switch, useToast } from "../components/ui";
-import { Method, type SoundCue, type SoundSet } from "../ipc/generated";
+import { Method, type OverlayPosition, type SoundCue, type SoundSet } from "../ipc/generated";
 import { useRuntime } from "../ipc/runtime";
 
 interface Sounds {
@@ -138,11 +138,47 @@ export function SoundSettings() {
   );
 }
 
+/** Where the Island appears (UX-13): top center, bottom center, or where it was dragged. */
+export function IslandSettings() {
+  const { t } = useTranslation();
+  const { link, request } = useRuntime();
+  const toast = useToast();
+  const connected = link?.status === "connected";
+  const position = connected ? link.snapshot?.island?.position : undefined;
+  if (!connected || !position) return null;
+  return (
+    <Group>
+      <Row
+        icon="island"
+        title={t("settings.island.position")}
+        subtitle={t("settings.island.positionHint")}
+        end={
+          <Select<OverlayPosition>
+            label={t("settings.island.position")}
+            value={position}
+            onChange={(v) => {
+              request(Method.settingsSet, { overlay: { position: v } }).catch((e: unknown) =>
+                toast(e instanceof Error ? e.message : String(e)),
+              );
+            }}
+            items={(["top-center", "bottom-center", "remember-drag"] as const).map((value) => ({
+              value,
+              label: t(`settings.island.positions.${value}`),
+            }))}
+          />
+        }
+      />
+    </Group>
+  );
+}
+
 export function Settings() {
   const { t } = useTranslation();
   return (
     <>
       <PageHeader title={t("nav.settings")} subtitle={t("settings.subtitle")} />
+      <Section title={t("settings.island.title")} />
+      <IslandSettings />
       <Section title={t("settings.sounds")} />
       <SoundSettings />
     </>

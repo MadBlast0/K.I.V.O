@@ -85,6 +85,10 @@ pub fn body(request: &ChatRequest) -> Value {
                 } => Some(json!({
                     "type": "tool_result", "tool_use_id": id, "content": content, "is_error": is_error,
                 })),
+                Part::Image { media_type, data } => Some(json!({
+                    "type": "image",
+                    "source": { "type": "base64", "media_type": media_type, "data": data },
+                })),
             })
             .collect();
         if content.is_empty() {

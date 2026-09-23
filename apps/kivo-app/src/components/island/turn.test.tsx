@@ -72,14 +72,17 @@ describe("Island while KIVO acts", () => {
       strength: "normal",
       allowAlways: true,
       plan: false,
+      hello: false,
     };
     const on = handlers();
     const model = islandForTurn(snapshot, i18n.t.bind(i18n), on);
     render(<>{model?.body}</>);
     expect(screen.getByText("Close Google Chrome")).toBeTruthy();
     expect(screen.getByText(/You asked KIVO to check/).textContent).toContain("You asked");
+    // "Always for…" asks how long (SEC-08).
     fireEvent.click(screen.getByRole("button", { name: "Always allow for Google Chrome" }));
-    expect(on.answer).toHaveBeenCalledWith("c1", true, true);
+    fireEvent.click(screen.getByRole("button", { name: "For 24 hours" }));
+    expect(on.answer).toHaveBeenCalledWith("c1", true, true, { duration: "day" });
     expect(hasButtons(model)).toBe(true);
   });
 
@@ -116,6 +119,7 @@ describe("Island M2 states (UX-08, UX-45, CONV-26)", () => {
       strength: "normal",
       allowAlways: false,
       plan: false,
+      hello: false,
     };
     return snapshot;
   };
@@ -193,5 +197,89 @@ describe("Island for a brain's answer (PLAN-17, BRAIN-06)", () => {
     expect(chip.getAttribute("title")).toBe("Coding · Claude Code — because this looked like a coding task");
     fireEvent.click(screen.getByRole("button", { name: "That’s not what I meant" }));
     expect(on.misroute).toHaveBeenCalledWith("t1");
+  });
+});
+
+describe("Island M4 (SEC-02, SEC-11, UX-43, UX-46, CAP-06, CAP-08)", () => {
+  const t = i18n.t.bind(i18n);
+
+  it("shows a plan as its steps and approves it in one answer", () => {
+    const snapshot = acting("plan");
+    snapshot.session = "awaitingConfirmation";
+    snapshot.turn!.confirm = {
+      callId: "t1-plan1",
+      tool: "plan",
+      action: ["Plan:", "1. Type “Ada” into a field", "2. Switch an option on or off"].join("\n"),
+      target: null,
+      why: "In Plan first, nothing changes until you approve the plan.",
+      provenance: "Suggested by the AI",
+      risk: "medium",
+      strength: "normal",
+      allowAlways: false,
+      plan: true,
+      hello: false,
+    };
+    const on = handlers();
+    render(<>{islandForTurn(snapshot, t, on)?.body}</>);
+    const plan = screen.getByText(/1\. Type “Ada” into a field/);
+    expect(plan.className).toContain("k-island__action--plan");
+    fireEvent.click(screen.getByRole("button", { name: "Approve plan" }));
+    expect(on.answer).toHaveBeenCalledWith("t1-plan1", true, false);
+    expect(screen.queryByRole("button", { name: /Always/ })).toBeNull();
+  });
+
+  it("offers Windows Hello for high risk", () => {
+    const snapshot = acting("auto");
+    snapshot.session = "awaitingConfirmation";
+    snapshot.turn!.confirm = {
+      callId: "c9",
+      tool: "system.shutdown",
+      action: "Shut down the computer",
+      target: null,
+      why: "This is a high-risk action.",
+      provenance: "You asked",
+      risk: "high",
+      strength: "strong",
+      allowAlways: false,
+      plan: false,
+      hello: true,
+    };
+    const on = handlers();
+    render(<>{islandForTurn(snapshot, t, on)?.body}</>);
+    fireEvent.click(screen.getByRole("button", { name: "Confirm with Windows Hello" }));
+    expect(on.answer).toHaveBeenCalledWith("c9", true, false, { hello: true });
+  });
+
+  it("offers Undo with a ring after a reversible change, and shows the app's icon and notes", () => {
+    const snapshot = acting("auto");
+    snapshot.session = "idle";
+    snapshot.turn!.answer = "Moved 1 item to Archive.";
+    snapshot.turn!.targetIcon = "data:image/png;base64,iVBORw0KGgo=";
+    snapshot.turn!.note = "Sent a screenshot of Notepad to Claude.";
+    snapshot.turn!.undo = { title: "Move files to Archive", until: Date.now() + 8000 };
+    const on = { ...handlers(), undo: vi.fn<() => void>() };
+    const model = islandForTurn(snapshot, t, on);
+    render(
+      <>
+        {model?.lead}
+        {model?.body}
+      </>,
+    );
+    expect(screen.getByRole("img", { name: "Google Chrome" }).getAttribute("src")).toContain("data:image/png");
+    expect(screen.getByText("Sent a screenshot of Notepad to Claude.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    expect(on.undo).toHaveBeenCalledOnce();
+    // Once the offer has run out, no Undo.
+    snapshot.turn!.undo = { title: "x", until: Date.now() - 1 };
+    const later = islandForTurn(snapshot, t, on);
+    expect(later?.body).toBeTruthy();
+  });
+
+  it("shows which sensitive capability is in use while acting", () => {
+    const snapshot = acting("auto");
+    snapshot.inUse = ["screen", "shell"];
+    render(<>{islandForTurn(snapshot, t, handlers())?.trail}</>);
+    expect(screen.getByRole("img", { name: "Reading the screen" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Running a command" })).toBeTruthy();
   });
 });

@@ -1,7 +1,7 @@
 //! Command-line flags (ARCHITECTURE §1).
 
 /// How the runtime was started, which decides whether and how it launches the app.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Args {
     /// Started at sign-in: launch the app in the background (no window).
     pub autostart: bool,
@@ -12,6 +12,10 @@ pub struct Args {
     /// Don't start: check that a running runtime answers over IPC, and exit 0 if it does
     /// (the installer smoke test, REL-06).
     pub health: bool,
+    /// Started by a browser as KIVO's native messaging host: the caller's origin
+    /// (`chrome-extension://<id>/`; TOOL-24). Chrome passes it as the first argument; the host
+    /// relays and never starts a runtime.
+    pub native_messaging: Option<String>,
 }
 
 impl Args {
@@ -23,6 +27,14 @@ impl Args {
                 "--from-app" => parsed.from_app = true,
                 "--no-app" => parsed.no_app = true,
                 "--health" => parsed.health = true,
+                "--native-messaging" => {
+                    parsed.native_messaging.get_or_insert_with(String::new);
+                }
+                origin if origin.starts_with("chrome-extension://") => {
+                    parsed.native_messaging = Some(origin.to_owned());
+                }
+                // Chrome adds the calling window on Windows; the host doesn't need it.
+                parent if parent.starts_with("--parent-window=") => {}
                 other => return Err(format!("unknown argument: {other}")),
             }
         }
@@ -45,5 +57,10 @@ mod tests {
         assert!(all.autostart && all.from_app && all.no_app && !all.health);
         assert!(parse(&["--health"]).unwrap().health);
         assert_eq!(parse(&["--nope"]), Err("unknown argument: --nope".into()));
+        let host = parse(&["chrome-extension://abc/", "--parent-window=0"]).unwrap();
+        assert_eq!(
+            host.native_messaging.as_deref(),
+            Some("chrome-extension://abc/")
+        );
     }
 }

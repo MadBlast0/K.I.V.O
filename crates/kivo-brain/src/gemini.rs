@@ -107,6 +107,9 @@ pub fn body(request: &ChatRequest) -> Value {
                         "response": if *is_error { json!({ "error": content }) } else { json!({ "content": content }) },
                     }
                 })),
+                Part::Image { media_type, data } => Some(json!({
+                    "inlineData": { "mimeType": media_type, "data": data }
+                })),
             })
             .collect();
         if parts.is_empty() {

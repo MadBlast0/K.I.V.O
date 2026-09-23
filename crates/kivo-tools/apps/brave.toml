@@ -1,0 +1,8 @@
+id = "brave"
+name = "Brave"
+aliases = ["Brave"]
+browser = true
+prefer = ["browser-dom", "uia"]
+
+[match]
+exe = ["brave.exe"]

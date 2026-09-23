@@ -1,0 +1,8 @@
+id = "chrome"
+name = "Google Chrome"
+aliases = ["Chrome"]
+browser = true
+prefer = ["browser-dom", "uia"]
+
+[match]
+exe = ["chrome.exe"]

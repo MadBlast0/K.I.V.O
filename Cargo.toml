@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/*", "apps/kivo-runtime", "apps/kivo-infer", "apps/kivo-bench", "apps/kivo-app/src-tauri"]
+members = ["crates/*", "apps/kivo-runtime", "apps/kivo-infer", "apps/kivo-bench", "apps/kivo-app/src-tauri", "testenv/app"]
 
 [workspace.package]
 version = "0.0.0"
@@ -50,6 +50,8 @@ ureq = { version = "3.4", default-features = false, features = ["native-tls", "g
 # Async HTTP with streaming bodies for the brain adapters (SSE), Windows TLS via schannel.
 reqwest = { version = "0.13", default-features = false, features = ["native-tls", "stream", "json", "http2", "system-proxy"] }
 async-trait = "0.1"
+# UI Automation (Apache-2.0, checked in M0): the UIA thread and tools (TOOL-19).
+uiautomation = { version = "0.25.1", default-features = false, features = ["process", "control", "event", "pattern", "input"] }
 kivo-core = { path = "crates/kivo-core" }
 kivo-platform = { path = "crates/kivo-platform" }
 kivo-ipc = { path = "crates/kivo-ipc" }

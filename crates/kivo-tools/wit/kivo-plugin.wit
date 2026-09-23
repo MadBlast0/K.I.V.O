@@ -1,0 +1,113 @@
+// KIVO plugins (INTEGRATIONS_AND_PLUGINS §3, INT-09): the WebAssembly Component Model interface,
+// drafted in M4 so KIVO's built-in tools already have the shape a plugin's tools will have.
+// Plugins arrive after M9; nothing loads WASM yet.
+//
+// Capabilities are granted by linking: a plugin gets only the imports the user approved at
+// install (no import, no access). Every tool call still goes through KIVO's permission engine;
+// a plugin can never approve its own actions.
+
+package kivo:plugin@0.1.0;
+
+/// What every tool declares about itself (TOOLS_AND_CONTROL §1). Mirrors `kivo_core::tool::ToolSpec`.
+interface types {
+    enum risk { safe, low, medium, high }
+
+    enum side-effect {
+        none,
+        local-read,
+        local-write,
+        destructive,
+        external-comms,
+        financial,
+        security-sensitive,
+    }
+
+    enum capability-tier { native, os-api, app-cli, uia, browser-dom, a11y, vision, input }
+
+    enum reversibility { not-applicable, undoable, irreversible }
+
+    enum platform { windows, mac-os, linux }
+
+    record tool-spec {
+        /// Namespaced: `<plugin-id>.<tool>`.
+        id: string,
+        /// Short and model-facing.
+        description: string,
+        /// What it does in the user's words, with `{arg}` placeholders.
+        title: string,
+        /// JSON Schema of the arguments and of the result, as JSON text.
+        params: string,
+        result: string,
+        risk: risk,
+        side-effects: list<side-effect>,
+        /// Sends data off the device.
+        data-egress: bool,
+        timeout-ms: u64,
+        cancellable: bool,
+        tier: capability-tier,
+        platforms: list<platform>,
+        reversibility: reversibility,
+        /// The KIVO capability that must be on for the tool to exist (kebab-case, e.g.
+        /// `ui-automation`).
+        capability: string,
+    }
+
+    enum error-code { not-found, invalid-args, unsupported, access-denied, timeout, cancelled, failed }
+
+    record tool-error {
+        code: error-code,
+        /// Safe to show and speak.
+        message: string,
+    }
+
+    record tool-output {
+        /// JSON text for the brain and Activity.
+        data: string,
+        /// A short sentence to say ("Opened Recipes.").
+        say: string,
+        /// Set when the data is someone else's content (a page, a file): KIVO fences it as
+        /// untrusted and taints the turn.
+        untrusted-source: option<string>,
+    }
+}
+
+/// What KIVO may lend a plugin, one import per grant.
+interface host {
+    use types.{tool-error};
+
+    /// Log a line to KIVO's log (never the user's content).
+    log: func(message: string);
+
+    /// HTTP GET/POST to hosts named in the manifest's `net` grant only.
+    fetch: func(method: string, url: string, body: option<list<u8>>) -> result<list<u8>, tool-error>;
+
+    /// Files under the manifest's `fs` grants only.
+    read-file: func(path: string) -> result<list<u8>, tool-error>;
+    write-file: func(path: string, data: list<u8>) -> result<_, tool-error>;
+
+    /// Ask KIVO to run one of its own tools named in the manifest's `tools` grant. The call goes
+    /// through the permission engine like any other; the plugin sees only the result.
+    call-tool: func(id: string, args: string) -> result<string, tool-error>;
+
+    /// True once the user or KIVO has cancelled the current call.
+    cancelled: func() -> bool;
+}
+
+/// What a plugin provides.
+interface tools {
+    use types.{tool-spec, tool-error, tool-output};
+
+    /// The tools this plugin offers (each also listed, with its risk, in `kivo-plugin.toml`).
+    list: func() -> list<tool-spec>;
+
+    /// Runs one call that the permission engine already allowed.
+    run: func(id: string, args: string) -> result<tool-output, tool-error>;
+
+    /// Takes back what `run` did, from the data it returned (only `undoable` tools).
+    undo: func(id: string, data: string) -> result<tool-output, tool-error>;
+}
+
+world plugin {
+    import host;
+    export tools;
+}

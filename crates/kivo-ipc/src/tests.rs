@@ -60,6 +60,8 @@ fn start_on(endpoint: String, hello_timeout: Duration) -> Running {
         turn: None,
         speech: SpeechStatus::Missing,
         hotkey_conflict: None,
+        in_use: Vec::new(),
+        island: Default::default(),
         revision: 1,
     });
     let task = tokio::spawn(server.run(
@@ -113,7 +115,7 @@ async fn a_client_gets_the_snapshot_answers_and_events() {
     );
     assert_eq!(
         c.request(method::STATE, Value::Null).await.unwrap(),
-        json!({"session":"idle","mode":"auto","islandHidden":false,"turn":null,"speech":{"state":"missing"},"revision":1})
+        json!({"session":"idle","mode":"auto","islandHidden":false,"turn":null,"speech":{"state":"missing"},"island":{"position":"top-center","spots":[]},"revision":1})
     );
     assert_eq!(
         c.request("echo", json!({"a": [1, 2]})).await.unwrap(),
@@ -272,6 +274,8 @@ async fn a_client_that_falls_behind_gets_a_snapshot() {
             turn: None,
             speech: SpeechStatus::Missing,
             hotkey_conflict: None,
+            in_use: Vec::new(),
+            island: Default::default(),
             revision: 42,
         };
         false
@@ -396,6 +400,8 @@ async fn state_changes_are_pushed_to_every_client() {
         turn: None,
         speech: SpeechStatus::Missing,
         hotkey_conflict: None,
+        in_use: Vec::new(),
+        island: Default::default(),
         revision: 2,
     });
     for conn in [&mut a, &mut b] {
@@ -409,7 +415,7 @@ async fn state_changes_are_pushed_to_every_client() {
     }
     assert_eq!(
         a.client.request(method::STATE, Value::Null).await.unwrap(),
-        json!({"session":"paused","mode":"auto","islandHidden":false,"turn":null,"speech":{"state":"missing"},"revision":2})
+        json!({"session":"paused","mode":"auto","islandHidden":false,"turn":null,"speech":{"state":"missing"},"island":{"position":"top-center","spots":[]},"revision":2})
     );
     rt.shutdown.cancel();
 }
@@ -465,6 +471,8 @@ async fn microphone_levels_stream_while_they_change() {
         turn: None,
         speech: SpeechStatus::Missing,
         hotkey_conflict: None,
+        in_use: Vec::new(),
+        island: Default::default(),
         revision: 0,
     });
     let shutdown = CancellationToken::new();

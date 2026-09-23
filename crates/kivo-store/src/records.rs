@@ -110,6 +110,21 @@ pub struct StoredGrant {
     pub scope: Option<String>,
     pub created_at: i64,
     pub expires_at: Option<i64>,
+    /// A `*` pattern over the call's arguments (SEC-08).
+    pub pattern: Option<String>,
+    /// Set for a grant that lasts only while this runtime session runs.
+    pub session: Option<String>,
+}
+
+/// What a new grant covers and for how long.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct NewGrant<'a> {
+    pub tool: &'a str,
+    pub scope: Option<&'a str>,
+    pub pattern: Option<&'a str>,
+    pub now: i64,
+    pub expires_at: Option<i64>,
+    pub session: Option<&'a str>,
 }
 
 impl Database {
@@ -363,18 +378,29 @@ impl Database {
         now: i64,
         expires_at: Option<i64>,
     ) -> Result<i64, DbError> {
+        self.add_scoped_grant(&NewGrant {
+            tool,
+            scope,
+            now,
+            expires_at,
+            ..NewGrant::default()
+        })
+    }
+
+    pub fn add_scoped_grant(&self, g: &NewGrant<'_>) -> Result<i64, DbError> {
         let owner = self.owner_profile()?.to_string();
         self.connection().execute(
-            "INSERT INTO permissions_grants (profile_id, tool, scope, created_at, expires_at) VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![owner, tool, scope, now, expires_at],
+            "INSERT INTO permissions_grants (profile_id, tool, scope, created_at, expires_at, pattern, session)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![owner, g.tool, g.scope, g.now, g.expires_at, g.pattern, g.session],
         )?;
         Ok(self.connection().last_insert_rowid())
     }
 
-    /// Grants still in force at `now`.
+    /// Grants still in force at `now` (any session's grants included; callers pick theirs).
     pub fn grants(&self, now: i64) -> Result<Vec<StoredGrant>, DbError> {
         let mut stmt = self.connection().prepare(
-            "SELECT id, tool, scope, created_at, expires_at FROM permissions_grants
+            "SELECT id, tool, scope, created_at, expires_at, pattern, session FROM permissions_grants
              WHERE expires_at IS NULL OR expires_at > ?1 ORDER BY id",
         )?;
         let rows = stmt.query_map([now], |r| {
@@ -384,8 +410,27 @@ impl Database {
                 scope: r.get(2)?,
                 created_at: r.get(3)?,
                 expires_at: r.get(4)?,
+                pattern: r.get(5)?,
+                session: r.get(6)?,
             })
         })?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    /// Removes grants that belonged to earlier runtime sessions.
+    pub fn drop_session_grants(&self, keep: &str) -> Result<usize, DbError> {
+        Ok(self.connection().execute(
+            "DELETE FROM permissions_grants WHERE session IS NOT NULL AND session <> ?1",
+            [keep],
+        )?)
+    }
+
+    /// When each tool last ran (from the audit log): (tool, epoch ms).
+    pub fn last_tool_uses(&self) -> Result<Vec<(String, i64)>, DbError> {
+        let mut stmt = self
+            .connection()
+            .prepare("SELECT tool, MAX(ts) FROM audit WHERE result IS NOT NULL GROUP BY tool")?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
         Ok(rows.collect::<Result<_, _>>()?)
     }
 

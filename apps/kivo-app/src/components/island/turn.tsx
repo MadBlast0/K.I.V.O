@@ -4,7 +4,16 @@
  * for the user. Only what the runtime reports is shown.
  */
 import type { TFunction } from "i18next";
-import type { Capability, ConfirmSpec, PermissionMode, StateSnapshot, StepView, TurnView } from "../../ipc/generated";
+import { useState } from "react";
+import type {
+  Capability,
+  ConfirmSpec,
+  GrantDuration,
+  PermissionMode,
+  StateSnapshot,
+  StepView,
+  TurnView,
+} from "../../ipc/generated";
 import {
   IslandActions,
   IslandApp,
@@ -22,7 +31,16 @@ import { Icon } from "../../icons";
 /** What the Island's buttons do (each goes to the runtime through `island_request`). */
 export interface IslandHandlers {
   stop: () => void;
-  answer: (callId: string, allow: boolean, always: boolean) => void;
+  /** Allow or deny; `always` is a grant ("Always for…", with how long, SEC-08); `hello` asks
+   * Windows Hello to confirm (High risk, SEC-11). */
+  answer: (
+    callId: string,
+    allow: boolean,
+    always: boolean,
+    extra?: { duration?: GrantDuration; hello?: boolean },
+  ) => void;
+  /** Takes back the last change (UX-43). */
+  undo?: () => void;
   openControlCenter: () => void;
   /** Opens where the permission mode is switched (the overlay itself can't switch it, SEC-04). */
   openMode: () => void;
@@ -41,8 +59,10 @@ export interface IslandHandlers {
 /** The card width for text content (UX §2: up to 520 px). */
 const CARD = 480;
 
-/** A leading square for the app KIVO is acting on (UX §8.1 target-app icon). */
-function appIcon(name: string | null) {
+/** A leading square for the app KIVO is acting on (UX-46): the app's own icon when Windows has
+ * one, else its initials. */
+function appIcon(name: string | null, icon?: string | null) {
+  if (icon) return <img className="k-island__app k-island__app--icon" src={icon} alt={name ?? ""} />;
   if (!name) return undefined;
   const initials = name
     .split(/\s+/)
@@ -115,25 +135,67 @@ function guestChip(turn: TurnView | null | undefined, t: TFunction) {
   return turn?.guest ? <IslandChip>{t("island.guest").toUpperCase()}</IslandChip> : null;
 }
 
+/** "Always for…": how long the grant lasts (SEC-08). */
+const DURATIONS: ReadonlyArray<GrantDuration> = ["session", "day", "always"];
+
+/** The decision's buttons: Allow once (or Approve plan), Always for… with how long, Windows
+ * Hello for High risk, and Deny. */
+function ConfirmButtons({ confirm, t, on }: { confirm: ConfirmSpec; t: TFunction; on: IslandHandlers }) {
+  const [choosing, setChoosing] = useState(false);
+  if (choosing) {
+    return (
+      <IslandActions
+        hint={false}
+        actions={[
+          ...DURATIONS.map((duration) => ({
+            label: t(`island.duration.${duration}`),
+            kind: duration === "always" ? ("primary" as const) : undefined,
+            onClick: () => on.answer(confirm.callId, true, true, { duration }),
+          })),
+          { label: t("island.back"), onClick: () => setChoosing(false) },
+        ]}
+      />
+    );
+  }
+  return (
+    <IslandActions
+      hint={false}
+      actions={[
+        ...(confirm.hello
+          ? [
+              {
+                label: t("island.hello"),
+                kind: "primary" as const,
+                onClick: () => on.answer(confirm.callId, true, false, { hello: true }),
+              },
+            ]
+          : []),
+        {
+          label: confirm.plan ? t("island.approvePlan") : t("island.allowOnce"),
+          kind: confirm.hello ? undefined : ("primary" as const),
+          onClick: () => on.answer(confirm.callId, true, false),
+        },
+        ...(confirm.allowAlways
+          ? [
+              {
+                // "Always for…" names what the grant covers (SEC-10), then asks how long (SEC-08).
+                label: confirm.target
+                  ? t("island.allowAlwaysFor", { target: confirm.target })
+                  : t("island.allowAlways"),
+                onClick: () => setChoosing(true),
+              },
+            ]
+          : []),
+        { label: t("island.deny"), kind: "danger" as const, onClick: () => on.answer(confirm.callId, false, false) },
+      ]}
+    />
+  );
+}
+
 function confirmCard(confirm: ConfirmSpec, turn: TurnView, t: TFunction, on: IslandHandlers): IslandModel {
   const high = confirm.risk === "high";
-  const actions = [
-    {
-      label: confirm.plan ? t("island.approvePlan") : t("island.allowOnce"),
-      kind: "primary" as const,
-      onClick: () => on.answer(confirm.callId, true, false),
-    },
-    ...(confirm.allowAlways
-      ? [
-          {
-            // "Always for…" names what the grant covers (SEC-10).
-            label: confirm.target ? t("island.allowAlwaysFor", { target: confirm.target }) : t("island.allowAlways"),
-            onClick: () => on.answer(confirm.callId, true, true),
-          },
-        ]
-      : []),
-    { label: t("island.deny"), kind: "danger" as const, onClick: () => on.answer(confirm.callId, false, false) },
-  ];
+  // A plan from the runtime (Plan first, SEC-02) arrives as its steps, one per line.
+  const steps = confirm.tool === "plan";
   // KIVO listens for a spoken answer (CONV-26): the mic ring and the buttons' own words, which the
   // decision grammar understands (CONV-27). High risk needs a click, so no hint. "Wait" keeps
   // the card with no timeout (UX-08).
@@ -159,8 +221,8 @@ function confirmCard(confirm: ConfirmSpec, turn: TurnView, t: TFunction, on: Isl
       <>
         <Heard turn={turn} />
         {confirm.risk !== "safe" && confirm.risk !== "low" && <IslandRisk level={high ? "high" : "medium"} />}
-        <div className="k-island__action">
-          {confirm.plan ? t("island.planTitle", { action: confirm.action }) : confirm.action}
+        <div className={steps ? "k-island__action k-island__action--plan" : "k-island__action"}>
+          {confirm.plan && !steps ? t("island.planTitle", { action: confirm.action }) : confirm.action}
         </div>
         {confirm.target && !confirm.action.includes(confirm.target) && (
           <div className="k-island__meta">{t("island.target", { target: confirm.target })}</div>
@@ -168,11 +230,52 @@ function confirmCard(confirm: ConfirmSpec, turn: TurnView, t: TFunction, on: Isl
         <div className="k-island__meta">
           {t("island.why", { why: confirm.why })} · {confirm.provenance}
         </div>
-        <IslandActions actions={actions} hint={false} />
+        <ConfirmButtons key={confirm.callId} confirm={confirm} t={t} on={on} />
         {hint}
       </>
     ),
   };
+}
+
+/** Sensitive capabilities in use right now (CAP-06): an eye for the screen, a hand for input
+ * control, a terminal for the shell. */
+const IN_USE_ICON = { screen: "eye", input: "hand", shell: "terminal" } as const;
+
+function InUse({ kinds, t }: { kinds: string[] | undefined; t: TFunction }) {
+  if (!kinds?.length) return null;
+  return (
+    <span className="k-island__inuse">
+      {kinds.map((k) => {
+        const kind = k === "screen" || k === "input" || k === "shell" ? k : null;
+        return kind ? (
+          <span key={k} role="img" aria-label={t(`island.inUse.${kind}`)} title={t(`island.inUse.${kind}`)}>
+            <Icon name={IN_USE_ICON[kind]} />
+          </span>
+        ) : null;
+      })}
+    </span>
+  );
+}
+
+/** What KIVO did with the user's data, when the card should say so (CAP-08). */
+function Note({ turn }: { turn: TurnView }) {
+  return turn.note ? <div className="k-island__meta k-island__note">{turn.note}</div> : null;
+}
+
+/** Undo with a countdown ring while it is offered (UX-43); irreversible actions never offer it. */
+function undoOffer(turn: TurnView, t: TFunction, on: IslandHandlers) {
+  const offer = turn.undo;
+  if (!offer || !on.undo) return null;
+  const left = Math.ceil((offer.until - Date.now()) / 1000);
+  if (left <= 0) return null;
+  return (
+    <span className="k-island__undo">
+      <IslandCountdown seconds={left} label={t("island.undoLeft", { seconds: left })} />
+      <button type="button" className="k-island__btn k-island__btn--primary" onClick={on.undo}>
+        {t("island.undo")}
+      </button>
+    </span>
+  );
 }
 
 /** The permission mode while KIVO acts (SEC-04): hidden in Auto; a click opens where it's switched. */
@@ -323,11 +426,12 @@ export function islandForTurn(snapshot: StateSnapshot, t: TFunction, on: IslandH
         width: CARD,
         label: t("island.working"),
         sub: turn && turn.steps.length > 1 ? t("island.steps", { count: turn.steps.length }) : undefined,
-        lead: appIcon(turn?.targetApp ?? null),
+        lead: appIcon(turn?.targetApp ?? null, turn?.targetIcon),
         trail: (
           <>
             {guestChip(turn, t)}
             {brainChip(turn, t)}
+            <InUse kinds={snapshot.inUse} t={t} />
             <ModeChip mode={snapshot.mode} t={t} on={on} />
             <IslandSpin />
           </>
@@ -336,6 +440,7 @@ export function islandForTurn(snapshot: StateSnapshot, t: TFunction, on: IslandH
           <>
             <Heard turn={turn} t={t} on={on} />
             <Steps steps={turn.steps} />
+            <Note turn={turn} />
             <Footer t={t} on={on} stop />
           </>
         ) : undefined,
@@ -345,7 +450,7 @@ export function islandForTurn(snapshot: StateSnapshot, t: TFunction, on: IslandH
         state: "speaking",
         width: CARD,
         label: t("island.kivo"),
-        lead: appIcon(turn?.targetApp ?? null),
+        lead: appIcon(turn?.targetApp ?? null, turn?.targetIcon),
         trail: (
           <>
             {guestChip(turn, t)}
@@ -358,6 +463,8 @@ export function islandForTurn(snapshot: StateSnapshot, t: TFunction, on: IslandH
           <>
             <Heard turn={turn} t={t} on={on} />
             {turn.answer && <div className="k-island__answer">{turn.answer}</div>}
+            <Note turn={turn} />
+            {undoOffer(turn, t, on)}
             <Footer t={t} on={on} stop />
           </>
         ) : undefined,
@@ -376,13 +483,15 @@ export function islandForTurn(snapshot: StateSnapshot, t: TFunction, on: IslandH
           state: `done-${turn.id}`,
           width: CARD,
           label: t("island.kivo"),
-          lead: appIcon(turn.targetApp) ?? <IslandOk />,
+          lead: appIcon(turn.targetApp, turn.targetIcon) ?? <IslandOk />,
           trail: turn.brain ? brainChip(turn, t) : <IslandChip>{t("island.stepDone").toUpperCase()}</IslandChip>,
           body: (
             <>
               <Heard turn={turn} t={t} on={on} />
               {turn.steps.length > 0 && <Steps steps={turn.steps} />}
               <div className="k-island__answer">{turn.answer}</div>
+              <Note turn={turn} />
+              {undoOffer(turn, t, on)}
               {turn.brain && (
                 <button type="button" className="k-island__misroute" onClick={() => on.misroute(turn.id)}>
                   {t("island.misroute")}

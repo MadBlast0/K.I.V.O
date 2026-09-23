@@ -132,7 +132,7 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 
 **Connectors (§0–2)**
 
-- [ ] **INT-01** · M4 · Local integration paths that need no account: Windows media controls for any player, app CLIs (`gh`, `code`, `git`, `wt`), UIA on desktop apps, the browser extension on web apps, URI protocols such as `spotify:` (§1, §2)
+- [x] **INT-01** · M4 · Local integration paths that need no account: Windows media controls for any player, app CLIs (`gh`, `code`, `git`, `wt`), UIA on desktop apps, the browser extension on web apps, URI protocols such as `spotify:` (§1, §2) → done: local paths with no account: Windows media controls (M1), app CLIs through `apps.cli` (VS Code `code`, Windows Terminal `wt`, `git`, GitHub CLI `gh`), UIA on desktop apps, the browser extension on web apps, and URI protocols through `apps.open_uri` (`spotify:`, `ms-settings:`, `calculator:`) · verified: `app_clis_run_declared_verbs_with_quoted_arguments`, `only_declared_uri_schemes_open`, the UIA and browser tests (2026-09-23)
 - [ ] **INT-02** · M6 · `Connector` shape: namespaced ToolSpecs, auth flow, health checks and a scope list shown to the user; covered by capability toggles and the permission engine (§1)
 - [ ] **INT-03** · M6 · Extensions → Connectors page: directory (logo, description, tools, data access, badges), Connect → system-browser sign-in, connected account, per-tool toggles and risk, Disconnect, last used (§0)
 - [ ] **INT-04** · M6 · Remote MCP connectors with MCP authorization (OAuth 2.1 + PKCE, DCR or a KIVO Client ID Metadata Document) and "Custom connector": paste a remote MCP URL (§0)
@@ -144,7 +144,7 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 
 **Plugins (§3)**
 
-- [ ] **INT-09** · M4 · ToolSpec and WIT interfaces drafted so built-in tools already fit the plugin shape (§3)
+- [x] **INT-09** · M4 · ToolSpec and WIT interfaces drafted so built-in tools already fit the plugin shape (§3) → done: `crates/kivo-tools/wit/kivo-plugin.wit` (types, host imports one per grant, `tools` export) with `tool-spec` mirroring `ToolSpec` (DECISIONS "Plugin interface drafted") · verified: `the_wit_tool_spec_is_the_tool_spec`, `the_wit_enums_are_the_rust_enums`, `every_tool_fits_the_plugin_shape` (2026-09-23)
 - [ ] **INT-10** · Post · WASM plugins (wasmtime Component Model): `kivo-plugin.toml` manifest, capabilities granted by linking only approved imports, consent at install and on capability-adding updates, fuel/time/memory limits, tools through `authorize()` (§3)
 
 **KIVO Remote (§4)**

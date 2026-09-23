@@ -25,6 +25,10 @@ pub trait Apps: Send + Sync {
     fn close(&self, app: &AppEntry) -> PlatformResult<usize>;
     /// Whether `app` has a window open.
     fn running(&self, app: &AppEntry) -> PlatformResult<bool>;
+    /// The app's icon (a program path, shortcut or packaged-app id), for the Island (UX-46).
+    fn icon(&self, _id: &str, _size: u32) -> Option<crate::screen::Image> {
+        None
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -43,6 +47,11 @@ pub trait Windows: Send + Sync {
     fn list(&self) -> PlatformResult<Vec<WindowInfo>>;
     fn foreground(&self) -> PlatformResult<Option<WindowInfo>>;
     fn focus(&self, id: WindowId) -> PlatformResult<()>;
+    /// The window's title bar or tab strip, in screen coordinates, when the OS knows it
+    /// (UX-14: the Island moves below it while listening).
+    fn title_bar(&self, _id: WindowId) -> PlatformResult<Option<Rect>> {
+        Ok(None)
+    }
     fn minimize(&self, id: WindowId) -> PlatformResult<()>;
     fn maximize(&self, id: WindowId) -> PlatformResult<()>;
     /// Back to its normal size and place (undoes minimize and maximize).

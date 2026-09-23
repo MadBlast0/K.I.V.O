@@ -36,6 +36,12 @@ pub enum Part {
         #[serde(default)]
         is_error: bool,
     },
+    /// A picture for a vision model (a screenshot from `screen.look`), base64-encoded. Only sent
+    /// to a brain whose model can see and that the privacy settings allow (CAP-08).
+    Image {
+        media_type: String,
+        data: String,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

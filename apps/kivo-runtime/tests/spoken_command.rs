@@ -676,7 +676,11 @@ async fn decisions_are_answered_by_voice_but_high_risk_needs_a_click() {
     .await;
     rig.core.clear_turn();
 
-    // High risk: a spoken yes is refused and the card stays for a click.
+    // High risk: a spoken yes only starts Windows Hello, which must finish it; declined there,
+    // nothing happens and the card stays for a click.
+    rig.verifier
+        .answer
+        .store(false, std::sync::atomic::Ordering::SeqCst);
     rig.audio.say_next(spoken("Shut down the computer."));
     rig.audio.say_next(spoken("Yes."));
     rig.engine
@@ -704,6 +708,11 @@ async fn decisions_are_answered_by_voice_but_high_risk_needs_a_click() {
     assert!(
         rig.core.turn_view().and_then(|t| t.confirm).is_some(),
         "the card still waits"
+    );
+    assert_eq!(
+        rig.verifier.prompts.lock().unwrap().len(),
+        1,
+        "the spoken yes asked Windows Hello"
     );
     rig.core.quit();
     let _ = tokio::time::timeout(Duration::from_secs(5), worker_task).await;

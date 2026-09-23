@@ -41,6 +41,11 @@ fn main() -> ExitCode {
     if args.health {
         return health(&paths);
     }
+    // A browser started KIVO as its native messaging host: relay, nothing else (TOOL-24).
+    #[cfg(windows)]
+    if let Some(caller) = args.native_messaging.clone() {
+        return native_messaging_host(&caller, &paths);
+    }
 
     // Crashes of this process are written to the crashes folder from here on (ARCH-10).
     #[cfg(windows)]
@@ -101,6 +106,27 @@ fn main() -> ExitCode {
     let code = tokio.block_on(run(args, &paths, config, writable, first_run));
     tracing::info!("KIVO runtime stopped");
     code
+}
+
+/// The native messaging host: a small single-threaded relay between the browser and the
+/// running runtime.
+#[cfg(windows)]
+fn native_messaging_host(caller: &str, paths: &Paths) -> ExitCode {
+    let Ok(endpoint) = kivo_ipc::transport::endpoint(&paths.run()) else {
+        return ExitCode::FAILURE;
+    };
+    let Ok(rt) = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+    else {
+        return ExitCode::FAILURE;
+    };
+    let token_file = paths.run().join("session.token");
+    rt.block_on(kivo_runtime::browser_bridge::run_host(
+        caller,
+        &endpoint,
+        &token_file,
+    ))
 }
 
 #[cfg(windows)]
@@ -194,6 +220,8 @@ async fn run(
             return ExitCode::FAILURE;
         }
     };
+    let bridge_endpoint = endpoint.clone();
+    let bridge_token = token.clone();
     let server = match Server::bind(ServerConfig::new(
         endpoint,
         token,
@@ -247,7 +275,6 @@ async fn run(
         catalog: Arc::clone(&app_catalog),
         screenshots: screenshots_folder(),
     });
-    let registry = Arc::new(kivo_tools::Registry::new(kivo_tools::builtin(&tools_env)));
     let speaker = Arc::new(Speaker::new(
         Arc::clone(&platform.audio),
         config
@@ -256,6 +283,33 @@ async fn run(
             .clone()
             .map(kivo_platform::DeviceId),
     ));
+    // Computer control (M4): UI Automation on its own thread, commands in Job Objects, and the
+    // rest of the native controls; the registry of what each app supports.
+    let vision = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let commands: Arc<kivo_platform_windows::WindowsCommands> = Arc::default();
+    let browser = browser_bridge(&core, &bridge_endpoint, bridge_token, paths);
+    let input = Arc::new(kivo_platform_windows::WindowsInput::default());
+    let input_abort = input.abort_flag();
+    let workspace = dirs::home_dir().unwrap_or_else(std::env::temp_dir);
+    let controls = kivo_runtime::controls::build(
+        windows_controls(
+            &platform,
+            &speaker,
+            &core,
+            Arc::clone(&commands),
+            input,
+            Arc::clone(&browser),
+        ),
+        &core,
+        kivo_runtime::controls::app_registry(
+            dirs::config_dir().map(|d| d.join("KIVO").join("apps")),
+        ),
+        Arc::clone(&vision),
+        workspace,
+    );
+    let mut tools = kivo_tools::builtin(&tools_env);
+    tools.extend(kivo_tools::controls(&controls));
+    let registry = Arc::new(kivo_tools::Registry::new(tools));
     speaker.configure(&config.sounds);
     let grammar = match Grammar::bundled(&config.general.language) {
         Ok(grammar) => grammar,
@@ -290,6 +344,10 @@ async fn run(
         fallback_voice: Some(Arc::new(kivo_platform_windows::WindowsSpeech)),
         brains: Arc::clone(&brains),
         agents: Arc::clone(&agents),
+        verifier: Arc::new(kivo_platform_windows::WindowsHello),
+        commands: Some(commands),
+        input_abort: Some(input_abort),
+        vision,
     }));
     // Agents' permission requests go to the turn engine's permission flow (BRAIN-15).
     agents.set_permissions(Arc::new(engine::EnginePermissions(Arc::downgrade(&engine))));
@@ -510,7 +568,8 @@ async fn run(
                     Arc::new(kivo_platform_windows::WindowsSecrets),
                     paths.voice(),
                 )))
-                .with_brains(Arc::clone(&brains_rpc)),
+                .with_brains(Arc::clone(&brains_rpc))
+                .with_browser(Arc::clone(&browser)),
             ),
             core.bus.clone(),
             core.state(),
@@ -682,6 +741,115 @@ fn windows_platform(
         },
         answered,
     )
+}
+
+/// The Windows parts of the computer-control tools.
+#[cfg(windows)]
+fn windows_controls(
+    platform: &Platform,
+    speaker: &Arc<Speaker>,
+    core: &Arc<kivo_runtime::core::Core>,
+    commands: Arc<kivo_platform_windows::WindowsCommands>,
+    input: Arc<kivo_platform_windows::WindowsInput>,
+    browser: Arc<dyn kivo_tools::Browser>,
+) -> kivo_runtime::controls::Platform {
+    let uia: Arc<dyn kivo_platform::UiAutomation> =
+        match kivo_platform_windows::WindowsUiAutomation::new() {
+            Ok(uia) => Arc::new(uia),
+            Err(e) => {
+                tracing::warn!(%e, "UI Automation is unavailable");
+                Arc::new(kivo_runtime::controls::NoUia)
+            }
+        };
+    let control = Arc::clone(&platform.control);
+    let audio = Arc::clone(&platform.audio);
+    let voice_speaker = Arc::clone(speaker);
+    let voice_core = Arc::clone(core);
+    let profile_dir = dirs::data_local_dir()
+        .unwrap_or_else(std::env::temp_dir)
+        .join("KIVO")
+        .join("browser-profile");
+    kivo_runtime::controls::Platform {
+        uia,
+        input,
+        ocr: Arc::new(kivo_platform_windows::WindowsOcr),
+        screen: Arc::clone(&platform.screen),
+        clipboard: Arc::new(kivo_platform_windows::WindowsClipboard),
+        files: Arc::new(kivo_platform_windows::WindowsFiles),
+        commands,
+        displays: Arc::new(kivo_platform_windows::WindowsDisplays),
+        power: Arc::new(kivo_platform_windows::WindowsPower),
+        windows: Arc::clone(&platform.windows),
+        secrets: Arc::new(kivo_platform_windows::WindowsSecrets),
+        browser,
+        // KIVO's own browser profile (TOOL-25), when Chrome, Edge or Brave is installed.
+        managed: kivo_runtime::managed_browser::find_browser().map(|program| {
+            Arc::new(kivo_runtime::managed_browser::ManagedChrome::new(
+                program,
+                profile_dir.clone(),
+                false,
+            )) as Arc<dyn kivo_tools::ManagedBrowser>
+        }),
+        open_settings: Arc::new(move |page| {
+            control
+                .open_system_settings(page)
+                .map_err(|e| e.to_string())
+        }),
+        open_uri: Arc::new(|uri| kivo_platform_windows::open_uri(uri).map_err(|e| e.to_string())),
+        output_devices: Arc::new(move || {
+            audio
+                .output_devices()
+                .unwrap_or_default()
+                .into_iter()
+                .map(|d| (d.id.0, d.name, d.is_default))
+                .collect()
+        }),
+        voice_output: Arc::new(move |device| {
+            voice_speaker.set_output_device(device.clone().map(kivo_platform::DeviceId));
+            voice_core.update_config(|c| c.voice.output_device = device);
+        }),
+    }
+}
+
+/// The browser bridge (TOOL-24): its pipe, and the host registered with the browsers while
+/// "Browser: read & act on pages" is on (and removed when it's turned off).
+#[cfg(windows)]
+fn browser_bridge(
+    core: &Arc<kivo_runtime::core::Core>,
+    endpoint: &str,
+    token: SessionToken,
+    paths: &Paths,
+) -> Arc<dyn kivo_tools::Browser> {
+    use kivo_runtime::browser_bridge::{BrowserBridge, set_registered};
+    let bridge = BrowserBridge::start(endpoint, token, core.shutdown());
+    let core = Arc::clone(core);
+    let local = paths.local.clone();
+    tokio::spawn(async move {
+        let mut changes = core.settings_changed();
+        let shutdown = core.shutdown();
+        let mut registered: Option<bool> = None;
+        loop {
+            let on = core
+                .config()
+                .capabilities
+                .enabled(kivo_core::Capability::BrowserPages);
+            if registered != Some(on) {
+                let local = local.clone();
+                match tokio::task::spawn_blocking(move || set_registered(on, &local)).await {
+                    Ok(Ok(())) => registered = Some(on),
+                    Ok(Err(e)) => {
+                        tracing::warn!(%e, on, "couldn't update the browser extension's host")
+                    }
+                    Err(e) => tracing::warn!(%e, "browser host registration stopped"),
+                }
+            }
+            tokio::select! {
+                changed = changes.changed() => if changed.is_err() { return },
+                () = shutdown.cancelled() => return,
+            }
+        }
+    });
+    bridge
 }
 
 /// Used when Windows won't give KIVO notifications.

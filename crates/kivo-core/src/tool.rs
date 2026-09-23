@@ -174,6 +174,20 @@ pub struct ConfirmSpec {
     pub allow_always: bool,
     /// The mode is Plan first: approving grants exactly this step.
     pub plan: bool,
+    /// Windows Hello can confirm this (High risk on a PC with Hello set up, SEC-11).
+    #[serde(default)]
+    pub hello: bool,
+}
+
+/// How long an "Always allow" lasts (SEC-08). "Once" is just Allow and stores nothing.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum GrantDuration {
+    Once,
+    Session,
+    Day,
+    Always,
 }
 
 /// How an action was allowed, for the audit log (SECURITY §7 `confirmed_by`).

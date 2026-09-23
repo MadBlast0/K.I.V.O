@@ -58,6 +58,10 @@ pub mod method {
     pub const SESSION_CANCEL: &str = "session.cancel";
     /// Client → runtime: stop everything (SEC-25).
     pub const SESSION_STOP_ALL: &str = "session.stopEverything";
+    /// Takes back the last change (UX-43): the Island's Undo, the toast, "Kivo, undo that".
+    pub const SESSION_UNDO: &str = "session.undo";
+    /// The Island was dragged (the app reports where, UX-13): remembered for that monitor.
+    pub const ISLAND_MOVED: &str = "island.moved";
     /// Client → runtime: answer a confirmation
     /// (`{ "callId": …, "answer": "allow" | "deny", "always": bool }`, SEC-10).
     pub const PERMISSIONS_ANSWER: &str = "permissions.answer";
@@ -65,6 +69,10 @@ pub mod method {
     pub const CAPABILITIES_GET: &str = "capabilities.get";
     /// Client → runtime: turn a capability on or off (`{ "capability": …, "on": bool }`).
     pub const CAPABILITIES_SET: &str = "capabilities.set";
+    /// Applies Minimal / Balanced / Power user (CAP-05); returns the list.
+    pub const CAPABILITIES_PRESET: &str = "capabilities.preset";
+    /// Whether KIVO's browser extension is connected, and how to install it (TOOL-24).
+    pub const BROWSER_STATUS: &str = "browser.status";
     /// Client → runtime: a page of the Activity timeline (`{ "before": id?, "limit": n }`).
     pub const ACTIVITY_LIST: &str = "activity.list";
     /// Client → runtime: the speech models on this PC and what can be downloaded (DIST-12).
@@ -220,8 +228,34 @@ pub struct StateSnapshot {
     /// Center offers a rebind.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hotkey_conflict: Option<String>,
+    /// Sensitive capabilities in use right now (CAP-06): `screen` (eye), `input` (hand),
+    /// `shell` (terminal). The tray and the Island show an indicator for each.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub in_use: Vec<String>,
+    /// Where the Island goes (UX-13): the setting and the spots it was dragged to.
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
+    pub island: IslandPlacement,
     /// Increases with every state change, so a client can tell whether its view is current.
     pub revision: u64,
+}
+
+/// The Island's placement setting and remembered spots (UX-13).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IslandPlacement {
+    pub position: kivo_core::config::OverlayPosition,
+    pub spots: Vec<kivo_core::config::IslandSpot>,
+}
+
+impl Default for IslandPlacement {
+    fn default() -> Self {
+        Self {
+            position: kivo_core::config::OverlayPosition::TopCenter,
+            spots: Vec::new(),
+        }
+    }
 }
 
 /// The turn the Island is showing (UX §2 card contents).
@@ -245,6 +279,9 @@ pub struct TurnView {
     pub confirm: Option<ConfirmSpec>,
     /// The app the action is aimed at, for the Island's leading icon (UX §8.1).
     pub target_app: Option<String>,
+    /// That app's icon as a `data:image/png` URL, when Windows has one (UX-46).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_icon: Option<String>,
     /// A capability this request needed that is off (CAP-02): the Island offers to turn it on.
     pub capability_off: Option<kivo_core::Capability>,
     /// A fullscreen app or Focus is on: the Island hides or shrinks to a dot, and KIVO only
@@ -255,6 +292,10 @@ pub struct TurnView {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "ts", ts(optional))]
     pub anchor: Option<ScreenPoint>,
+    /// The bottom edge (physical y) of the title bar or tab strip of the window in front, when it
+    /// sits at the top of its monitor: while only listening, the Island moves below it (UX-14).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title_bar_bottom: Option<i32>,
     /// Someone other than the enrolled owner is talking: a guest turn (UX-08, VOICE-22).
     #[serde(default)]
     pub guest: bool,
@@ -274,6 +315,26 @@ pub struct TurnView {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "ts", ts(optional))]
     pub brain: Option<BrainChip>,
+    /// A line the card shows about what KIVO did with the user's data ("Sent a screenshot of
+    /// VS Code to Claude", CAP-08).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+    /// The last change can be taken back (UX-43): the Island shows Undo with a ring until
+    /// `until` (milliseconds since the Unix epoch, about 8 s).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub undo: Option<UndoOffer>,
+}
+
+/// An Undo the Island offers (UX-43).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UndoOffer {
+    /// What would be undone ("Move files to Archive").
+    pub title: String,
+    /// When the Island stops offering it (epoch ms); voice and the toast still work after.
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
+    pub until: u64,
 }
 
 /// The card header's brain chip (UX-09): "Coding · Claude Code", the routing reason, and a cost
@@ -397,6 +458,10 @@ pub struct GrantItem {
     pub scope: Option<String>,
     pub created_at: i64,
     pub expires_at: Option<i64>,
+    /// A `*` pattern the call's arguments must match (a folder, a command prefix).
+    pub pattern: Option<String>,
+    /// Lasts only until KIVO restarts.
+    pub session_only: bool,
 }
 
 /// A speech model KIVO can install (Voice → Models on this PC, DIST-13).
@@ -548,6 +613,9 @@ pub struct CapabilityItem {
     pub enabled: bool,
     pub default: bool,
     pub badges: Vec<kivo_core::capability::Badge>,
+    /// When a tool of this capability last ran (epoch ms), for "used 3 min ago" (CAP-04).
+    #[cfg_attr(feature = "ts", ts(type = "number | null"))]
+    pub last_used: Option<i64>,
 }
 
 /// A JSON-RPC 2.0 request id (numbers only; KIVO's clients never send strings).

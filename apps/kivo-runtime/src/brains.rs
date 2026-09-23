@@ -587,6 +587,16 @@ impl Brains {
             .is_none_or(|t| t.elapsed() >= HEALTH_TTL)
     }
 
+    /// Whether `model` at `provider` can look at images: what the provider reported, else the
+    /// model families known to (CAP-08).
+    pub fn sees(&self, provider: &str, model: &str) -> bool {
+        let listed = lock(&self.known)
+            .get(provider)
+            .and_then(|k| k.models.iter().find(|m| m.id == model))
+            .map(|m| m.vision);
+        listed.unwrap_or_else(|| sees_by_name(model))
+    }
+
     /// The context window of `model` at `provider`, when known.
     pub fn window(&self, provider: &str, model: &str) -> Option<u32> {
         let from_list = lock(&self.known)
@@ -923,6 +933,35 @@ fn read<T>(l: &RwLock<T>) -> std::sync::RwLockReadGuard<'_, T> {
 
 fn write<T>(l: &RwLock<T>) -> std::sync::RwLockWriteGuard<'_, T> {
     l.write().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Model families that take images, for providers that don't say (CAP-08).
+pub fn sees_by_name(model: &str) -> bool {
+    let m = model.to_lowercase();
+    [
+        "claude-",
+        "gpt-4o",
+        "gpt-4.1",
+        "gpt-5",
+        "o3",
+        "o4",
+        "gemini-",
+        "llava",
+        "bakllava",
+        "qwen2.5-vl",
+        "qwen2-vl",
+        "qwen3-vl",
+        "llama3.2-vision",
+        "llama-4",
+        "minicpm-v",
+        "pixtral",
+        "gemma3",
+        "moondream",
+        "grok-4",
+        "grok-2-vision",
+    ]
+    .iter()
+    .any(|f| m.contains(f))
 }
 
 #[cfg(test)]

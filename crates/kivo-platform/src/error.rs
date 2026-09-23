@@ -15,6 +15,13 @@ pub enum PlatformError {
     Conflict(String),
     #[error("the operation was cancelled")]
     Cancelled,
+    /// The target runs as administrator and KIVO doesn't; Windows blocks automating it (UIPI).
+    /// KIVO never elevates itself to get around this (TOOL-22).
+    #[error("{0} is running as administrator")]
+    Elevated(String),
+    /// The app didn't answer in time (a hung window).
+    #[error("the app didn't respond")]
+    Timeout,
     /// An OS error. `message` is for the log, not the user.
     #[error("the operating system reported an error")]
     Os { code: i64, message: String },

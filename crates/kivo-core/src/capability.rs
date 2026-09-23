@@ -153,6 +153,33 @@ impl CapabilitySettings {
     }
 
     /// Sets a toggle; returns true when it changed. Values equal to the default are not stored.
+    /// Applies a preset (CAP-05) to the capabilities presets decide; returns what changed.
+    /// Custom changes nothing.
+    pub fn apply_preset(&mut self, preset: crate::config::Preset) -> Vec<(Capability, bool)> {
+        let mut changed = Vec::new();
+        for &c in PRESET_SCOPE {
+            if let Some(on) = preset_value(preset, c)
+                && self.set(c, on)
+            {
+                changed.push((c, on));
+            }
+        }
+        changed
+    }
+
+    /// The preset these toggles match, or Custom.
+    pub fn preset(&self) -> crate::config::Preset {
+        use crate::config::Preset;
+        [Preset::Balanced, Preset::Minimal, Preset::PowerUser]
+            .into_iter()
+            .find(|&p| {
+                PRESET_SCOPE
+                    .iter()
+                    .all(|&c| preset_value(p, c) == Some(self.enabled(c)))
+            })
+            .unwrap_or(Preset::Custom)
+    }
+
     pub fn set(&mut self, capability: Capability, on: bool) -> bool {
         let changed = self.enabled(capability) != on;
         if on == capability.default_enabled() {
@@ -161,6 +188,62 @@ impl CapabilitySettings {
             self.0.insert(capability, on);
         }
         changed
+    }
+}
+
+/// The capabilities presets decide (CAPABILITIES §2). Consent-driven ones (the microphone, voice
+/// recognition, remote access, agents, MCP servers, integrations) stay as the user set them.
+pub const PRESET_SCOPE: &[Capability] = &[
+    Capability::PushToTalk,
+    Capability::SpeakResponses,
+    Capability::AppsAndWindows,
+    Capability::SystemControls,
+    Capability::PowerActions,
+    Capability::FilesRead,
+    Capability::FilesModify,
+    Capability::Clipboard,
+    Capability::BrowserOpenLinks,
+    Capability::BrowserPages,
+    Capability::BrowserAutonomous,
+    Capability::UiAutomation,
+    Capability::ScreenAwareness,
+    Capability::ComputerUse,
+    Capability::Shell,
+    Capability::BackgroundTasks,
+    Capability::Routines,
+    Capability::Memory,
+    Capability::CloudBrains,
+    Capability::RealtimeVoice,
+    Capability::Notifications,
+];
+
+/// A preset's value for a capability (`None` outside the scope or for Custom).
+pub fn preset_value(preset: crate::config::Preset, c: Capability) -> Option<bool> {
+    use crate::config::Preset;
+    if !PRESET_SCOPE.contains(&c) {
+        return None;
+    }
+    match preset {
+        Preset::Custom => None,
+        // Everyday things on; screen, input and commands off (the shipped defaults).
+        Preset::Balanced => Some(c.default_enabled()),
+        // Voice, apps and system controls only.
+        Preset::Minimal => Some(matches!(
+            c,
+            Capability::PushToTalk
+                | Capability::SpeakResponses
+                | Capability::AppsAndWindows
+                | Capability::SystemControls
+                | Capability::Notifications
+        )),
+        // Balanced plus the shell, screen awareness and the clipboard.
+        Preset::PowerUser => Some(
+            c.default_enabled()
+                || matches!(
+                    c,
+                    Capability::Shell | Capability::ScreenAwareness | Capability::Clipboard
+                ),
+        ),
     }
 }
 
@@ -199,5 +282,25 @@ mod tests {
         assert!(!s.enabled(Capability::SystemControls));
         assert!(s.set(Capability::SystemControls, true));
         assert!(s.0.is_empty());
+    }
+
+    #[test]
+    fn presets_set_their_toggles_and_are_recognized() {
+        use crate::config::Preset;
+        let mut s = CapabilitySettings::default();
+        assert_eq!(s.preset(), Preset::Balanced);
+        let changed = s.apply_preset(Preset::PowerUser);
+        assert!(changed.contains(&(Capability::Shell, true)));
+        assert_eq!(s.preset(), Preset::PowerUser);
+        s.apply_preset(Preset::Minimal);
+        assert!(!s.enabled(Capability::CloudBrains) && s.enabled(Capability::AppsAndWindows));
+        assert_eq!(s.preset(), Preset::Minimal);
+        s.set(Capability::Clipboard, true);
+        assert_eq!(s.preset(), Preset::Custom);
+        // Consent-driven capabilities are never touched by a preset.
+        s.set(Capability::MicListening, true);
+        s.apply_preset(Preset::Minimal);
+        assert!(s.enabled(Capability::MicListening));
+        assert!(s.apply_preset(Preset::Custom).is_empty());
     }
 }

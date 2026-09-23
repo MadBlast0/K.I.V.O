@@ -53,6 +53,8 @@ pub enum TrayIcon {
     Paused,
     Error,
     Updating,
+    /// A sensitive capability is in use: the screen, input control or the shell (CAP-06).
+    InUse,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

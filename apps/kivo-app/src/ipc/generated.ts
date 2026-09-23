@@ -45,7 +45,7 @@ export type TaskEvent = { "type": "created", name: string, } | { "type": "stepCh
 
 export type StepStatus = "pending" | "running" | "done" | "failed" | "skipped";
 
-export type SystemEvent = { "type": "windowChanged", app: string, title: string, } | { "type": "fullscreenChanged", fullscreen: boolean, } | { "type": "focusModeChanged", on: boolean, } | { "type": "powerChanged", onBattery: boolean, percent: number | null, } | { "type": "deviceChanged", kind: DeviceKind, name: string, } | { "type": "networkChanged", online: boolean, } | { "type": "fileChanged", path: string, } | { "type": "browserChanged", url: string, title: string, } | { "type": "shuttingDown" } | { "type": "modelChanged", id: string, 
+export type SystemEvent = { "type": "windowChanged", app: string, title: string, } | { "type": "fullscreenChanged", fullscreen: boolean, } | { "type": "focusModeChanged", on: boolean, } | { "type": "powerChanged", onBattery: boolean, percent: number | null, } | { "type": "deviceChanged", kind: DeviceKind, name: string, } | { "type": "networkChanged", online: boolean, } | { "type": "fileChanged", path: string, } | { "type": "browserChanged", url: string, title: string, } | { "type": "automation", kind: string, element: string, name: string, } | { "type": "shuttingDown" } | { "type": "modelChanged", id: string, 
 /**
  * Download progress while downloading.
  */
@@ -95,6 +95,10 @@ confirm: ConfirmSpec | null,
  */
 targetApp: string | null, 
 /**
+ * That app's icon as a `data:image/png` URL, when Windows has one (UX-46).
+ */
+targetIcon?: string | null, 
+/**
  * A capability this request needed that is off (CAP-02): the Island offers to turn it on.
  */
 capabilityOff: Capability | null, 
@@ -108,6 +112,11 @@ quiet: QuietIsland | null,
  * appears on that window's monitor (UX-06).
  */
 anchor?: ScreenPoint, 
+/**
+ * The bottom edge (physical y) of the title bar or tab strip of the window in front, when it
+ * sits at the top of its monitor: while only listening, the Island moves below it (UX-14).
+ */
+titleBarBottom?: number | null, 
 /**
  * Someone other than the enrolled owner is talking: a guest turn (UX-08, VOICE-22).
  */
@@ -129,7 +138,17 @@ waiting: boolean,
 /**
  * The brain answering and why (PLAN-17): the card's chip, with the reason on hover.
  */
-brain?: BrainChip, };
+brain?: BrainChip, 
+/**
+ * A line the card shows about what KIVO did with the user's data ("Sent a screenshot of
+ * VS Code to Claude", CAP-08).
+ */
+note?: string | null, 
+/**
+ * The last change can be taken back (UX-43): the Island shows Undo with a ring until
+ * `until` (milliseconds since the Unix epoch, about 8 s).
+ */
+undo?: UndoOffer | null, };
 
 export type BrainChip = { 
 /**
@@ -160,6 +179,16 @@ warning?: string,
  * Context used by this request, in tokens, and the budget (the context meter, UX-21).
  */
 contextUsed: number, contextBudget: number, };
+
+export type UndoOffer = { 
+/**
+ * What would be undone ("Move files to Archive").
+ */
+title: string, 
+/**
+ * When the Island stops offering it (epoch ms); voice and the toast still work after.
+ */
+until: number, };
 
 export type StepView = { 
 /**
@@ -213,7 +242,15 @@ allowAlways: boolean,
 /**
  * The mode is Plan first: approving grants exactly this step.
  */
-plan: boolean, };
+plan: boolean, 
+/**
+ * Windows Hello can confirm this (High risk on a PC with Hello set up, SEC-11).
+ */
+hello: boolean, };
+
+export type GrantDuration = "once" | "session" | "day" | "always";
+
+export type Preset = "minimal" | "balanced" | "power-user" | "custom";
 
 export type Capability = "mic-listening" | "push-to-talk" | "speak-responses" | "apps-and-windows" | "system-controls" | "power-actions" | "files-read" | "files-modify" | "clipboard" | "browser-open-links" | "browser-pages" | "browser-autonomous" | "ui-automation" | "screen-awareness" | "computer-use" | "shell" | "background-tasks" | "routines" | "memory" | "cloud-brains" | "realtime-voice" | "cli-agents" | "mcp-servers" | "integrations" | "speaker-recognition" | "remote-access" | "notifications";
 
@@ -243,9 +280,28 @@ speech: SpeechStatus,
  */
 hotkeyConflict?: string | null, 
 /**
+ * Sensitive capabilities in use right now (CAP-06): `screen` (eye), `input` (hand),
+ * `shell` (terminal). The tray and the Island show an indicator for each.
+ */
+inUse?: Array<string>, 
+/**
+ * Where the Island goes (UX-13): the setting and the spots it was dragged to.
+ */
+island?: IslandPlacement, 
+/**
  * Increases with every state change, so a client can tell whether its view is current.
  */
 revision: number, };
+
+export type IslandPlacement = { position: OverlayPosition, spots: Array<IslandSpot>, };
+
+export type IslandSpot = { 
+/**
+ * The monitor as Windows names it (`\\.\DISPLAY2`).
+ */
+monitor: string, x: number, y: number, };
+
+export type OverlayPosition = "top-center" | "bottom-center" | "remember-drag";
 
 export type ActivityItem = { id: number, 
 /**
@@ -263,7 +319,15 @@ status: string, };
 
 export type AuditItem = { ts: number, turnId: string | null, tool: string, argsSummary: string, risk: string, decision: string, confirmedBy: string | null, result: string | null, error: string | null, };
 
-export type GrantItem = { id: number, tool: string, scope: string | null, createdAt: number, expiresAt: number | null, };
+export type GrantItem = { id: number, tool: string, scope: string | null, createdAt: number, expiresAt: number | null, 
+/**
+ * A `*` pattern the call's arguments must match (a folder, a command prefix).
+ */
+pattern: string | null, 
+/**
+ * Lasts only until KIVO restarts.
+ */
+sessionOnly: boolean, };
 
 export type ModelItem = { id: string, name: string, 
 /**
@@ -373,7 +437,11 @@ export type RecommendationItem = {
  */
 tier: string, sttEngine: string | null, sttFallback: string | null, ttsEngine: string, ttsFallback: string | null, threads: number, reason: string, };
 
-export type CapabilityItem = { capability: Capability, label: string, enabled: boolean, default: boolean, badges: Array<Badge>, };
+export type CapabilityItem = { capability: Capability, label: string, enabled: boolean, default: boolean, badges: Array<Badge>, 
+/**
+ * When a tool of this capability last ran (epoch ms), for "used 3 min ago" (CAP-04).
+ */
+lastUsed: number | null, };
 
 export type ProtocolVersion = { major: number, minor: number, };
 
@@ -407,11 +475,14 @@ export const Method = {
   sessionSay: "session.say",
   sessionCancel: "session.cancel",
   sessionStopEverything: "session.stopEverything",
+  sessionUndo: "session.undo",
   permissionsAnswer: "permissions.answer",
   permissionsGrants: "permissions.grants",
   permissionsRevoke: "permissions.revoke",
   capabilitiesGet: "capabilities.get",
   capabilitiesSet: "capabilities.set",
+  capabilitiesPreset: "capabilities.preset",
+  browserStatus: "browser.status",
   activityList: "activity.list",
   auditList: "audit.list",
   modelsList: "models.list",

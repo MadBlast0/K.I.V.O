@@ -1,0 +1,7 @@
+id = "explorer"
+name = "File Explorer"
+aliases = ["Explorer", "Files"]
+prefer = ["native", "uia"]
+
+[match]
+exe = ["explorer.exe"]

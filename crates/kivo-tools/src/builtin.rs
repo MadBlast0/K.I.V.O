@@ -69,6 +69,11 @@ pub fn platform_error(e: PlatformError) -> ToolError {
         PlatformError::Unsupported => (ToolErrorCode::Unsupported, text::t("error.unsupported")),
         PlatformError::AccessDenied => (ToolErrorCode::AccessDenied, text::t("error.accessDenied")),
         PlatformError::Cancelled => (ToolErrorCode::Cancelled, text::t("reply.cancelled")),
+        PlatformError::Elevated(name) => (
+            ToolErrorCode::AccessDenied,
+            text::tf("error.elevated", &[("name", &name)]),
+        ),
+        PlatformError::Timeout => (ToolErrorCode::Timeout, text::t("error.appHung")),
         PlatformError::Conflict(_) | PlatformError::Os { .. } => {
             (ToolErrorCode::Failed, text::t("error.failed"))
         }
@@ -76,15 +81,12 @@ pub fn platform_error(e: PlatformError) -> ToolError {
     ToolError::new(code, message).with_detail(detail)
 }
 
-fn done(say: impl Into<String>, data: Value) -> Result<Output, ToolError> {
-    Ok(Output {
-        data,
-        say: say.into(),
-    })
+pub(crate) fn done(say: impl Into<String>, data: Value) -> Result<Output, ToolError> {
+    Ok(Output::new(say, data))
 }
 
 /// A missing argument; `what` names it in `error.missing.*`.
-fn invalid(what: &str) -> ToolError {
+pub(crate) fn invalid(what: &str) -> ToolError {
     ToolError::new(
         ToolErrorCode::InvalidArgs,
         text::t(&format!("error.missing.{what}")),
@@ -128,7 +130,7 @@ fn window_arg(args: &Value, env: &Env) -> Result<(WindowId, String), ToolError> 
     Ok((front.id, front.title))
 }
 
-fn number_arg(args: &Value) -> Result<f32, ToolError> {
+pub(crate) fn number_arg(args: &Value) -> Result<f32, ToolError> {
     let n = args["number"].as_f64().ok_or_else(|| invalid("number"))?;
     #[allow(clippy::cast_possible_truncation, reason = "0–100")]
     Ok((n as f32 / 100.0).clamp(0.0, 1.0))
@@ -162,19 +164,20 @@ pub fn targets(tool: &str, args: &Value) -> Vec<Target> {
 
 /// A tool's definition. Its title (shown on confirmation cards and in Activity) is
 /// `tool.<id>` in the text catalog; the description is for models and stays in English.
-struct Def {
-    id: &'static str,
-    description: &'static str,
-    params: Value,
-    risk: Risk,
-    effects: &'static [SideEffect],
-    capability: Capability,
-    reversibility: Reversibility,
-    egress: bool,
-    timeout_ms: u64,
+pub(crate) struct Def {
+    pub id: &'static str,
+    pub description: &'static str,
+    pub params: Value,
+    pub risk: Risk,
+    pub effects: &'static [SideEffect],
+    pub capability: Capability,
+    pub reversibility: Reversibility,
+    pub egress: bool,
+    pub timeout_ms: u64,
+    pub tier: CapabilityTier,
 }
 
-fn spec(d: &Def) -> ToolSpec {
+pub(crate) fn spec(d: &Def) -> ToolSpec {
     ToolSpec {
         id: d.id.into(),
         description: d.description.into(),
@@ -186,14 +189,14 @@ fn spec(d: &Def) -> ToolSpec {
         data_egress: d.egress,
         timeout_ms: d.timeout_ms,
         cancellable: true,
-        tier: CapabilityTier::OsApi,
+        tier: d.tier,
         platforms: vec![Platform::Windows],
         reversibility: d.reversibility,
         capability: d.capability,
     }
 }
 
-fn object(properties: Value, required: &[&str]) -> Value {
+pub(crate) fn object(properties: Value, required: &[&str]) -> Value {
     json!({ "type": "object", "properties": properties, "required": required, "additionalProperties": false })
 }
 
@@ -204,12 +207,12 @@ fn app_param() -> Value {
     )
 }
 
-fn window_param(required: bool) -> Value {
+pub(crate) fn window_param(required: bool) -> Value {
     let props = json!({ "window": { "type": "object", "properties": { "id": {"type": "string"}, "name": {"type": "string"} } } });
     object(props, if required { &["window"] } else { &[] })
 }
 
-fn none() -> Value {
+pub(crate) fn none() -> Value {
     object(json!({}), &[])
 }
 
@@ -247,6 +250,7 @@ pub fn builtin(env: &Arc<Env>) -> Vec<Arc<dyn Tool>> {
         reversibility,
         egress: false,
         timeout_ms: 5_000,
+        tier: CapabilityTier::OsApi,
     };
     vec![
         tool(
@@ -823,7 +827,7 @@ fn screenshot(env: &Env, target: CaptureTarget) -> Result<Output, ToolError> {
 }
 
 /// `{"region": {x, y, width, height}}`, when given.
-fn region_arg(args: &Value) -> Result<Option<kivo_platform::Rect>, ToolError> {
+pub(crate) fn region_arg(args: &Value) -> Result<Option<kivo_platform::Rect>, ToolError> {
     let region = &args["region"];
     if region.is_null() {
         return Ok(None);
@@ -913,7 +917,10 @@ fn encode_query(text: &str) -> String {
 }
 
 /// Writes `image` as `KIVO <date> <time>.png` in `dir`.
-fn save_png(dir: &std::path::Path, image: &kivo_platform::Image) -> Result<PathBuf, ToolError> {
+pub(crate) fn save_png(
+    dir: &std::path::Path,
+    image: &kivo_platform::Image,
+) -> Result<PathBuf, ToolError> {
     let fail = |e: &dyn std::fmt::Display| {
         ToolError::new(ToolErrorCode::Failed, text::t("error.screenshot"))
             .with_detail(e.to_string())

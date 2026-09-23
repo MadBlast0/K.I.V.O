@@ -12,6 +12,12 @@ pub fn frames<S: AsyncRead + AsyncWrite>(stream: S) -> Frames<S> {
     Framed::new(stream, codec(MAX_FRAME))
 }
 
+/// The frame codec (1 MiB limit), for relaying frames byte-for-byte (the browser bridge's native
+/// messaging host: Chrome frames messages the same way).
+pub fn frame_codec() -> LengthDelimitedCodec {
+    codec(MAX_FRAME)
+}
+
 pub(crate) fn codec(max: usize) -> LengthDelimitedCodec {
     LengthDelimitedCodec::builder()
         .little_endian()

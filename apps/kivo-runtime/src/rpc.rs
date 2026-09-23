@@ -27,6 +27,8 @@ pub struct Rpc {
     voice: Option<Arc<crate::voice_rpc::VoiceRpc>>,
     /// Brains, Chat, Usage and preferences (BRAINS, CONVERSATION).
     brains: Option<Arc<crate::brains_rpc::BrainsRpc>>,
+    /// KIVO's browser extension, for its status (TOOL-24).
+    browser: Option<Arc<dyn kivo_tools::Browser>>,
 }
 
 impl Rpc {
@@ -45,6 +47,7 @@ impl Rpc {
             lifecycle,
             voice: None,
             brains: None,
+            browser: None,
         }
     }
 
@@ -52,6 +55,13 @@ impl Rpc {
     #[must_use]
     pub fn with_brains(mut self, brains: Arc<crate::brains_rpc::BrainsRpc>) -> Self {
         self.brains = Some(brains);
+        self
+    }
+
+    /// Adds the browser extension's status.
+    #[must_use]
+    pub fn with_browser(mut self, browser: Arc<dyn kivo_tools::Browser>) -> Self {
+        self.browser = Some(browser);
         self
     }
 
@@ -84,6 +94,7 @@ impl Handler for Rpc {
         let lifecycle = Arc::clone(&self.lifecycle);
         let voice = self.voice.clone();
         let brains = self.brains.clone();
+        let browser = self.browser.clone();
         Box::pin(async move {
             if let Some(brains) = brains
                 && let Some(result) = brains.call(&name, params.clone()).await
@@ -141,6 +152,32 @@ impl Handler for Rpc {
                     engine.stop_everything();
                     Ok(Value::Null)
                 }
+                method::ISLAND_MOVED => {
+                    #[derive(Deserialize)]
+                    #[serde(deny_unknown_fields)]
+                    struct Params {
+                        monitor: String,
+                        x: i32,
+                        y: i32,
+                    }
+                    let p: Params = parse(params)?;
+                    // Dragging remembers the spot for that monitor and turns on Remember drag.
+                    core.update_config(|c| {
+                        c.overlay.spots.retain(|s| s.monitor != p.monitor);
+                        c.overlay.spots.push(kivo_core::config::IslandSpot {
+                            monitor: p.monitor.clone(),
+                            x: p.x,
+                            y: p.y,
+                        });
+                        c.overlay.position = kivo_core::config::OverlayPosition::RememberDrag;
+                    });
+                    Ok(Value::Null)
+                }
+                method::SESSION_UNDO => engine
+                    .undo_last()
+                    .await
+                    .map(|()| Value::Null)
+                    .map_err(refuse),
                 method::PERMISSIONS_ANSWER => {
                     #[derive(Deserialize)]
                     #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -149,15 +186,32 @@ impl Handler for Rpc {
                         allow: bool,
                         #[serde(default)]
                         always: bool,
+                        /// How long "Always allow" lasts (SEC-08); `always` alone means Always.
+                        #[serde(default)]
+                        duration: Option<kivo_core::tool::GrantDuration>,
+                        /// Confirm with Windows Hello instead of a plain click (SEC-11).
+                        #[serde(default)]
+                        hello: bool,
                     }
                     let p: Params = parse(params)?;
-                    engine
-                        .answer_confirmation(&p.call_id, p.allow, p.always)
-                        .await
-                        .map(|()| Value::Null)
-                        .map_err(refuse)
+                    let answer = if p.allow && p.hello {
+                        engine.approve_with_hello(&p.call_id).await
+                    } else {
+                        let duration = p
+                            .duration
+                            .or(p.always.then_some(kivo_core::tool::GrantDuration::Always));
+                        engine
+                            .answer_confirmation_for(&p.call_id, p.allow, duration)
+                            .await
+                    };
+                    answer.map(|()| Value::Null).map_err(refuse)
                 }
-                method::CAPABILITIES_GET => ok(&capability_list(&core)),
+                method::CAPABILITIES_GET => ok(&capability_list(&core, &engine)),
+                method::BROWSER_STATUS => ok(&serde_json::json!({
+                    "connected": browser.as_ref().is_some_and(|b| b.connected()),
+                    "extensionId": crate::browser_bridge::EXTENSION_ID,
+                    "folder": crate::browser_bridge::extension_folder(),
+                })),
                 method::CAPABILITIES_SET => {
                     #[derive(Deserialize)]
                     #[serde(deny_unknown_fields)]
@@ -167,12 +221,33 @@ impl Handler for Rpc {
                     }
                     let Params { capability, on } = parse(params)?;
                     let mut changed = false;
-                    core.update_config(|config| changed = config.capabilities.set(capability, on));
+                    core.update_config(|config| {
+                        changed = config.capabilities.set(capability, on);
+                        // A toggle that no longer matches the preset makes it Custom (CAP-05).
+                        config.tools.preset = config.capabilities.preset();
+                    });
                     if changed {
                         // Every toggle change is audited (CAP-03).
                         recorder.capability_changed(capability, on);
                     }
-                    ok(&capability_list(&core))
+                    ok(&capability_list(&core, &engine))
+                }
+                method::CAPABILITIES_PRESET => {
+                    #[derive(Deserialize)]
+                    #[serde(deny_unknown_fields)]
+                    struct Params {
+                        preset: kivo_core::config::Preset,
+                    }
+                    let Params { preset } = parse(params)?;
+                    let mut changed = Vec::new();
+                    core.update_config(|config| {
+                        changed = config.capabilities.apply_preset(preset);
+                        config.tools.preset = config.capabilities.preset();
+                    });
+                    for (capability, on) in changed {
+                        recorder.capability_changed(capability, on);
+                    }
+                    ok(&capability_list(&core, &engine))
                 }
                 method::ACTIVITY_LIST => {
                     #[derive(Deserialize)]
@@ -295,8 +370,16 @@ struct Id {
     id: String,
 }
 
-fn capability_list(core: &Core) -> Vec<CapabilityItem> {
+fn capability_list(core: &Core, engine: &Engine) -> Vec<CapabilityItem> {
     let settings = core.config().capabilities;
+    // "Used … ago": the last time any tool of the capability ran, from the audit log.
+    let mut last: std::collections::HashMap<Capability, i64> = std::collections::HashMap::new();
+    for (tool, ts) in engine.recorder.last_tool_uses() {
+        if let Some(spec) = engine.registry.known(&tool) {
+            let e = last.entry(spec.capability).or_insert(ts);
+            *e = (*e).max(ts);
+        }
+    }
     Capability::ALL
         .iter()
         .map(|&capability| CapabilityItem {
@@ -305,6 +388,7 @@ fn capability_list(core: &Core) -> Vec<CapabilityItem> {
             enabled: settings.enabled(capability),
             default: capability.default_enabled(),
             badges: capability.badges().to_vec(),
+            last_used: last.get(&capability).copied(),
         })
         .collect()
 }
@@ -366,6 +450,10 @@ mod tests {
                 Arc::new(Mutex::new(Database::in_memory().unwrap())),
                 std::env::temp_dir(),
             ),
+            verifier: Arc::new(kivo_testkit::FakeVerifier::default()),
+            commands: None,
+            input_abort: None,
+            vision: Arc::default(),
         }));
         let lifecycle = Arc::new(Lifecycle::new(
             Arc::clone(&core),

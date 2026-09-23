@@ -118,6 +118,38 @@ fn enable_shutdown_privilege() -> PlatformResult<()> {
     }
 }
 
+/// Opens an app URI (`spotify:search:jazz`, `ms-settings:bluetooth`) with its registered app.
+/// Only a plain `scheme:` URI: never a path, a file or script URL, or a web address (those have
+/// their own, checked ways in).
+pub fn open_uri(uri: &str) -> PlatformResult<()> {
+    let Some((scheme, rest)) = uri.split_once(':') else {
+        return Err(PlatformError::NotFound("that link".into()));
+    };
+    let scheme = scheme.to_ascii_lowercase();
+    let plain = scheme.len() > 1
+        && scheme
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
+        && scheme.starts_with(|c: char| c.is_ascii_alphabetic());
+    let refused = matches!(
+        scheme.as_str(),
+        "file"
+            | "javascript"
+            | "vbscript"
+            | "data"
+            | "http"
+            | "https"
+            | "ms-msdt"
+            | "search-ms"
+            | "search"
+            | "ms-officecmd"
+    );
+    if !plain || refused || rest.chars().any(|c| c.is_control() || c == '"') {
+        return Err(PlatformError::AccessDenied);
+    }
+    shell_open(uri)
+}
+
 /// Opens a document, folder or URI with its default handler.
 fn shell_open(target: &str) -> PlatformResult<()> {
     let _com = Com::init()?;

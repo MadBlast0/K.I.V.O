@@ -1,0 +1,9 @@
+id = "firefox"
+name = "Mozilla Firefox"
+aliases = ["Firefox"]
+browser = true
+# KIVO's extension is Chromium-only for now: Firefox is read through UI Automation.
+prefer = ["uia"]
+
+[match]
+exe = ["firefox.exe"]

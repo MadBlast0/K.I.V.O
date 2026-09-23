@@ -10,6 +10,7 @@ fn main() {
         "overlay_typing_done",
         "overlay_focus",
         "overlay_hover",
+        "overlay_drag",
         "island_request",
         "announce",
     ]);

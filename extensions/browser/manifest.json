@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "KIVO",
+  "short_name": "KIVO",
+  "version": "0.1.0",
+  "description": "Lets KIVO, your voice assistant on this PC, read and act on the page you're on when you ask it to.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAkKw4wO8pkmI/88xYi2TW6tQPy0k+QRPZu/2OAl3cjwGIYbF3eJPW9CRR2QEgrz5JNjBg4+tMNwNQgvKbb5GlusCQskh6fY5wRLBtHnmaeUZS/1dQaxWiMGi0+4se1PQgAbAhdwoec+yfmp9d6HfKj8uqnDkxv8jc7QAFCsj7viwSF9qJlrQVmk1AczbL5/CvvVv0o+Gx7MIR0MjJ5jtWoK3nbyqNHl54agu11ipUbeSupOeT8URMbV5ArR+BCjRMQRkLn63ZK/x9PPxR4MzoQBuqdZxjpcZAZ5hgxvOCrzQlL1eKvqATSzZbMYv2lmuPBpi45dpvTbcMkoHbA+18UwIDAQAB",
+  "minimum_chrome_version": "116",
+  "permissions": ["nativeMessaging", "tabs", "scripting"],
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "icons": {
+    "128": "icon128.png"
+  }
+}
