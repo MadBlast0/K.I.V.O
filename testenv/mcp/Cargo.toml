@@ -1,0 +1,29 @@
+[package]
+name = "kivo-testenv-mcp"
+description = "The safe test ground's MCP server (TOOLS_AND_CONTROL §10, TOOL-41): a well-behaved mode and a hostile one."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[[bin]]
+name = "kivo-test-mcp"
+path = "src/main.rs"
+
+[dependencies]
+rmcp = { workspace = true, features = ["transport-streamable-http-server"] }
+serde_json.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-std", "time", "sync", "net"] }
+# The HTTP mode's server and its small OAuth authorization server.
+base64.workspace = true
+bytes = "1"
+http-body-util = "0.1"
+hyper = { version = "1", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+sha2.workspace = true
+tower-service = "0.3"
+url = "2"
+
+[lints]
+workspace = true

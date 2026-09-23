@@ -26,6 +26,7 @@ import {
   Section,
   Segmented,
   Select,
+  Switch,
   Tag,
   TextArea,
   useToast,
@@ -102,6 +103,25 @@ function AgentsTab() {
   const [overview, setOverview] = useState<AgentsOverview | null>(null);
   const [starting, setStarting] = useState<AgentItem | null>(null);
   const [workspaces] = useWorkspaces();
+  // Which agents may use KIVO's MCP server, and so the user's memory (CONV-24).
+  const [sharing, setSharing] = useState<{ agents: string[]; sensitive: boolean }>({ agents: [], sensitive: false });
+  useEffect(() => {
+    if (!connected) return;
+    void request<{ tools: Record<string, unknown> }>(Method.settingsGet)
+      .then((s) => {
+        const agents = s.tools["share-with-agents"];
+        setSharing({
+          agents: Array.isArray(agents) ? agents.filter((a): a is string => typeof a === "string") : [],
+          sensitive: s.tools["share-sensitive"] === true,
+        });
+      })
+      .catch(() => {});
+  }, [connected, request]);
+  const share = (params: { agent: string; on: boolean; sensitive?: boolean }) => {
+    request<{ agents: string[]; sensitive: boolean }>(Method.mcpShare, params)
+      .then(setSharing)
+      .catch((e: unknown) => toast(message(e)));
+  };
 
   const load = useCallback(() => {
     if (!connected) return;
@@ -217,6 +237,38 @@ function AgentsTab() {
           end={<Pill tone="danger">{t("risk.high")}</Pill>}
         />
         <Row icon="send" title={t("agents.reviewPrompts")} subtitle={t("agents.reviewPromptsDetail")} />
+      </Group>
+
+      <Section title={t("agents.memory")} />
+      <Group>
+        {installed.map((a) => (
+          <Row
+            key={a.id}
+            icon="memory"
+            title={t("agents.shareWith", { name: a.name })}
+            subtitle={t("agents.shareDetail")}
+            end={
+              <Switch
+                label={t("agents.shareWith", { name: a.name })}
+                checked={sharing.agents.includes(a.id)}
+                onChange={(on) => share({ agent: a.id, on })}
+              />
+            }
+          />
+        ))}
+        <Row
+          icon="privacy"
+          title={t("agents.shareSensitive")}
+          subtitle={t("agents.shareSensitiveDetail")}
+          end={
+            <Switch
+              label={t("agents.shareSensitive")}
+              checked={sharing.sensitive}
+              disabled={sharing.agents.length === 0}
+              onChange={(sensitive) => share({ agent: sharing.agents[0] ?? "", on: true, sensitive })}
+            />
+          }
+        />
       </Group>
 
       {starting && (
@@ -352,7 +404,10 @@ function WorkspacesTab() {
                 }
               />
             </Group>
-            <Instructions scope={w.id} placeholder={t("workspaces.instructionsPlaceholder", { name: w.name })} />
+            <Instructions
+              scope={`workspace:${w.id}`}
+              placeholder={t("workspaces.instructionsPlaceholder", { name: w.name })}
+            />
           </div>
         ))
       )}

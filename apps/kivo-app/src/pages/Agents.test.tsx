@@ -141,7 +141,7 @@ describe("Workspaces and instructions (CONV-09/10/11)", () => {
     fireEvent.change(notes, { target: { value: "Use pnpm." } });
     fireEvent.blur(notes);
     await settle();
-    expect(calls).toContainEqual({ method: "instructions.set", params: { scope: "w1", text: "Use pnpm." } });
+    expect(calls).toContainEqual({ method: "instructions.set", params: { scope: "workspace:w1", text: "Use pnpm." } });
     expect(screen.getByText("CLAUDE.md")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Export as AGENTS.md" }));
     await settle();

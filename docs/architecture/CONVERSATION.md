@@ -416,7 +416,7 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 - [ ] **CONV-21** · M8 · Workspace notes (automatic) with detail level Brief / Standard / Detailed (§6)
 - [ ] **CONV-22** · M8 · Tidy job: merge duplicates, condense logs older than 14 days, mark superseded facts, 50 KB per-workspace cap, never keep secrets, ask before new workspace/person notes (§6)
 - [ ] **CONV-23** · M8 · Hybrid search FTS5 + `sqlite-vec` (§6, MEMORY §3)
-- [ ] **CONV-24** · M6 · Memory MCP tools `memory.search`, `memory.read`/`memory.get`, `memory.write_note`/`memory.add` (permission-gated), `memory.tags`; each agent allowed first; sensitive memories never shared with cloud agents unless allowed (§6)
+- [x] **CONV-24** · M6 · Memory MCP tools `memory.search`, `memory.read`/`memory.get`, `memory.write_note`/`memory.add` (permission-gated), `memory.tags`; each agent allowed first; sensitive memories never shared with cloud agents unless allowed (§6) → done: `memory.search`, `memory.get`, `memory.add` (asks, Medium) and `memory.tags` (`apps/kivo-runtime/src/memory_tools.rs`) over preferences, notes and conversations (the M7 vault replaces the store behind them); shared per agent from Agents → Memory; sensitive items (personal, About me, conversations) filtered unless allowed · verified: `m6_extensions::kivos_mcp_server_shares_memory_only_with_allowed_agents` (search, add asks, sensitive filtered, unshared agent sees nothing) and memory_tools unit tests
 - [ ] **CONV-25** · M8 · Memory page graph view (tags, backlinks) (§6)
 
 **Conversational confirmations (§7)**
@@ -433,5 +433,5 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 
 **Skills (§9)**
 
-- [ ] **CONV-32** · M6 · Agent Skills (`SKILL.md` folders) from `%APPDATA%\KIVO\skills\`, import from folder/zip; only name + description in context, body loaded on use; scripts run through the shell tool under the permission engine; external skills reviewed before enabling (§9)
+- [x] **CONV-32** · M6 · Agent Skills (`SKILL.md` folders) from `%APPDATA%\KIVO\skills\`, import from folder/zip; only name + description in context, body loaded on use; scripts run through the shell tool under the permission engine; external skills reviewed before enabling (§9) → done: `apps/kivo-runtime/src/skills.rs`: SKILL.md folders in `%APPDATA%\KIVO\skills\`, import from folder or zip (zip-slip checked), only name + description in the prompt, `skills.load` loads the body, scripts run through `shell.run`; external skills off until reviewed · verified: `m6_extensions::skills_are_found_reviewed_and_offered_to_brains`, skills unit tests, `Extensions.test.tsx`
 - [ ] **CONV-33** · M8 · Skills created from a routine, or shared by agents KIVO launches (with permission) (§9)

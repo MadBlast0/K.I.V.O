@@ -16,6 +16,13 @@ kivo-ipc.workspace = true
 kivo-platform.workspace = true
 kivo-security = { path = "../../crates/kivo-security" }
 kivo-store.workspace = true
+kivo-mcp.workspace = true
+rmcp.workspace = true
+# The test rig's "browser" for connector sign-ins.
+reqwest.workspace = true
+url = "2"
+# Skill imports from a .zip (CONV-32); MIT.
+zip = { version = "2.4", default-features = false, features = ["deflate"] }
 kivo-tools = { path = "../../crates/kivo-tools" }
 kivo-voice = { path = "../../crates/kivo-voice" }
 # The fakes behind `scripted` (end-to-end tests and the `kivo-e2e` benchmark journeys); the

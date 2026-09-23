@@ -101,7 +101,14 @@ instructions mirrored to Markdown; terminal agents in Windows Terminal with Draf
 prompt is sent; Bypass permissions; the Tasks, Routines and Agents pages, live activities, the
 selection shortcut, "What can I say?", every Island button by voice, toast replies and the jump
 list. Still open in M5: nothing beyond the M3 note that a live Claude Code run needs its ACP
-adapter. **Next: M6.** Progress per milestone is in the
+adapter. **M6 — MCP, connectors, skills** is built: the `kivo-mcp` crate on `rmcp` (stdio and
+Streamable HTTP), MCP tools as `mcp.<server>.<tool>` reviewed by description hash before use and
+switched off when they change, imports from Claude Desktop, Claude Code, Cursor, VS Code, Codex and
+Gemini CLI that never touch the originals, KIVO's own MCP server (`--mcp-server --agent <id>`)
+sharing memory tools with the agents the user allows, connectors with OAuth (PKCE + dynamic
+registration) and local detection, Agent Skills, file watchers, the hostile-server fixture
+(`testenv/mcp`) and the Extensions page. Still open in M6: a sign-in against a live publisher
+(needs the owner's accounts). **Next: M7.** Progress per milestone is in the
 table at the top of [docs/ROADMAP.md](docs/ROADMAP.md).
 Update this section as milestones land.
 
@@ -121,6 +128,7 @@ Update this section as milestones land.
 | Is the running runtime healthy? (exit code 0/1) | `kivo-runtime --health` |
 | Sync ROADMAP from the spec checklists | `pnpm docs:sync` |
 | Real CLI agents' ACP handshake (no prompt, no quota) | `KIVO_TEST_REAL_AGENTS=1 cargo test -p kivo-brain speaks_acp` |
+| MCP fixture server (normal, `--hostile`, `--http [--no-auth]`) | `cargo run -p kivo-testenv-mcp -- --hostile` |
 | UIA journey on the dummy app (`testenv/app`, acts only on its own window) | `cargo test -p kivo-platform-windows --test uia_testenv` |
 | Security suite v1 (injection, shell strings, traversal, bypass attempts) | `cargo test -p kivo-tools --lib security_suite` · `cargo test -p kivo-runtime --test security_suite` |
 | Regenerate the UI's IPC types | `KIVO_WRITE_TS=1 cargo test -p kivo-ipc --features ts --test ts_bindings` |

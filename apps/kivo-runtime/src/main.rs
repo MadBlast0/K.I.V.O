@@ -41,6 +41,10 @@ fn main() -> ExitCode {
     if args.health {
         return health(&paths);
     }
+    // A CLI agent started KIVO's MCP server: relay to the running KIVO, nothing else (TOOL-37).
+    if let Some(agent) = args.mcp_server.clone() {
+        return mcp_server(&agent, &paths);
+    }
     // A browser started KIVO as its native messaging host: relay, nothing else (TOOL-24).
     #[cfg(windows)]
     if let Some(caller) = args.native_messaging.clone() {
@@ -127,6 +131,20 @@ fn native_messaging_host(caller: &str, paths: &Paths) -> ExitCode {
         &endpoint,
         &token_file,
     ))
+}
+
+fn mcp_server(agent: &str, paths: &Paths) -> ExitCode {
+    let Ok(endpoint) = kivo_ipc::transport::endpoint(&paths.run()) else {
+        return ExitCode::FAILURE;
+    };
+    let Ok(rt) = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+    else {
+        return ExitCode::FAILURE;
+    };
+    let token_file = paths.run().join("session.token");
+    rt.block_on(kivo_runtime::mcp_bridge::run(agent, &endpoint, &token_file))
 }
 
 #[cfg(windows)]
@@ -287,6 +305,8 @@ async fn run(
     // rest of the native controls; the registry of what each app supports.
     let vision = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let commands: Arc<kivo_platform_windows::WindowsCommands> = Arc::default();
+    // Connector detection runs `gh auth status` (DISC-08).
+    let detect_commands: Arc<dyn kivo_platform::CommandRunner> = commands.clone();
     let browser = browser_bridge(&core, &bridge_endpoint, bridge_token, paths);
     let input = Arc::new(kivo_platform_windows::WindowsInput::default());
     let input_abort = input.abort_flag();
@@ -407,6 +427,77 @@ async fn run(
     );
     workspaces.watch();
     engine.set_workspaces(Arc::clone(&workspaces));
+    // What KIVO remembers, for brains and for agents through KIVO's MCP server (CONV-24).
+    registry.set_live(
+        "memory.",
+        kivo_runtime::memory_tools::tools(&db, &workspaces),
+    );
+    // MCP servers, connectors and skills (M6): servers connect and detectors run in the
+    // background; other apps' setups and the skills folders are watched.
+    let projects: Vec<std::path::PathBuf> = workspaces
+        .list()
+        .into_iter()
+        .map(|w| std::path::PathBuf::from(w.path))
+        .collect();
+    let mcp = kivo_runtime::mcp::Mcp::new(
+        Arc::clone(&core),
+        Arc::clone(&db),
+        Arc::clone(&registry),
+        Arc::new(kivo_platform_windows::WindowsSecrets),
+        kivo_mcp::imports::Places {
+            projects: projects.clone(),
+            ..kivo_mcp::imports::Places::user()
+        },
+    );
+    mcp.watch();
+    let skills = kivo_runtime::skills::Skills::new(
+        Arc::clone(&core),
+        Arc::clone(&db),
+        dirs::config_dir()
+            .unwrap_or_else(std::env::temp_dir)
+            .join("KIVO")
+            .join("skills"),
+        dirs::home_dir().unwrap_or_else(std::env::temp_dir),
+    );
+    skills.set_projects(projects);
+    skills.scan();
+    skills.watch();
+    registry.set_live("skills.", kivo_runtime::skills::tools(&skills));
+    engine.set_skills(Arc::clone(&skills));
+    // Agents KIVO runs get KIVO's MCP server when the user allowed them (BRAIN-16, CONV-24).
+    if let Ok(exe) = std::env::current_exe() {
+        let core = Arc::clone(&core);
+        agents.set_kivo_server(Arc::new(move |agent| {
+            core.config()
+                .tools
+                .share_with_agents
+                .iter()
+                .any(|a| a == agent)
+                .then(|| kivo_runtime::agents::kivo_server(agent, &exe))
+        }));
+    }
+    let connectors = kivo_runtime::connectors::Connectors::new(
+        Arc::clone(&core),
+        Arc::clone(&mcp),
+        Some(detect_commands),
+        {
+            let engine = Arc::clone(&engine);
+            Arc::new(move || engine.installed_apps())
+        },
+        Arc::clone(&controls.apps),
+        Some(Arc::clone(&browser)),
+        Arc::new(|url| kivo_platform_windows::open_uri(url).map_err(|e| e.to_string())),
+    );
+    {
+        let mcp = Arc::clone(&mcp);
+        let connectors = Arc::clone(&connectors);
+        tokio::spawn(async move {
+            // After start-up work, at low priority.
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            mcp.start().await;
+            connectors.refresh().await;
+        });
+    }
     {
         let tasks = Arc::clone(&tasks);
         tokio::spawn(async move {
@@ -657,7 +748,16 @@ async fn run(
                     uia: Arc::clone(&controls.uia),
                     clipboard: Arc::clone(&controls.clipboard),
                     db: Arc::clone(&db),
-                })),
+                }))
+                .with_extensions(Arc::new(
+                    kivo_runtime::extensions_rpc::ExtensionsRpc {
+                        core: Arc::clone(&core),
+                        engine: Arc::clone(&engine),
+                        mcp: Arc::clone(&mcp),
+                        connectors: Arc::clone(&connectors),
+                        skills: Arc::clone(&skills),
+                    },
+                )),
             ),
             core.bus.clone(),
             core.state(),

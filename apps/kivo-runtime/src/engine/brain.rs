@@ -990,6 +990,8 @@ impl Engine {
             .unwrap_or_default();
         let mut layers = Layers {
             system: persona::system_prompt(&persona, voice, &addendum),
+            // The skills index (CONV-32): names and descriptions; a body loads with `skills.load`.
+            skills: self.skills_index(),
             ..Layers::default()
         };
         // Stated preferences ("call me Sam", "use metric", MEM-03) and, for voice, the words
@@ -1121,6 +1123,17 @@ impl Engine {
         let task = classify_task(text);
         let limit = if tainted { 8 } else { 20 };
         layers.tools = context::select_tools(&candidates, text, task, &scope, limit);
+        // With skills on, the brain can always load one (CONV-32): their index is in the request.
+        if !layers.skills.is_empty()
+            && !layers.tools.iter().any(|t| t.name == "skills__load")
+            && let Some(load) = candidates.iter().find(|c| c.id == "skills.load")
+        {
+            layers.tools.push(kivo_brain::ToolDef {
+                name: context::wire_name(&load.id),
+                description: load.description.clone(),
+                params: load.params.clone(),
+            });
+        }
         // Only what was offered can be called (SEC-15): a brain naming another tool is refused.
         if let Some(t) = lock(&self.turn).as_mut() {
             t.offered = layers

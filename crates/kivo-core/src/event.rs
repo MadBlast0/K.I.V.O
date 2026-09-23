@@ -332,6 +332,11 @@ pub enum SystemEvent {
         stage: String,
         message: Option<String>,
     },
+    /// Something the Extensions page shows changed (DISC-16): `mcp`, `skills` or `connectors`
+    /// (a server connected or its tools changed, another app's setup or a skills folder changed).
+    DiscoveryChanged {
+        section: String,
+    },
 }
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]

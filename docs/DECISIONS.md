@@ -341,3 +341,16 @@ Geist font. *(Superseded 2026-09-21: the system font, and Base UI styled by KIVO
 instead of shadcn. See "Implementation start".)* Voice visuals are adapted from ElevenLabs UI (MIT) and optionally the
 LiveKit aura shader (Apache-2.0). The overlay shell, state machine and audio-level
 bridge are custom.
+
+## 2026-09-23 — M6 build
+
+| Topic | Decision |
+|---|---|
+| **rmcp for MCP** | The official Rust SDK `rmcp` (Apache-2.0) is KIVO's MCP client and server: stdio child processes (`.cmd` shims run through `cmd /c`, no console window) and Streamable HTTP, with its OAuth support. The new `kivo-mcp` crate wraps it; the runtime never calls rmcp directly |
+| **Tools are reviewed by hash** | Each MCP tool's approval is a SHA-256 of its name, description and input schema. A new or changed tool is shown on the Extensions page and not registered until the user approves it; `tools/list_changed` re-lists and compares. Tool ids are `mcp.<server>.<tool>` with names sanitized and `__` collapsed; default risk Medium (lowerable per tool); descriptions are labelled as the server's and capped at 1,000 characters, results at 64,000 and treated as untrusted. The approval card uses KIVO's own words, never the server's |
+| **KIVO's MCP server is a bridge** | `kivo-runtime --mcp-server --agent <id>` speaks MCP on stdio and relays each call over the local IPC to the running runtime, so every call goes through the same permission engine (initiator `Mcp`); a call that would ask is refused while no turn is running. It is passed in each ACP session's MCP server list. Only agents the user turns on (Agents → Memory) get it, and it offers only the memory tools |
+| **Sensitive memory** | Memories under `personal.*`, About me and past conversations are marked sensitive and removed from what agents see unless "Include personal memories" is on. CONV-24's memory tools work over the M5 memory (preferences, notes, conversations) until the M7 vault |
+| **Connector catalog** | `crates/kivo-mcp/connectors.toml`: remote servers only where the publisher documents an official MCP endpoint with OAuth (GitHub, Notion, Linear, Atlassian, Stripe); local ones that need no sign-in (GitHub via `gh auth status`, Spotify, VS Code, the browser extension) and built-in media. Sentry and Asana left out until their endpoints are confirmed. Sign-in uses OAuth 2.1 with PKCE and dynamic client registration on a loopback redirect; tokens go to Credential Manager; KIVO never asks for a password or key |
+| **Imports copy, never modify** | Other apps' MCP setups (Claude Desktop incl. the Store build, Claude Code, Cursor, VS Code, Codex, Gemini CLI) are read and copied; their files are never written. Secret-looking environment values move to Credential Manager. Every imported tool waits for review |
+| **Skills trust** | Skills in KIVO's own folder are on; skills found in `~/.claude/skills` or a project's `.claude/skills` and imported folders or zips are off until reviewed. Zip import rejects paths outside the folder. Only a skill's name and description go with a request; `skills.load` (always offered while skills are on) loads its body; its scripts run through `shell.run` and ask like any command |
+| **Plugins after 1.0** | The Plugins tab says plugins come after 1.0 (INT-06+ are Post); MCP servers and skills extend KIVO until then |

@@ -91,6 +91,19 @@ pub struct Rig {
     /// The M5 requests the Control Center makes (Tasks, Routines, Agents, Bypass), as the app
     /// sends them.
     pub rpc: Arc<crate::tasks_rpc::TasksRpc>,
+    /// M6: MCP servers (secrets in a fake Credential Manager), skills and connectors, with
+    /// "other apps" and the skills folders in this rig's own folder, and the Extensions requests.
+    pub mcp: Arc<crate::mcp::Mcp>,
+    pub skills: Arc<crate::skills::Skills>,
+    pub connectors: Arc<crate::connectors::Connectors>,
+    pub extensions: Arc<crate::extensions_rpc::ExtensionsRpc>,
+    pub secrets: Arc<kivo_testkit::FakeSecrets>,
+    /// The rig's pretend user profile folder (`~`) and `%APPDATA%`, for other apps' setups.
+    pub home: PathBuf,
+    pub appdata: PathBuf,
+    /// Pages a connector's sign-in opened in "the browser" (which follows them, like a user who
+    /// signs in at once).
+    pub opened: Arc<Mutex<Vec<String>>>,
 }
 
 impl Drop for Rig {
@@ -297,6 +310,68 @@ pub fn rig_with_voice(
         screenshots.join("kivo-data"),
     );
     engine.set_workspaces(Arc::clone(&workspaces));
+    // What KIVO remembers, for brains and for agents through KIVO's MCP server (CONV-24).
+    registry.set_live("memory.", crate::memory_tools::tools(&db, &workspaces));
+    // M6 on fakes, in this rig's own folder.
+    let home = screenshots.join("home");
+    let appdata = screenshots.join("appdata");
+    let _ = std::fs::create_dir_all(&home);
+    let _ = std::fs::create_dir_all(&appdata);
+    let secrets = Arc::new(kivo_testkit::FakeSecrets::default());
+    let mcp = crate::mcp::Mcp::new(
+        Arc::clone(&core),
+        Arc::clone(&db),
+        Arc::clone(&registry),
+        secrets.clone(),
+        kivo_mcp::imports::Places {
+            home: home.clone(),
+            appdata: appdata.clone(),
+            local_appdata: screenshots.join("localappdata"),
+            projects: Vec::new(),
+        },
+    );
+    let skills = crate::skills::Skills::new(
+        Arc::clone(&core),
+        Arc::clone(&db),
+        appdata.join("KIVO").join("skills"),
+        home.clone(),
+    );
+    registry.set_live("skills.", crate::skills::tools(&skills));
+    engine.set_skills(Arc::clone(&skills));
+    let opened: Arc<Mutex<Vec<String>>> = Arc::default();
+    let connectors = crate::connectors::Connectors::new(
+        Arc::clone(&core),
+        Arc::clone(&mcp),
+        Some(commands.clone() as Arc<dyn kivo_platform::CommandRunner>),
+        {
+            let engine = Arc::clone(&engine);
+            Arc::new(move || engine.installed_apps())
+        },
+        Arc::clone(&controls.apps),
+        None,
+        {
+            let opened = Arc::clone(&opened);
+            Arc::new(move |page: &str| {
+                opened
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .push(page.to_owned());
+                // The "user" signs in at once: the browser follows the page's redirects.
+                let page = page.to_owned();
+                tokio::spawn(async move {
+                    let _ = reqwest::get(page).await;
+                });
+                Ok(())
+            })
+        },
+    );
+    let extensions = Arc::new(crate::extensions_rpc::ExtensionsRpc {
+        core: Arc::clone(&core),
+        engine: Arc::clone(&engine),
+        mcp: Arc::clone(&mcp),
+        connectors: Arc::clone(&connectors),
+        skills: Arc::clone(&skills),
+    });
     let rpc = Arc::new(crate::tasks_rpc::TasksRpc {
         core: Arc::clone(&core),
         engine: Arc::clone(&engine),
@@ -380,6 +455,14 @@ pub fn rig_with_voice(
             terminals,
             workspaces,
             rpc,
+            mcp,
+            skills,
+            connectors,
+            extensions,
+            secrets,
+            home,
+            appdata,
+            opened,
         },
         worker_task,
         pump,

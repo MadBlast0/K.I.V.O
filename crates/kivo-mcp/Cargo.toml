@@ -1,6 +1,6 @@
 [package]
 name = "kivo-mcp"
-description = "MCP client and the KIVO MCP server."
+description = "MCP for KIVO (TOOLS_AND_CONTROL §9): the client for other servers' tools, KIVO's own server for agents, imports of other apps' MCP setups, and remote connectors."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,6 +8,24 @@ license.workspace = true
 publish = false
 
 [dependencies]
+kivo-core.workspace = true
+kivo-tools = { path = "../kivo-tools" }
+rmcp.workspace = true
+async-trait.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+tokio = { workspace = true, features = ["rt", "sync", "time", "process", "macros", "net", "io-util"] }
+tokio-util.workspace = true
+tracing.workspace = true
+url = "2"
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio = { workspace = true, features = ["rt", "time", "macros", "rt-multi-thread"] }
 
 [lints]
 workspace = true

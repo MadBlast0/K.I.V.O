@@ -32,6 +32,22 @@ pub struct Agents {
     permissions: RwLock<Option<Arc<dyn PermissionHandler>>>,
     /// Sessions a background task is driving: their requests go to the task (BRAIN-32).
     routed: Mutex<HashMap<String, Arc<dyn PermissionHandler>>>,
+    /// KIVO's own MCP server for an agent's sessions (BRAIN-16), when the user allowed the agent.
+    kivo_server: RwLock<Option<KivoServerFor>>,
+}
+
+/// KIVO's MCP server for an agent (by id), if it may use it.
+pub type KivoServerFor = Arc<dyn Fn(&str) -> Option<kivo_brain::acp::McpServer> + Send + Sync>;
+
+/// KIVO's MCP server as an agent starts it: this program with `--mcp-server --agent <id>`
+/// (TOOL-37), which relays to the running KIVO.
+pub fn kivo_server(agent: &str, exe: &Path) -> kivo_brain::acp::McpServer {
+    kivo_brain::acp::McpServer {
+        name: "kivo".into(),
+        command: exe.to_path_buf(),
+        args: vec!["--mcp-server".into(), "--agent".into(), agent.to_owned()],
+        env: Vec::new(),
+    }
 }
 
 /// Hands permission requests to whatever answers them now.
@@ -63,7 +79,13 @@ impl Agents {
             workspace: RwLock::new(workspace),
             permissions: RwLock::new(None),
             routed: Mutex::default(),
+            kivo_server: RwLock::new(None),
         })
+    }
+
+    /// Offers KIVO's MCP server to the sessions of agents `server` allows (BRAIN-16).
+    pub fn set_kivo_server(&self, server: KivoServerFor) {
+        *write(&self.kivo_server) = Some(server);
     }
 
     pub fn set_permissions(&self, handler: Arc<dyn PermissionHandler>) {
@@ -138,10 +160,15 @@ impl Agents {
             .ok()
             .flatten()
             .map(|r| r.id);
-        let session = match client.session(cwd, &[], stored.as_deref()).await {
+        let servers: Vec<kivo_brain::acp::McpServer> = read(&self.kivo_server)
+            .as_ref()
+            .and_then(|f| f(id))
+            .into_iter()
+            .collect();
+        let session = match client.session(cwd, &servers, stored.as_deref()).await {
             Ok(s) => s,
             // A stored session the agent no longer has: start fresh.
-            Err(_) if stored.is_some() => client.session(cwd, &[], None).await?,
+            Err(_) if stored.is_some() => client.session(cwd, &servers, None).await?,
             Err(e) => {
                 client.stop();
                 return Err(e);

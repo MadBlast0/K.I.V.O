@@ -299,6 +299,26 @@ const SCHEMA: &[&str] = &[
              updated_at INTEGER NOT NULL,
              PRIMARY KEY (profile_id, scope)
          ) STRICT;",
+    // 9 · M6: MCP servers (their setup and the user's tool decisions, as JSON; secrets live in
+    // Credential Manager) and skills (where each one is, and whether it's reviewed and on).
+    "CREATE TABLE mcp_servers (
+             id         TEXT NOT NULL,
+             profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+             body       TEXT NOT NULL,
+             updated_at INTEGER NOT NULL,
+             PRIMARY KEY (profile_id, id)
+         ) STRICT;
+     CREATE TABLE skills (
+             id         TEXT NOT NULL,
+             profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+             name       TEXT NOT NULL,
+             path       TEXT NOT NULL,
+             source     TEXT NOT NULL,
+             enabled    INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+             reviewed   INTEGER NOT NULL CHECK (reviewed IN (0, 1)),
+             updated_at INTEGER NOT NULL,
+             PRIMARY KEY (profile_id, id)
+         ) STRICT;",
 ];
 
 static MIGRATIONS: LazyLock<Migrations<'static>> =

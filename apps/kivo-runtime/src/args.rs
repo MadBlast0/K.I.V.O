@@ -16,13 +16,24 @@ pub struct Args {
     /// (`chrome-extension://<id>/`; TOOL-24). Chrome passes it as the first argument; the host
     /// relays and never starts a runtime.
     pub native_messaging: Option<String>,
+    /// Started by a CLI agent as KIVO's MCP server (`--mcp-server --agent <id>`, TOOL-37): relay
+    /// the agent's MCP to the running KIVO, nothing else.
+    pub mcp_server: Option<String>,
 }
 
 impl Args {
     pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Self, String> {
         let mut parsed = Self::default();
-        for arg in args {
+        let mut args = args.into_iter();
+        while let Some(arg) = args.next() {
             match arg.as_str() {
+                "--mcp-server" => {
+                    parsed.mcp_server.get_or_insert_with(String::new);
+                }
+                "--agent" => {
+                    let agent = args.next().ok_or("--agent needs an agent id")?;
+                    parsed.mcp_server = Some(agent);
+                }
                 "--autostart" => parsed.autostart = true,
                 "--from-app" => parsed.from_app = true,
                 "--no-app" => parsed.no_app = true,
@@ -57,6 +68,9 @@ mod tests {
         assert!(all.autostart && all.from_app && all.no_app && !all.health);
         assert!(parse(&["--health"]).unwrap().health);
         assert_eq!(parse(&["--nope"]), Err("unknown argument: --nope".into()));
+        let mcp = parse(&["--mcp-server", "--agent", "claude-code"]).unwrap();
+        assert_eq!(mcp.mcp_server.as_deref(), Some("claude-code"));
+        assert!(parse(&["--mcp-server", "--agent"]).is_err());
         let host = parse(&["chrome-extension://abc/", "--parent-window=0"]).unwrap();
         assert_eq!(
             host.native_messaging.as_deref(),

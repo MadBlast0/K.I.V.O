@@ -6,6 +6,7 @@ pub mod brains;
 pub mod config;
 pub mod crashes;
 pub mod db;
+pub mod extensions;
 pub mod logging;
 pub mod models;
 pub mod records;

@@ -476,6 +476,7 @@ impl Tool for ProposePlan {
                 let tool = s["tool"].as_str().unwrap_or_default();
                 registry
                     .all_tools()
+                    .into_iter()
                     .find(|t| t.spec().id == tool)
                     .map_or(Risk::High, |t| t.assess(&s["args"], initiator))
             })

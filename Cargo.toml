@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/*", "apps/kivo-runtime", "apps/kivo-infer", "apps/kivo-bench", "apps/kivo-app/src-tauri", "testenv/app"]
+members = ["crates/*", "apps/kivo-runtime", "apps/kivo-infer", "apps/kivo-bench", "apps/kivo-app/src-tauri", "testenv/app", "testenv/mcp"]
 
 [workspace.package]
 version = "0.0.0"
@@ -51,6 +51,19 @@ sha2 = "0.10"
 ureq = { version = "3.4", default-features = false, features = ["native-tls", "gzip"] }
 # Async HTTP with streaming bodies for the brain adapters (SSE), Windows TLS via schannel.
 reqwest = { version = "0.13", default-features = false, features = ["native-tls", "stream", "json", "http2", "system-proxy"] }
+# MCP (TOOLS_AND_CONTROL §9, TOOL-34): the official Rust SDK, Apache-2.0. The client (stdio child
+# processes and Streamable HTTP), KIVO's own server for agents, and MCP authorization (OAuth 2.1 +
+# PKCE with dynamic client registration) for remote connectors.
+rmcp = { version = "3.4.0", default-features = false, features = [
+  "client",
+  "server",
+  "transport-child-process",
+  "transport-io",
+  "transport-streamable-http-client-reqwest",
+  "reqwest-native-tls",
+  "auth",
+] }
+kivo-mcp = { path = "crates/kivo-mcp" }
 async-trait = "0.1"
 # UI Automation (Apache-2.0, checked in M0): the UIA thread and tools (TOOL-19).
 uiautomation = { version = "0.25.1", default-features = false, features = ["process", "control", "event", "pattern", "input"] }

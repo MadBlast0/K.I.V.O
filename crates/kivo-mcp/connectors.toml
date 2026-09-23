@@ -1,0 +1,98 @@
+# The connector directory (INTEGRATIONS §0, INT-03). Remote connectors are the vendors' own
+# remote MCP servers: Connect signs in in the browser (MCP authorization: OAuth 2.1 + PKCE, KIVO
+# registering itself), so nobody pastes a key. Local ones need no account: KIVO finds them on this
+# PC (DISC-08). Endpoints are the vendors' published ones, checked 2026-09-23.
+
+[[connector]]
+id = "github"
+name = "GitHub"
+description = "Issues, pull requests and code on github.com."
+access = "Repositories you can see, issues, pull requests"
+kind = "remote"
+url = "https://api.githubcopilot.com/mcp/"
+badges = ["cloud"]
+
+[[connector]]
+id = "notion"
+name = "Notion"
+description = "Search and edit your Notion pages and databases."
+access = "The pages you share with KIVO when you sign in"
+kind = "remote"
+url = "https://mcp.notion.com/mcp"
+badges = ["cloud"]
+
+[[connector]]
+id = "linear"
+name = "Linear"
+description = "Issues, projects and cycles."
+access = "Your Linear workspace"
+kind = "remote"
+url = "https://mcp.linear.app/mcp"
+badges = ["cloud"]
+
+[[connector]]
+id = "atlassian"
+name = "Atlassian"
+description = "Jira and Confluence."
+access = "The Jira projects and Confluence spaces you can see"
+kind = "remote"
+url = "https://mcp.atlassian.com/v2/mcp"
+badges = ["cloud"]
+
+[[connector]]
+id = "stripe"
+name = "Stripe"
+description = "Look up customers, payments and invoices."
+access = "Your Stripe account"
+kind = "remote"
+url = "https://mcp.stripe.com"
+badges = ["cloud", "sensitive"]
+
+# Local: ready on this PC, no sign-in (DISC-08).
+[[connector]]
+id = "github-cli"
+name = "GitHub via GitHub CLI"
+description = "Uses the GitHub CLI you're already signed in to."
+access = "What gh can reach"
+kind = "local"
+detect = "gh"
+app = "github-cli"
+badges = ["local"]
+
+[[connector]]
+id = "spotify"
+name = "Spotify"
+description = "Plays, pauses and searches with the Spotify app."
+access = "Playback on this PC"
+kind = "local"
+detect = "app"
+app = "spotify"
+badges = ["local"]
+
+[[connector]]
+id = "vscode"
+name = "VS Code"
+description = "Opens folders and files in VS Code."
+access = "Folders you ask it to open"
+kind = "local"
+detect = "app"
+app = "vscode"
+badges = ["local"]
+
+[[connector]]
+id = "browser"
+name = "Browser extension"
+description = "Your open tabs in Chrome, Edge and Brave."
+access = "Pages you ask KIVO to read or act on"
+kind = "local"
+detect = "browser"
+badges = ["local"]
+
+# Built in: always there.
+[[connector]]
+id = "media"
+name = "Media controls"
+description = "Spotify, YouTube Music and any other player."
+access = "Playback on this PC"
+kind = "builtIn"
+badges = ["local"]

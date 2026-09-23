@@ -137,6 +137,7 @@ impl Routines {
         let mut out: Vec<ToolItem> = self
             .registry
             .all_specs()
+            .into_iter()
             .filter(|s| !s.id.starts_with("agent."))
             .map(|s| ToolItem {
                 id: s.id.clone(),
@@ -181,15 +182,20 @@ impl Routines {
                 let spec = self.registry.known(&g.tool);
                 let tool = self.registry.get(&g.tool, &config.capabilities);
                 GrantLine {
-                    title: spec.map_or_else(
+                    title: spec.as_ref().map_or_else(
                         || g.tool.clone(),
                         |s| kivo_security::render_title(&s.title, &g.args),
                     ),
                     risk: tool.as_ref().map_or_else(
-                        || spec.map_or(kivo_core::tool::Risk::High, |s| s.risk),
+                        || {
+                            spec.as_ref()
+                                .map_or(kivo_core::tool::Risk::High, |s| s.risk)
+                        },
                         |t| t.assess(&g.args, Initiator::Task),
                     ),
-                    capability: spec.map_or(kivo_core::Capability::Routines, |s| s.capability),
+                    capability: spec
+                        .as_ref()
+                        .map_or(kivo_core::Capability::Routines, |s| s.capability),
                     capability_off: tool.is_none(),
                     tool: g.tool,
                 }

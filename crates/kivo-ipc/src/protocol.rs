@@ -231,6 +231,42 @@ pub mod method {
     pub const SELECTION_ACTION: &str = "selection.action";
     /// Offers the Island makes outside a turn: `{ id, accept }` ("Remember … as a workspace?").
     pub const OFFER_ANSWER: &str = "offer.answer";
+
+    // M6: MCP servers, connectors and skills (Extensions).
+    /// MCP servers in KIVO's setup with their tools (UX-27): `McpServerView[]`.
+    pub const MCP_LIST: &str = "mcp.list";
+    /// Other apps' MCP setups (DISC-09): `McpFoundView[]`.
+    pub const MCP_FOUND: &str = "mcp.found";
+    /// Imports servers from another app's file: `{ file, servers? }`; the file is only read.
+    pub const MCP_IMPORT: &str = "mcp.import";
+    /// Adds a custom server: `{ name, url }` (remote) or `{ name, command, args }` (a program).
+    pub const MCP_ADD: &str = "mcp.add";
+    pub const MCP_REMOVE: &str = "mcp.remove";
+    pub const MCP_ENABLE: &str = "mcp.enable";
+    /// Approves a server's tools as they are now: `{ id, on: [tool names] }` (TOOL-36).
+    pub const MCP_APPROVE: &str = "mcp.approve";
+    /// One tool on or off, and its risk: `{ id, tool, enabled?, risk? }`.
+    pub const MCP_SET_TOOL: &str = "mcp.setTool";
+    /// KIVO's MCP server (TOOL-37): the shared tools for an agent `{ agent }`, and a call
+    /// `{ agent, name, args }`. Only the `kivo-mcp` bridge uses these.
+    pub const MCP_SHARED_LIST: &str = "mcp.shared.list";
+    pub const MCP_SHARED_CALL: &str = "mcp.shared.call";
+    /// Which agents may use KIVO's MCP server (CONV-24): `{ agent, on, sensitive? }`.
+    pub const MCP_SHARE: &str = "mcp.share";
+    /// Connectors (INT-02/03/04, DISC-08): the directory with what's connected and ready.
+    pub const CONNECTORS_LIST: &str = "connectors.list";
+    /// Connects one: `{ id }` or a custom remote MCP `{ url, name }`; signs in in the browser.
+    pub const CONNECTORS_CONNECT: &str = "connectors.connect";
+    pub const CONNECTORS_DISCONNECT: &str = "connectors.disconnect";
+    /// Skills (CONV-32, DISC-10): the list, found in other apps, on/off after review, import
+    /// from a folder or zip, read (for review), remove.
+    pub const SKILLS_LIST: &str = "skills.list";
+    pub const SKILLS_ENABLE: &str = "skills.enable";
+    pub const SKILLS_IMPORT: &str = "skills.import";
+    pub const SKILLS_READ: &str = "skills.read";
+    pub const SKILLS_REMOVE: &str = "skills.remove";
+    /// Re-runs one section's detectors (DISCOVERY §2): `{ section: "mcp" | "skills" | "connectors" }`.
+    pub const EXTENSIONS_REFRESH: &str = "extensions.refresh";
 }
 
 /// The name the desktop app gives in `hello`; the runtime supervises the client with this name.
@@ -1090,6 +1126,96 @@ pub struct AgentSessionItem {
     pub resumable: bool,
     #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub last_used: i64,
+}
+
+/// An MCP server on the Extensions page (UX-27, TOOL-34/35/36).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct McpServerView {
+    pub id: String,
+    pub name: String,
+    /// `local` (a program on this PC) or `remote`.
+    pub kind: String,
+    /// The app it was imported from, or `connector:<id>`.
+    pub source: Option<String>,
+    pub enabled: bool,
+    /// `running`, `stopped`, `connecting`, `error` or `needsReview`.
+    pub status: String,
+    pub error: Option<String>,
+    pub tools: Vec<McpToolView>,
+}
+
+/// One of a server's tools and the user's decision about it.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct McpToolView {
+    pub name: String,
+    /// The server's own description: untrusted, shown for review.
+    pub description: String,
+    pub risk: kivo_core::tool::Risk,
+    pub enabled: bool,
+    /// `approved`, `new` (not reviewed yet) or `changed` (differs from what was approved).
+    pub state: String,
+}
+
+/// Another app's MCP setup (DISC-09).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct McpFoundView {
+    pub app: String,
+    pub name: String,
+    pub file: String,
+    pub servers: Vec<String>,
+    /// Its servers not imported yet.
+    pub new: Vec<String>,
+}
+
+/// A connector in the directory (INT-03).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectorView {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    /// What it can reach ("Issues, pull requests and code").
+    pub access: String,
+    /// `remote` (a remote MCP with sign-in), `local` (ready on this PC, no sign-in) or `builtIn`.
+    pub kind: String,
+    /// `connected`, `ready`, `available`, `connecting` or `error`.
+    pub state: String,
+    /// What it's connected as or found through ("gh is signed in as MadBlast0").
+    pub detail: Option<String>,
+    /// The MCP server it runs as, once connected.
+    pub server: Option<String>,
+    pub tools: u32,
+    /// `local`, `cloud`, `sensitive`.
+    pub badges: Vec<String>,
+    /// When KIVO last used one of its tools (epoch ms, from the audit log).
+    #[cfg_attr(feature = "ts", ts(type = "number | null"))]
+    pub last_used: Option<i64>,
+}
+
+/// A skill (CONV-32, DISC-10).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillView {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    /// `kivo`, `claude-code`, `project:<name>`, `import`.
+    pub source: String,
+    pub path: String,
+    pub enabled: bool,
+    pub reviewed: bool,
+    /// It has scripts (they run through the shell tool, under the permission engine).
+    pub scripts: bool,
+    /// About how many tokens its name and description add to a request.
+    pub tokens: u32,
 }
 
 #[cfg(test)]

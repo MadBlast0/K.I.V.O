@@ -31,6 +31,8 @@ pub struct Rpc {
     browser: Option<Arc<dyn kivo_tools::Browser>>,
     /// Tasks, routines, agents, workspaces (M5).
     tasks: Option<Arc<crate::tasks_rpc::TasksRpc>>,
+    /// MCP servers, connectors and skills (M6).
+    extensions: Option<Arc<crate::extensions_rpc::ExtensionsRpc>>,
 }
 
 impl Rpc {
@@ -51,6 +53,7 @@ impl Rpc {
             brains: None,
             browser: None,
             tasks: None,
+            extensions: None,
         }
     }
 
@@ -58,6 +61,16 @@ impl Rpc {
     #[must_use]
     pub fn with_tasks(mut self, tasks: Arc<crate::tasks_rpc::TasksRpc>) -> Self {
         self.tasks = Some(tasks);
+        self
+    }
+
+    /// Adds the M6 requests (MCP servers, connectors, skills, KIVO's MCP server).
+    #[must_use]
+    pub fn with_extensions(
+        mut self,
+        extensions: Arc<crate::extensions_rpc::ExtensionsRpc>,
+    ) -> Self {
+        self.extensions = Some(extensions);
         self
     }
 
@@ -106,9 +119,15 @@ impl Handler for Rpc {
         let brains = self.brains.clone();
         let browser = self.browser.clone();
         let tasks = self.tasks.clone();
+        let extensions = self.extensions.clone();
         Box::pin(async move {
             if let Some(tasks) = tasks
                 && let Some(result) = tasks.call(&name, params.clone()).await
+            {
+                return result;
+            }
+            if let Some(extensions) = extensions
+                && let Some(result) = extensions.call(&name, params.clone()).await
             {
                 return result;
             }

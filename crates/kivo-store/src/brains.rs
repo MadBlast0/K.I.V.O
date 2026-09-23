@@ -97,7 +97,7 @@ fn i64_of(n: u64) -> i64 {
 }
 
 impl Database {
-    fn owner(&self) -> Result<String, DbError> {
+    pub(crate) fn owner(&self) -> Result<String, DbError> {
         Ok(self.owner_profile()?.to_string())
     }
 
@@ -272,6 +272,20 @@ impl Database {
             .query_map([conversation], Self::message_from)?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(rows)
+    }
+
+    /// One kept message by its id (the memory tools' `memory.get`).
+    pub fn message(&self, id: i64) -> Result<Option<StoredMessage>, DbError> {
+        let owner = self.owner()?;
+        Ok(self
+            .connection()
+            .query_row(
+                "SELECT id, conversation_id, ts, role, text, brain, turn_id FROM messages
+                 WHERE id = ?1 AND profile_id = ?2",
+                params![id, owner],
+                Self::message_from,
+            )
+            .optional()?)
     }
 
     /// Full-text recall over every kept message (CONV-06, Chat's search).

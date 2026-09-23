@@ -24,6 +24,7 @@ import { Onboarding } from "./pages/Onboarding";
 import { Permissions } from "./pages/Permissions";
 import { Settings } from "./pages/Settings";
 import { Agents } from "./pages/Agents";
+import { Extensions } from "./pages/Extensions";
 import { Routines } from "./pages/Routines";
 import { Tasks } from "./pages/Tasks";
 
@@ -225,6 +226,8 @@ function Shell({
           <Routines />
         ) : page === "agents" ? (
           <Agents />
+        ) : page === "extensions" ? (
+          <Extensions />
         ) : page === "brains" ? (
           <Brains />
         ) : page === "voice" ? (

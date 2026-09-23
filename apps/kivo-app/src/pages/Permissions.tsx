@@ -48,6 +48,7 @@ import {
   type Preset,
 } from "../ipc/generated";
 import { useRuntime } from "../ipc/runtime";
+import { ago } from "../lib/ago";
 
 type Tab = "mode" | "capabilities" | "privacy";
 
@@ -423,15 +424,7 @@ function useAgo() {
   const { t, i18n } = useTranslation();
   return (ms: number | null) => {
     if (ms === null) return t("permissions.capabilities.neverUsed");
-    const minutes = Math.max(0, Math.round((Date.now() - ms) / 60_000));
-    const rtf = new Intl.RelativeTimeFormat(i18n.language, { numeric: "auto" });
-    const when =
-      minutes < 60
-        ? rtf.format(-minutes, "minute")
-        : minutes < 60 * 48
-          ? rtf.format(-Math.round(minutes / 60), "hour")
-          : rtf.format(-Math.round(minutes / 1440), "day");
-    return t("permissions.capabilities.used", { when });
+    return t("permissions.capabilities.used", { when: ago(ms, i18n.language) });
   };
 }
 
@@ -439,7 +432,7 @@ function CapabilitiesTab() {
   const { t } = useTranslation();
   const { link, request } = useRuntime();
   const fail = useFail();
-  const ago = useAgo();
+  const usedAgo = useAgo();
   const connected = link?.status === "connected";
   const [items, setItems] = useState<CapabilityItem[] | null>(null);
   const [settings, save] = useSettings();
@@ -506,7 +499,7 @@ function CapabilitiesTab() {
                   key={c}
                   icon={ICON[c]}
                   title={item.label}
-                  subtitle={`${t(`permissions.capabilities.about.${c}`)} · ${ago(item.lastUsed)}`}
+                  subtitle={`${t(`permissions.capabilities.about.${c}`)} · ${usedAgo(item.lastUsed)}`}
                   end={
                     <span className="k-inline">
                       {item.badges.map((b) => (

@@ -87,51 +87,86 @@ pub trait Tool: Send + Sync {
     }
 }
 
+/// KIVO's tools: the built-in ones, fixed at start, and the ones that come and go with MCP
+/// servers and connectors (`mcp.<server>.*`), replaced whenever a server's tools change.
 #[derive(Default)]
 pub struct Registry {
     tools: Vec<Arc<dyn Tool>>,
+    live: std::sync::RwLock<Vec<Arc<dyn Tool>>>,
 }
 
 impl Registry {
     pub fn new(tools: Vec<Arc<dyn Tool>>) -> Self {
-        Self { tools }
+        Self {
+            tools,
+            live: std::sync::RwLock::default(),
+        }
+    }
+
+    /// Replaces the live tools whose id starts with `prefix` (`mcp.github.`) with `tools`. A
+    /// live tool can never replace a built-in one: ids already taken are dropped.
+    pub fn set_live(&self, prefix: &str, tools: Vec<Arc<dyn Tool>>) {
+        let mut live = self
+            .live
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        live.retain(|t| !t.spec().id.starts_with(prefix));
+        for t in tools {
+            let id = &t.spec().id;
+            if id.starts_with(prefix)
+                && !self.tools.iter().any(|b| &b.spec().id == id)
+                && !live.iter().any(|l| &l.spec().id == id)
+            {
+                live.push(t);
+            }
+        }
+    }
+
+    /// Every tool now, built-in first.
+    fn every(&self) -> Vec<Arc<dyn Tool>> {
+        let live = self
+            .live
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        self.tools.iter().chain(live.iter()).cloned().collect()
     }
 
     /// Specs of the tools that exist with these capability settings (CAP-01).
-    pub fn available<'a>(
-        &'a self,
-        capabilities: &'a CapabilitySettings,
-    ) -> impl Iterator<Item = &'a ToolSpec> {
-        self.tools.iter().map(|t| t.spec()).filter(|s| {
-            capabilities.enabled(s.capability) && s.platforms.contains(&current_platform())
-        })
+    pub fn available(&self, capabilities: &CapabilitySettings) -> impl Iterator<Item = ToolSpec> {
+        let platform = current_platform();
+        let caps = capabilities.clone();
+        self.every()
+            .into_iter()
+            .map(|t| t.spec().clone())
+            .filter(move |s| caps.enabled(s.capability) && s.platforms.contains(&platform))
     }
 
     /// A registered tool (`None` if unknown, not for this OS, or its capability is off).
     pub fn get(&self, id: &str, capabilities: &CapabilitySettings) -> Option<Arc<dyn Tool>> {
-        self.tools
-            .iter()
-            .find(|t| t.spec().id == id)
-            .filter(|t| {
-                capabilities.enabled(t.spec().capability)
-                    && t.spec().platforms.contains(&current_platform())
-            })
-            .cloned()
+        self.every().into_iter().find(|t| {
+            t.spec().id == id
+                && capabilities.enabled(t.spec().capability)
+                && t.spec().platforms.contains(&current_platform())
+        })
     }
 
-    /// The spec of any known tool, registered or not (to explain *why* it isn't available: CAP-02).
     /// Every tool, whatever the capabilities.
-    pub fn all_tools(&self) -> impl Iterator<Item = &Arc<dyn Tool>> {
-        self.tools.iter()
+    pub fn all_tools(&self) -> Vec<Arc<dyn Tool>> {
+        self.every()
     }
 
     /// Every tool's spec, whatever the capabilities (the routine builder's catalog).
-    pub fn all_specs(&self) -> impl Iterator<Item = &ToolSpec> {
-        self.tools.iter().map(|t| t.spec())
+    pub fn all_specs(&self) -> Vec<ToolSpec> {
+        self.every().iter().map(|t| t.spec().clone()).collect()
     }
 
-    pub fn known(&self, id: &str) -> Option<&ToolSpec> {
-        self.tools.iter().map(|t| t.spec()).find(|s| s.id == id)
+    /// The spec of any known tool, registered or not (to explain *why* it isn't available: CAP-02).
+    pub fn known(&self, id: &str) -> Option<ToolSpec> {
+        self.every()
+            .iter()
+            .map(|t| t.spec())
+            .find(|s| s.id == id)
+            .cloned()
     }
 }
 
@@ -313,6 +348,32 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn live_tools_come_and_go_and_never_replace_built_in_ones() {
+        let slow = |id: &str| -> Arc<dyn Tool> {
+            Arc::new(Slow {
+                spec: spec(id, Capability::AppsAndWindows, 100),
+                delay: Duration::ZERO,
+            })
+        };
+        let registry = Registry::new(vec![slow("mcp.x.taken")]);
+        let caps = CapabilitySettings::default();
+        registry.set_live(
+            "mcp.x.",
+            vec![slow("mcp.x.a"), slow("mcp.x.taken"), slow("apps.launch")],
+        );
+        let ids: Vec<String> = registry.available(&caps).map(|s| s.id).collect();
+        assert_eq!(
+            ids,
+            ["mcp.x.taken", "mcp.x.a"],
+            "no duplicates, nothing outside its prefix"
+        );
+        assert!(registry.get("mcp.x.a", &caps).is_some());
+        registry.set_live("mcp.x.", Vec::new());
+        assert!(registry.get("mcp.x.a", &caps).is_none());
+        assert_eq!(registry.all_specs().len(), 1);
+    }
+
+    #[tokio::test]
     async fn tools_of_a_disabled_capability_are_not_registered() {
         let registry = Registry::new(vec![
             Arc::new(Slow {
@@ -325,12 +386,8 @@ mod tests {
             }),
         ]);
         let mut caps = CapabilitySettings::default();
-        let ids = |caps: &CapabilitySettings| {
-            registry
-                .available(caps)
-                .map(|s| s.id.clone())
-                .collect::<Vec<_>>()
-        };
+        let ids =
+            |caps: &CapabilitySettings| registry.available(caps).map(|s| s.id).collect::<Vec<_>>();
         assert_eq!(ids(&caps), ["a.x"], "shell is off by default");
         assert!(registry.get("s.x", &caps).is_none());
         assert!(

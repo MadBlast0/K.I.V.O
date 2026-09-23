@@ -28,6 +28,9 @@ impl PermissionHandler for Answers {
     }
 }
 
+/// The `mcpServers` each fake agent's `session/new` was given.
+static SEEN_SERVERS: Mutex<Vec<Value>> = Mutex::new(Vec::new());
+
 /// A fake agent: answers `initialize`, `session/new`, `session/load`, `session/set_mode`, and a
 /// prompt with a thought, a plan, a tool call that asks permission and edits a file, then a
 /// message. A prompt "wait" waits for `session/cancel`.
@@ -47,23 +50,34 @@ async fn fake_agent(stream: tokio::io::DuplexStream) {
                 "agentCapabilities": { "loadSession": true },
                 "authMethods": [{ "id": "oauth-personal", "name": "Log in with Google" }],
             }})),
-            Some("session/new") => out.push(json!({ "jsonrpc": "2.0", "id": id, "result": {
+            Some("session/new") => {
+                SEEN_SERVERS
+                    .lock()
+                    .unwrap()
+                    .push(msg["params"]["mcpServers"].clone());
+                out.push(json!({ "jsonrpc": "2.0", "id": id, "result": {
                 "sessionId": "s1",
                 "modes": { "currentModeId": "default", "availableModes": [
                     { "id": "default", "name": "Default" }, { "id": "bypassPermissions", "name": "Bypass" }
                 ]},
-            }})),
+            }}));
+            }
             Some("session/load") => {
                 out.push(json!({ "jsonrpc": "2.0", "id": id, "result": {} }));
             }
-            Some("session/set_mode") => out.push(json!({ "jsonrpc": "2.0", "id": id, "result": {} })),
+            Some("session/set_mode") => {
+                out.push(json!({ "jsonrpc": "2.0", "id": id, "result": {} }))
+            }
             Some("session/cancel") => {
                 if let Some(prompt_id) = pending_prompt.take() {
                     out.push(json!({ "jsonrpc": "2.0", "id": prompt_id, "result": { "stopReason": "cancelled" } }));
                 }
             }
             Some("session/prompt") => {
-                let text = msg["params"]["prompt"][0]["text"].as_str().unwrap_or_default().to_owned();
+                let text = msg["params"]["prompt"][0]["text"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_owned();
                 let session = msg["params"]["sessionId"].clone();
                 let update = |u: Value| json!({ "jsonrpc": "2.0", "method": "session/update", "params": { "sessionId": session, "update": u } });
                 if text == "wait" {
@@ -89,7 +103,10 @@ async fn fake_agent(stream: tokio::io::DuplexStream) {
             None if msg.get("result").is_some() => {
                 // KIVO answered the permission request: finish the prompt accordingly.
                 permission_reply = Some(msg["result"].clone());
-                let chosen = msg["result"]["outcome"]["optionId"].as_str().unwrap_or_default().to_owned();
+                let chosen = msg["result"]["outcome"]["optionId"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_owned();
                 let update = |u: Value| json!({ "jsonrpc": "2.0", "method": "session/update", "params": { "sessionId": "s1", "update": u } });
                 if chosen == "yes" {
                     out.push(update(json!({ "sessionUpdate": "tool_call_update", "toolCallId": "t1", "status": "completed",
@@ -220,6 +237,33 @@ async fn cancelling_a_prompt_tells_the_agent_and_ends_the_stream() {
     let events = drain(rx).await;
     assert_eq!(events.last(), Some(&AgentEvent::Done("cancelled".into())));
     assert!(started.elapsed() < Duration::from_millis(500));
+}
+
+/// BRAIN-16: the MCP servers KIVO passes (its own server) reach the agent in `session/new`.
+#[tokio::test]
+async fn a_new_session_carries_kivos_mcp_server() {
+    let (client, _) = connected(true).await;
+    client.request("initialize", json!({})).await.unwrap();
+    let kivo = crate::acp::McpServer {
+        name: "kivo-brain16".into(),
+        command: "C:/KIVO/kivo-runtime.exe".into(),
+        args: vec!["--mcp-server".into(), "--agent".into(), "gemini".into()],
+        env: Vec::new(),
+    };
+    client
+        .session(Path::new("C:/work"), &[kivo], None)
+        .await
+        .unwrap();
+    let seen = SEEN_SERVERS.lock().unwrap().clone();
+    let ours = seen
+        .iter()
+        .filter_map(Value::as_array)
+        .flatten()
+        .find(|s| s["name"] == "kivo-brain16")
+        .expect("the agent got KIVO's server");
+    assert_eq!(ours["command"], "C:/KIVO/kivo-runtime.exe");
+    assert_eq!(ours["args"], json!(["--mcp-server", "--agent", "gemini"]));
+    assert_eq!(ours["env"], json!([]));
 }
 
 #[tokio::test]

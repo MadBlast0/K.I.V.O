@@ -19,11 +19,11 @@ use kivo_core::{Event, EventMeta, ProfileId, SessionState, TaskId, Timestamp, Tr
 use kivo_ipc::infer::Residency;
 use kivo_ipc::protocol::{
     ActivityItem, AgentItem, AgentSessionItem, AgentsOverview, AuditItem, BrainChip,
-    CapabilityItem, Collision, DesktopAiItem, DraftView, GrantItem, GrantLine, IslandPlacement,
-    LiveActivity, MeasuredItem, ModelItem, Offer, ProfileItem, ProtocolVersion, QuietIsland,
-    RecommendationItem, RoutineCheck, RoutineView, ScreenPoint, SpeechChoices, SpeechEngineItem,
-    SpeechStatus, StepView, TaskQuestion, TaskStepView, TaskView, ToolItem, TurnView, UndoOffer,
-    VoiceItem, WorkspaceItem,
+    CapabilityItem, Collision, ConnectorView, DesktopAiItem, DraftView, GrantItem, GrantLine,
+    IslandPlacement, LiveActivity, McpFoundView, McpServerView, McpToolView, MeasuredItem,
+    ModelItem, Offer, ProfileItem, ProtocolVersion, QuietIsland, RecommendationItem, RoutineCheck,
+    RoutineView, ScreenPoint, SkillView, SpeechChoices, SpeechEngineItem, SpeechStatus, StepView,
+    TaskQuestion, TaskStepView, TaskView, ToolItem, TurnView, UndoOffer, VoiceItem, WorkspaceItem,
 };
 use kivo_ipc::{Link, LinkStatus, RpcError, StateSnapshot, Welcome, method};
 use std::path::PathBuf;
@@ -127,6 +127,12 @@ fn render() -> String {
         AgentItem::decl(&cfg),
         DesktopAiItem::decl(&cfg),
         AgentSessionItem::decl(&cfg),
+        // MCP servers, connectors and skills (M6)
+        McpServerView::decl(&cfg),
+        McpToolView::decl(&cfg),
+        McpFoundView::decl(&cfg),
+        ConnectorView::decl(&cfg),
+        SkillView::decl(&cfg),
         ProtocolVersion::decl(&cfg),
         Welcome::decl(&cfg),
         RpcError::decl(&cfg),
@@ -262,6 +268,24 @@ fn render() -> String {
         ("sessionMissed", method::SESSION_MISSED),
         ("selectionAction", method::SELECTION_ACTION),
         ("offerAnswer", method::OFFER_ANSWER),
+        ("mcpList", method::MCP_LIST),
+        ("mcpFound", method::MCP_FOUND),
+        ("mcpImport", method::MCP_IMPORT),
+        ("mcpAdd", method::MCP_ADD),
+        ("mcpRemove", method::MCP_REMOVE),
+        ("mcpEnable", method::MCP_ENABLE),
+        ("mcpApprove", method::MCP_APPROVE),
+        ("mcpSetTool", method::MCP_SET_TOOL),
+        ("mcpShare", method::MCP_SHARE),
+        ("connectorsList", method::CONNECTORS_LIST),
+        ("connectorsConnect", method::CONNECTORS_CONNECT),
+        ("connectorsDisconnect", method::CONNECTORS_DISCONNECT),
+        ("skillsList", method::SKILLS_LIST),
+        ("skillsEnable", method::SKILLS_ENABLE),
+        ("skillsImport", method::SKILLS_IMPORT),
+        ("skillsRead", method::SKILLS_READ),
+        ("skillsRemove", method::SKILLS_REMOVE),
+        ("extensionsRefresh", method::EXTENSIONS_REFRESH),
     ];
     out.push_str("\n/** IPC methods the UI can call. */\nexport const Method = {\n");
     for (name, value) in methods {

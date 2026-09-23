@@ -8,6 +8,7 @@
 mod agent;
 mod brain;
 mod control;
+mod shared;
 
 pub use agent::{EnginePermissions, agent_spec};
 
@@ -227,6 +228,8 @@ pub struct Engine {
     routines: RwLock<Option<Arc<crate::routines::Routines>>>,
     /// Instructions and workspaces (CONVERSATION §4).
     workspaces: RwLock<Option<Arc<crate::workspaces::Workspaces>>>,
+    /// Agent Skills (CONV-32): their names and descriptions go into each brain request.
+    skills: RwLock<Option<Arc<crate::skills::Skills>>>,
     /// Counts media activities shown, so only the newest one's timer removes it.
     media_shown: Arc<AtomicU64>,
     /// Reads the selection in the app in front when the text box opens (UX-42).
@@ -271,6 +274,7 @@ impl Engine {
             routines: RwLock::new(None),
             workspaces: RwLock::new(None),
             media_shown: Arc::new(AtomicU64::new(0)),
+            skills: RwLock::new(None),
             previous: Mutex::new(None),
             uia: RwLock::new(None),
         }
@@ -307,6 +311,23 @@ impl Engine {
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone()
+    }
+
+    pub fn set_skills(&self, skills: Arc<crate::skills::Skills>) {
+        *self
+            .skills
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(skills);
+    }
+
+    /// The skills layer of a brain request: the enabled skills' names and descriptions.
+    pub fn skills_index(&self) -> String {
+        self.skills
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+            .map(|s| s.index())
+            .unwrap_or_default()
     }
 
     pub fn set_uia(&self, uia: Arc<dyn kivo_platform::UiAutomation>) {

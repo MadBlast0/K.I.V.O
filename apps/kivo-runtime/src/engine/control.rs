@@ -94,6 +94,18 @@ impl Engine {
                 message: e.message,
             });
         }
+        // A local connector the user switched off: KIVO doesn't use that app (INT-03).
+        let config = self.core.config();
+        for t in &call.targets {
+            if let Target::App { id, .. } = t
+                && let Some(name) = crate::connectors::switched_off(&config, id)
+            {
+                return Decision::Deny(kivo_security::Denial {
+                    code: kivo_security::DenyCode::BlockedApp,
+                    message: text::tf("connectors.off", &[("name", &name)]),
+                });
+            }
+        }
         let assessed = tool.assess(&call.args, call.initiated_by);
         self.authorize_spec(tool.spec(), assessed, call)
     }

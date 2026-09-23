@@ -49,7 +49,7 @@ export type SystemEvent = { "type": "windowChanged", app: string, title: string,
 /**
  * Download progress while downloading.
  */
-percent: number | null, installed: boolean, } | { "type": "modelResidency", engine: string, state: string, } | { "type": "speechFallback", slot: string, from: string, to: string | null, message: string, } | { "type": "engineSwitch", slot: string, engine: string, stage: string, message: string | null, };
+percent: number | null, installed: boolean, } | { "type": "modelResidency", engine: string, state: string, } | { "type": "speechFallback", slot: string, from: string, to: string | null, message: string, } | { "type": "engineSwitch", slot: string, engine: string, stage: string, message: string | null, } | { "type": "discoveryChanged", section: string, };
 
 export type DeviceKind = "microphone" | "speaker";
 
@@ -653,6 +653,80 @@ kind: string, running: boolean,
  */
 resumable: boolean, lastUsed: number, };
 
+export type McpServerView = { id: string, name: string, 
+/**
+ * `local` (a program on this PC) or `remote`.
+ */
+kind: string, 
+/**
+ * The app it was imported from, or `connector:<id>`.
+ */
+source: string | null, enabled: boolean, 
+/**
+ * `running`, `stopped`, `connecting`, `error` or `needsReview`.
+ */
+status: string, error: string | null, tools: Array<McpToolView>, };
+
+export type McpToolView = { name: string, 
+/**
+ * The server's own description: untrusted, shown for review.
+ */
+description: string, risk: Risk, enabled: boolean, 
+/**
+ * `approved`, `new` (not reviewed yet) or `changed` (differs from what was approved).
+ */
+state: string, };
+
+export type McpFoundView = { app: string, name: string, file: string, servers: Array<string>, 
+/**
+ * Its servers not imported yet.
+ */
+new: Array<string>, };
+
+export type ConnectorView = { id: string, name: string, description: string, 
+/**
+ * What it can reach ("Issues, pull requests and code").
+ */
+access: string, 
+/**
+ * `remote` (a remote MCP with sign-in), `local` (ready on this PC, no sign-in) or `builtIn`.
+ */
+kind: string, 
+/**
+ * `connected`, `ready`, `available`, `connecting` or `error`.
+ */
+state: string, 
+/**
+ * What it's connected as or found through ("gh is signed in as MadBlast0").
+ */
+detail: string | null, 
+/**
+ * The MCP server it runs as, once connected.
+ */
+server: string | null, tools: number, 
+/**
+ * `local`, `cloud`, `sensitive`.
+ */
+badges: Array<string>, 
+/**
+ * When KIVO last used one of its tools (epoch ms, from the audit log).
+ */
+lastUsed: number | null, };
+
+export type SkillView = { id: string, name: string, description: string, 
+/**
+ * `kivo`, `claude-code`, `project:<name>`, `import`.
+ */
+source: string, path: string, enabled: boolean, reviewed: boolean, 
+/**
+ * It has scripts (they run through the shell tool, under the permission engine).
+ */
+scripts: boolean, 
+/**
+ * About how many tokens its name and description add to a request.
+ */
+tokens: number, };
+
 export type ProtocolVersion = { major: number, minor: number, };
 
 export type Welcome = { protocolVersion: ProtocolVersion, runtimeVersion: string, snapshot: StateSnapshot, };
@@ -794,6 +868,24 @@ export const Method = {
   sessionMissed: "session.missed",
   selectionAction: "selection.action",
   offerAnswer: "offer.answer",
+  mcpList: "mcp.list",
+  mcpFound: "mcp.found",
+  mcpImport: "mcp.import",
+  mcpAdd: "mcp.add",
+  mcpRemove: "mcp.remove",
+  mcpEnable: "mcp.enable",
+  mcpApprove: "mcp.approve",
+  mcpSetTool: "mcp.setTool",
+  mcpShare: "mcp.share",
+  connectorsList: "connectors.list",
+  connectorsConnect: "connectors.connect",
+  connectorsDisconnect: "connectors.disconnect",
+  skillsList: "skills.list",
+  skillsEnable: "skills.enable",
+  skillsImport: "skills.import",
+  skillsRead: "skills.read",
+  skillsRemove: "skills.remove",
+  extensionsRefresh: "extensions.refresh",
 } as const;
 
 export type Method = (typeof Method)[keyof typeof Method];

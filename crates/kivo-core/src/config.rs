@@ -517,6 +517,14 @@ pub struct Tools {
     /// Browser pages: sites the extension tools may read and act on (empty: any) and never.
     pub allowed_sites: Vec<String>,
     pub blocked_sites: Vec<String>,
+    /// Agents (by id: `claude-code`, `codex`) allowed to use KIVO's MCP server, and so the user's
+    /// memory (CONV-24). None until the user allows one.
+    pub share_with_agents: Vec<String>,
+    /// Sensitive memories (personal notes, conversations) may go to those agents too.
+    pub share_sensitive: bool,
+    /// Local connectors the user switched off (Extensions → Connectors): KIVO doesn't use that
+    /// app's commands, links or CLI (INT-03).
+    pub connectors_off: Vec<String>,
 }
 
 impl Default for Tools {
@@ -534,6 +542,9 @@ impl Default for Tools {
             private_folders: Vec::new(),
             allowed_sites: Vec::new(),
             blocked_sites: Vec::new(),
+            share_with_agents: Vec::new(),
+            share_sensitive: false,
+            connectors_off: Vec::new(),
         }
     }
 }
