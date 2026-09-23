@@ -29,6 +29,9 @@ pub struct FakeAudio {
     /// mic for end-to-end tests, BENCH-08), and play like a speaker, one 10 ms buffer every 10 ms.
     /// Otherwise the clip is delivered as fast as possible and playback pulls `playback_chunks`.
     pub realtime: bool,
+    /// Clips for the next captures, one per opening of the microphone, before `clip` (a scripted
+    /// microphone for a series of turns, BENCH-08).
+    pub script: Mutex<std::collections::VecDeque<Vec<f32>>>,
 }
 
 impl FakeAudio {
@@ -38,7 +41,16 @@ impl FakeAudio {
             playback_chunks: 1,
             played: Arc::default(),
             realtime: false,
+            script: Mutex::default(),
         }
+    }
+
+    /// Queues `clip` for the next time the microphone opens.
+    pub fn say_next(&self, clip: Vec<f32>) {
+        self.script
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push_back(clip);
     }
 
     /// A virtual microphone: the clip arrives at the pace speech does.
@@ -104,7 +116,12 @@ impl AudioIo for FakeAudio {
         _device: Option<&DeviceId>,
         mut sink: FrameSink,
     ) -> PlatformResult<Box<dyn AudioStream>> {
-        let clip = self.clip.clone();
+        let clip = self
+            .script
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .pop_front()
+            .unwrap_or_else(|| self.clip.clone());
         let realtime = self.realtime;
         Ok(Box::new(FakeStream::spawn(move |stop| {
             let started = std::time::Instant::now();
@@ -247,6 +264,23 @@ mod tests {
         drop(stream);
         let played = audio.played.lock().unwrap().len();
         assert!((CHUNK * 5..=CHUNK * 15).contains(&played), "{played}");
+    }
+
+    #[test]
+    fn scripted_clips_play_one_per_capture_then_the_default() {
+        let audio = FakeAudio::with_clip(vec![0.0; 10]);
+        audio.say_next(vec![1.0; 5]);
+        let capture = |audio: &FakeAudio| {
+            let (tx, rx) = mpsc::channel();
+            let stream = audio
+                .open_capture(None, Box::new(move |f, _| tx.send(f.to_vec()).unwrap()))
+                .unwrap();
+            let all: Vec<f32> = rx.iter().flatten().collect();
+            drop(stream);
+            all
+        };
+        assert_eq!(capture(&audio), vec![1.0; 5]);
+        assert_eq!(capture(&audio), vec![0.0; 10]);
     }
 
     #[test]

@@ -36,9 +36,6 @@ const COLLAPSE_AFTER: Duration = Duration::from_secs(4);
 const THINKING_CUE_AFTER: Duration = Duration::from_secs(1);
 /// How long a first request waits for the speech worker to come up.
 const WORKER_START: Duration = Duration::from_secs(8);
-/// What KIVO says when the grammar doesn't understand (the brain arrives in M3).
-const NOT_UNDERSTOOD: &str = "I can't do that yet.";
-
 /// The turn in progress.
 struct Running {
     id: String,
@@ -55,6 +52,9 @@ struct Running {
     speaking: Option<u64>,
     /// Becomes true once the speech worker has started this utterance.
     stt_started: tokio::sync::watch::Receiver<bool>,
+    /// How the turn ends once its reply is spoken: "done", or "unhandled" when KIVO couldn't
+    /// route the request.
+    outcome: &'static str,
 }
 
 /// What the engine is built from.
@@ -214,6 +214,7 @@ impl Engine {
             transcript: String::new(),
             pending: None,
             speaking: None,
+            outcome: "done",
             stt_started: started_rx,
         };
         *lock(&self.turn) = Some(running);
@@ -336,6 +337,7 @@ impl Engine {
             transcript: text.to_owned(),
             pending: None,
             speaking: None,
+            outcome: "done",
             stt_started: tokio::sync::watch::channel(true).1,
         });
         self.recorder.turn_started(&id, TurnSource::Typed);
@@ -489,9 +491,15 @@ impl Engine {
                         path: IntentPath::Brain,
                         intent: "unknown".into(),
                     })));
-                self.recorder
-                    .answer(&self.turn_key(), NOT_UNDERSTOOD, "unhandled");
-                self.speak_and_finish(NOT_UNDERSTOOD).await;
+                // Routed nowhere: said plainly, recorded as unhandled (brains arrive in M3).
+                let reply = text::t("turn.notUnderstood");
+                if let Some(running) = lock(&self.turn).as_mut() {
+                    running.outcome = "unhandled";
+                }
+                self.core
+                    .update_turn(|view| view.answer = Some(reply.clone()));
+                self.recorder.answer(&self.turn_key(), &reply, "unhandled");
+                self.speak(&reply).await;
             }
         }
     }
@@ -793,7 +801,8 @@ impl Engine {
             return;
         };
         let answer = self.core.turn_view().and_then(|v| v.answer);
-        self.finish_turn("done", answer.as_deref());
+        let outcome = lock(&self.turn).as_ref().map_or("done", |t| t.outcome);
+        self.finish_turn(outcome, answer.as_deref());
         tracing::debug!(turn = id, "turn complete");
     }
 

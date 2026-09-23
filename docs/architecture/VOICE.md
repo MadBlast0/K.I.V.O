@@ -195,6 +195,63 @@ Design for every language from the start, and ship languages one at a time
 | Wake false accepts | ≤ 0.5 / hour on the negative corpus |
 | Wake false rejects | ≤ 5% on the positive corpus |
 
+## 11. Choosing speech engines (owner brief, 2026-09-23)
+
+KIVO never forces one STT or TTS engine, and it never shows a model marketplace. Users pick from
+**2–4 curated profiles per slot**; the engine underneath is secondary information. STT, TTS and
+the brain stay independent: changing one never requires changing another (§2 traits).
+
+**Profiles (user-facing), each backed by a registry entry:**
+
+| Slot | Profile | Meaning | Candidates to evaluate (not locked) |
+|---|---|---|---|
+| STT | Recommended / Balanced | accurate, streaming, moderate resources | Moonshine Base (current), Moonshine Streaming sizes, Parakeet TDT v3 |
+| STT | Lightweight | lowest CPU/RAM, fast | Moonshine Tiny / Streaming small |
+| STT | High accuracy | more compute for better text | Whisper large-v3-turbo, Parakeet on GPU |
+| STT | Multilingual | languages beyond English | Parakeet TDT v3, Whisper |
+| TTS | Recommended / Natural | human-like, balanced | Kokoro-82M (shipped), Supertonic 3 |
+| TTS | Lightweight | fastest first audio, low resources | Windows voices, Supertonic |
+| TTS | Multilingual | broad language coverage | Supertonic 3 (reported 31 languages, ~99M params, ONNX on CPU — verify) |
+| TTS | Expressive | emotional delivery where supported | Chatterbox (§3) |
+
+**Model registry.** Each engine declares `EngineInfo` plus: profile tags, languages, streaming,
+local/cloud/hybrid, execution devices (CPU, DirectML, CUDA), download size, licence, voices
+(for TTS), and **KIVO's own benchmark results** on this PC and the reference tiers. Scores and
+labels (★ ratings, Excellent/Good) come only from KIVO's thresholds applied to measured results
+or clearly labelled qualitative classes; anything unmeasured shows **"Not benchmarked by KIVO"**.
+Adding an engine is a registry entry plus an adapter; onboarding, the Voice page, routing and the
+resource manager need no changes.
+
+**Recommendation.** An explicit function: hardware (CPU, RAM, GPU, VRAM, disk, battery),
+OS, languages, privacy/offline preference, stated priority (speed, accuracy, resources, voice),
+installed models and benchmark results → recommended STT and TTS, plus fallbacks. It prefers CPU
+engines when they meet the latency budgets, to keep the GPU for the user's main AI work, and
+explains itself ("Your PC has enough CPU; KIVO keeps the GPU free"). Never irreversible.
+
+**Safe switching.** Choosing an engine: check compatibility → download (with the licence shown
+first) → load → validate (microphone test, a transcription or synthesis test) → "Ready — Use it".
+The previous working engine stays active until the new one validates; a failed switch never
+leaves KIVO without working STT/TTS. The active model can't be removed without a working
+replacement unless the user confirms.
+
+**Voices.** The TTS engine and the voice are separate choices; voice cards show name, style,
+language and a Preview that plays the same sentence ("Hi, I'm KIVO. How can I help?") through
+each voice. Speaking speed is a setting.
+
+**Languages.** Primary and secondary languages are chosen separately from engines; if an engine
+doesn't cover a language KIVO says so plainly and offers compatible engines — it never switches
+silently.
+
+**Fallback.** Primary STT/TTS failure → the configured fallback (Windows voices for TTS; another
+installed STT) with a visible notice ("Your voice engine stopped; KIVO is using Windows voices")
+— the saved choice is not changed silently (ARCH-09 already speaks failures in-process).
+
+**Privacy labels.** Every option shows Local (audio stays on this PC), Cloud (audio goes to the
+provider) or Hybrid, from the engine's real architecture (VOICE-07 enforces the mode).
+
+**Simple and advanced.** Onboarding and the Voice page show profiles; Advanced shows the exact
+engine, model, device, model path, chunk/latency settings, resource limits, fallback and cache.
+
 ## Build checklist
 
 Status marks and the build protocol: [docs/README.md](../README.md). Engine choices marked
@@ -266,6 +323,17 @@ Status marks and the build protocol: [docs/README.md](../README.md). Engine choi
 - [x] **VOICE-37** · M1 · Primary + secondary language settings; automatic language ID only where the engine provides it and it measures reliable (§9) → done: settings `general.language` (primary) and `general.languages` (secondary), validated; no shipped engine offers language ID, so none is used (detected languages would count only when the user speaks them) · verified: config tests, `detected_languages_count_only_when_the_user_speaks_them` (2026-09-23); the language picker is UX-51
 - [ ] **VOICE-38** · L2 · Hindi + Punjabi, including Hindi–English and Punjabi–English code-mixing, benchmarked on owner-recorded test sets (§9)
 - [ ] **VOICE-39** · L1 · Each language has STT test audio, command utterances and wake positives/negatives before it moves from Alpha to Supported (§9)
+
+**Choosing speech engines (§11)**
+
+- [ ] **VOICE-42** · M2 · Speech engine registry: every engine's profile tags, languages, streaming, local/cloud/hybrid, devices, size, licence, voices and KIVO benchmark results; UI and onboarding read only the registry (§11)
+- [ ] **VOICE-43** · M2 · Curated profiles: 2–4 STT (Recommended, Lightweight, High accuracy, Multilingual) and 2–4 TTS (Recommended/Natural, Lightweight, Multilingual, Expressive), each mapped to a registry engine; unmeasured values read "Not benchmarked by KIVO" (§11)
+- [ ] **VOICE-44** · M2 · Recommendation function: hardware + OS + languages + privacy/offline + priority + installed models + benchmarks → recommended and fallback STT/TTS with a one-line reason; prefers CPU engines that meet the budgets (§11)
+- [ ] **VOICE-45** · M2 · Safe engine switching: licence → download → load → validate (mic/transcription or synthesis test) → activate; the previous engine stays active until validation passes (§11)
+- [ ] **VOICE-46** · M2 · Evaluate Supertonic 3 (licence, languages, size, CPU latency, streaming) and Moonshine Streaming sizes against KIVO's budgets; add the ones that pass to the registry and log the result in DECISIONS (§11)
+- [ ] **VOICE-47** · M2 · Fallback policy: a failed primary STT/TTS switches to the configured fallback for the session with a visible notice; saved settings are unchanged (§11)
+- [ ] **VOICE-48** · M2 · Language compatibility: selected languages are checked against each engine; incompatible choices are explained with compatible alternatives, never switched silently (§11, §9)
+- [ ] **VOICE-49** · M3 · Advanced mode: exact engine, model, device, model path, chunk/latency settings, resource limits, fallback and cache (§11)
 
 **Budgets (§10)**
 

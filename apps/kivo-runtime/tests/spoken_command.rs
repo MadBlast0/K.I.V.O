@@ -10,19 +10,11 @@
 
 use kivo_core::event::TurnSource;
 use kivo_core::{Capability, SessionState};
-use kivo_ipc::protocol::SpeechStatus;
-use kivo_platform::{AppEntry, Paths, SpeechSynth};
-use kivo_store::Database;
+use kivo_platform::Paths;
+use kivo_runtime::scripted::{self, Rig, spoken};
 use kivo_store::models::ModelStore;
-use kivo_testkit::{FakeApps, FakeAudio, FakeNotifications, FakeSystemControl, FakeWindows};
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
-
-use kivo_runtime::core::Core;
-use kivo_runtime::engine::{self, Engine};
-use kivo_runtime::infer::{self, Infer};
-use kivo_runtime::{activity, speaker, voice};
 
 /// The worker built beside this test binary.
 fn worker() -> PathBuf {
@@ -30,51 +22,6 @@ fn worker() -> PathBuf {
     dir.pop(); // deps
     dir.pop();
     dir.join("kivo-infer.exe")
-}
-
-/// Windows' own voice, at 16 kHz mono, as the microphone would hear it.
-fn spoken(text: &str) -> Vec<f32> {
-    let audio = kivo_platform_windows::WindowsSpeech
-        .synthesize(text, None)
-        .expect("Windows has a voice");
-    let mut clip = kivo_audio::RateConverter::convert_all(audio.rate, 16_000, &audio.samples);
-    // A moment of quiet at the end, so the pipeline sees the sentence finish.
-    clip.extend(std::iter::repeat_n(0.0, 16_000));
-    clip
-}
-
-/// Windows' voice stand-in: records what KIVO says in-process (a failure, ARCH-09).
-#[derive(Default)]
-struct Heard(Mutex<Vec<String>>);
-
-impl SpeechSynth for Heard {
-    fn voices(&self) -> kivo_platform::PlatformResult<Vec<kivo_platform::SystemVoice>> {
-        Ok(Vec::new())
-    }
-    fn synthesize(
-        &self,
-        text: &str,
-        _voice: Option<&str>,
-    ) -> kivo_platform::PlatformResult<kivo_platform::SynthAudio> {
-        self.0.lock().unwrap().push(text.to_owned());
-        Ok(kivo_platform::SynthAudio {
-            rate: 16_000,
-            samples: vec![0.0; 160],
-        })
-    }
-}
-
-struct Rig {
-    engine: Arc<Engine>,
-    infer: Infer,
-    heard: Arc<Heard>,
-    listener: Arc<voice::Listener>,
-    system: Arc<kivo_testkit::FakeSystemInfo>,
-    windows: Arc<FakeWindows>,
-    core: Arc<Core>,
-    apps: Arc<FakeApps>,
-    recorder: activity::Recorder,
-    db: Arc<Mutex<Database>>,
 }
 
 fn rig(
@@ -85,7 +32,7 @@ fn rig(
     tokio::task::JoinHandle<()>,
     tokio::task::JoinHandle<()>,
 ) {
-    rig_with_voice(clip, model_dir, ("system".to_owned(), None))
+    scripted::rig(worker(), clip, model_dir)
 }
 
 fn rig_with_voice(
@@ -97,121 +44,7 @@ fn rig_with_voice(
     tokio::task::JoinHandle<()>,
     tokio::task::JoinHandle<()>,
 ) {
-    let core = Arc::new(Core::with_config(kivo_core::KivoConfig::default(), None));
-    let db = Arc::new(Mutex::new(Database::in_memory().unwrap()));
-    let recorder = activity::Recorder::new(Arc::clone(&db), true);
-    let (infer, mut events, sender) = Infer::new(worker());
-    infer.configure(
-        infer::Engines {
-            stt: model_dir
-                .is_dir()
-                .then(|| (kivo_voice::moonshine::MODEL_ID.to_owned(), model_dir)),
-            tts: Some(voice),
-            threads: 4,
-        },
-        Duration::from_secs(600),
-    );
-    let chrome = AppEntry {
-        id: "Chrome".into(),
-        name: "Google Chrome".into(),
-        aliases: vec!["Chrome".into()],
-        exe: None,
-    };
-    let apps = Arc::new(FakeApps {
-        installed: vec![chrome.clone()],
-        ..Default::default()
-    });
-    let windows = Arc::new(FakeWindows::default());
-    let audio = Arc::new(FakeAudio::microphone(clip));
-    let speaker = Arc::new(speaker::Speaker::new(audio.clone(), None));
-    let catalog = Arc::new(RwLock::new(vec![chrome]));
-    let env = Arc::new(kivo_tools::Env {
-        apps: apps.clone(),
-        windows: windows.clone(),
-        control: Arc::new(FakeSystemControl::default()),
-        screen: Arc::new(NoScreen),
-        notifications: Arc::new(FakeNotifications::default()),
-        catalog: Arc::clone(&catalog),
-        screenshots: std::env::temp_dir(),
-    });
-    let registry = Arc::new(kivo_tools::Registry::new(kivo_tools::builtin(&env)));
-    let heard = Arc::new(Heard::default());
-    let system = Arc::new(kivo_testkit::FakeSystemInfo::default());
-    let engine = Arc::new(Engine::new(engine::Parts {
-        core: Arc::clone(&core),
-        infer: infer.clone(),
-        speaker: Arc::clone(&speaker),
-        registry,
-        recorder: recorder.clone(),
-        apps: apps.clone(),
-        windows: windows.clone(),
-        app_catalog: catalog,
-        router: kivo_intent::IntentRouter::new(kivo_intent::Grammar::bundled("en").unwrap()),
-        system: system.clone(),
-        fallback_voice: Some(heard.clone()),
-    }));
-    engine.refresh_apps();
-    let (signals, mut voice_signals) = tokio::sync::mpsc::unbounded_channel();
-    let (levels, _levels_rx) = tokio::sync::watch::channel(0.0);
-    let listener = Arc::new(voice::start(voice::Pipeline {
-        audio,
-        device: None,
-        vad_model: PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../assets/models/silero_vad.onnx"),
-        infer: infer.clone(),
-        speaker,
-        levels,
-        signals,
-        qos: Arc::new(kivo_testkit::FakeThreadQos::default()),
-    }));
-    engine.set_listener(Arc::clone(&listener));
-    core.set_speech_status(SpeechStatus::Ready);
-
-    let worker_task = tokio::spawn(infer::supervise(infer.clone(), sender, core.shutdown()));
-    let pump = {
-        let engine = Arc::clone(&engine);
-        tokio::spawn(async move {
-            loop {
-                tokio::select! {
-                    signal = voice_signals.recv() => match signal {
-                        Some(signal) => engine::handle_signal(&engine, signal).await,
-                        None => break,
-                    },
-                    event = events.recv() => match event {
-                        Some(event) => engine::handle_infer_event(&engine, event).await,
-                        None => break,
-                    },
-                }
-            }
-        })
-    };
-    (
-        Rig {
-            engine,
-            infer,
-            heard,
-            listener,
-            system,
-            windows,
-            core,
-            apps,
-            recorder,
-            db,
-        },
-        worker_task,
-        pump,
-    )
-}
-
-struct NoScreen;
-
-impl kivo_platform::Screen for NoScreen {
-    fn capture(
-        &self,
-        _target: kivo_platform::CaptureTarget,
-    ) -> kivo_platform::PlatformResult<kivo_platform::Image> {
-        Err(kivo_platform::PlatformError::Unsupported)
-    }
+    scripted::rig_with_voice(worker(), clip, model_dir, voice)
 }
 
 /// The journeys run one at a time: each drives real speech models, and in parallel they starve

@@ -13,6 +13,8 @@ pub mod infer;
 pub mod lifecycle;
 pub mod models;
 pub mod rpc;
+#[cfg(windows)]
+pub mod scripted;
 pub mod speaker;
 #[cfg(windows)]
 pub mod tray;

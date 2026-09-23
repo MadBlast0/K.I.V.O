@@ -17,6 +17,9 @@ kivo-security = { path = "../../crates/kivo-security" }
 kivo-store.workspace = true
 kivo-tools = { path = "../../crates/kivo-tools" }
 kivo-voice = { path = "../../crates/kivo-voice" }
+# The fakes behind `scripted` (end-to-end tests and the `kivo-e2e` benchmark journeys); the
+# runtime binary itself never uses them.
+kivo-testkit = { path = "../../crates/kivo-testkit" }
 dirs.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -29,7 +32,6 @@ tracing.workspace = true
 kivo-platform-windows = { path = "../../crates/kivo-platform-windows" }
 
 [dev-dependencies]
-kivo-testkit = { path = "../../crates/kivo-testkit" }
 tempfile.workspace = true
 tracing-subscriber.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync", "time", "test-util"] }

@@ -5,6 +5,8 @@ use crate::harness::{Plan, Suite};
 #[cfg(windows)]
 mod audio;
 #[cfg(windows)]
+mod e2e;
+#[cfg(windows)]
 mod idle;
 mod ipc;
 #[cfg(windows)]
@@ -41,6 +43,10 @@ pub const ALL: &[(&str, &str)] = &[
         "\"Hey Kivo\" keyword spotting: false rejects, false accepts per hour, CPU",
     ),
     (
+        "e2e",
+        "the plan §102 journeys spoken end to end: T spans from the end of speech (needs kivo-e2e)",
+    ),
+    (
         "overlay",
         "the running Island: hotkey → visible, white flash, window styles, GPU and power (KIVO must be running)",
     ),
@@ -63,6 +69,8 @@ pub fn create(name: &str, plan: Plan) -> Result<Box<dyn Suite>, String> {
         "wake" => Ok(Box::new(crate::speech::wake::Wake::start()?)),
         #[cfg(windows)]
         "overlay" => Ok(Box::new(overlay::Overlay::start()?)),
+        #[cfg(windows)]
+        "e2e" => Ok(Box::new(e2e::E2e::start()?)),
         other => Err(format!("unknown suite \"{other}\" (see `kivo-bench list`)")),
     }
 }
