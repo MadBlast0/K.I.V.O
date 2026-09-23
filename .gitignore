@@ -18,6 +18,8 @@ pnpm-debug.log*
 # Tauri
 src-tauri/gen/schemas/
 src-tauri/WixTools/
+# Release sidecars, built by scripts/sidecars.mjs
+apps/kivo-app/src-tauri/binaries/
 
 # Python (isolated ML workers)
 __pycache__/

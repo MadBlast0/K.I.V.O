@@ -54,7 +54,7 @@ impl Tts {
 
 fn private_mb() -> f64 {
     #[allow(clippy::cast_precision_loss, reason = "memory in MB")]
-    win::process_usage(std::process::id()).map_or(0.0, |(_, bytes)| bytes as f64 / 1_048_576.0)
+    win::process_usage(std::process::id()).map_or(0.0, |u| u.committed as f64 / 1_048_576.0)
 }
 
 fn ms(d: Duration) -> f64 {

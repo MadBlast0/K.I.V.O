@@ -38,6 +38,10 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     };
 
+    if args.health {
+        return health(&paths);
+    }
+
     // Crashes of this process are written to the crashes folder from here on (ARCH-10).
     #[cfg(windows)]
     kivo_platform_windows::crash::install(&paths.crashes(), "kivo-runtime");
@@ -67,6 +71,8 @@ fn main() -> ExitCode {
         &loaded,
         Ok(l) if matches!(l.notice, Some(Notice::FromNewerVersion { .. }))
     ) && loaded.is_ok();
+    // A new settings file: the installer's startup choice may need adopting (DIST-05).
+    let first_run = matches!(&loaded, Ok(l) if matches!(l.notice, Some(Notice::Created)));
     let _log = kivo_store::logging::init(&paths.logs(), "info", config.privacy.debug_transcripts)
         .map_err(|e| eprintln!("kivo-runtime: logging is off: {e}"))
         .ok();
@@ -92,7 +98,7 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let code = tokio.block_on(run(args, &paths, config, writable));
+    let code = tokio.block_on(run(args, &paths, config, writable, first_run));
     tracing::info!("KIVO runtime stopped");
     code
 }
@@ -102,6 +108,37 @@ fn claim_instance() -> Result<Option<kivo_platform_windows::instance::InstanceGu
     let sid = kivo_ipc::transport::current_user_sid().map_err(|e| e.to_string())?;
     kivo_platform_windows::instance::claim(&format!("Local\\KIVO.Runtime.{sid}"))
         .map_err(|e| e.to_string())
+}
+
+/// `--health`: exit 0 if this user's runtime answers a ping within 30 s (REL-06). The exit code is
+/// the answer; release builds have no console for the message.
+fn health(paths: &Paths) -> ExitCode {
+    const WAIT: std::time::Duration = std::time::Duration::from_secs(30);
+    let run = paths.run();
+    let answer = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| e.to_string())
+        .and_then(|rt| {
+            let endpoint = kivo_ipc::transport::endpoint(&run).map_err(|e| e.to_string())?;
+            let token_file = run.join("session.token");
+            let read = || kivo_ipc::SessionToken::read(&token_file).map(|t| t.as_str().to_owned());
+            rt.block_on(kivo_ipc::health(&endpoint, read, WAIT))
+                .map_err(|e| match e {
+                    kivo_ipc::ClientError::Cancelled => format!("no answer within {WAIT:?}"),
+                    e => e.to_string(),
+                })
+        });
+    match answer {
+        Ok(version) => {
+            println!("KIVO runtime {version} is running");
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("kivo-runtime: not healthy: {e}");
+            ExitCode::FAILURE
+        }
+    }
 }
 
 fn log_config_notice(notice: Option<&Notice>) {
@@ -123,7 +160,13 @@ fn log_config_notice(notice: Option<&Notice>) {
     }
 }
 
-async fn run(args: Args, paths: &Paths, config: kivo_core::KivoConfig, writable: bool) -> ExitCode {
+async fn run(
+    args: Args,
+    paths: &Paths,
+    config: kivo_core::KivoConfig,
+    writable: bool,
+    first_run: bool,
+) -> ExitCode {
     #[cfg(windows)]
     tracing::info!(capabilities = ?kivo_platform_windows::detect_capabilities(), "platform");
 
@@ -285,7 +328,10 @@ async fn run(args: Args, paths: &Paths, config: kivo_core::KivoConfig, writable:
         recorder.clone(),
         paths.crashes(),
     ));
-    lifecycle.apply_autostart(&config);
+    if first_run {
+        lifecycle.adopt_installer_startup();
+    }
+    lifecycle.apply_autostart(&core.config());
     lifecycle.report_crashes();
     #[cfg(windows)]
     {

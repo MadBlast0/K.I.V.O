@@ -364,6 +364,27 @@ async fn backoff_stops_when_cancelled() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn health_reports_a_running_runtime_and_gives_up_on_a_missing_one() {
+    let rt = start();
+    let token = rt.token.clone();
+    let version = health(&rt.endpoint, || Ok(token.clone()), Duration::from_secs(5))
+        .await
+        .unwrap();
+    assert_eq!(version, "test 1.0");
+    rt.shutdown.cancel();
+
+    let started = std::time::Instant::now();
+    let missing = health(
+        &unique_endpoint(),
+        || Ok(String::new()),
+        Duration::from_millis(300),
+    )
+    .await;
+    assert!(matches!(missing, Err(ClientError::Cancelled)));
+    assert!(started.elapsed() < Duration::from_secs(3));
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn state_changes_are_pushed_to_every_client() {
     let rt = start();
     let mut a = connect(&rt.endpoint, &rt.token, "a").await.unwrap();

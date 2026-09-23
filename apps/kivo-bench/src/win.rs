@@ -19,7 +19,7 @@ use windows::Win32::System::Performance::{
     PdhAddEnglishCounterW, PdhCloseQuery, PdhCollectQueryData, PdhGetFormattedCounterArrayW,
     PdhGetRawCounterArrayW, PdhOpenQueryW,
 };
-use windows::Win32::System::ProcessStatus::{GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS_EX};
+use windows::Win32::System::ProcessStatus::{GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS_EX2};
 use windows::Win32::System::Threading::{
     GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
 };
@@ -287,8 +287,19 @@ fn all_processes() -> Vec<(u32, u32, String)> {
     list
 }
 
+/// A process's CPU time and memory.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Usage {
+    /// User + kernel time.
+    pub cpu: Duration,
+    /// Private memory in RAM (Task Manager's "Memory" column): what the RAM budgets measure.
+    pub ram: u64,
+    /// Private memory committed, including what Windows has paged out or trimmed.
+    pub committed: u64,
+}
+
 /// Total CPU time (user + kernel) and private memory of a process.
-pub fn process_usage(pid: u32) -> Result<(Duration, u64), String> {
+pub fn process_usage(pid: u32) -> Result<Usage, String> {
     // SAFETY: the handle is closed below; the out-structures are sized as documented.
     unsafe {
         let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid)
@@ -306,8 +317,8 @@ pub fn process_usage(pid: u32) -> Result<(Duration, u64), String> {
             &raw mut kernel,
             &raw mut user,
         );
-        let mut mem = PROCESS_MEMORY_COUNTERS_EX {
-            cb: u32::try_from(size_of::<PROCESS_MEMORY_COUNTERS_EX>()).unwrap_or(0),
+        let mut mem = PROCESS_MEMORY_COUNTERS_EX2 {
+            cb: u32::try_from(size_of::<PROCESS_MEMORY_COUNTERS_EX2>()).unwrap_or(0),
             ..Default::default()
         };
         let memory = GetProcessMemoryInfo(handle, (&raw mut mem).cast(), mem.cb);
@@ -317,7 +328,11 @@ pub fn process_usage(pid: u32) -> Result<(Duration, u64), String> {
         let ticks = |t: FILETIME| (u64::from(t.dwHighDateTime) << 32) | u64::from(t.dwLowDateTime);
         // FILETIME counts 100 ns ticks.
         let cpu = Duration::from_nanos((ticks(kernel) + ticks(user)) * 100);
-        Ok((cpu, mem.PrivateUsage as u64))
+        Ok(Usage {
+            cpu,
+            ram: mem.PrivateWorkingSetSize as u64,
+            committed: mem.PrivateUsage as u64,
+        })
     }
 }
 

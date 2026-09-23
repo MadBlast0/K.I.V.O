@@ -62,6 +62,14 @@ pub struct Rig {
     pub db: Arc<Mutex<Database>>,
     /// The scripted microphone: queue what the user says next with `say_next`.
     pub audio: Arc<FakeAudio>,
+    /// Where "take a screenshot" saves: a folder of this rig's own under the temp folder.
+    pub screenshots: PathBuf,
+}
+
+impl Drop for Rig {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.screenshots);
+    }
 }
 
 /// A rig speaking with the Windows voices. `worker` is the `kivo-infer` program.
@@ -117,14 +125,20 @@ pub fn rig_with_voice(
     let speaker = Arc::new(speaker::Speaker::new(audio.clone(), None));
     let mic = Arc::clone(&audio);
     let catalog = Arc::new(RwLock::new(vec![chrome]));
+    static RIGS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+    let screenshots = std::env::temp_dir().join(format!(
+        "kivo-scripted-{}-{}",
+        std::process::id(),
+        RIGS.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ));
     let env = Arc::new(kivo_tools::Env {
         apps: apps.clone(),
         windows: windows.clone(),
         control: Arc::new(FakeSystemControl::default()),
-        screen: Arc::new(NoScreen),
+        screen: Arc::new(PlainScreen),
         notifications: Arc::new(FakeNotifications::default()),
         catalog: Arc::clone(&catalog),
-        screenshots: std::env::temp_dir(),
+        screenshots: screenshots.clone(),
     });
     let registry = Arc::new(kivo_tools::Registry::new(kivo_tools::builtin(&env)));
     let heard = Arc::new(Heard::default());
@@ -190,20 +204,25 @@ pub fn rig_with_voice(
             recorder,
             db,
             audio: mic,
+            screenshots,
         },
         worker_task,
         pump,
     )
 }
 
-/// A screen that can't be captured.
-pub struct NoScreen;
+/// A screen that is one small grey picture, so a screenshot never captures this PC's desktop.
+pub struct PlainScreen;
 
-impl kivo_platform::Screen for NoScreen {
+impl kivo_platform::Screen for PlainScreen {
     fn capture(
         &self,
         _target: kivo_platform::CaptureTarget,
     ) -> kivo_platform::PlatformResult<kivo_platform::Image> {
-        Err(kivo_platform::PlatformError::Unsupported)
+        Ok(kivo_platform::Image {
+            width: 16,
+            height: 9,
+            rgba: [128, 128, 128, 255].repeat(16 * 9),
+        })
     }
 }

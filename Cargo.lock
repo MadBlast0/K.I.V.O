@@ -2217,6 +2217,8 @@ dependencies = [
  "tauri-plugin-single-instance",
  "tokio",
  "tokio-util",
+ "webview2-com",
+ "windows-core 0.61.2",
 ]
 
 [[package]]

@@ -3,8 +3,9 @@
 //! total (split across the runs); `KIVO_BENCH_IDLE_SECONDS` sets another total for a quick look,
 //! and the report says which was used.
 //!
-//! Per window: CPU as a share of the whole machine (VOICE §10: ≤ 2%), private memory (runtime
-//! ≤ 150 MB; UI with its WebView2 processes ≤ 120 MB), wakeups (context switches per second of
+//! Per window: CPU as a share of the whole machine (VOICE §10: ≤ 2%), RAM as the private working
+//! set, Task Manager's "Memory" (runtime ≤ 150 MB; UI with its WebView2 processes ≤ 120 MB), the
+//! committed private memory for reference (it also counts what Windows has trimmed), wakeups (context switches per second of
 //! the runtime's and app's own threads) and the CPU package power (RAPL) of the whole machine.
 
 use crate::harness::{Sample, Suite};
@@ -59,17 +60,17 @@ impl Idle {
     }
 
     /// CPU time and private memory, summed over processes.
-    fn usage(pids: &[u32]) -> Result<(Duration, u64), String> {
-        let mut cpu = Duration::ZERO;
-        let mut memory = 0;
+    fn usage(pids: &[u32]) -> win::Usage {
+        let mut total = win::Usage::default();
         for &pid in pids {
             // A WebView2 helper can exit mid-run; what is left still counts.
-            if let Ok((c, m)) = win::process_usage(pid) {
-                cpu += c;
-                memory += m;
+            if let Ok(u) = win::process_usage(pid) {
+                total.cpu += u.cpu;
+                total.ram += u.ram;
+                total.committed += u.committed;
             }
         }
-        Ok((cpu, memory))
+        total
     }
 }
 
@@ -90,8 +91,7 @@ impl Suite for Idle {
     fn run(&mut self) -> Result<Vec<Sample>, String> {
         let app: Vec<u32> = self.app.map(win::with_descendants).unwrap_or_default();
         let runtime = [self.runtime];
-        let (rt_cpu0, _) = Self::usage(&runtime)?;
-        let (app_cpu0, _) = Self::usage(&app)?;
+        let (rt0, app0) = (Self::usage(&runtime), Self::usage(&app));
         self.counters.sample()?;
         let (rt_sw0, app_sw0) = (self.runtime_switches.read()?, self.app_switches.read()?);
         let started = Instant::now();
@@ -101,16 +101,16 @@ impl Suite for Idle {
         let seconds = wall.as_secs_f64();
         let runtime_wakeups = win::rate(&rt_sw0, &self.runtime_switches.read()?, seconds);
         let app_wakeups = win::rate(&app_sw0, &self.app_switches.read()?, seconds);
-        let (rt_cpu1, rt_mem) = Self::usage(&runtime)?;
-        let (app_cpu1, app_mem) = Self::usage(&app)?;
+        let (rt1, app1) = (Self::usage(&runtime), Self::usage(&app));
 
         let mut samples = vec![
             Sample::cost(
                 "runtime CPU (share of the whole machine)",
                 "%",
-                percent(rt_cpu1.saturating_sub(rt_cpu0), wall, self.logical_cpus),
+                percent(rt1.cpu.saturating_sub(rt0.cpu), wall, self.logical_cpus),
             ),
-            Sample::cost("runtime private memory", "MB", mb(rt_mem)),
+            Sample::cost("runtime RAM (private working set)", "MB", mb(rt1.ram)),
+            Sample::cost("runtime committed memory", "MB", mb(rt1.committed)),
             Sample::cost("runtime wakeups", "/s", runtime_wakeups),
             Sample::cost("CPU package power (whole machine)", "W", power / 1000.0),
         ];
@@ -119,9 +119,14 @@ impl Suite for Idle {
                 Sample::cost(
                     "app + WebView2 CPU (share of the whole machine)",
                     "%",
-                    percent(app_cpu1.saturating_sub(app_cpu0), wall, self.logical_cpus),
+                    percent(app1.cpu.saturating_sub(app0.cpu), wall, self.logical_cpus),
                 ),
-                Sample::cost("app + WebView2 private memory", "MB", mb(app_mem)),
+                Sample::cost(
+                    "app + WebView2 RAM (private working set)",
+                    "MB",
+                    mb(app1.ram),
+                ),
+                Sample::cost("app + WebView2 committed memory", "MB", mb(app1.committed)),
                 Sample::cost("app wakeups (its own threads)", "/s", app_wakeups),
             ]);
         }

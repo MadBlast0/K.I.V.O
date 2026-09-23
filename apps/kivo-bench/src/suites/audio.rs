@@ -35,7 +35,7 @@ impl Audio {
     }
 
     fn cpu() -> Result<Duration, String> {
-        win::process_usage(std::process::id()).map(|(cpu, _)| cpu)
+        win::process_usage(std::process::id()).map(|u| u.cpu)
     }
 }
 

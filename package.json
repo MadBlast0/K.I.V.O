@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "cargo build -p kivo-runtime -p kivo-infer && pnpm --filter kivo-app tauri dev",
     "ui": "pnpm --filter kivo-app dev",
-    "build": "pnpm --filter kivo-app tauri build",
+    "sidecars": "node scripts/sidecars.mjs",
+    "build": "node scripts/sidecars.mjs && pnpm --filter kivo-app tauri build --config src-tauri/tauri.bundle.conf.json",
     "typecheck": "pnpm --filter kivo-app typecheck",
     "docs:sync": "node scripts/sync-roadmap.mjs",
     "release:version": "node scripts/set-version.mjs",

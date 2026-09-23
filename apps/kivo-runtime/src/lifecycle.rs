@@ -73,11 +73,31 @@ impl Lifecycle {
         }
     }
 
+    /// Whether the sign-in entry runs this runtime. Windows paths ignore case, and the installer
+    /// spells the folder its own way.
+    fn registered(&self) -> bool {
+        self.autostart
+            .current()
+            .ok()
+            .flatten()
+            .is_some_and(|c| c.eq_ignore_ascii_case(&self.command))
+    }
+
+    /// On the very first start: if the installer registered KIVO to start with Windows (its
+    /// `/STARTUP` option, DIST-05), that becomes the setting, so `apply_autostart` keeps it.
+    pub fn adopt_installer_startup(&self) -> bool {
+        let registered = self.registered();
+        if registered {
+            self.core
+                .update_config(|c| c.general.start_with_windows = true);
+        }
+        registered
+    }
+
     /// Keeps the sign-in entry in step with "Open KIVO when Windows starts" (ARCH-06).
     pub fn apply_autostart(&self, config: &KivoConfig) {
         let wanted = config.general.start_with_windows;
-        let current = self.autostart.current().ok().flatten();
-        let registered = current.as_deref() == Some(self.command.as_str());
+        let registered = self.registered();
         if wanted != registered
             && let Err(e) = self.autostart.set(wanted, &self.command)
         {
@@ -249,6 +269,21 @@ mod tests {
         assert_eq!(
             *r.control.opened.lock().unwrap(),
             ["settings:privacy-microphone"]
+        );
+    }
+
+    #[test]
+    fn the_installers_startup_choice_is_kept_on_the_first_start() {
+        let r = rig();
+        assert!(!r.life.adopt_installer_startup(), "nothing registered");
+        r.autostart.set(true, &r.life.command).unwrap();
+        assert!(r.life.adopt_installer_startup());
+        let config = r.core.config();
+        assert!(config.general.start_with_windows);
+        r.life.apply_autostart(&config);
+        assert!(
+            r.autostart.current().unwrap().is_some(),
+            "kept, not removed"
         );
     }
 

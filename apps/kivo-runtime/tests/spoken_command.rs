@@ -502,3 +502,87 @@ async fn saying_mute_mutes_with_no_ai_and_a_brief_answer() {
     let _ = tokio::time::timeout(Duration::from_secs(5), worker_task).await;
     pump.abort();
 }
+
+/// M1-X1: "Mute", "open Chrome" and "take a screenshot", spoken one after another, each act within
+/// 500 ms of the end of speech, offline (local speech worker, grammar, no network).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_m1_commands_act_within_500_ms_of_the_end_of_speech() {
+    const BUDGET_MS: u64 = 500;
+    let _turn = ONE_AT_A_TIME.lock().await;
+    let paths = Paths::user().expect("per-user folders");
+    let Some(model) = ModelStore::new(paths.models()).installed(kivo_voice::moonshine::MODEL_ID)
+    else {
+        eprintln!("the speech model isn't installed on this machine; skipping");
+        return;
+    };
+    if !worker().is_file() {
+        eprintln!("kivo-infer isn't built beside the tests; skipping");
+        return;
+    }
+    let (rig, worker_task, pump) = rig(Vec::new(), model.dir);
+    rig.core.update_config(|c| {
+        c.capabilities.set(Capability::SpeakResponses, false);
+    });
+    // The budget is for KIVO with its speech model loaded, as it is from the moment a request
+    // starts (VOICE-34). A cold disk right after a build can take seconds to load it.
+    rig.infer.warm();
+    assert!(
+        rig.infer.wait_ready(Duration::from_secs(60)).await,
+        "the speech worker loads"
+    );
+    for (said, tool) in [
+        ("Mute.", "audio.mute"),
+        ("Open Chrome.", "apps.launch"),
+        ("Take a screenshot.", "screen.screenshot"),
+    ] {
+        rig.audio.say_next(spoken(said));
+        rig.engine
+            .talk(TurnSource::PushToTalk)
+            .await
+            .expect("KIVO starts listening");
+        let turn = rig.core.turn_view().expect("a turn").id;
+        until(said, Duration::from_secs(60), || {
+            rig.db
+                .lock()
+                .unwrap()
+                .turn(&turn)
+                .unwrap()
+                .and_then(|t| t.outcome)
+                .is_some()
+        })
+        .await;
+        until("KIVO to settle", Duration::from_secs(20), || {
+            rig.core.state().borrow().session == SessionState::Idle
+        })
+        .await;
+        rig.core.clear_turn();
+        assert!(
+            rig.recorder
+                .audit_rows(10)
+                .iter()
+                .any(|a| a.tool == tool && a.decision == "allow"),
+            "{said} ran {tool}"
+        );
+        let spans = rig
+            .db
+            .lock()
+            .unwrap()
+            .turn_metrics(&turn)
+            .unwrap()
+            .expect("timings");
+        let at = |span: &str| spans.get(span).and_then(serde_json::Value::as_u64);
+        let took = at("t8ToolDone").unwrap() - at("t4EndOfSpeech").unwrap();
+        eprintln!("{said} end of speech → action: {took} ms");
+        assert!(took <= BUDGET_MS, "{said} took {took} ms");
+    }
+    assert!(
+        std::fs::read_dir(&rig.screenshots)
+            .map(|d| d.count() == 1)
+            .unwrap_or(false),
+        "the screenshot was saved in the rig's folder"
+    );
+    assert_eq!(*rig.apps.launched.lock().unwrap(), ["Chrome"]);
+    rig.core.quit();
+    let _ = tokio::time::timeout(Duration::from_secs(5), worker_task).await;
+    pump.abort();
+}

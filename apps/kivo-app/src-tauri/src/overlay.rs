@@ -6,6 +6,7 @@
 //! (the page reports it): compositing a large transparent window every frame cost ~12 W of package
 //! power while animating (`kivo-bench overlay`).
 
+use crate::memory::{self, Visibility};
 use kivo_core::SessionState;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -68,6 +69,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
         .build()?;
     window.set_ignore_cursor_events(true)?;
     window.as_ref().hide()?;
+    memory::apply(&window, Visibility::Hidden, false);
     Ok(())
 }
 
@@ -199,6 +201,7 @@ fn show(app: &AppHandle, anchor: Option<(i32, i32)>) {
     // setting the same value again is ignored, so it is turned off and on.
     let _ = window.set_always_on_top(false);
     let _ = window.set_always_on_top(true);
+    memory::apply(&window, Visibility::Shown, false);
     let _ = window.as_ref().show();
     let _ = window.show();
 }
@@ -207,6 +210,7 @@ fn hide(app: &AppHandle) {
     if let Some(window) = app.get_webview_window(LABEL) {
         let _ = window.as_ref().hide();
         let _ = window.hide();
+        memory::apply(&window, Visibility::Hidden, false);
     }
 }
 

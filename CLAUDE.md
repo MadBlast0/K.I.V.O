@@ -59,8 +59,13 @@ built: core types, platform traits, store, secured IPC with live state and mic l
 runtime (tray, single instance, app supervision, push-to-talk, permission modes, stop
 everything), the app (Home, overlay Island), WASAPI audio and the `kivo-bench` harness with all
 suites. The speech-engine benchmark runs are deferred by the owner (DECISIONS "Benchmarks
-deferred"). **Next: M1.** Progress per milestone is in the
-table at the top of [docs/ROADMAP.md](docs/ROADMAP.md). Update this section as milestones land.
+deferred"). **M1 — first useful voice loop** is built: speak or type → grammar → permission
+engine → action → spoken answer (Moonshine STT, Kokoro or Windows voices), the Island's states,
+Activity and audit, cancel ≤ 100 ms, undo, and the installer/release pipeline. Still open in M1:
+the first installer build and smoke test (they run on the first `v*` tag, DECISIONS "Installer
+and release at M1"), and the reference-tier and release-build budget runs (deferred). **Next:
+M2.** Progress per milestone is in the table at the top of [docs/ROADMAP.md](docs/ROADMAP.md).
+Update this section as milestones land.
 
 ## Build, run, check
 
@@ -74,7 +79,8 @@ table at the top of [docs/ROADMAP.md](docs/ROADMAP.md). Update this section as m
 | Check / lint Rust | `cargo clippy --workspace --all-targets` · `cargo fmt --all --check` · `cargo deny check` |
 | Test Rust | `cargo test --workspace` |
 | Check UI | `pnpm typecheck` · `pnpm lint` (Oxlint, type-aware) · `pnpm format:check` · `pnpm test` (Vitest) |
-| Installer build | `pnpm build` |
+| Installer build (release sidecars + NSIS/MSI; ask the owner first) | `pnpm build` |
+| Is the running runtime healthy? (exit code 0/1) | `kivo-runtime --health` |
 | Sync ROADMAP from the spec checklists | `pnpm docs:sync` |
 | Regenerate the UI's IPC types | `KIVO_WRITE_TS=1 cargo test -p kivo-ipc --features ts --test ts_bindings` |
 

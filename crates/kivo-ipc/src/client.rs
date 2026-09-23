@@ -97,6 +97,29 @@ pub async fn connect_with_backoff(
     }
 }
 
+/// Whether a runtime is up and answering: connects (retrying for up to `wait`, as a runtime that
+/// was just started needs a moment), says `hello`, pings, and returns the runtime's version. Used
+/// by `kivo-runtime --health` for the installer smoke test (REL-06) and after updates (DIST-08).
+pub async fn health(
+    endpoint: &str,
+    read_token: impl Fn() -> std::io::Result<String>,
+    wait: Duration,
+) -> Result<String, ClientError> {
+    let cancel = CancellationToken::new();
+    let deadline = {
+        let cancel = cancel.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(wait).await;
+            cancel.cancel();
+        })
+    };
+    let connected = connect_with_backoff(endpoint, read_token, "health", &cancel).await;
+    deadline.abort();
+    let connection = connected?;
+    connection.client.request(method::PING, Value::Null).await?;
+    Ok(connection.welcome.runtime_version)
+}
+
 async fn send<S: AsyncRead + AsyncWrite + Unpin>(
     io: &mut Frames<S>,
     message: &Message,

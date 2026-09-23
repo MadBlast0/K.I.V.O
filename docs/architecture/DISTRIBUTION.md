@@ -24,6 +24,24 @@ remains for IT.
 
 **Target size:** under 40 MB. There are **no STT, TTS or LLM models** in the installer.
 
+**How it is built (M1):**
+
+- `pnpm build` runs `scripts/sidecars.mjs` (release builds of `kivo-runtime` and `kivo-infer`,
+  copied to `src-tauri/binaries/<name>-<target-triple>.exe`), then `tauri build` with
+  `src-tauri/tauri.bundle.conf.json` merged in. The sidecars and the installer settings live only
+  in that file, so `pnpm dev` and `cargo` builds don't need release binaries.
+- `mainBinaryName` is `KIVO`, so the app is `KIVO.exe` beside `kivo-runtime.exe` and
+  `kivo-infer.exe`; Silero VAD goes to `resources\silero_vad.onnx`, where the runtime looks.
+- KIVO's sounds are synthesized by the runtime and the English grammar is compiled into it, so
+  neither is a separate file. The icons come from the Tauri bundle.
+- NSIS per user, with the WebView2 bootstrapper downloaded silently when WebView2 is missing
+  (Windows 10). Tauri's template adds the Start-menu shortcut, the uninstaller and in-place
+  upgrades. KIVO's hooks (`src-tauri/windows/hooks.nsh`) stop the runtime tree before files are
+  replaced or removed, and remove the startup entry on a real uninstall (upgrades keep it).
+- **Startup.** "Open KIVO when Windows starts" is off by default and asked in onboarding.
+  Deployments can pass `/STARTUP` (`KIVO_x.y.z_x64-setup.exe /S /STARTUP`) to register it. On its
+  first start the runtime adopts that entry as the setting, so it isn't removed.
+
 ## 2. Updates (plan §112–113)
 
 - The updater is `tauri-plugin-updater`. The manifest (`latest.json`) is signed with KIVO's
@@ -95,11 +113,11 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 
 **Installers (§1)**
 
-- [ ] **DIST-01** · M1 · NSIS per-user installer (no admin, `%LOCALAPPDATA%\Programs\KIVO`) built from the Tauri bundle, with `kivo-runtime.exe` and `kivo-infer.exe` as `externalBin` sidecars (§1)
-- [ ] **DIST-02** · M1 · Bundle contents: WebView2 bootstrapper (Windows 10), sounds, icons, default intent grammar, "Hey Kivo" model (from M2), Silero VAD; no STT, TTS or LLM models (§1)
+- [~] **DIST-01** · M1 · NSIS per-user installer (no admin, `%LOCALAPPDATA%\Programs\KIVO`) built from the Tauri bundle, with `kivo-runtime.exe` and `kivo-infer.exe` as `externalBin` sidecars (§1) → partial: `pnpm build` = `scripts/sidecars.mjs` (release `kivo-runtime`/`kivo-infer` → `src-tauri/binaries/<name>-<triple>.exe`) + `tauri build --config src-tauri/tauri.bundle.conf.json` (NSIS `installMode: currentUser` → `%LOCALAPPDATA%\Programs\KIVO`, `externalBin` sidecars, `mainBinaryName: KIVO`) · verified: the app compiles with the bundle config merged (tauri-build resolves the sidecars and resources), the runtime and app find each other and the worker beside them (2026-09-23) · missing: the first real installer build, which runs on the first `v*` tag (`release.yml`; DECISIONS "Installer and release at M1")
+- [~] **DIST-02** · M1 · Bundle contents: WebView2 bootstrapper (Windows 10), sounds, icons, default intent grammar, "Hey Kivo" model (from M2), Silero VAD; no STT, TTS or LLM models (§1) → partial: the bundle carries the three executables, icons and Silero VAD (`resources\silero_vad.onnx`, where the runtime looks); the WebView2 bootstrapper is downloaded silently when missing; sounds are synthesized by the runtime and the grammar is compiled in (§1); no STT/TTS/LLM models; "Hey Kivo" joins at M2 · verified: bundle config compiles with its resource paths (2026-09-23) · missing: contents checked in a built installer (first `v*` tag)
 - [ ] **DIST-03** · M9 · Installer size under 40 MB, checked in the release pipeline (§1, BENCHMARKS §3)
 - [ ] **DIST-04** · M9 · MSI per-machine for IT, updater-aware (§1)
-- [ ] **DIST-05** · M1 · Installer registers the startup option, Start-menu shortcut and uninstaller; supports in-place upgrades (§1, plan §110)
+- [~] **DIST-05** · M1 · Installer registers the startup option, Start-menu shortcut and uninstaller; supports in-place upgrades (§1, plan §110) → partial: Tauri's NSIS template adds the Start-menu shortcut, uninstaller and in-place upgrades; `src-tauri/windows/hooks.nsh` stops the runtime tree before files are replaced or removed, registers startup with `/STARTUP` and removes it on a real uninstall (upgrades keep it); the runtime adopts the installer's entry on its first start (`Lifecycle::adopt_installer_startup`) · verified: `the_installers_startup_choice_is_kept_on_the_first_start` (2026-09-23) · missing: `scripts/smoke-install.ps1` run against a built installer (first `v*` tag)
 - [ ] **DIST-06** · Post · MSIX / sparse package spike for package identity (Windows AI Speech, richer notifications, Store) (§1)
 
 **Updates (§2)**

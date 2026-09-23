@@ -14,7 +14,7 @@ pub mod server;
 pub mod token;
 pub mod transport;
 
-pub use client::{Client, ClientError, Connection, connect, connect_with_backoff};
+pub use client::{Client, ClientError, Connection, connect, connect_with_backoff, health};
 pub use frame::MAX_FRAME;
 pub use link::{Link, LinkStatus};
 pub use peer::{Incoming, Peer, PeerError};

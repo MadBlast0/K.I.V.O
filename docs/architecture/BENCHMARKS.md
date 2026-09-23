@@ -46,6 +46,10 @@ See [VOICE.md §10](VOICE.md). In addition:
 | Cold start to "ready" (runtime) | ≤ 1.5 s |
 | Control Center open (warm) | ≤ 300 ms |
 
+RAM means the **private working set** (Task Manager's "Memory" column): memory in RAM that
+only KIVO uses. The `idle` suite also reports committed private memory, which counts what Windows
+has trimmed or paged out, for reference.
+
 ## 4. Regression gate
 
 - CI runs a **smoke subset** on every PR: the intent-router latency, the IPC round trip, and the
@@ -68,7 +72,7 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 - [ ] **BENCH-09** · M3 · `brain` suite: TTFT, tokens/s, tool-call latency, structured-output validity, cancellation latency, error rate (§1)
 - [~] **BENCH-10** · M0 · Reference machines recorded: the owner's PC (mid/high) and the 4-core / 8 GB / no-GPU VM (low, labelled approximate) (§2, DECISIONS) → partial: the owner's PC is recorded in every report (Ryzen 7 6800H, 16 threads, 15 GB, RTX 3060 6 GB + Radeon iGPU, Windows 11 25H2); `--tier low` emulates the 4-core tier on it, labelled approximate (DECISIONS "Wake-word data") · missing: a low-tier run (not run: the owner deferred benchmark runs until after the build milestones (2026-09-22); `pnpm bench:data` fetches the data, then `kivo-bench <suite>`)
 - [~] **BENCH-11** · M0 · The first benchmark report is committed to `docs/benchmarks/` and the engine defaults in DECISIONS.md are updated with measured numbers (§1) → partial: first report committed: `docs/benchmarks/2026-09-21-amd-ryzen-7-6800h.md` (ipc, audio, overlay, idle) + `bench-results/` · missing: the engine results and updated engine defaults in DECISIONS (needs BENCH-02–05; not run: the owner deferred benchmark runs until after the build milestones (2026-09-22); `pnpm bench:data` fetches the data, then `kivo-bench <suite>`)
-- [ ] **BENCH-12** · M1 · Budgets met: runtime idle RAM ≤ 150 MB, UI idle RAM ≤ 120 MB (overlay preloaded, CC closed), runtime cold start ≤ 1.5 s, Control Center open (warm) ≤ 300 ms (§3)
+- [~] **BENCH-12** · M1 · Budgets met: runtime idle RAM ≤ 150 MB, UI idle RAM ≤ 120 MB (overlay preloaded, CC closed), runtime cold start ≤ 1.5 s, Control Center open (warm) ≤ 300 ms (§3) → partial: hidden webviews drop to WebView2's low memory target and the hidden Control Center is suspended (`src-tauri/src/memory.rs`); RAM is the private working set (Task Manager's "Memory"; the `idle` suite now reports it beside committed memory). Measured on the owner's PC, debug build, started as at sign-in (CC closed, overlay preloaded): UI 48 MB (≤ 120), runtime 31 MB (≤ 150), runtime cold start to IPC ready 192–253 ms (≤ 1.5 s); the suspended Control Center reopens live (2026-09-23) · missing: Control Center warm-open timing (≤ 300 ms) and the release-build numbers on the reference tiers (deferred with the benchmarks)
 - [~] **BENCH-13** · M0 · CI smoke subset on every PR: intent-router latency, IPC round trip, state-machine and cancellation tests (§4) → partial: `ci.yml` runs `kivo-bench ipc` after the tests (state-machine and cancellation tests are unit tests in the same job) · missing: the intent-router latency (the router is M1); not yet run in CI (runs on the next version tag)
 - [ ] **BENCH-14** · M9 · Full suites before each release on the reference machines; a > 10% regression on a budgeted metric blocks the release (§4)
 - [ ] **BENCH-15** · M3 · "Benchmark this engine" in the Control Center: STT first-partial and final latency, RTF, WER, CPU/RAM/VRAM, noise; TTS first audio, RTF, CPU/RAM/VRAM, long text, interruption; stored locally and shown against KIVO's thresholds (VOICE §11)

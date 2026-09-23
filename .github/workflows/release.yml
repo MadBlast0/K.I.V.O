@@ -1,0 +1,77 @@
+name: Release
+
+# Runs only when a version tag is pushed (RELEASE.md §2; owner decision: no workflows on pushes,
+# pull requests or schedules). Windows x64 first (REL-05); the rest of the matrix is M9 (REL-07).
+# Nothing is published: the job builds, smoke-tests the installer, and only then creates a
+# *draft* release with checksums for the owner to review and publish.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  TARGET: x86_64-pc-windows-msvc
+
+jobs:
+  windows-x64:
+    name: Windows x64
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: rustup show active-toolchain || rustup toolchain install
+      - run: rustup target add ${{ env.TARGET }}
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # RELEASE.md §2 step 3: kivo-runtime and kivo-infer into src-tauri/binaries/<name>-<triple>.
+      - name: Build the sidecars
+        run: node scripts/sidecars.mjs --target ${{ env.TARGET }}
+
+      # Build only: no tag or release here, so nothing is uploaded before the smoke test passes.
+      # latest.json and updater signatures join with the updater (DIST-07, M9).
+      - name: Build the installers
+        uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # action-v1.0.0
+        with:
+          projectPath: apps/kivo-app
+          tauriScript: pnpm tauri
+          args: --target ${{ env.TARGET }} --config src-tauri/tauri.bundle.conf.json
+          uploadUpdaterJson: false
+
+      - name: Smoke test (install, launch, IPC health, upgrade, uninstall)
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem "target/$env:TARGET/release/bundle/nsis/*-setup.exe" | Select-Object -First 1
+          ./scripts/smoke-install.ps1 -Installer $setup.FullName
+
+      - name: Checksums
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force release | Out-Null
+          Get-ChildItem "target/$env:TARGET/release/bundle/nsis/*-setup.exe", "target/$env:TARGET/release/bundle/msi/*.msi" |
+            Copy-Item -Destination release
+          Get-ChildItem release -File | ForEach-Object {
+            '{0}  {1}' -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name
+          } | Set-Content release/SHA256SUMS.txt -Encoding utf8NoBOM
+          Get-Content release/SHA256SUMS.txt
+
+      - name: Draft release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          $flags = @('--draft', '--verify-tag', '--generate-notes', '--title', "KIVO $($tag.TrimStart('v'))")
+          if ($tag -match '-') { $flags += '--prerelease' }
+          gh release create $tag @flags (Get-ChildItem release -File).FullName

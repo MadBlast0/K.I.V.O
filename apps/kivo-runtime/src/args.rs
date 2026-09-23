@@ -9,6 +9,9 @@ pub struct Args {
     pub from_app: bool,
     /// Never launch or supervise the app (development and tests).
     pub no_app: bool,
+    /// Don't start: check that a running runtime answers over IPC, and exit 0 if it does
+    /// (the installer smoke test, REL-06).
+    pub health: bool,
 }
 
 impl Args {
@@ -19,6 +22,7 @@ impl Args {
                 "--autostart" => parsed.autostart = true,
                 "--from-app" => parsed.from_app = true,
                 "--no-app" => parsed.no_app = true,
+                "--health" => parsed.health = true,
                 other => return Err(format!("unknown argument: {other}")),
             }
         }
@@ -38,7 +42,8 @@ mod tests {
     fn flags_are_parsed_and_unknown_ones_refused() {
         assert_eq!(parse(&[]), Ok(Args::default()));
         let all = parse(&["--autostart", "--from-app", "--no-app"]).unwrap();
-        assert!(all.autostart && all.from_app && all.no_app);
+        assert!(all.autostart && all.from_app && all.no_app && !all.health);
+        assert!(parse(&["--health"]).unwrap().health);
         assert_eq!(parse(&["--nope"]), Err("unknown argument: --nope".into()));
     }
 }

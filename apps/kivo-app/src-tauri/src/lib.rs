@@ -2,10 +2,12 @@
 //! of its own: everything comes from `kivo-runtime` over IPC (ARCHITECTURE §1, §8), and closing
 //! its window only hides it while KIVO keeps running (UX §1).
 
+mod memory;
 mod overlay;
 mod runtime;
 
 use kivo_ipc::Link;
+use memory::Visibility;
 use runtime::{NAVIGATE_EVENT, Runtime};
 use serde::Serialize;
 use serde_json::Value;
@@ -46,6 +48,7 @@ struct PendingPage(Mutex<Option<String>>);
 /// launch, "Settings" in the tray).
 pub(crate) fn show_main_window(app: &AppHandle, page: Option<&str>) {
     if let Some(window) = app.get_webview_window(MAIN) {
+        memory::apply(&window, Visibility::Shown, true);
         let _ = window.as_ref().show();
         let _ = window.show();
         let _ = window.unminimize();
@@ -138,8 +141,9 @@ pub fn run() {
                     // A hidden Control Center renders nothing (WebView2 invisible too).
                     if let Some(webview) = window.app_handle().get_webview_window(MAIN) {
                         let _ = webview.as_ref().hide();
+                        let _ = window.hide();
+                        memory::apply(&webview, Visibility::Hidden, true);
                     }
-                    let _ = window.hide();
                     // The runtime decides what closing means: keep running (and, the first time,
                     // say so in a notification), or quit when "keep running" is off (UX-02).
                     let app = window.app_handle().clone();
@@ -158,7 +162,12 @@ pub fn run() {
         .setup(move |app| {
             // Preloaded hidden, so the Island appears without loading anything (ARCHITECTURE §1).
             overlay::create(app.handle())?;
-            if !launch.background {
+            if launch.background {
+                // Started at sign-in: the Control Center stays hidden until opened.
+                if let Some(window) = app.get_webview_window(MAIN) {
+                    memory::apply(&window, Visibility::Hidden, true);
+                }
+            } else {
                 show_main_window(app.handle(), None);
             }
             tauri::async_runtime::spawn(runtime::maintain(app.handle().clone()));
