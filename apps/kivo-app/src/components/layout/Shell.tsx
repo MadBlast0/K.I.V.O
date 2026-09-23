@@ -136,7 +136,19 @@ export function PageHeader({
   );
 }
 
-export function AppWindow({ sidebar, children }: { sidebar: ReactNode; children: ReactNode }) {
+/** The window: the sidebar and a scrolling page, or — without a sidebar — a full-window screen
+ * that lays itself out (onboarding). */
+export function AppWindow({ sidebar, children }: { sidebar?: ReactNode; children: ReactNode }) {
+  if (sidebar === undefined) {
+    return (
+      <div className="k-app k-app--bare">
+        <main className="k-page">
+          <TitleBar />
+          {children}
+        </main>
+      </div>
+    );
+  }
   return (
     <div className="k-app">
       {sidebar}

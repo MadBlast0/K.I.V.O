@@ -28,6 +28,8 @@ const STYLE_WIDTH: usize = 256;
 /// The most phonemes one pass takes (the model's context, less the two pads).
 const MAX_PHONEMES: usize = 510;
 pub const DEFAULT_VOICE: &str = "af_heart";
+/// The voices KIVO downloads with the model.
+pub const VOICES: [&str; 5] = ["af_heart", "af_bella", "am_michael", "bf_emma", "bm_george"];
 
 pub fn info() -> EngineInfo {
     EngineInfo {
@@ -49,7 +51,7 @@ pub fn info() -> EngineInfo {
 }
 
 /// Voice names as the picker shows them: "af_heart" → "Heart (American, female)".
-fn voice_name(id: &str) -> String {
+pub fn voice_name(id: &str) -> String {
     let (prefix, name) = id.split_once('_').unwrap_or(("", id));
     let accent = match prefix.chars().next() {
         Some('a') => "American",

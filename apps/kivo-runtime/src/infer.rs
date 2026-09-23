@@ -47,6 +47,14 @@ pub enum InferEvent {
         engine: String,
         state: Residency,
     },
+    /// A chosen engine failed to load, so the worker uses `to` instead for the rest of the
+    /// session (VOICE-47); `None` when nothing could replace it. The saved choice is unchanged.
+    Fallback {
+        slot: InferSlot,
+        from: String,
+        to: Option<String>,
+        error: String,
+    },
     /// The worker stopped; the current turn can't continue.
     Lost,
 }
@@ -56,9 +64,13 @@ pub enum InferEvent {
 pub struct Engines {
     /// Speech-to-text engine id and its model folder.
     pub stt: Option<(String, PathBuf)>,
+    /// Another installed speech-to-text engine, used if `stt` fails to load (VOICE-47).
+    pub stt_fallback: Option<(String, PathBuf)>,
     /// Text-to-speech engine id ("system", "kokoro-82m") and its model folder, if it has one.
     pub tts: Option<(String, Option<PathBuf>)>,
     pub threads: usize,
+    /// The language KIVO speaks and hears.
+    pub language: String,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -88,6 +100,8 @@ pub struct Infer {
     /// The running worker's process id (0 while none runs).
     pid: Arc<std::sync::atomic::AtomicU32>,
     program: PathBuf,
+    /// Engines that failed to load this session; their fallbacks stand in (VOICE-47).
+    failed: Arc<Mutex<std::collections::HashSet<String>>>,
 }
 
 impl Infer {
@@ -111,10 +125,22 @@ impl Infer {
                 next_id: Arc::new(AtomicU64::new(1)),
                 pid: Arc::default(),
                 program,
+                failed: Arc::default(),
             },
             rx,
             tx,
         )
+    }
+
+    /// The worker program, for a second worker that tries an engine out (VOICE-45).
+    pub fn program(&self) -> &std::path::Path {
+        &self.program
+    }
+
+    /// Lets an engine that failed earlier in the session be tried again (it was reinstalled, or
+    /// passed a test in another worker).
+    pub fn forgive(&self, engine: &str) {
+        lock(&self.failed).remove(engine);
     }
 
     pub fn is_ready(&self) -> bool {
@@ -382,7 +408,7 @@ async fn run_worker(
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(peer.clone());
     let wanted = engines_rx.borrow_and_update().clone();
-    load_engines(&peer, &wanted).await?;
+    load_engines(&peer, &wanted, &infer.failed, events).await?;
     infer.ready.send_replace(true);
 
     let result = loop {
@@ -402,7 +428,7 @@ async fn run_worker(
                     let _ = peer.request(method::SHUTDOWN, Value::Null).await;
                     break Ok(());
                 }
-                if let Err(e) = load_engines(&peer, &engines).await {
+                if let Err(e) = load_engines(&peer, &engines, &infer.failed, events).await {
                     break Err(e);
                 }
             }
@@ -439,55 +465,89 @@ fn spawn(program: &std::path::Path) -> Result<Child, String> {
         .map_err(|e| format!("couldn't start {}: {e}", program.display()))
 }
 
-async fn load_engines(peer: &Peer, engines: &Engines) -> Result<(), String> {
+/// Loads the wanted engines. An engine that fails to load doesn't take the worker down: the STT
+/// fallback or the Windows voices stand in for the session, and the runtime is told so it can
+/// say so (VOICE-47). Only a broken connection is an error.
+async fn load_engines(
+    peer: &Peer,
+    engines: &Engines,
+    failed: &Mutex<std::collections::HashSet<String>>,
+    events: &mpsc::UnboundedSender<InferEvent>,
+) -> Result<(), String> {
     let threads = engines.threads.max(1);
-    match &engines.stt {
-        Some((engine, dir)) => {
-            let params = json!(ModelLoad {
-                slot: InferSlot::Stt,
-                engine: engine.clone(),
-                dir: Some(dir.to_string_lossy().into_owned()),
-                threads,
-            });
-            peer.request(method::MODEL_LOAD, params)
-                .await
-                .map_err(|e| e.to_string())?;
+    let language = &engines.language;
+    let load = |slot: InferSlot, engine: &str, dir: Option<&std::path::Path>| {
+        let params = json!(ModelLoad {
+            slot,
+            engine: engine.to_owned(),
+            dir: dir.map(|d| d.to_string_lossy().into_owned()),
+            threads,
+            language: Some(language.clone()),
+        });
+        async move { peer.request(method::MODEL_LOAD, params).await }
+    };
+    let unload = |slot: InferSlot| async move {
+        let _ = peer
+            .request(method::MODEL_UNLOAD, json!(ModelUnload { slot }))
+            .await;
+    };
+    // Tries `candidates` in order, skipping ones that failed before; reports a stand-in.
+    let fill = |slot: InferSlot, candidates: Vec<(String, Option<PathBuf>)>| async move {
+        let Some(chosen) = candidates.first().map(|(id, _)| id.clone()) else {
+            unload(slot).await;
+            return Ok(());
+        };
+        let mut error = None;
+        for (id, dir) in &candidates {
+            if lock(failed).contains(id) {
+                continue;
+            }
+            match load(slot, id, dir.as_deref()).await {
+                Ok(_) => {
+                    if *id != chosen {
+                        let _ = events.send(InferEvent::Fallback {
+                            slot,
+                            from: chosen.clone(),
+                            to: Some(id.clone()),
+                            error: error.clone().unwrap_or_default(),
+                        });
+                    }
+                    return Ok(());
+                }
+                Err(_) if peer.is_closed() => {
+                    return Err("the speech worker closed the connection".to_owned());
+                }
+                Err(e) => {
+                    tracing::error!(%e, engine = id, ?slot, "a speech engine failed to load");
+                    lock(failed).insert(id.clone());
+                    error = Some(e.to_string());
+                }
+            }
         }
-        None => {
-            let _ = peer
-                .request(
-                    method::MODEL_UNLOAD,
-                    json!(ModelUnload {
-                        slot: InferSlot::Stt
-                    }),
-                )
-                .await;
-        }
+        unload(slot).await;
+        let _ = events.send(InferEvent::Fallback {
+            slot,
+            from: chosen,
+            to: None,
+            error: error.unwrap_or_default(),
+        });
+        Ok(())
+    };
+    let stt: Vec<(String, Option<PathBuf>)> = engines
+        .stt
+        .iter()
+        .chain(engines.stt_fallback.iter())
+        .map(|(id, dir)| (id.clone(), Some(dir.clone())))
+        .collect();
+    fill(InferSlot::Stt, stt).await?;
+    let mut tts: Vec<(String, Option<PathBuf>)> = engines.tts.iter().cloned().collect();
+    if tts
+        .first()
+        .is_some_and(|(id, _)| id != kivo_voice::system_tts::ENGINE_ID)
+    {
+        tts.push((kivo_voice::system_tts::ENGINE_ID.to_owned(), None));
     }
-    match &engines.tts {
-        Some((engine, dir)) => {
-            let params = json!(ModelLoad {
-                slot: InferSlot::Tts,
-                engine: engine.clone(),
-                dir: dir.as_ref().map(|d| d.to_string_lossy().into_owned()),
-                threads
-            });
-            peer.request(method::MODEL_LOAD, params)
-                .await
-                .map_err(|e| e.to_string())?;
-        }
-        None => {
-            let _ = peer
-                .request(
-                    method::MODEL_UNLOAD,
-                    json!(ModelUnload {
-                        slot: InferSlot::Tts
-                    }),
-                )
-                .await;
-        }
-    }
-    Ok(())
+    fill(InferSlot::Tts, tts).await
 }
 
 fn forward(method_name: &str, params: Value, events: &mpsc::UnboundedSender<InferEvent>) {
@@ -563,8 +623,10 @@ mod tests {
         let (infer, _events, _tx) = Infer::new(PathBuf::from("kivo-infer"));
         let engines = Engines {
             stt: None,
+            stt_fallback: None,
             tts: Some(("system".into(), None)),
             threads: 1,
+            language: "en-US".into(),
         };
         infer.configure(engines.clone(), Duration::from_secs(600));
         assert!(!infer.loaded(), "configuring loads nothing");

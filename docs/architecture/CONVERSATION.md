@@ -421,9 +421,9 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 
 **Conversational confirmations (§7)**
 
-- [ ] **CONV-26** · M2 · Decisions play the `question` earcon, listen without the wake word for 10 s (extended while the user talks), show a mic ring and voice hints matching the buttons (§7, DESIGN_SYSTEM voice-hint rule)
-- [ ] **CONV-27** · M2 · Local confirmation grammar (EN + HI): approve, approve with scope, deny, defer ("Waiting for you", no timeout), edit (to the brain), explain ("why?") (§7)
-- [ ] **CONV-28** · M2 · Voice approval rules: Medium needs the owner's voice (or signed-in device with recognition off); guests can't approve; speech heard during KIVO's own TTS is ignored (§7)
+- [x] **CONV-26** · M2 · Decisions play the `question` earcon, listen without the wake word for 10 s (extended while the user talks), show a mic ring and voice hints matching the buttons (§7, DESIGN_SYSTEM voice-hint rule) → done: a decision plays `question`, listens 10 s (extended while the user talks), and the Island shows the mic ring and the buttons' words ("allow", "always allow", "deny", "wait") · verified: `decisions_are_answered_by_voice_but_high_risk_needs_a_click`, Island hint tests (2026-09-23)
+- [~] **CONV-27** · M2 · Local confirmation grammar (EN + HI): approve, approve with scope, deny, defer ("Waiting for you", no timeout), edit (to the brain), explain ("why?") (§7) → partial: `kivo_intent::answers` (EN + HI): approve, approve with scope, deny, defer ("Waiting for you", no timeout) and explain ("why?") all work by voice · missing: edit is recognized but, with no brain until M3, KIVO says it can't change the request by voice yet
+- [x] **CONV-28** · M2 · Voice approval rules: Medium needs the owner's voice (or signed-in device with recognition off); guests can't approve; speech heard during KIVO's own TTS is ignored (§7) → done: Medium needs the owner's voice (or recognition off), guests can't approve, High needs a click; speech heard during KIVO's own TTS is ignored for answers · verified: `decisions_are_answered_by_voice_but_high_risk_needs_a_click`, voice-ID tests (2026-09-23)
 - [ ] **CONV-29** · M4 · High risk: voice "approve" triggers Windows Hello; a click also works; voice alone never suffices (§7)
 
 **Context layers (§8)**

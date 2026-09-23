@@ -82,6 +82,17 @@ fn load(request: &ModelLoad) -> Result<Box<dyn TtsEngine>, VoiceError> {
                 request.threads,
             )?))
         }
+        kivo_voice::supertonic::ENGINE_ID => {
+            let dir = request
+                .dir
+                .as_deref()
+                .ok_or_else(|| VoiceError::ModelMissing(request.engine.clone()))?;
+            Ok(Box::new(kivo_voice::supertonic::Supertonic::load(
+                std::path::Path::new(dir),
+                request.threads,
+                request.language.as_deref().unwrap_or("en"),
+            )?))
+        }
         #[cfg(windows)]
         system_tts::ENGINE_ID => Ok(Box::new(SystemTts::new(Arc::new(
             kivo_platform_windows::WindowsSpeech,

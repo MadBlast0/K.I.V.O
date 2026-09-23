@@ -9,10 +9,12 @@ import {
   IslandActions,
   IslandApp,
   IslandChip,
+  IslandCountdown,
   IslandDot,
   IslandOk,
   IslandRisk,
   IslandSpin,
+  VoiceHint,
   type IslandModel,
 } from "./Island";
 import { Icon } from "../../icons";
@@ -92,6 +94,12 @@ function Heard({ turn, t, on }: { turn: TurnView; t?: TFunction; on?: IslandHand
   );
 }
 
+/** A guest's turn (VOICE-22, UX-08): a neutral "Guest" chip, so it's clear KIVO didn't
+ * recognize the owner's voice. */
+function guestChip(turn: TurnView | null | undefined, t: TFunction) {
+  return turn?.guest ? <IslandChip>{t("island.guest").toUpperCase()}</IslandChip> : null;
+}
+
 function confirmCard(confirm: ConfirmSpec, turn: TurnView, t: TFunction, on: IslandHandlers): IslandModel {
   const high = confirm.risk === "high";
   const actions = [
@@ -111,11 +119,27 @@ function confirmCard(confirm: ConfirmSpec, turn: TurnView, t: TFunction, on: Isl
       : []),
     { label: t("island.deny"), kind: "danger" as const, onClick: () => on.answer(confirm.callId, false, false) },
   ];
+  // KIVO listens for a spoken answer (CONV-26): the mic ring and the buttons' own words, which the
+  // decision grammar understands (CONV-27). High risk needs a click, so no hint. "Wait" keeps
+  // the card with no timeout (UX-08).
+  const hint =
+    turn.answering && !high ? (
+      <VoiceHint
+        words={[
+          t("island.voice.allow"),
+          ...(confirm.allowAlways ? [t("island.voice.always")] : []),
+          t("island.voice.deny"),
+          t("island.voice.wait"),
+        ]}
+      />
+    ) : null;
   return {
-    state: `confirm-${confirm.callId}`,
+    state: `confirm-${confirm.callId}${turn.waiting ? "-waiting" : ""}`,
     width: 490,
-    label: high ? t("island.confirmHigh") : t("island.needsOk"),
+    label: turn.waiting ? t("island.waiting") : high ? t("island.confirmHigh") : t("island.needsOk"),
+    sub: turn.waiting ? t("island.waitingSub") : undefined,
     lead: <IslandDot color={high ? "#FF5147" : "#FFC857"} />,
+    trail: guestChip(turn, t),
     body: (
       <>
         <Heard turn={turn} />
@@ -129,8 +153,8 @@ function confirmCard(confirm: ConfirmSpec, turn: TurnView, t: TFunction, on: Isl
         <div className="k-island__meta">
           {t("island.why", { why: confirm.why })} · {confirm.provenance}
         </div>
-        {/* Voice approval arrives with the local decision grammar (M2, CONV-27): buttons only. */}
         <IslandActions actions={actions} hint={false} />
+        {hint}
       </>
     ),
   };
@@ -247,11 +271,19 @@ export function islandForTurn(snapshot: StateSnapshot, t: TFunction, on: IslandH
     case "listening":
     case "followUp": {
       const heard = turn?.transcript ?? "";
+      // A follow-up needs no wake word for a few seconds: the ring counts them down (UX-45).
+      const seconds = session === "followUp" ? turn?.followUp : undefined;
       return {
-        state: session,
-        width: heard ? CARD : 236,
+        state: seconds ? `followUp-${turn?.id ?? ""}` : session,
+        width: heard ? CARD : 256,
         label: t(session === "followUp" ? "island.followUp" : "island.listening"),
         sub: session === "followUp" ? t("island.followUpSub") : undefined,
+        trail: (
+          <>
+            {guestChip(turn, t)}
+            {seconds ? <IslandCountdown seconds={seconds} label={t("island.followUpLeft", { seconds })} /> : null}
+          </>
+        ),
         wave: true,
         body: heard && turn ? <Heard turn={turn} /> : undefined,
       };
@@ -261,7 +293,12 @@ export function islandForTurn(snapshot: StateSnapshot, t: TFunction, on: IslandH
         state: "thinking",
         width: turn?.transcript ? CARD : 196,
         label: t("island.thinking"),
-        trail: <IslandSpin />,
+        trail: (
+          <>
+            {guestChip(turn, t)}
+            <IslandSpin />
+          </>
+        ),
         body: turn?.transcript ? <Heard turn={turn} /> : undefined,
       };
     case "acting":
@@ -273,6 +310,7 @@ export function islandForTurn(snapshot: StateSnapshot, t: TFunction, on: IslandH
         lead: appIcon(turn?.targetApp ?? null),
         trail: (
           <>
+            {guestChip(turn, t)}
             <ModeChip mode={snapshot.mode} t={t} on={on} />
             <IslandSpin />
           </>
@@ -291,6 +329,7 @@ export function islandForTurn(snapshot: StateSnapshot, t: TFunction, on: IslandH
         width: CARD,
         label: t("island.kivo"),
         lead: appIcon(turn?.targetApp ?? null),
+        trail: guestChip(turn, t),
         wave: true,
         voice: "kivo",
         body: turn ? (

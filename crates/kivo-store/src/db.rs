@@ -218,6 +218,21 @@ impl Database {
         Ok(())
     }
 
+    /// The latest result of `suite` measured on this PC as it is (not an emulated tier): when it
+    /// started and its JSON (VOICE-42 reads the speech suites for the engine registry).
+    pub fn latest_benchmark(&self, suite: &str) -> Result<Option<(i64, String)>, DbError> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT started_at, result FROM benchmarks
+                 WHERE suite = ?1 AND machine NOT LIKE '%-emulated-%'
+                 ORDER BY started_at DESC LIMIT 1",
+                params![suite],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .optional()?)
+    }
+
     pub fn schema_version(&self) -> Result<usize, DbError> {
         current_version(&self.conn)
     }
@@ -400,6 +415,16 @@ mod tests {
             .unwrap();
         assert_eq!((suite.as_str(), result.as_str()), ("ipc", r#"{"p50":1.0}"#));
         assert!(db.record_benchmark("ipc", "m", 1, "not json").is_err());
+        db.record_benchmark("ipc", "pc", 5, r#"{"p50":2.0}"#)
+            .unwrap();
+        db.record_benchmark("ipc", "pc-emulated-low", 9, r#"{"p50":3.0}"#)
+            .unwrap();
+        assert_eq!(
+            db.latest_benchmark("ipc").unwrap(),
+            Some((5, r#"{"p50":2.0}"#.to_owned())),
+            "the newest run on this PC as it is"
+        );
+        assert_eq!(db.latest_benchmark("stt").unwrap(), None);
     }
 
     #[test]

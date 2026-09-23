@@ -47,7 +47,29 @@
     "allowAlwaysFor": "Always allow for {target}",
     "target": "On: {target}",
     "editHint": "Click to fix and send again",
-    "talk": "Talk"
+    "talk": "Talk",
+    "guest": "Guest",
+    "followUpLeft": "{seconds, plural, one {# second} other {# seconds}} to follow up without the wake word",
+    "waiting": "Waiting for you",
+    "waitingSub": "no rush",
+    "voice": {
+      "allow": "allow",
+      "always": "always allow",
+      "deny": "deny",
+      "wait": "wait"
+    },
+    "announce": {
+      "listening": "Listening",
+      "followUp": "Listening for a follow-up",
+      "thinking": "Thinking",
+      "acting": "Working",
+      "speaking": "KIVO is answering",
+      "awaitingConfirmation": "KIVO needs your OK",
+      "error": "Something went wrong",
+      "paused": "Listening is paused",
+      "heard": "You said: {text}",
+      "answer": "KIVO: {text}"
+    }
   },
   "home": {
     "talk": "Talk",
@@ -543,12 +565,7 @@
     "usePin": "Use PIN"
   },
   "voice": {
-    "subtitle": "How KIVO hears and speaks, and the speech models on this PC.",
-    "speaking": "Speaking",
-    "engine": "Voice",
-    "engineHint": "Windows voices are built in. Kokoro sounds more natural and is downloaded once.",
-    "systemVoices": "Windows voices",
-    "kokoro": "Kokoro",
+    "subtitle": "How KIVO hears and speaks, what wakes it, and the speech models on this PC.",
     "models": "Models on this PC",
     "modelsHint": "Speech runs on this PC; nothing you say is sent anywhere.",
     "modelLine": "{license} · {size} {where}",
@@ -572,6 +589,307 @@
       "active": "In use",
       "idle": "Ready",
       "unloading": "Unloading"
+    },
+    "followUp": "Follow-ups without the wake word",
+    "followUpHint": "After KIVO answers, keep listening this long for a follow-up.",
+    "followUpOff": "Off",
+    "seconds": "{count, plural, one {# second} other {# seconds}}"
+  },
+  "speech": {
+    "sttTitle": "How KIVO hears you",
+    "sttHint": "Speech recognition runs on this PC.",
+    "ttsTitle": "How KIVO speaks",
+    "ttsHint": "The engine; the voice is chosen below.",
+    "profile": {
+      "recommended": "Recommended",
+      "lightweight": "Lightweight",
+      "highAccuracy": "High accuracy",
+      "multilingual": "Multilingual",
+      "natural": "Natural",
+      "expressive": "Expressive"
+    },
+    "hint": {
+      "recommended": "accurate and quick, with moderate use of your PC",
+      "lightweight": "the lightest and fastest; uses the least of your PC",
+      "highAccuracy": "more computing for better text",
+      "multilingual": "for languages beyond English",
+      "natural": "a human-sounding voice",
+      "expressive": "emotion where the engine supports it"
+    },
+    "notYet": "Not available yet",
+    "notForLanguage": "Not available for {language} yet",
+    "privacy": {
+      "local": "Local: audio stays on this PC",
+      "cloud": "Cloud: audio goes to the provider",
+      "hybrid": "Hybrid"
+    },
+    "builtIn": "Built into Windows",
+    "onThisPc": "On this PC",
+    "download": "{size} download",
+    "anyLanguage": "Any language Windows has",
+    "languages": "{count, plural, one {# language} other {# languages}}",
+    "accuracy": "{wer} word errors",
+    "speed": "{rtf}× real time",
+    "notBenchmarked": "Not benchmarked by KIVO",
+    "personalUse": "Personal use only",
+    "personalUseTitle": "Personal use only",
+    "personalUseBody": "This model’s licence doesn’t allow commercial use. You can use it for yourself.",
+    "recommended": "Recommended",
+    "inUse": "In use",
+    "use": "Use",
+    "failed": "Staying with the current engine",
+    "ready": "Ready and in use",
+    "stage": {
+      "checking": "Checking it fits",
+      "downloading": "Downloading",
+      "downloadingPercent": "Downloading · {percent, number, ::percent}",
+      "loading": "Starting it up",
+      "testing": "Testing it",
+      "ready": "Ready",
+      "failed": "Didn’t work"
+    },
+    "trySample": "Try sample",
+    "listening": "Listening to the sample…",
+    "heard": "Heard: “{text}”",
+    "heardNothing": "(nothing)",
+    "downloadTitle": "Download {name}?",
+    "downloadBody": "It downloads once and stays on this PC. KIVO keeps using the current engine until the new one passes a quick test.",
+    "downloadAndUse": "Download and use",
+    "voices": "Voices",
+    "voicesHint": "Each says the same sentence when you press play.",
+    "preview": "Preview {name}",
+    "style": {
+      "female": "Female",
+      "male": "Male"
+    },
+    "recommendedTitle": "Recommended for your PC",
+    "recommendedPair": "Hear with {stt}, speak with {tts}.",
+    "recommendedNoStt": "Speak with {tts}. KIVO has no recognizer for your language yet.",
+    "useRecommended": "Use recommended"
+  },
+  "onboarding": {
+    "setUp": "Set up KIVO",
+    "phase": {
+      "welcome": "Welcome",
+      "voice": "Voice"
+    },
+    "voiceStep": "Voice · {n} of {total}",
+    "optional": "optional",
+    "back": "Back",
+    "skip": "Skip",
+    "continue": "Continue",
+    "finish": "Finish",
+    "welcome": {
+      "title": "Talk to your PC.",
+      "sub": "KIVO opens apps, finds files, answers questions and handles tasks, and asks before anything risky.",
+      "start": "Get started",
+      "time": "About 2 minutes",
+      "private": "Private by default",
+      "skip": "Skip setup"
+    },
+    "mic": {
+      "title": "Check your microphone",
+      "sub": "Press Test and say anything. The bars should move.",
+      "device": "Microphone",
+      "deviceHint": "The one Windows uses by default",
+      "level": "Level",
+      "levelHint": "Speak at a normal volume",
+      "speakNow": "Listening… say anything",
+      "test": "Test",
+      "again": "Test again",
+      "good": "Sounds good",
+      "goodBody": "KIVO can hear you clearly.",
+      "quiet": "That was quiet",
+      "quietBody": "Move a little closer, or check the microphone in Windows sound settings.",
+      "failed": "KIVO couldn’t hear you"
+    },
+    "activation": {
+      "title": "How do you call KIVO?",
+      "sub": "Use either, or both.",
+      "hold": "Hold to talk",
+      "holdHint": "Hold while you speak. Works in noisy rooms.",
+      "wake": "“Hey Kivo”",
+      "wakeHint": "Hands-free. Listening happens on this PC; nothing is sent until you say it.",
+      "note": "Turning on “Hey Kivo” downloads its small listener (about 20 MB) from its publisher."
+    },
+    "speech": {
+      "title": "How KIVO hears and speaks",
+      "sub": "The recommended choice for your PC is ready to use. The other options are one click away.",
+      "others": "See other options",
+      "fewer": "Hide other options",
+      "background": "Downloads happen in the background; you can carry on."
+    },
+    "summary": {
+      "title": "Your setup",
+      "sub": "What KIVO will use. Change any of it later on the Voice page.",
+      "understanding": "Understanding",
+      "speaking": "Speaking",
+      "ai": "AI",
+      "aiLater": "No brain connected yet. Commands like “mute” never need one.",
+      "resources": "Resources",
+      "resourcesLine": "{tier} · speech uses up to {threads, plural, one {# core} other {# cores}}",
+      "tier": {
+        "low": "A lighter PC",
+        "mid": "A mid-range PC",
+        "high": "A fast PC"
+      },
+      "downloading": "downloading",
+      "none": "Not chosen yet"
+    },
+    "voice": {
+      "title": "Teach KIVO your voice",
+      "sub": "Read 8 short phrases so KIVO knows it’s you. Stored encrypted on this PC, and you can delete it anytime."
     }
+  },
+  "enroll": {
+    "title": "Your voice",
+    "hint": "So KIVO knows it’s you. Encrypted on this PC.",
+    "consent": "I agree to store a voiceprint on this PC",
+    "start": "Start",
+    "progress": "Phrase {n} of {total}",
+    "record": "Record",
+    "recording": "Recording",
+    "pressToRecord": "Press the button, then read the phrase.",
+    "speakNow": "Listening… read the phrase.",
+    "retry": "That was too short. Try that one again.",
+    "recorded": "{n} of {total} recorded",
+    "allDone": "All phrases recorded",
+    "allDoneBody": "Finish to save your voice profile.",
+    "finish": "Finish",
+    "enrolled": "KIVO knows your voice",
+    "enrolledHint": "It tells you apart from guests.",
+    "on": "On",
+    "again": "Record again",
+    "redo": "Start over",
+    "delete": "Delete voice data",
+    "deleteHint": "Removes the recordings and the voiceprint.",
+    "deleteButton": "Delete",
+    "mode": "Who can use KIVO by voice",
+    "modes": {
+      "off": "Anyone",
+      "prefer-owner": "Prefer my voice",
+      "owner-only": "Only my voice"
+    },
+    "modeHint": {
+      "off": "Voices aren’t told apart.",
+      "prefer-owner": "Others get a guest session that can’t approve anything.",
+      "owner-only": "KIVO ignores other voices."
+    }
+  },
+  "wake": {
+    "title": "Wake words",
+    "hint": "Say one to start hands-free. Up to 5 at a time.",
+    "heyKivo": "“Hey Kivo”",
+    "builtIn": "Built in",
+    "custom": "Yours",
+    "enabledFor": "Listen for “{phrase}”",
+    "add": "Add a wake word",
+    "addRowHint": "Two or three words that you don’t say by accident",
+    "max": "Turn one off to add more ({count} at a time)",
+    "noModelTitle": "The wake-word listener isn’t downloaded",
+    "noModelBody": "Turn a wake word on and KIVO downloads it (about 20 MB, Apache-2.0).",
+    "addTitle": "Add a wake word",
+    "addHint": "Check it, hear it, try it, then save it.",
+    "placeholder": "e.g. Okay Jarvis",
+    "phrase": "Wake word",
+    "check": "Check",
+    "quality": {
+      "good": "Good",
+      "fair": "Fair",
+      "risky": "Risky"
+    },
+    "qualityHint": {
+      "good": "Distinct enough to wake KIVO reliably.",
+      "fair": "It works, with a few more false wakes or misses.",
+      "risky": "Too easy to confuse; choose something longer or more distinct."
+    },
+    "concern": {
+      "empty": "Type a phrase first.",
+      "oneSyllable": "One syllable is too short to tell apart.",
+      "twoSyllables": "Two syllables is short; three or more work better.",
+      "fewSounds": "Only {count} distinct sounds.",
+      "sameVowels": "The vowels all sound alike.",
+      "commonWords": "These words come up in everyday talk.",
+      "likeWakeWord": "Sounds like “{phrase}”.",
+      "likeCommand": "Sounds like the command “{phrase}”.",
+      "unspellable": "The listener can’t spell part of it; try spelling it as it sounds."
+    },
+    "hear": "Hear it",
+    "try": "Try it",
+    "tryHeard": "KIVO heard it.",
+    "tryMissed": "KIVO missed it. Try again, or raise the sensitivity after saving.",
+    "save": "Save",
+    "done": "Done",
+    "delete": "Delete",
+    "sensitivity": "Sensitivity",
+    "fewerFalse": "Fewer false wakes",
+    "wakesEasily": "Wakes more easily",
+    "samples": "{count, plural, =0 {No samples} one {# sample} other {# samples}}",
+    "samplesHint": "Record 3–5 samples of you saying it.",
+    "sayIt": "Say “{phrase}”",
+    "sampleKept": "Kept. Record another, or tune.",
+    "sampleMissed": "That didn’t sound like it. Try again.",
+    "record": "Record",
+    "tune": "Tune to my voice",
+    "tuneHint": "Sets the sensitivity so every sample wakes KIVO.",
+    "tuneButton": "Tune",
+    "falseAlarms": "False-alarm test",
+    "falseAlarmsHint": "Plays minutes of everyday speech and counts false wakes.",
+    "falseAlarmsResult": "{count, plural, =0 {No false wakes} one {# false wake} other {# false wakes}} in {minutes} minutes",
+    "runTest": "Run test",
+    "edit": "Edit “{phrase}”"
+  },
+  "sounds": {
+    "enabled": "Sounds",
+    "enabledHint": "Short cues when KIVO listens, answers or needs you.",
+    "set": "Sound set",
+    "sets": {
+      "soft": "Soft",
+      "softHint": "Rounded, gentle tones",
+      "glass": "Glass",
+      "glassHint": "Bright and clear",
+      "pulse": "Pulse",
+      "pulseHint": "Short electronic blips",
+      "wood": "Wood",
+      "woodHint": "Warm, woody knocks",
+      "minimal": "Minimal",
+      "minimalHint": "Barely there",
+      "custom": "Custom",
+      "customHint": "Your own sounds"
+    },
+    "preview": "Preview",
+    "previewCue": "Play {cue}",
+    "volume": "Volume",
+    "volumeHint": "Relative to the Windows volume",
+    "cues": "Cues",
+    "cuesHint": "Turn any of them off.",
+    "cue": {
+      "listen-start": "Starts listening",
+      "listen-stop": "Stops listening",
+      "done": "Done",
+      "error": "Error",
+      "thinking": "Thinking",
+      "question": "Needs your answer",
+      "approved": "Approved",
+      "cancelled": "Cancelled",
+      "hangup": "Conversation ends",
+      "notification": "Notification"
+    },
+    "cueHint": {
+      "listen-start": "When you can start talking",
+      "listen-stop": "When KIVO stops listening",
+      "done": "When a request is done",
+      "error": "When something went wrong",
+      "thinking": "While KIVO thinks for more than a second (off by default)",
+      "question": "When KIVO asks you something",
+      "approved": "When you approve an action",
+      "cancelled": "When something is cancelled",
+      "hangup": "When the conversation ends",
+      "notification": "When KIVO has news for you"
+    }
+  },
+  "settings": {
+    "subtitle": "How KIVO behaves. More settings are on their way.",
+    "sounds": "Sounds"
   }
 }

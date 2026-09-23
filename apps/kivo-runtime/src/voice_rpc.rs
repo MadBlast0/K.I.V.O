@@ -5,15 +5,21 @@ use crate::activity::Recorder;
 use crate::core::Core;
 use crate::engine::Engine;
 use crate::models::Models;
+use crate::switch::Switcher;
 use crate::wake::Wake;
 use kivo_core::config::{SoundCue, SoundSet};
 use kivo_core::text;
+use kivo_ipc::infer::InferSlot;
+use kivo_ipc::protocol::{
+    MeasuredItem, ProfileItem, RecommendationItem, SpeechChoices, SpeechEngineItem, VoiceItem,
+};
 use kivo_ipc::{RpcError, method};
 use kivo_platform::Secrets;
 use kivo_store::Database;
 use kivo_store::models::{KEYWORD_SPOTTER, SPEAKER_MODEL};
 use kivo_store::wake::{FalseAlarmTest, Quality as StoredQuality, WakeWord};
 use kivo_voice::kws::{Keyword, KeywordSpotter, KwsModel};
+use kivo_voice::recommend::Priority;
 use kivo_voice::wakeword::{self, Assessment, Quality};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -64,6 +70,7 @@ pub struct VoiceRpc {
     recorder: Recorder,
     secrets: Arc<dyn Secrets>,
     voice_dir: PathBuf,
+    switcher: Arc<Switcher>,
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -76,6 +83,14 @@ fn parse<T: serde::de::DeserializeOwned>(params: Value) -> Result<T, RpcError> {
 
 fn ok<T: Serialize>(value: &T) -> Result<Value, RpcError> {
     serde_json::to_value(value).map_err(|e| RpcError::new(RpcError::INTERNAL, e.to_string()))
+}
+
+/// A unit enum's JSON name ("highAccuracy").
+fn json_name(value: &impl Serialize) -> String {
+    serde_json::to_value(value)
+        .ok()
+        .and_then(|v| v.as_str().map(str::to_owned))
+        .unwrap_or_default()
 }
 
 fn refuse(message: impl Into<String>) -> RpcError {
@@ -157,6 +172,11 @@ impl VoiceRpc {
         secrets: Arc<dyn Secrets>,
         voice_dir: PathBuf,
     ) -> Self {
+        let switcher = Arc::new(Switcher::new(
+            Arc::clone(&core),
+            Arc::clone(&engine),
+            Arc::clone(&models),
+        ));
         Self {
             core,
             engine,
@@ -166,6 +186,88 @@ impl VoiceRpc {
             recorder,
             secrets,
             voice_dir,
+            switcher,
+        }
+    }
+
+    /// The registry, profiles and current choice for the speech choosers (VOICE-42/43/48).
+    fn speech_choices(&self) -> SpeechChoices {
+        let config = self.core.config();
+        let language = config.general.language.clone();
+        let ready = self.models.ready_engines();
+
+        // The Windows voices are whatever this PC has installed.
+        let windows_voices: Vec<VoiceItem> = self
+            .engine
+            .system_voice()
+            .and_then(|synth| synth.voices().ok())
+            .unwrap_or_default()
+            .into_iter()
+            .map(|v| VoiceItem {
+                id: v.id,
+                name: v.name,
+                style: String::new(),
+                languages: vec![v.language],
+            })
+            .collect();
+        let engines = self
+            .models
+            .registry()
+            .into_iter()
+            .map(|e| SpeechEngineItem {
+                slot: json_name(&e.engine.slot),
+                profiles: e.profiles.iter().map(json_name).collect(),
+                privacy: json_name(&e.privacy),
+                commercial_use: e.commercial_use,
+                streaming: e.engine.streaming,
+                devices: e.engine.accel.iter().map(json_name).collect(),
+                download_mb: e.engine.resources.disk_mb,
+                ram_mb: e.engine.resources.ram_mb,
+                ready: ready.contains(&e.engine.id),
+                fits_language: e.engine.supports(&language),
+                voices: if e.engine.id == kivo_voice::system_tts::ENGINE_ID {
+                    windows_voices.clone()
+                } else {
+                    e.voices
+                        .into_iter()
+                        .map(|v| VoiceItem {
+                            id: v.id,
+                            name: v.name,
+                            style: v.style,
+                            languages: v.languages,
+                        })
+                        .collect()
+                },
+                measured: e.measured.map(|m| MeasuredItem {
+                    real_time_factor: m.real_time_factor,
+                    latency_ms: m.latency_ms,
+                    word_error_rate: m.word_error_rate,
+                    measured_at: m.measured_at,
+                }),
+                model: e.engine.model,
+                license: e.engine.license,
+                languages: e.engine.languages,
+                name: e.engine.name,
+                id: e.engine.id,
+            })
+            .collect();
+        let profiles = [kivo_voice::EngineSlot::Stt, kivo_voice::EngineSlot::Tts]
+            .into_iter()
+            .flat_map(|slot| kivo_voice::registry::profiles(slot, &language))
+            .map(|c| ProfileItem {
+                slot: c.slot,
+                profile: json_name(&c.profile),
+                engine: c.engine,
+                other_languages_only: c.other_languages_only,
+            })
+            .collect();
+        SpeechChoices {
+            stt: self.models.listening_engine(&config),
+            tts: config.voice.tts_engine.clone(),
+            tts_voice: config.voice.tts_voice.clone(),
+            language,
+            engines,
+            profiles,
         }
     }
 
@@ -290,6 +392,111 @@ impl VoiceRpc {
     #[allow(clippy::too_many_lines, reason = "one table of the voice requests")]
     pub async fn call(&self, name: &str, params: Value) -> Option<Result<Value, RpcError>> {
         let result = match name {
+            method::VOICE_ENGINES => ok(&self.speech_choices()),
+            method::VOICE_RECOMMEND => {
+                #[derive(Deserialize, Default)]
+                #[serde(deny_unknown_fields)]
+                struct Params {
+                    #[serde(default)]
+                    priority: Priority,
+                }
+                let p: Params = if params.is_null() {
+                    Params::default()
+                } else {
+                    match parse(params) {
+                        Ok(p) => p,
+                        Err(e) => return Some(Err(e)),
+                    }
+                };
+                self.models
+                    .recommend_now(&self.core.config(), p.priority)
+                    .ok_or_else(|| refuse(text::t("voice.noHardware")))
+                    .and_then(|r| {
+                        ok(&RecommendationItem {
+                            tier: json_name(&r.tier),
+                            stt_engine: r.stt_engine,
+                            stt_fallback: r.stt_fallback,
+                            tts_engine: r.tts_engine,
+                            tts_fallback: r.tts_fallback,
+                            threads: u32::try_from(r.threads).unwrap_or(1),
+                            reason: r.reason,
+                        })
+                    })
+            }
+            method::VOICE_SWITCH => {
+                #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
+                struct Params {
+                    slot: InferSlot,
+                    engine: String,
+                    #[serde(default)]
+                    voice: Option<String>,
+                }
+                match parse::<Params>(params) {
+                    Ok(p) => self
+                        .switcher
+                        .start(p.slot, &p.engine, p.voice)
+                        .map(|()| Value::Null)
+                        .map_err(refuse),
+                    Err(e) => Err(e),
+                }
+            }
+            method::VOICE_PREVIEW => {
+                #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
+                struct Params {
+                    engine: String,
+                    #[serde(default)]
+                    voice: Option<String>,
+                }
+                match parse::<Params>(params) {
+                    Ok(p) => self
+                        .switcher
+                        .preview(&p.engine, p.voice.as_deref())
+                        .await
+                        .map(|()| Value::Null)
+                        .map_err(refuse),
+                    Err(e) => Err(e),
+                }
+            }
+            method::VOICE_MIC_CHECK => {
+                #[derive(Serialize)]
+                #[serde(rename_all = "camelCase")]
+                struct Checked {
+                    heard: bool,
+                    /// The loudest moment, in dB below full scale.
+                    peak_db: f32,
+                    seconds: f32,
+                }
+                self.record().await.and_then(|audio| {
+                    let peak = audio.iter().fold(0.0_f32, |m, s| m.max(s.abs()));
+                    #[allow(clippy::cast_precision_loss, reason = "seconds of audio")]
+                    let seconds = audio.len() as f32 / 16_000.0;
+                    let peak_db = 20.0 * peak.max(1e-6).log10();
+                    // Speech was found (the recording keeps only speech) and it is loud enough.
+                    ok(&Checked {
+                        heard: seconds >= 0.3 && peak_db > -40.0,
+                        peak_db,
+                        seconds,
+                    })
+                })
+            }
+            method::VOICE_TRY_SAMPLE => {
+                #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
+                struct Params {
+                    engine: String,
+                }
+                match parse::<Params>(params) {
+                    Ok(p) => self
+                        .switcher
+                        .try_sample(&p.engine)
+                        .await
+                        .map(|(said, heard)| serde_json::json!({ "said": said, "heard": heard }))
+                        .map_err(refuse),
+                    Err(e) => Err(e),
+                }
+            }
             method::WAKE_LIST => {
                 let words = lock(&self.db)
                     .wake_words()

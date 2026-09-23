@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { RuntimeStatus } from "./components/layout/RuntimeStatus";
 import { AppWindow, NAV, PageHeader, Sidebar, type PageId } from "./components/layout/Shell";
@@ -12,12 +12,14 @@ import {
   type Command,
 } from "./components/ui";
 import { Method } from "./ipc/generated";
-import { RuntimeProvider, useRuntime } from "./ipc/runtime";
+import { RuntimeProvider, useRuntime, useRuntimeEvents } from "./ipc/runtime";
 import { ThemeProvider } from "./lib/theme";
 import { Gallery } from "./pages/Gallery";
 import { Activity } from "./pages/Activity";
 import { Voice } from "./pages/Voice";
 import { Home } from "./pages/Home";
+import { Onboarding } from "./pages/Onboarding";
+import { Settings } from "./pages/Settings";
 
 const PAGES: ReadonlyArray<PageId> = [
   "home",
@@ -57,6 +59,20 @@ export function App() {
   );
 }
 
+/** Setup runs until it is finished or skipped (UX-33); `null` while the settings are loading. */
+function useOnboarded(): [boolean | null, () => void] {
+  const { link, request } = useRuntime();
+  const connected = link?.status === "connected";
+  const [onboarded, setOnboarded] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!connected) return;
+    void request<{ general: Record<string, unknown> }>(Method.settingsGet)
+      .then((s) => setOnboarded(s.general["onboarded"] === true))
+      .catch(() => setOnboarded(true));
+  }, [connected, request]);
+  return [onboarded, () => setOnboarded(true)];
+}
+
 function Shell({ page, setPage }: { page: PageId; setPage: (page: PageId) => void }) {
   const [palette, setPalette] = useState(false);
   useCommandPaletteHotkey(setPalette);
@@ -64,6 +80,12 @@ function Shell({ page, setPage }: { page: PageId; setPage: (page: PageId) => voi
   const { link, request } = useRuntime();
   const toast = useToast();
   const session = link?.status === "connected" ? (link.snapshot?.session ?? null) : null;
+  const [onboarded, finishOnboarding] = useOnboarded();
+
+  // A speech engine failed and another stands in for now (VOICE-47): say so wherever the user is.
+  useRuntimeEvents((event) => {
+    if (event.group === "system" && event.event.type === "speechFallback") toast(event.event.message);
+  });
 
   const commands = useMemo<Command[]>(() => {
     const run = (method: Method) => () => {
@@ -123,6 +145,19 @@ function Shell({ page, setPage }: { page: PageId; setPage: (page: PageId) => voi
     ];
   }, [request, session, setPage, t, toast]);
 
+  if (onboarded === false) {
+    return (
+      <AppWindow>
+        <Onboarding
+          onFinish={() => {
+            finishOnboarding();
+            setPage("home");
+          }}
+        />
+      </AppWindow>
+    );
+  }
+
   return (
     <>
       <AppWindow
@@ -147,6 +182,8 @@ function Shell({ page, setPage }: { page: PageId; setPage: (page: PageId) => voi
           <Activity />
         ) : page === "voice" ? (
           <Voice />
+        ) : page === "settings" ? (
+          <Settings />
         ) : (
           <>
             <PageHeader title={t(`nav.${page}`)} />

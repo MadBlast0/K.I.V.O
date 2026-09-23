@@ -77,15 +77,242 @@ impl ModelManifest {
 
 /// The models KIVO knows how to download.
 pub fn catalog() -> Vec<ModelManifest> {
-    const MOONSHINE: &str = "https://huggingface.co/csukuangfj2/sherpa-onnx-moonshine-base-en-quantized-2026-02-27/resolve/main";
-    vec![
-        moonshine(MOONSHINE),
+    const MOONSHINE: &str = "https://huggingface.co/csukuangfj2/sherpa-onnx-moonshine-base-en-quantized-2026-02-27/resolve/8f4d6c58c03d40bcea40043bb7120a878f2bbef6";
+    let mut all = vec![moonshine(MOONSHINE)];
+    all.extend(MOONSHINE_RELEASES.iter().map(moonshine_release));
+    all.extend([
         kokoro(),
         silero(),
         smart_turn(),
+        supertonic(),
         keyword_spotter(),
         campplus(),
-    ]
+    ]);
+    all
+}
+
+/// A Moonshine model from the sherpa-onnx author's releases, pinned.
+struct MoonshineRelease {
+    id: &'static str,
+    name: &'static str,
+    language: &'static str,
+    repo: &'static str,
+    revision: &'static str,
+    encoder: (u64, &'static str),
+    decoder: (u64, &'static str),
+    tokens: (u64, &'static str),
+}
+
+/// The other Moonshine models (VOICE-43/46): Tiny for English (MIT), and models for other
+/// languages under the non-commercial Moonshine Community License, which is shown before the
+/// download.
+const MOONSHINE_RELEASES: [MoonshineRelease; 9] = [
+    MoonshineRelease {
+        id: "moonshine-tiny-en",
+        name: "Moonshine Tiny (English)",
+        language: "en",
+        repo: "csukuangfj2/sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27",
+        revision: "d1e6c30921780b8508d04b492dfb3ce8a51605d4",
+        encoder: (
+            13_281_600,
+            "94e90a4654fc45cdfedb77c4c08e1739f48862998e58fada384b25118134f221",
+        ),
+        decoder: (
+            30_412_256,
+            "cf524c4862d36e9e5ab032eddc73637efd822d70e868ac575cf1a46e1e4708a0",
+        ),
+        tokens: (
+            549_350,
+            "2870d843e14c1e187bf1913a521562a63b53933814bd7f2145120468f494a049",
+        ),
+    },
+    MoonshineRelease {
+        id: "moonshine-base-es",
+        name: "Moonshine Base (Spanish)",
+        language: "es",
+        repo: "csukuangfj2/sherpa-onnx-moonshine-base-es-quantized-2026-02-27",
+        revision: "59e235a505b7372eb7f896471a74c776f6f6e061",
+        encoder: (
+            20_964_320,
+            "331aafa2fc7f7e55ba28376eef08eaf919ae105bb719cd64ba6875505dca72b3",
+        ),
+        decoder: (
+            43_612_200,
+            "8e6513ad66a3a71ca86824746a09051eeb60468940eaf8201ce758e8919e2b5d",
+        ),
+        tokens: (
+            532_090,
+            "c6e35883ba038f70ceea8b4a21cf79742adbda7e6730cbff27460857e0667a02",
+        ),
+    },
+    MoonshineRelease {
+        id: "moonshine-base-ja",
+        name: "Moonshine Base (Japanese)",
+        language: "ja",
+        repo: "csukuangfj2/sherpa-onnx-moonshine-base-ja-quantized-2026-02-27",
+        revision: "cf95fc9c3a55a240892c80c501e80b35603d20bc",
+        encoder: (
+            31_326_816,
+            "3230cafb84d5f08800e60de6f932aad7c69c649a37fa6997fe04fe25f808b56b",
+        ),
+        decoder: (
+            109_424_424,
+            "35a522052d2d8695d0dd2870666f088d633111e08cfbed0418f61c4122b4ba25",
+        ),
+        tokens: (
+            549_350,
+            "2870d843e14c1e187bf1913a521562a63b53933814bd7f2145120468f494a049",
+        ),
+    },
+    MoonshineRelease {
+        id: "moonshine-base-zh",
+        name: "Moonshine Base (Chinese)",
+        language: "zh",
+        repo: "csukuangfj2/sherpa-onnx-moonshine-base-zh-quantized-2026-02-27",
+        revision: "19042e30b8680b101d0db3b0b8cabc84ae954b7f",
+        encoder: (
+            31_326_816,
+            "c725a24b58595905921ea2a47e2bcf0f18c78f4d171d96136f2dcbc8c77a58a6",
+        ),
+        decoder: (
+            109_424_520,
+            "bf79fce626e123739ec37eceb2b2a010a93d720da266dd5d8ef9a47ef9a7dc36",
+        ),
+        tokens: (
+            549_350,
+            "2870d843e14c1e187bf1913a521562a63b53933814bd7f2145120468f494a049",
+        ),
+    },
+    MoonshineRelease {
+        id: "moonshine-base-ar",
+        name: "Moonshine Base (Arabic)",
+        language: "ar",
+        repo: "csukuangfj2/sherpa-onnx-moonshine-base-ar-quantized-2026-02-27",
+        revision: "00c1062f1b70e4da96658486f4fd79552d8bc22b",
+        encoder: (
+            31_326_824,
+            "68e50ebe0317ce909f098044a5dda2a76e6b86dc882829a317771fbafc5826ae",
+        ),
+        decoder: (
+            109_424_552,
+            "8f272cb50818e28ad86bbffc21e1450a4d57155e95f099ca6a236f38f4d9eafb",
+        ),
+        tokens: (
+            549_350,
+            "2870d843e14c1e187bf1913a521562a63b53933814bd7f2145120468f494a049",
+        ),
+    },
+    MoonshineRelease {
+        id: "moonshine-base-uk",
+        name: "Moonshine Base (Ukrainian)",
+        language: "uk",
+        repo: "csukuangfj2/sherpa-onnx-moonshine-base-uk-quantized-2026-02-27",
+        revision: "336649c4c1cd81d066c586163381fe8bb65d9145",
+        encoder: (
+            31_326_816,
+            "ea37ff7a2c308b566def1fd6e6860e23db4968590f192d5cc0fbc494666e30f9",
+        ),
+        decoder: (
+            109_424_424,
+            "2c0c1ebc20ba75a21ff5315fd039e53d2fc9ba77a9ca9ad3bc4c7c1c1de93cbc",
+        ),
+        tokens: (
+            549_350,
+            "2870d843e14c1e187bf1913a521562a63b53933814bd7f2145120468f494a049",
+        ),
+    },
+    MoonshineRelease {
+        id: "moonshine-base-vi",
+        name: "Moonshine Base (Vietnamese)",
+        language: "vi",
+        repo: "csukuangfj2/sherpa-onnx-moonshine-base-vi-quantized-2026-02-27",
+        revision: "2946c5272fcb2d92f5cd99edb6e828c66be94f2e",
+        encoder: (
+            31_326_816,
+            "5a63cf0e248ef463776fbad50784813b4185eb73136f1fb062c5722e667130dc",
+        ),
+        decoder: (
+            109_424_520,
+            "0a4f007e9d585348d94124d8de47f7aefbc3e2d3fa44152646af7b94c639770d",
+        ),
+        tokens: (
+            549_350,
+            "2870d843e14c1e187bf1913a521562a63b53933814bd7f2145120468f494a049",
+        ),
+    },
+    MoonshineRelease {
+        id: "moonshine-tiny-ko",
+        name: "Moonshine Tiny (Korean)",
+        language: "ko",
+        repo: "csukuangfj2/sherpa-onnx-moonshine-tiny-ko-quantized-2026-02-27",
+        revision: "3f2e79d6fe04ae0009fcb150a035586c12ac742f",
+        encoder: (
+            13_238_176,
+            "947260d46252f48eada86a34986b3f70c01d68a343959949a77375b94debd055",
+        ),
+        decoder: (
+            58_327_336,
+            "95aa9f2e764b80625d2889d6ec9f05c965808e540ac50c16abd10c7ea33fe44b",
+        ),
+        tokens: (
+            549_350,
+            "2870d843e14c1e187bf1913a521562a63b53933814bd7f2145120468f494a049",
+        ),
+    },
+    MoonshineRelease {
+        id: "moonshine-tiny-ja",
+        name: "Moonshine Tiny (Japanese)",
+        language: "ja",
+        repo: "csukuangfj2/sherpa-onnx-moonshine-tiny-ja-quantized-2026-02-27",
+        revision: "550e2eb0a8b33092f3b394f64649ee1b3d9eb506",
+        encoder: (
+            13_238_184,
+            "86ece73812604b9b5f1274b4d1e6eec0d783b96088ff46d49e30a53f881cad73",
+        ),
+        decoder: (
+            58_327_272,
+            "9fcd9b71323a496b307e20dd305c4e9a1b533c7bedd6e4f660e974967dd60bb6",
+        ),
+        tokens: (
+            549_350,
+            "2870d843e14c1e187bf1913a521562a63b53933814bd7f2145120468f494a049",
+        ),
+    },
+];
+
+fn moonshine_release(r: &MoonshineRelease) -> ModelManifest {
+    let base = format!("https://huggingface.co/{}/resolve/{}", r.repo, r.revision);
+    let file = |name: &str, (size, sha256): (u64, &str)| ModelFile {
+        name: name.into(),
+        url: format!("{base}/{name}"),
+        size,
+        sha256: sha256.into(),
+        unpack: Vec::new(),
+    };
+    let english = r.language == "en";
+    ModelManifest {
+        id: r.id.into(),
+        name: r.name.into(),
+        kind: ModelKind::Stt,
+        license: if english {
+            "MIT".into()
+        } else {
+            "Moonshine Community License (non-commercial)".into()
+        },
+        attribution: if english {
+            "Moonshine by Moonshine AI, MIT License; ONNX export by sherpa-onnx.".into()
+        } else {
+            "Moonshine by Moonshine AI under the Moonshine Community License, a non-commercial licence: personal use only. ONNX export by sherpa-onnx.".into()
+        },
+        source: format!("https://huggingface.co/{}", r.repo),
+        languages: vec![r.language.into()],
+        requires: vec![SILERO_VAD.into(), SMART_TURN.into()],
+        files: vec![
+            file("encoder_model.ort", r.encoder),
+            file("decoder_model_merged.ort", r.decoder),
+            file("tokens.txt", r.tokens),
+        ],
+    }
 }
 
 /// The keyword-spotting model's id: "Hey Kivo", custom wake words and "Kivo stop" (VOICE §4).
@@ -171,6 +398,58 @@ fn silero() -> ModelManifest {
         requires: Vec::new(),
     }
 }
+
+/// Supertonic 3 (Supertone; weights OpenRAIL-M, code MIT): natural voices in 31 languages from
+/// characters, no phonemizer (VOICE-46). Its licence carries use restrictions, shown before the
+/// download (DIST-13).
+fn supertonic() -> ModelManifest {
+    const BASE: &str = "https://huggingface.co/Supertone/supertonic-3/resolve/3cadd1ee6394adea1bd021217a0e650ede09a323";
+    let file = |name: &str, size: u64, sha256: &str| ModelFile {
+        name: name.into(),
+        url: format!("{BASE}/{name}"),
+        size,
+        sha256: sha256.into(),
+        unpack: Vec::new(),
+    };
+    ModelManifest {
+        id: SUPERTONIC.into(),
+        name: "Supertonic 3 (31 languages)".into(),
+        kind: ModelKind::Tts,
+        license: "OpenRAIL-M".into(),
+        attribution: "Supertonic 3 by Supertone Inc. Model weights under the BigScience Open RAIL-M License, which forbids certain uses (see the licence); code under the MIT License.".into(),
+        source: "https://huggingface.co/Supertone/supertonic-3".into(),
+        languages: vec![
+            "en", "ko", "ja", "ar", "bg", "cs", "da", "de", "el", "es", "et", "fi", "fr", "hi",
+            "hr", "hu", "id", "it", "lt", "lv", "nl", "pl", "pt", "ro", "ru", "sk", "sl", "sv",
+            "tr", "uk", "vi",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect(),
+        files: vec![
+            file("onnx/tts.json", 8_253, "42078d3aef1cd43ab43021f3c54f47d2d75ceb4e75f627f118890128b06a0d09"),
+            file("onnx/unicode_indexer.json", 277_676, "9bf7346e43883a81f8645c81224f786d43c5b57f3641f6e7671a7d6c493cb24f"),
+            file("onnx/duration_predictor.onnx", 3_700_147, "c3eb91414d5ff8a7a239b7fe9e34e7e2bf8a8140d8375ffb14718b1c639325db"),
+            file("onnx/text_encoder.onnx", 36_416_150, "c7befd5ea8c3119769e8a6c1486c4edc6a3bc8365c67621c881bbb774b9902ff"),
+            file("onnx/vector_estimator.onnx", 256_534_781, "883ac868ea0275ef0e991524dc64f16b3c0376efd7c320af6b53f5b780d7c61c"),
+            file("onnx/vocoder.onnx", 101_424_195, "085de76dd8e8d5836d6ca66826601f615939218f90e519f70ee8a36ed2a4c4ba"),
+            file("voice_styles/F1.json", 292_046, "bbdec6ee00231c2c742ad05483df5334cab3b52fda3ba38e6a07059c4563dbc2"),
+            file("voice_styles/F2.json", 292_423, "7c722c6a72707b1a77f035d67f0d1351ba187738e06f7683e8c72b1df3477fc6"),
+            file("voice_styles/F3.json", 290_794, "12f6ef2573baa2defa1128069cb59f203e3ab67c92af77b42df8a0e3a2f7c6ab"),
+            file("voice_styles/F4.json", 291_808, "c2fa764c1225a76dfc3e2c73e8aa4f70d9ee48793860eb34c295fff01c2e032b"),
+            file("voice_styles/F5.json", 291_479, "45966e73316415626cf41a7d1c6f3b4c70dbc1ba2bee5c1978ef0ce33244fc8d"),
+            file("voice_styles/M1.json", 291_748, "e35604687f5d23694b8e91593a93eec0e4eca6c0b02bb8ed69139ab2ea6b0a5b"),
+            file("voice_styles/M2.json", 292_055, "b76cbf62bac707c710cf0ae5aba5e31eea1a6339a9734bfae33ab98499534a50"),
+            file("voice_styles/M3.json", 290_198, "ea1ac35ccb91b0d7ecad533a2fbd0eec10c91513d8951e3b25fbba99954e159b"),
+            file("voice_styles/M4.json", 291_522, "ca8eefad4fcd989c9379032ff3e50738adc547eeb5e221b82593a6d7b3bac303"),
+            file("voice_styles/M5.json", 291_469, "dd22b92740314321f8ae11c5e87f8dd60d060f15dd3a632b5adf77f471f77af2"),
+        ],
+        requires: Vec::new(),
+    }
+}
+
+/// Supertonic's id (VOICE-46).
+pub const SUPERTONIC: &str = "supertonic-3";
 
 /// The voice-activity model's id.
 pub const SILERO_VAD: &str = "silero-vad-v6";

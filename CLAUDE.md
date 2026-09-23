@@ -63,8 +63,15 @@ deferred"). **M1 — first useful voice loop** is built: speak or type → gramm
 engine → action → spoken answer (Moonshine STT, Kokoro or Windows voices), the Island's states,
 Activity and audit, cancel ≤ 100 ms, undo, and the installer/release pipeline. Still open in M1:
 the first installer build and smoke test (they run on the first `v*` tag, DECISIONS "Installer
-and release at M1"), and the reference-tier and release-build budget runs (deferred). **Next:
-M2.** Progress per milestone is in the table at the top of [docs/ROADMAP.md](docs/ROADMAP.md).
+and release at M1"), and the reference-tier and release-build budget runs (deferred). **M2 —
+wake word, enrollment, conversation audio** is built: "Hey Kivo" and custom wake words on KIVO's
+own keyword spotter, echo cancellation with echo-path detection, barge-in, "stop" by voice,
+owner-voice enrollment and speaker modes, decisions answered by voice, sound sets, the speech
+engine registry with profiles, recommendation, safe switching and fallbacks (Moonshine sizes and
+languages, Supertonic 3), onboarding steps 1–5, the Island's M2 states and screen-reader
+announcements. Still open in M2: the wake corpus benchmark (deferred with the other bench runs),
+a live barge-in check on the laptop's speakers, and voice "edit" handed to a brain (M3).
+**Next: M3.** Progress per milestone is in the table at the top of [docs/ROADMAP.md](docs/ROADMAP.md).
 Update this section as milestones land.
 
 ## Build, run, check

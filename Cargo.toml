@@ -39,6 +39,8 @@ rubato = "5.0"
 realfft = "3.5"
 # WebRTC AEC3 in pure Rust (BSD-3-Clause): echo cancellation (VOICE-30).
 sonora = "0.2"
+# Unicode normalization (MIT/Apache-2.0): Supertonic's text preparation.
+unicode-normalization = "0.1"
 # Model archives (.tar.bz2, as sherpa-onnx publishes its keyword-spotting models).
 tar = "0.4"
 bzip2 = "0.6"

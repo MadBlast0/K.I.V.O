@@ -88,14 +88,16 @@ fn run(rx: &mpsc::Receiver<Command>, peer: &Peer, tokens: &Tokens) {
     while let Ok(command) = rx.recv() {
         match command {
             Command::Load { load, reply } => {
-                if engine.is_some() {
+                // Already loaded: nothing to do. Another engine was chosen: switch (VOICE-45).
+                if engine.as_ref().is_some_and(|e| e.info().id == load.engine) {
                     let _ = reply.send(Ok(()));
                     continue;
                 }
+                engine = None;
                 report(peer, &load.engine, Residency::Warming);
                 let started = Instant::now();
                 let loaded = match (load.engine.as_str(), &load.dir) {
-                    (moonshine::MODEL_ID, Some(dir)) => {
+                    (id, Some(dir)) if moonshine::variant(id).is_some() => {
                         Moonshine::load(Path::new(dir), load.threads.max(1))
                     }
                     (other, _) => Err(VoiceError::Unavailable(format!(

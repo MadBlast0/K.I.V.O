@@ -64,6 +64,9 @@ pub struct ModelLoad {
     /// The installed model folder, for engines that need one.
     pub dir: Option<String>,
     pub threads: usize,
+    /// The language to speak or hear (BCP-47), for engines that cover several.
+    #[serde(default)]
+    pub language: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

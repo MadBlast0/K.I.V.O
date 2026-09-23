@@ -801,3 +801,466 @@ async fn hey_kivo_wakes_kivo_hands_free_and_a_follow_up_needs_no_wake_word() {
     let _ = tokio::time::timeout(Duration::from_secs(5), worker_task).await;
     pump.abort();
 }
+
+/// VOICE-31: barge-in. KIVO is busy talking (a long reply is playing) when the user says "Open
+/// Chrome." over it, with no wake word. The listener ducks KIVO's voice, hears the whole request
+/// from just before the user started, and KIVO acts on it: only barge-in can start this turn,
+/// since no wake word is said and no follow-up window is open.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn talking_over_kivo_interrupts_it_and_is_heard_as_a_new_request() {
+    let _turn = ONE_AT_A_TIME.lock().await;
+    let paths = Paths::user().expect("per-user folders");
+    let Some(model) = ModelStore::new(paths.models()).installed(kivo_voice::moonshine::MODEL_ID)
+    else {
+        eprintln!("the speech model isn't installed on this machine; skipping");
+        return;
+    };
+    let Some(kws) = keyword_model() else {
+        eprintln!("the keyword model isn't here (KIVO_KWS_DIR); skipping");
+        return;
+    };
+    if !worker().is_file() {
+        eprintln!("kivo-infer isn't built beside the tests; skipping");
+        return;
+    }
+    let (rig, worker_task, pump) = rig(Vec::new(), model.dir);
+    rig.core.update_config(|c| c.voice.follow_up_seconds = 0);
+    let mut mic = vec![0.0; 16_000 * 2];
+    mic.extend(spoken("Open Chrome."));
+    mic.extend(vec![0.0; 16_000 * 3]);
+    rig.audio.say_next(mic);
+    // KIVO is in the middle of a long spoken reply (12 s of a soft tone at 24 kHz).
+    #[allow(clippy::cast_precision_loss)]
+    let reply: Vec<f32> = (0..24_000 * 12)
+        .map(|i| (i as f32 / 24_000.0 * 180.0 * std::f32::consts::TAU).sin() * 0.05)
+        .collect();
+    rig.engine.speaker.speak(&reply, 24_000);
+    rig.listener.set_busy(true);
+    rig.listener
+        .set_hands_free(Some(kivo_runtime::voice::HandsFree {
+            model_dir: kws,
+            wake: rig
+                .db
+                .lock()
+                .unwrap()
+                .wake_words()
+                .unwrap()
+                .iter()
+                .flat_map(kivo_runtime::wake::keywords_for)
+                .collect(),
+            stop: kivo_runtime::wake::stop_words(),
+        }));
+    until(
+        "Chrome to open after talking over KIVO",
+        Duration::from_secs(40),
+        || !rig.apps.launched.lock().unwrap().is_empty(),
+    )
+    .await;
+    let heard = rig
+        .recorder
+        .recent(None, 20)
+        .into_iter()
+        .find(|a| a.kind == "transcript")
+        .map(|a| a.title)
+        .unwrap_or_default();
+    assert!(
+        heard.to_lowercase().contains("open"),
+        "the whole request was heard, from before barge-in was detected: {heard:?}"
+    );
+    rig.listener.set_hands_free(None);
+    rig.core.quit();
+    let _ = tokio::time::timeout(Duration::from_secs(5), worker_task).await;
+    pump.abort();
+}
+
+/// VOICE-47: the chosen voice can't load (its files are missing). KIVO still answers, with the
+/// Windows voices for the rest of the session, and says so with a visible notice; the request
+/// itself is unaffected.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_voice_that_fails_to_load_falls_back_to_the_windows_voices_with_a_notice() {
+    let _turn = ONE_AT_A_TIME.lock().await;
+    let paths = Paths::user().expect("per-user folders");
+    let Some(model) = ModelStore::new(paths.models()).installed(kivo_voice::moonshine::MODEL_ID)
+    else {
+        eprintln!("the speech model isn't installed on this machine; skipping");
+        return;
+    };
+    if !worker().is_file() {
+        eprintln!("kivo-infer isn't built beside the tests; skipping");
+        return;
+    }
+    let broken = tempfile::tempdir().expect("an empty folder");
+    let (rig, worker_task, pump) = rig_with_voice(
+        spoken("Kivo, mute."),
+        model.dir,
+        ("kokoro-82m".into(), Some(broken.path().to_path_buf())),
+    );
+    let mut events = rig.core.bus.subscribe();
+    rig.engine
+        .talk(TurnSource::PushToTalk)
+        .await
+        .expect("KIVO starts listening");
+    let notice = tokio::time::timeout(Duration::from_secs(30), async {
+        loop {
+            if let kivo_core::Received::Event(event) = events.recv().await
+                && let kivo_core::EventKind::System(kivo_core::event::SystemEvent::SpeechFallback {
+                    slot,
+                    to,
+                    message,
+                    ..
+                }) = &event.kind
+            {
+                return (slot.clone(), to.clone(), message.clone());
+            }
+        }
+    })
+    .await
+    .expect("a fallback notice");
+    assert_eq!(notice.0, "tts");
+    assert_eq!(notice.1.as_deref(), Some("system"));
+    assert!(notice.2.contains("Windows voices"), "{}", notice.2);
+    until("the answer", Duration::from_secs(30), || {
+        rig.core.turn_view().and_then(|t| t.answer).is_some()
+    })
+    .await;
+    assert!(
+        rig.recorder
+            .audit_rows(5)
+            .iter()
+            .any(|a| a.tool == "audio.mute" && a.decision == "allow"),
+        "the request still ran"
+    );
+    rig.core.quit();
+    let _ = tokio::time::timeout(Duration::from_secs(5), worker_task).await;
+    pump.abort();
+}
+
+/// VOICE-45: choosing a recognizer tests it in a separate worker before it becomes the choice —
+/// a Windows voice says a sentence and the new engine must hear it — and only then is the setting
+/// saved. Choosing one that doesn't fit the language is refused with the engines that do.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_new_speech_engine_is_tested_before_it_is_used() {
+    let _turn = ONE_AT_A_TIME.lock().await;
+    let paths = Paths::user().expect("per-user folders");
+    let Some(model) = ModelStore::new(paths.models()).installed(kivo_voice::moonshine::MODEL_ID)
+    else {
+        eprintln!("the speech model isn't installed on this machine; skipping");
+        return;
+    };
+    if !worker().is_file() {
+        eprintln!("kivo-infer isn't built beside the tests; skipping");
+        return;
+    }
+    let (rig, worker_task, pump) = rig(Vec::new(), model.dir);
+    let models = std::sync::Arc::new(kivo_runtime::models::Models::new(
+        paths.models(),
+        std::sync::Arc::clone(&rig.core),
+        rig.infer.clone(),
+    ));
+    let switcher = std::sync::Arc::new(
+        kivo_runtime::switch::Switcher::new(
+            std::sync::Arc::clone(&rig.core),
+            std::sync::Arc::clone(&rig.engine),
+            models,
+        )
+        .with_test_voice(std::sync::Arc::new(kivo_platform_windows::WindowsSpeech)),
+    );
+    let mut events = rig.core.bus.subscribe();
+    assert!(rig.core.config().voice.stt_engine.is_empty());
+    switcher
+        .start(
+            kivo_ipc::infer::InferSlot::Stt,
+            kivo_voice::moonshine::MODEL_ID,
+            None,
+        )
+        .expect("it fits");
+    let mut stages = Vec::new();
+    let outcome =
+        tokio::time::timeout(Duration::from_secs(60), async {
+            loop {
+                if let kivo_core::Received::Event(event) = events.recv().await
+                    && let kivo_core::EventKind::System(
+                        kivo_core::event::SystemEvent::EngineSwitch { stage, message, .. },
+                    ) = &event.kind
+                {
+                    stages.push(stage.clone());
+                    if stage == "ready" || stage == "failed" {
+                        return message.clone();
+                    }
+                    if stage == "testing" {
+                        assert!(
+                            rig.core.config().voice.stt_engine.is_empty(),
+                            "the choice waits for the test"
+                        );
+                    }
+                }
+            }
+        })
+        .await
+        .expect("the switch finished");
+    assert_eq!(outcome, None, "it passed: {stages:?}");
+    assert_eq!(stages, ["checking", "loading", "testing", "ready"]);
+    assert_eq!(
+        rig.core.config().voice.stt_engine,
+        kivo_voice::moonshine::MODEL_ID
+    );
+
+    rig.core
+        .update_config(|c| c.general.language = "es-ES".into());
+    let refused = switcher
+        .start(
+            kivo_ipc::infer::InferSlot::Stt,
+            kivo_voice::moonshine::MODEL_ID,
+            None,
+        )
+        .unwrap_err();
+    assert!(refused.contains("Moonshine Base (Spanish)"), "{refused}");
+    rig.core.quit();
+    let _ = tokio::time::timeout(Duration::from_secs(5), worker_task).await;
+    pump.abort();
+}
+
+/// VOICE-19, SEC-26: while KIVO is busy, "Kivo, stop" stops it without the wake word. KIVO is in
+/// the middle of a 12-second reply; the user says it over the reply and KIVO falls silent long
+/// before the reply would have ended.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn saying_stop_while_kivo_talks_stops_it() {
+    let _turn = ONE_AT_A_TIME.lock().await;
+    let paths = Paths::user().expect("per-user folders");
+    let Some(model) = ModelStore::new(paths.models()).installed(kivo_voice::moonshine::MODEL_ID)
+    else {
+        eprintln!("the speech model isn't installed on this machine; skipping");
+        return;
+    };
+    let Some(kws) = keyword_model() else {
+        eprintln!("the keyword model isn't here (KIVO_KWS_DIR); skipping");
+        return;
+    };
+    if !worker().is_file() {
+        eprintln!("kivo-infer isn't built beside the tests; skipping");
+        return;
+    }
+    let (rig, worker_task, pump) = rig(Vec::new(), model.dir);
+    let mut mic = vec![0.0; 16_000 * 2];
+    mic.extend(spoken("Kivo, stop."));
+    mic.extend(vec![0.0; 16_000 * 8]);
+    rig.audio.say_next(mic);
+    #[allow(clippy::cast_precision_loss)]
+    let reply: Vec<f32> = (0..24_000 * 12)
+        .map(|i| (i as f32 / 24_000.0 * 180.0 * std::f32::consts::TAU).sin() * 0.05)
+        .collect();
+    let started = Instant::now();
+    rig.engine.speaker.speak(&reply, 24_000);
+    rig.listener.set_busy(true);
+    rig.listener
+        .set_hands_free(Some(kivo_runtime::voice::HandsFree {
+            model_dir: kws,
+            wake: rig
+                .db
+                .lock()
+                .unwrap()
+                .wake_words()
+                .unwrap()
+                .iter()
+                .flat_map(kivo_runtime::wake::keywords_for)
+                .collect(),
+            stop: kivo_runtime::wake::stop_words(),
+        }));
+    until("KIVO to fall silent", Duration::from_secs(9), || {
+        !rig.engine.speaker.speaking()
+    })
+    .await;
+    assert!(
+        started.elapsed() < Duration::from_secs(9),
+        "stopped by the user, not by the reply ending"
+    );
+    rig.listener.set_hands_free(None);
+    rig.core.quit();
+    let _ = tokio::time::timeout(Duration::from_secs(5), worker_task).await;
+    pump.abort();
+}
+
+/// A stand-in voice model for the guest test: a voice is the pitch of its zero crossings, so the
+/// owner's enrollment (a 180 Hz voice) and Windows' voice are clearly different people.
+struct PitchVoice;
+
+impl kivo_voice::SpeakerVerifier for PitchVoice {
+    fn info(&self) -> &kivo_voice::EngineInfo {
+        static INFO: std::sync::OnceLock<kivo_voice::EngineInfo> = std::sync::OnceLock::new();
+        INFO.get_or_init(kivo_voice::speaker::info)
+    }
+    fn embed(&self, audio: &[f32]) -> kivo_voice::VoiceResult<Vec<f32>> {
+        let crossings = audio
+            .windows(2)
+            .filter(|w| (w[0] < 0.0) != (w[1] < 0.0))
+            .count();
+        #[allow(clippy::cast_precision_loss)]
+        let angle = crossings as f32 / audio.len().max(1) as f32 * 40.0;
+        Ok(vec![angle.cos(), angle.sin(), 0.2])
+    }
+    fn score(&self, embedding: &Vec<f32>, profile: &[Vec<f32>]) -> f32 {
+        kivo_voice::speaker::similarity(embedding, &kivo_voice::speaker::centroid(profile))
+    }
+}
+
+/// M2-X3, CONV-28, VOICE-22: with the owner enrolled and "Prefer owner" on, a request in another
+/// voice becomes a guest turn, and the guest's spoken "yes" does not approve the action.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_guest_cannot_approve_by_voice() {
+    let _turn = ONE_AT_A_TIME.lock().await;
+    let paths = Paths::user().expect("per-user folders");
+    let Some(model) = ModelStore::new(paths.models()).installed(kivo_voice::moonshine::MODEL_ID)
+    else {
+        eprintln!("the speech model isn't installed on this machine; skipping");
+        return;
+    };
+    if !worker().is_file() {
+        eprintln!("kivo-infer isn't built beside the tests; skipping");
+        return;
+    }
+    let (rig, worker_task, pump) = rig(Vec::new(), model.dir);
+    let voice = tempfile::tempdir().expect("a voice folder");
+    let voice_id = std::sync::Arc::new(kivo_runtime::voiceid::VoiceId::new(
+        voice.path().to_path_buf(),
+        std::sync::Arc::new(kivo_testkit::FakeSecrets::default()),
+        std::sync::Arc::clone(&rig.db),
+        || Some(std::sync::Arc::new(PitchVoice) as std::sync::Arc<dyn kivo_voice::SpeakerVerifier>),
+    ));
+    // The owner enrolls in a 180 Hz voice.
+    #[allow(clippy::cast_precision_loss)]
+    let owner = |seconds: f32| -> Vec<f32> {
+        (0..(16_000.0 * seconds) as usize)
+            .map(|i| (i as f32 / 16_000.0 * 180.0 * std::f32::consts::TAU).sin() * 0.3)
+            .collect()
+    };
+    for prompt in 0..8 {
+        assert!(voice_id.keep_take(prompt, owner(2.5)).ok);
+    }
+    assert!(voice_id.finish_enrollment().expect("enrolled").enrolled);
+    rig.engine.set_voice_id(std::sync::Arc::clone(&voice_id));
+    rig.listener.set_keep_audio(true);
+    rig.core.update_config(|c| {
+        c.capabilities.set(Capability::SpeakResponses, false);
+        c.capabilities.set(Capability::SpeakerRecognition, true);
+        c.voice.speaker_mode = kivo_core::config::SpeakerMode::PreferOwner;
+    });
+    rig.core
+        .set_mode(kivo_core::config::PermissionMode::Ask)
+        .expect("Ask mode");
+    // Windows' voice is not the owner's: a guest asks, and says yes.
+    rig.audio.say_next(spoken("Open Chrome."));
+    rig.audio.say_next(spoken("Yes, go ahead."));
+    rig.engine
+        .talk(TurnSource::PushToTalk)
+        .await
+        .expect("KIVO starts listening");
+    until(
+        "a guest turn asking for OK",
+        Duration::from_secs(40),
+        || {
+            rig.core
+                .turn_view()
+                .is_some_and(|t| t.guest && t.confirm.is_some())
+        },
+    )
+    .await;
+    until(
+        "the guest's yes to be refused",
+        Duration::from_secs(30),
+        || {
+            rig.recorder
+                .recent(None, 20)
+                .iter()
+                .any(|a| a.kind == "reply" && a.status == "refused" && a.title.contains("owner"))
+        },
+    )
+    .await;
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    assert!(
+        rig.apps.launched.lock().unwrap().is_empty(),
+        "a guest's yes approves nothing"
+    );
+    assert!(
+        rig.core.turn_view().is_some_and(|t| t.confirm.is_some()),
+        "the card still waits for the owner"
+    );
+    rig.core.quit();
+    let _ = tokio::time::timeout(Duration::from_secs(5), worker_task).await;
+    pump.abort();
+}
+
+/// VOICE-30/31 with a speaker's echo (M2-X2, simulated): KIVO's reply is real speech, and the
+/// fake device sits in a "room" where the microphone hears the speaker 40 ms later at a third of
+/// its level, until KIVO stops. The user talks over the reply: the echo path is found, KIVO's
+/// own voice doesn't interrupt it, and the user's request gets through.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn talking_over_kivo_works_with_speakers_echoing_its_voice() {
+    let _turn = ONE_AT_A_TIME.lock().await;
+    let paths = Paths::user().expect("per-user folders");
+    let Some(model) = ModelStore::new(paths.models()).installed(kivo_voice::moonshine::MODEL_ID)
+    else {
+        eprintln!("the speech model isn't installed on this machine; skipping");
+        return;
+    };
+    let Some(kws) = keyword_model() else {
+        eprintln!("the keyword model isn't here (KIVO_KWS_DIR); skipping");
+        return;
+    };
+    if !worker().is_file() {
+        eprintln!("kivo-infer isn't built beside the tests; skipping");
+        return;
+    }
+    let (rig, worker_task, pump) = rig(Vec::new(), model.dir);
+    rig.core.update_config(|c| c.voice.follow_up_seconds = 0);
+    rig.audio.set_room(40, 0.3);
+    let reply = spoken(
+        "Here is the forecast for the rest of the week. Tomorrow will be sunny with a light \
+         breeze, and the weekend brings some rain in the afternoon, so take an umbrella.",
+    );
+    // The user says nothing for 3 s, then talks over the reply.
+    let mut mic = vec![0.0; 16_000 * 3];
+    mic.extend(spoken("Open Chrome."));
+    mic.extend(vec![0.0; 16_000 * 6]);
+    rig.audio.say_next(mic);
+    rig.listener.set_busy(true);
+    rig.listener
+        .set_hands_free(Some(kivo_runtime::voice::HandsFree {
+            model_dir: kws,
+            wake: rig
+                .db
+                .lock()
+                .unwrap()
+                .wake_words()
+                .unwrap()
+                .iter()
+                .flat_map(kivo_runtime::wake::keywords_for)
+                .collect(),
+            stop: kivo_runtime::wake::stop_words(),
+        }));
+    until("the microphone to open", Duration::from_secs(10), || {
+        rig.listener.hands_free_on()
+    })
+    .await;
+    rig.engine.speaker.speak(&reply, 16_000);
+    until(
+        "Chrome to open over KIVO's echo",
+        Duration::from_secs(40),
+        || !rig.apps.launched.lock().unwrap().is_empty(),
+    )
+    .await;
+    let heard = rig
+        .recorder
+        .recent(None, 20)
+        .into_iter()
+        .find(|a| a.kind == "transcript")
+        .map(|a| a.title)
+        .unwrap_or_default();
+    assert!(
+        !heard.to_lowercase().contains("umbrella"),
+        "KIVO's own voice wasn't taken for the user's: {heard:?}"
+    );
+    rig.listener.set_hands_free(None);
+    rig.core.quit();
+    let _ = tokio::time::timeout(Duration::from_secs(5), worker_task).await;
+    pump.abort();
+}

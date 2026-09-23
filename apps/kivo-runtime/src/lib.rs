@@ -17,6 +17,7 @@ pub mod rpc;
 pub mod scripted;
 pub mod sounds;
 pub mod speaker;
+pub mod switch;
 #[cfg(windows)]
 pub mod tray;
 pub mod voice;

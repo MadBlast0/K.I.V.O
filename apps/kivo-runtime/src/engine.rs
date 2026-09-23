@@ -16,6 +16,7 @@ use kivo_core::text;
 use kivo_core::tool::{ConfirmSpec, ConfirmedBy, Initiator, ToolCall, ToolError, ToolErrorCode};
 use kivo_core::{Event, SessionInput, SessionState};
 use kivo_intent::{Context as GrammarContext, Index, IndexEntry, IntentRouter, Route};
+use kivo_ipc::infer::InferSlot;
 use kivo_ipc::protocol::{QuietIsland, SpeechStatus, StepView};
 use kivo_platform::{Apps, Windows};
 use kivo_security::{
@@ -356,17 +357,21 @@ impl Engine {
         let language = self.core.config().general.language;
         match parse_answer(said, &language) {
             Some(answer @ (Said::Approve | Said::ApproveAlways)) => {
-                if guest {
-                    self.speak(&text::t("decision.guest")).await;
-                    return;
-                }
-                if spec.strength == kivo_core::tool::Strength::Strong {
+                // A spoken approval that doesn't count is said aloud and kept in Activity.
+                let refused = if guest {
+                    Some("decision.guest")
+                } else if spec.strength == kivo_core::tool::Strength::Strong {
                     // High risk: a click (Windows Hello from M4); voice alone is never enough.
-                    self.speak(&text::t("decision.click")).await;
-                    return;
-                }
-                if !self.owner_said_it(audio).await {
-                    self.speak(&text::t("decision.notOwner")).await;
+                    Some("decision.click")
+                } else if !self.owner_said_it(audio).await {
+                    Some("decision.notOwner")
+                } else {
+                    None
+                };
+                if let Some(key) = refused {
+                    let message = text::t(key);
+                    self.recorder.answer(&self.turn_key(), &message, "refused");
+                    self.speak(&message).await;
                     return;
                 }
                 let always = answer == Said::ApproveAlways && spec.allow_always;
@@ -431,6 +436,8 @@ impl Engine {
         if lock(&self.turn).is_some() {
             self.cancel_turn(CancelReason::BargeIn, false);
         }
+        // Whatever KIVO was saying stops (a 30 ms fade), turn or no turn.
+        self.speaker.stop();
         if self
             .start_turn(TurnSource::FollowUp, Some(utterance))
             .await
@@ -843,6 +850,14 @@ impl Engine {
                 text: text.clone(),
                 confidence: None,
             })));
+
+        // "Kivo, stop" caught as a request (barge-in is quicker than the stop-word spotter): the
+        // turn ends quietly (VOICE-19).
+        if kivo_intent::is_stop_request(&text) {
+            tracing::info!("stopped by a spoken request");
+            self.cancel(CancelReason::UserVoice);
+            return;
+        }
 
         let apps = self.apps_index();
         let windows = self.windows_index();
@@ -1471,6 +1486,44 @@ impl Engine {
         });
     }
 
+    /// A chosen speech engine failed to load and another stands in for the session, or none
+    /// could (VOICE-47). The user is told; the saved choice stays as it is.
+    pub fn speech_fallback(&self, slot: InferSlot, from: &str, to: Option<&str>, error: &str) {
+        let name = |id: &str| kivo_voice::engine(id).map_or_else(|| id.to_owned(), |e| e.name);
+        let from_name = name(from);
+        let (slot_name, message) = match (slot, to) {
+            (InferSlot::Tts, _) => (
+                "tts",
+                text::tf("voice.fallbackTts", &[("from", &from_name)]),
+            ),
+            (InferSlot::Stt, Some(to)) => (
+                "stt",
+                text::tf(
+                    "voice.fallbackStt",
+                    &[("from", &from_name), ("to", &name(to))],
+                ),
+            ),
+            (InferSlot::Stt, None) => {
+                let message = text::tf("voice.fallbackNone", &[("from", &from_name)]);
+                self.core.set_speech_status(SpeechStatus::Failed {
+                    message: message.clone(),
+                });
+                ("stt", message)
+            }
+        };
+        tracing::warn!(slot = slot_name, from, to, error, "speech engine fallback");
+        self.core
+            .bus
+            .publish(kivo_core::Event::new(kivo_core::EventKind::System(
+                kivo_core::event::SystemEvent::SpeechFallback {
+                    slot: slot_name.to_owned(),
+                    from: from.to_owned(),
+                    to: to.map(str::to_owned),
+                    message,
+                },
+            )));
+    }
+
     /// The speech worker died mid-turn.
     pub fn engine_lost(&self) {
         if lock(&self.turn).is_some() {
@@ -1554,6 +1607,12 @@ pub async fn handle_infer_event(engine: &Arc<Engine>, event: InferEvent) {
                 .unwrap_or_default();
             engine.core.set_residency(&name, &state);
         }
+        InferEvent::Fallback {
+            slot,
+            from,
+            to,
+            error,
+        } => engine.speech_fallback(slot, &from, to.as_deref(), &error),
         InferEvent::Lost => engine.engine_lost(),
     }
 }

@@ -49,6 +49,9 @@ pub struct Speaker {
     cues: Mutex<Vec<(Cue, Vec<f32>)>>,
     /// Everything played, for echo cancellation (VOICE-30).
     reference: kivo_audio::echo::Reference,
+    /// Bumped when the output device changes, so the echo path is found again (headphones on
+    /// or off).
+    device_changes: std::sync::atomic::AtomicU64,
 }
 
 impl Speaker {
@@ -66,6 +69,7 @@ impl Speaker {
             on_sound: Mutex::new(None),
             cues: Mutex::new(render(SoundSet::Soft)),
             reference: kivo_audio::echo::Reference::default(),
+            device_changes: std::sync::atomic::AtomicU64::new(0),
         }
     }
 
@@ -107,8 +111,20 @@ impl Speaker {
     }
 
     pub fn set_output_device(&self, device: Option<DeviceId>) {
-        *lock(&self.device) = device;
+        let mut current = lock(&self.device);
+        if *current == device {
+            return;
+        }
+        *current = device;
         *lock(&self.open) = None; // reopened on the new device when next needed
+        self.device_changes
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// How many times the output device has changed (see `device_changes`).
+    pub fn device_changes(&self) -> u64 {
+        self.device_changes
+            .load(std::sync::atomic::Ordering::Relaxed)
     }
 
     /// The mixer, opening the speaker if needed.

@@ -1420,6 +1420,28 @@ button.k-island__chip {
   flex: none;
   background: conic-gradient(#fff var(--p, 70%), rgba(255, 255, 255, 0.18) 0);
 }
+@property --p {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 70%;
+}
+@keyframes k-countdown {
+  from {
+    --p: 100%;
+  }
+  to {
+    --p: 0%;
+  }
+}
+.k-island__ring--countdown {
+  --p: 100%;
+  animation: k-countdown var(--dur, 8s) linear forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .k-island__ring--countdown {
+    animation: none;
+  }
+}
 .k-island__examples {
   display: flex;
   flex-direction: column;

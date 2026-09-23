@@ -110,6 +110,15 @@ pub mod method {
     pub const VOICE_ID_DELETE: &str = "voiceId.delete";
     /// Settings → Sounds: play a set's cues (VOICE-27).
     pub const SOUNDS_PREVIEW: &str = "sounds.preview";
+    /// Choosing speech engines (VOICE §11): the registry, profiles and current choice; the
+    /// recommendation; a safe switch (progress as `engineSwitch` events); a voice preview.
+    pub const VOICE_ENGINES: &str = "voice.engines";
+    pub const VOICE_RECOMMEND: &str = "voice.recommend";
+    pub const VOICE_SWITCH: &str = "voice.switch";
+    pub const VOICE_PREVIEW: &str = "voice.preview";
+    /// Onboarding's microphone check (UX-33) and a recognizer's "Try sample" (UX-60).
+    pub const VOICE_MIC_CHECK: &str = "voice.micCheck";
+    pub const VOICE_TRY_SAMPLE: &str = "voice.trySample";
 }
 
 /// The name the desktop app gives in `hello`; the runtime supervises the client with this name.
@@ -325,6 +334,105 @@ pub struct ModelItem {
     /// `unloading`; `None` until the worker reports it.
     #[serde(default)]
     pub residency: Option<String>,
+}
+
+/// A speech engine in the registry, as the Voice page and onboarding show it (VOICE-42).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SpeechEngineItem {
+    pub id: String,
+    pub name: String,
+    /// `stt` or `tts`.
+    pub slot: String,
+    /// `recommended`, `lightweight`, `highAccuracy`, `multilingual`, `natural`, `expressive`.
+    pub profiles: Vec<String>,
+    /// `local`, `cloud` or `hybrid`.
+    pub privacy: String,
+    pub license: String,
+    pub commercial_use: bool,
+    /// BCP-47 primary tags; `*` for any.
+    pub languages: Vec<String>,
+    pub streaming: bool,
+    /// `cpu`, `directMl`, `cuda`, `npu`.
+    pub devices: Vec<String>,
+    pub download_mb: u32,
+    pub ram_mb: u32,
+    /// The model it downloads, if any.
+    pub model: Option<String>,
+    /// Ready to use: its model is on this PC, or it needs none.
+    pub ready: bool,
+    /// It handles the primary language (VOICE-48).
+    pub fits_language: bool,
+    pub voices: Vec<VoiceItem>,
+    /// KIVO's measurement on this PC; `None` reads "Not benchmarked by KIVO".
+    pub measured: Option<MeasuredItem>,
+}
+
+/// A voice of a TTS engine.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VoiceItem {
+    pub id: String,
+    pub name: String,
+    /// `female`, `male` or empty.
+    pub style: String,
+    pub languages: Vec<String>,
+}
+
+/// KIVO's own benchmark of an engine on this PC.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MeasuredItem {
+    pub real_time_factor: Option<f64>,
+    pub latency_ms: Option<f64>,
+    pub word_error_rate: Option<f64>,
+    /// Unix milliseconds.
+    pub measured_at: i64,
+}
+
+/// One curated profile and the engine behind it for the primary language (VOICE-43).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfileItem {
+    pub slot: String,
+    pub profile: String,
+    /// `None`: "Not available yet", or none for this language (`otherLanguagesOnly`).
+    pub engine: Option<String>,
+    pub other_languages_only: bool,
+}
+
+/// Everything the speech choosers need (`voice.engines`).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SpeechChoices {
+    /// The primary language.
+    pub language: String,
+    pub engines: Vec<SpeechEngineItem>,
+    pub profiles: Vec<ProfileItem>,
+    /// The recognizer KIVO listens with, and the voice engine and voice it speaks with.
+    pub stt: String,
+    pub tts: String,
+    pub tts_voice: String,
+}
+
+/// The recommendation for this PC (`voice.recommend`, VOICE-44).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecommendationItem {
+    /// `low`, `mid` or `high`.
+    pub tier: String,
+    pub stt_engine: Option<String>,
+    pub stt_fallback: Option<String>,
+    pub tts_engine: String,
+    pub tts_fallback: Option<String>,
+    pub threads: u32,
+    pub reason: String,
 }
 
 /// A capability toggle (CAPABILITIES §1).

@@ -241,10 +241,17 @@ pub async fn maintain(app: AppHandle) {
                     Ok(snapshot) => runtime.set_link(&app, |l| l.snapshot = Some(snapshot)),
                     Err(e) => eprintln!("KIVO: unreadable state from the runtime: {e}"),
                 },
-                // The mic level goes to the Island only (its waveform), ~30 times a second.
+                // The mic level goes to the Island (its waveform), ~30 times a second, and to the
+                // Control Center while it is on screen (the microphone check, UX-33).
                 method::LEVELS => {
                     if let Some(level) = note.params.get("level").and_then(Value::as_f64) {
                         let _ = app.emit_to(crate::overlay::LABEL, LEVEL_EVENT, level);
+                        if app
+                            .get_webview_window(crate::MAIN)
+                            .is_some_and(|w| w.is_visible().unwrap_or(false))
+                        {
+                            let _ = app.emit_to(crate::MAIN, LEVEL_EVENT, level);
+                        }
                     }
                 }
                 _ => {}

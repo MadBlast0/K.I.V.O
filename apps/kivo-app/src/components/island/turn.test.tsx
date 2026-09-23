@@ -98,3 +98,67 @@ describe("Island while KIVO acts", () => {
     expect(hasButtons(model)).toBe(true);
   });
 });
+
+describe("Island M2 states (UX-08, UX-45, CONV-26)", () => {
+  const t = i18n.t.bind(i18n);
+  const decision = (risk: "medium" | "high") => {
+    const snapshot = acting("ask");
+    snapshot.session = "awaitingConfirmation";
+    snapshot.turn!.confirm = {
+      callId: "c1",
+      tool: "apps.close",
+      action: "Close Google Chrome",
+      target: "Google Chrome",
+      why: "It closes an app.",
+      provenance: "You asked",
+      risk,
+      strength: "normal",
+      allowAlways: false,
+      plan: false,
+    };
+    return snapshot;
+  };
+
+  it("marks a guest's turn with a Guest chip", () => {
+    const snapshot = acting("auto");
+    snapshot.turn!.guest = true;
+    render(<>{islandForTurn(snapshot, t, handlers())?.trail}</>);
+    expect(screen.getByText("GUEST")).toBeTruthy();
+  });
+
+  it("counts down the follow-up window with a ring", () => {
+    const snapshot = acting("auto");
+    snapshot.session = "followUp";
+    snapshot.turn!.followUp = 8;
+    const model = islandForTurn(snapshot, t, handlers());
+    render(<>{model?.trail}</>);
+    const ring = screen.getByRole("img", { name: /8 seconds to follow up/ });
+    expect(ring.getAttribute("style")).toContain("--dur: 8s");
+    expect(model?.sub).toBe(t("island.followUpSub"));
+  });
+
+  it("shows the words KIVO listens for while it waits for a spoken answer", () => {
+    const snapshot = decision("medium");
+    snapshot.turn!.answering = true;
+    render(<>{islandForTurn(snapshot, t, handlers())?.body}</>);
+    const hint = screen.getByText(/^Say/).textContent ?? "";
+    expect(hint).toContain("allow");
+    expect(hint).toContain("deny");
+    expect(hint).toContain("wait");
+  });
+
+  it("gives no voice hint when only a click can approve", () => {
+    const snapshot = decision("high");
+    snapshot.turn!.answering = true;
+    render(<>{islandForTurn(snapshot, t, handlers())?.body}</>);
+    expect(screen.queryByText(/^Say/)).toBeNull();
+  });
+
+  it("says Waiting for you after the user said wait, keeping the buttons", () => {
+    const snapshot = decision("medium");
+    snapshot.turn!.waiting = true;
+    const model = islandForTurn(snapshot, t, handlers());
+    expect(model?.label).toBe("Waiting for you");
+    expect(hasButtons(model)).toBe(true);
+  });
+});

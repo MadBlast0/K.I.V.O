@@ -5,7 +5,7 @@
 #![cfg(feature = "ts")]
 
 use kivo_core::capability::{Badge, Capability};
-use kivo_core::config::PermissionMode;
+use kivo_core::config::{PermissionMode, SoundCue, SoundSet};
 use kivo_core::event::{
     CancelReason, DeviceKind, EventKind, IntentPath, PermissionDecision, ProviderEvent, StepStatus,
     SystemEvent, TaskEvent, ToolEvent, TtsStopReason, TurnEvent, TurnSource, UiEvent, VoiceEvent,
@@ -14,8 +14,9 @@ use kivo_core::tool::{ConfirmSpec, ConfirmedBy, Risk, Strength};
 use kivo_core::{Event, EventMeta, ProfileId, SessionState, TaskId, Timestamp, TraceId, TurnId};
 use kivo_ipc::infer::Residency;
 use kivo_ipc::protocol::{
-    ActivityItem, AuditItem, CapabilityItem, GrantItem, ModelItem, ProtocolVersion, QuietIsland,
-    ScreenPoint, SpeechStatus, StepView, TurnView,
+    ActivityItem, AuditItem, CapabilityItem, GrantItem, MeasuredItem, ModelItem, ProfileItem,
+    ProtocolVersion, QuietIsland, RecommendationItem, ScreenPoint, SpeechChoices, SpeechEngineItem,
+    SpeechStatus, StepView, TurnView, VoiceItem,
 };
 use kivo_ipc::{Link, LinkStatus, RpcError, StateSnapshot, Welcome, method};
 use std::path::PathBuf;
@@ -52,6 +53,8 @@ fn render() -> String {
         // session and protocol
         SessionState::decl(&cfg),
         PermissionMode::decl(&cfg),
+        SoundCue::decl(&cfg),
+        SoundSet::decl(&cfg),
         // what KIVO is doing now
         TurnView::decl(&cfg),
         StepView::decl(&cfg),
@@ -72,6 +75,12 @@ fn render() -> String {
         AuditItem::decl(&cfg),
         GrantItem::decl(&cfg),
         ModelItem::decl(&cfg),
+        SpeechEngineItem::decl(&cfg),
+        VoiceItem::decl(&cfg),
+        MeasuredItem::decl(&cfg),
+        ProfileItem::decl(&cfg),
+        SpeechChoices::decl(&cfg),
+        RecommendationItem::decl(&cfg),
         CapabilityItem::decl(&cfg),
         ProtocolVersion::decl(&cfg),
         Welcome::decl(&cfg),
@@ -111,6 +120,29 @@ fn render() -> String {
         ("modelsRemove", method::MODELS_REMOVE),
         ("settingsGet", method::SETTINGS_GET),
         ("settingsSet", method::SETTINGS_SET),
+        ("wakeList", method::WAKE_LIST),
+        ("wakeCheck", method::WAKE_CHECK),
+        ("wakeSave", method::WAKE_SAVE),
+        ("wakeDelete", method::WAKE_DELETE),
+        ("wakeSet", method::WAKE_SET),
+        ("wakeHear", method::WAKE_HEAR),
+        ("wakeTry", method::WAKE_TRY),
+        ("wakeSample", method::WAKE_SAMPLE),
+        ("wakeTune", method::WAKE_TUNE),
+        ("wakeFalseAlarms", method::WAKE_FALSE_ALARMS),
+        ("voiceIdStatus", method::VOICE_ID_STATUS),
+        ("voiceIdStart", method::VOICE_ID_START),
+        ("voiceIdRecord", method::VOICE_ID_RECORD),
+        ("voiceIdFinish", method::VOICE_ID_FINISH),
+        ("voiceIdCancel", method::VOICE_ID_CANCEL),
+        ("voiceIdDelete", method::VOICE_ID_DELETE),
+        ("soundsPreview", method::SOUNDS_PREVIEW),
+        ("voiceEngines", method::VOICE_ENGINES),
+        ("voiceRecommend", method::VOICE_RECOMMEND),
+        ("voiceSwitch", method::VOICE_SWITCH),
+        ("voicePreview", method::VOICE_PREVIEW),
+        ("voiceMicCheck", method::VOICE_MIC_CHECK),
+        ("voiceTrySample", method::VOICE_TRY_SAMPLE),
     ];
     out.push_str("\n/** IPC methods the UI can call. */\nexport const Method = {\n");
     for (name, value) in methods {

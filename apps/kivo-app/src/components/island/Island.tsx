@@ -199,6 +199,16 @@ export const IslandApp = ({ text, bg, fg = "#fff" }: { text: string; bg: string;
 export const IslandRing = ({ progress = 70 }: { progress?: number }) => (
   <span className="k-island__ring" style={{ ["--p" as string]: `${progress}%` }} />
 );
+/** A ring that empties over `seconds` (the follow-up window, UX-45). CSS runs it, so it costs no
+ * script frames; with reduced motion it stays full. */
+export const IslandCountdown = ({ seconds, label }: { seconds: number; label: string }) => (
+  <span
+    className="k-island__ring k-island__ring--countdown"
+    role="img"
+    aria-label={label}
+    style={{ ["--dur" as string]: `${seconds}s` }}
+  />
+);
 export const IslandProgress = ({ value }: { value: number }) => (
   <span className="k-island__progress">
     <span style={{ width: `${value}%` }} />

@@ -1,7 +1,8 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import axe from "axe-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ToastProvider } from "../components/ui";
-import type { ModelItem } from "../ipc/generated";
+import type { ModelItem, RecommendationItem, SpeechChoices, SpeechEngineItem } from "../ipc/generated";
 
 const calls: Array<{ method: string; params: unknown }> = [];
 const models: ModelItem[] = [
@@ -35,20 +36,124 @@ const models: ModelItem[] = [
   },
 ];
 
+function engine(e: Partial<SpeechEngineItem> & Pick<SpeechEngineItem, "id" | "name" | "slot">): SpeechEngineItem {
+  return {
+    profiles: [],
+    privacy: "local",
+    license: "MIT",
+    commercialUse: true,
+    languages: ["en"],
+    streaming: true,
+    devices: ["cpu"],
+    downloadMb: 100,
+    ramMb: 300,
+    model: e.id,
+    ready: false,
+    fitsLanguage: true,
+    voices: [],
+    measured: null,
+    ...e,
+  };
+}
+
+const choices: SpeechChoices = {
+  language: "en",
+  stt: "moonshine-base-en",
+  tts: "system",
+  ttsVoice: "",
+  engines: [
+    engine({
+      id: "moonshine-base-en",
+      name: "Moonshine Base",
+      slot: "stt",
+      ready: true,
+      measured: { realTimeFactor: 0.05, latencyMs: 120, wordErrorRate: 0.042, measuredAt: 1 },
+    }),
+    engine({ id: "moonshine-tiny-en", name: "Moonshine Tiny", slot: "stt", downloadMb: 42 }),
+    engine({ id: "system", name: "Windows voices", slot: "tts", model: null, ready: true, languages: ["*"] }),
+    engine({
+      id: "kokoro-82m",
+      name: "Kokoro",
+      slot: "tts",
+      license: "Apache-2.0",
+      voices: [{ id: "af_heart", name: "Heart (American, female)", style: "female", languages: ["en"] }],
+    }),
+    engine({ id: "supertonic-3", name: "Supertonic 3", slot: "tts", license: "OpenRAIL-M", languages: ["en", "es"] }),
+  ],
+  profiles: [
+    { slot: "stt", profile: "recommended", engine: "moonshine-base-en", otherLanguagesOnly: false },
+    { slot: "stt", profile: "lightweight", engine: "moonshine-tiny-en", otherLanguagesOnly: false },
+    { slot: "stt", profile: "highAccuracy", engine: null, otherLanguagesOnly: false },
+    { slot: "stt", profile: "multilingual", engine: null, otherLanguagesOnly: true },
+    { slot: "tts", profile: "natural", engine: "kokoro-82m", otherLanguagesOnly: false },
+    { slot: "tts", profile: "lightweight", engine: "system", otherLanguagesOnly: false },
+    { slot: "tts", profile: "multilingual", engine: "supertonic-3", otherLanguagesOnly: false },
+    { slot: "tts", profile: "expressive", engine: null, otherLanguagesOnly: false },
+  ],
+};
+
+const recommendation: RecommendationItem = {
+  tier: "high",
+  sttEngine: "moonshine-base-en",
+  sttFallback: "moonshine-tiny-en",
+  ttsEngine: "kokoro-82m",
+  ttsFallback: "system",
+  threads: 4,
+  reason: "This is a fast PC.",
+};
+
+// Stable like the real provider's, so effects that depend on them don't rerun every render.
+const runtime = vi.hoisted(() => ({
+  link: { status: "connected", runtimeVersion: "0.0.0", snapshot: null, message: null },
+  request: (_method: string, _params?: unknown): Promise<unknown> => Promise.resolve(null),
+}));
+
 vi.mock("../ipc/runtime", () => ({
-  useRuntime: () => ({
-    link: { status: "connected", runtimeVersion: "0.0.0", snapshot: null, message: null },
-    request: (method: string, params?: unknown) => {
-      calls.push({ method, params });
-      if (method === "models.list") return Promise.resolve(models);
-      if (method === "settings.get") return Promise.resolve({ voice: { "tts-engine": "system" } });
-      return Promise.resolve(null);
-    },
-  }),
+  useRuntime: () => runtime,
   useRuntimeEvents: () => {},
 }));
 
+runtime.request = (method: string, params?: unknown) => {
+  calls.push({ method, params });
+  if (method === "models.list") return Promise.resolve(models);
+  if (method === "voice.engines") return Promise.resolve(choices);
+  if (method === "voice.recommend") return Promise.resolve(recommendation);
+  if (method === "wake.list") {
+    return Promise.resolve({
+      words: [
+        {
+          id: "hey-kivo",
+          phrase: "Hey Kivo",
+          phonetic: null,
+          enabled: true,
+          builtIn: true,
+          sensitivity: 0.5,
+          samples: [],
+          quality: "good",
+          falseAlarmTest: null,
+        },
+      ],
+      modelInstalled: false,
+      listening: false,
+    });
+  }
+  if (method === "voiceId.status") {
+    return Promise.resolve({ enrolled: false, prompts: ["Hey Kivo"], recorded: [false], embeddings: 0 });
+  }
+  if (method === "settings.get") {
+    return Promise.resolve({ voice: { "tts-engine": "system", "follow-up-seconds": 8, "speaker-mode": "off" } });
+  }
+  return Promise.resolve(null);
+};
+
 const { Voice } = await import("./Voice");
+
+async function violations() {
+  const result = await axe.run(document.body, {
+    rules: { "color-contrast": { enabled: false }, region: { enabled: false } },
+  });
+  return result.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`);
+}
 
 async function mount() {
   render(
@@ -61,29 +166,78 @@ async function mount() {
   });
 }
 
-describe("Voice page (DIST-13)", () => {
+const hearing = () => within(screen.getByRole("radiogroup", { name: "How KIVO hears you" }));
+const speaking = () => within(screen.getByRole("radiogroup", { name: "How KIVO speaks" }));
+
+const settle = () =>
+  act(async () => {
+    await new Promise((r) => setTimeout(r, 0));
+  });
+
+describe("Voice page", () => {
   beforeEach(() => {
     calls.length = 0;
   });
 
-  it("lists the models with their licence and size, and offers Remove or Download", async () => {
+  it("offers curated profiles with honest measurements (VOICE-43)", async () => {
+    await mount();
+    const base = hearing().getByRole("radio", { name: "Recommended" });
+    expect(base.getAttribute("aria-checked")).toBe("true");
+    expect(base.textContent).toContain("4.2% word errors");
+    const tiny = hearing().getByRole("radio", { name: "Lightweight" });
+    expect(tiny.textContent).toContain("Not benchmarked by KIVO");
+    expect(screen.getAllByText("Not available yet").length).toBeGreaterThan(0);
+    expect(screen.getByText("Recommended for your PC")).toBeTruthy();
+  });
+
+  it("shows the licence before a new engine downloads, then switches safely (VOICE-45)", async () => {
+    await mount();
+    fireEvent.click(speaking().getByRole("radio", { name: "Natural" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Apache-2.0")).toBeTruthy();
+    expect(within(dialog).getByText("Kokoro-82M by hexgrad, Apache License 2.0.")).toBeTruthy();
+    expect(calls.some((c) => c.method === "voice.switch")).toBe(false);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Download and use" }));
+    await settle();
+    expect(calls).toContainEqual({
+      method: "voice.switch",
+      params: { slot: "tts", engine: "kokoro-82m", voice: null },
+    });
+  });
+
+  it("switches straight away to an engine that is already here", async () => {
+    choices.tts = "kokoro-82m";
+    await mount();
+    // The Windows voices need no download: no licence dialog, straight to the test and switch.
+    fireEvent.click(speaking().getByRole("radio", { name: "Lightweight" }));
+    await settle();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(calls).toContainEqual({ method: "voice.switch", params: { slot: "tts", engine: "system", voice: null } });
+    choices.tts = "system";
+  });
+
+  it("lists wake words, and turning one on downloads the listener first", async () => {
+    await mount();
+    expect(screen.getByText("“Hey Kivo”")).toBeTruthy();
+    fireEvent.click(screen.getByRole("switch", { name: "Listen for “Hey Kivo”" }));
+    await settle();
+    const methods = calls.map((c) => c.method);
+    expect(methods.indexOf("models.install")).toBeLessThan(methods.indexOf("wake.set"));
+    expect(calls).toContainEqual({
+      method: "capabilities.set",
+      params: { capability: "mic-listening", on: true },
+    });
+  });
+
+  it("has no ARIA or labelling problems (UX-52)", async () => {
+    await mount();
+    expect(await violations()).toEqual([]);
+  });
+
+  it("lists the models with their licence and size (DIST-13)", async () => {
     await mount();
     expect(screen.getByText("Moonshine Base (English)")).toBeTruthy();
     expect(screen.getByText(/MIT · 141 MB on this PC/)).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Remove Moonshine Base (English)" })).toBeTruthy();
     expect(screen.getByText(/Apache-2.0 · 101 MB to download/)).toBeTruthy();
-  });
-
-  it("shows the licence before anything downloads", async () => {
-    await mount();
-    fireEvent.click(screen.getByRole("button", { name: "Download" }));
-    expect(await screen.findByText("Kokoro-82M by hexgrad, Apache License 2.0.")).toBeTruthy();
-    expect(calls.some((c) => c.method === "models.install")).toBe(false);
-    const confirm = screen.getAllByRole("button", { name: "Download" }).at(-1)!;
-    await act(async () => {
-      fireEvent.click(confirm);
-      await new Promise((r) => setTimeout(r, 0));
-    });
-    expect(calls).toContainEqual({ method: "models.install", params: { id: "kokoro-82m" } });
   });
 });

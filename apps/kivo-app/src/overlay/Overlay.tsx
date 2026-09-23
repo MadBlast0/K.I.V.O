@@ -14,6 +14,7 @@ import { Icon } from "../icons";
 import { Island, IslandKeys, type IslandModel } from "../components/island/Island";
 import { islandForMode } from "../components/island/session";
 import { hasButtons, islandForTurn, type IslandHandlers } from "../components/island/turn";
+import { NOTHING, announcements, heardFrom } from "../components/island/announce";
 import type { Link, PermissionMode, StateSnapshot } from "../ipc/generated";
 import { Method } from "../ipc/generated";
 
@@ -96,6 +97,15 @@ export function Overlay() {
       unlisten?.();
     };
   }, []);
+
+  // Screen readers hear state changes, what KIVO heard and its answers (UX-53).
+  const heard = useRef(NOTHING);
+  useEffect(() => {
+    const now = heardFrom(snapshot);
+    const said = announcements(heard.current, now, t);
+    heard.current = now;
+    if (isTauri()) for (const text of said) void invoke("announce", { text });
+  }, [snapshot, t]);
 
   const handlers = useMemo<IslandHandlers>(
     () => ({

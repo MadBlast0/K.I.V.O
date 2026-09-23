@@ -2,6 +2,7 @@
 //! of its own: everything comes from `kivo-runtime` over IPC (ARCHITECTURE §1, §8), and closing
 //! its window only hides it while KIVO keeps running (UX §1).
 
+mod announce;
 mod memory;
 mod overlay;
 mod runtime;
@@ -130,7 +131,8 @@ pub fn run() {
             overlay::overlay_typing_done,
             overlay::overlay_focus,
             overlay::overlay_hover,
-            overlay::island_request
+            overlay::island_request,
+            announce::announce
         ])
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {

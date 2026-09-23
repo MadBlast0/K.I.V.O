@@ -308,6 +308,22 @@ pub enum SystemEvent {
         engine: String,
         state: String,
     },
+    /// A chosen speech engine failed, and `to` stands in for the rest of the session (none when
+    /// nothing could); the saved choice is unchanged (VOICE-47). `message` is shown to the user.
+    SpeechFallback {
+        slot: String,
+        from: String,
+        to: Option<String>,
+        message: String,
+    },
+    /// Choosing a new speech engine moved on (VOICE-45): `checking`, `downloading`, `loading`,
+    /// `testing`, then `ready` or `failed` (with `message`). The old engine works until `ready`.
+    EngineSwitch {
+        slot: String,
+        engine: String,
+        stage: String,
+        message: Option<String>,
+    },
 }
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]

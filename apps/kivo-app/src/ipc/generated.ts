@@ -49,7 +49,7 @@ export type SystemEvent = { "type": "windowChanged", app: string, title: string,
 /**
  * Download progress while downloading.
  */
-percent: number | null, installed: boolean, } | { "type": "modelResidency", engine: string, state: string, };
+percent: number | null, installed: boolean, } | { "type": "modelResidency", engine: string, state: string, } | { "type": "speechFallback", slot: string, from: string, to: string | null, message: string, } | { "type": "engineSwitch", slot: string, engine: string, stage: string, message: string | null, };
 
 export type DeviceKind = "microphone" | "speaker";
 
@@ -60,6 +60,10 @@ export type UiEvent = { "type": "controlCenterRequested", page: string | null, }
 export type SessionState = "idle" | "listening" | "thinking" | "acting" | "speaking" | "followUp" | "interrupted" | "paused" | "awaitingConfirmation" | "error";
 
 export type PermissionMode = "ask" | "accept-edits" | "plan" | "auto" | "bypass";
+
+export type SoundCue = "listen-start" | "listen-stop" | "done" | "error" | "thinking" | "hangup" | "question" | "approved" | "cancelled" | "notification";
+
+export type SoundSet = "soft" | "glass" | "pulse" | "wood" | "minimal" | "custom";
 
 export type TurnView = { id: string, source: TurnSource, 
 /**
@@ -246,6 +250,78 @@ downloading: number | null,
  */
 residency: string | null, };
 
+export type SpeechEngineItem = { id: string, name: string, 
+/**
+ * `stt` or `tts`.
+ */
+slot: string, 
+/**
+ * `recommended`, `lightweight`, `highAccuracy`, `multilingual`, `natural`, `expressive`.
+ */
+profiles: Array<string>, 
+/**
+ * `local`, `cloud` or `hybrid`.
+ */
+privacy: string, license: string, commercialUse: boolean, 
+/**
+ * BCP-47 primary tags; `*` for any.
+ */
+languages: Array<string>, streaming: boolean, 
+/**
+ * `cpu`, `directMl`, `cuda`, `npu`.
+ */
+devices: Array<string>, downloadMb: number, ramMb: number, 
+/**
+ * The model it downloads, if any.
+ */
+model: string | null, 
+/**
+ * Ready to use: its model is on this PC, or it needs none.
+ */
+ready: boolean, 
+/**
+ * It handles the primary language (VOICE-48).
+ */
+fitsLanguage: boolean, voices: Array<VoiceItem>, 
+/**
+ * KIVO's measurement on this PC; `None` reads "Not benchmarked by KIVO".
+ */
+measured: MeasuredItem | null, };
+
+export type VoiceItem = { id: string, name: string, 
+/**
+ * `female`, `male` or empty.
+ */
+style: string, languages: Array<string>, };
+
+export type MeasuredItem = { realTimeFactor: number | null, latencyMs: number | null, wordErrorRate: number | null, 
+/**
+ * Unix milliseconds.
+ */
+measuredAt: number, };
+
+export type ProfileItem = { slot: string, profile: string, 
+/**
+ * `None`: "Not available yet", or none for this language (`otherLanguagesOnly`).
+ */
+engine: string | null, otherLanguagesOnly: boolean, };
+
+export type SpeechChoices = { 
+/**
+ * The primary language.
+ */
+language: string, engines: Array<SpeechEngineItem>, profiles: Array<ProfileItem>, 
+/**
+ * The recognizer KIVO listens with, and the voice engine and voice it speaks with.
+ */
+stt: string, tts: string, ttsVoice: string, };
+
+export type RecommendationItem = { 
+/**
+ * `low`, `mid` or `high`.
+ */
+tier: string, sttEngine: string | null, sttFallback: string | null, ttsEngine: string, ttsFallback: string | null, threads: number, reason: string, };
+
 export type CapabilityItem = { capability: Capability, label: string, enabled: boolean, default: boolean, badges: Array<Badge>, };
 
 export type ProtocolVersion = { major: number, minor: number, };
@@ -292,6 +368,29 @@ export const Method = {
   modelsRemove: "models.remove",
   settingsGet: "settings.get",
   settingsSet: "settings.set",
+  wakeList: "wake.list",
+  wakeCheck: "wake.check",
+  wakeSave: "wake.save",
+  wakeDelete: "wake.delete",
+  wakeSet: "wake.set",
+  wakeHear: "wake.hear",
+  wakeTry: "wake.try",
+  wakeSample: "wake.sample",
+  wakeTune: "wake.tune",
+  wakeFalseAlarms: "wake.falseAlarms",
+  voiceIdStatus: "voiceId.status",
+  voiceIdStart: "voiceId.start",
+  voiceIdRecord: "voiceId.record",
+  voiceIdFinish: "voiceId.finish",
+  voiceIdCancel: "voiceId.cancel",
+  voiceIdDelete: "voiceId.delete",
+  soundsPreview: "sounds.preview",
+  voiceEngines: "voice.engines",
+  voiceRecommend: "voice.recommend",
+  voiceSwitch: "voice.switch",
+  voicePreview: "voice.preview",
+  voiceMicCheck: "voice.micCheck",
+  voiceTrySample: "voice.trySample",
 } as const;
 
 export type Method = (typeof Method)[keyof typeof Method];

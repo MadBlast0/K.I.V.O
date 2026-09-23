@@ -229,6 +229,7 @@ async fn run(
         Arc::clone(&core),
         infer.clone(),
     ));
+    models.load_measurements(&db.lock().unwrap_or_else(std::sync::PoisonError::into_inner));
     let (signals, mut voice_signals) = tokio::sync::mpsc::unbounded_channel();
 
     #[cfg(windows)]
@@ -333,11 +334,14 @@ async fn run(
     let wake_task = tokio::spawn(Arc::clone(&wake).run());
 
     // What this PC can do, for the speech engines' threads (PLAN-01).
+    models.set_system(Arc::clone(&platform.system));
     match platform.system.snapshot() {
         Ok(machine) => {
-            let available = [kivo_voice::moonshine::info()];
-            let advice =
-                kivo_voice::recommend::recommend(&machine, &config.general.language, &available);
+            let advice = models.recommend(
+                &machine,
+                &config,
+                kivo_voice::recommend::Priority::default(),
+            );
             tracing::info!(
                 cpu = machine.cpu_name,
                 threads = machine.logical_cpus,

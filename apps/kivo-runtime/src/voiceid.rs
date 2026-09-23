@@ -68,6 +68,8 @@ pub enum Verdict {
 #[serde(rename_all = "camelCase")]
 pub struct Status {
     pub enrolled: bool,
+    /// What each prompt asks the user to say.
+    pub prompts: Vec<String>,
     /// Prompts recorded in the enrollment under way.
     pub recorded: Vec<bool>,
     pub embeddings: usize,
@@ -277,6 +279,7 @@ impl VoiceId {
         };
         Status {
             enrolled,
+            prompts: PROMPTS.iter().map(|p| (*p).to_owned()).collect(),
             recorded: lock(&self.takes).iter().map(Option::is_some).collect(),
             embeddings,
         }

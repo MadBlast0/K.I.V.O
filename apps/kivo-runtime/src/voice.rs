@@ -527,6 +527,7 @@ fn run(pipeline: Pipeline, commands: &Receiver<Command>, flags: &Flags) {
     let reference = speaker.reference();
     let mut echo = kivo_audio::echo::EchoCanceller::new();
     let mut echo_active = false;
+    let mut output_changes = speaker.device_changes();
     let mut voice_until: Option<Instant> = None;
     let mut barge: Option<Barge> = None;
     let mut follow_until: Option<Instant> = None;
@@ -699,8 +700,20 @@ fn run(pipeline: Pipeline, commands: &Receiver<Command>, flags: &Flags) {
         }
         if voice_until.is_some_and(|until| Instant::now() < until) {
             let (rate, played) = reference.take();
+            // Headphones plugged in or out: find the echo path again (VOICE-30).
+            let changes = speaker.device_changes();
+            if changes != output_changes {
+                output_changes = changes;
+                echo.reset_echo_path();
+            }
+            let path = echo.echo_path();
             echo.played(rate, &played);
             echo.clean(&mut audio_buf);
+            if path.is_none()
+                && let Some(found) = echo.echo_path()
+            {
+                tracing::info!(echo_path = found, "echo path found");
+            }
             echo_active = true;
         } else if echo_active {
             // KIVO stopped talking: pass on what the canceller still held, then the rest as is.
@@ -755,8 +768,10 @@ fn run(pipeline: Pipeline, commands: &Receiver<Command>, flags: &Flags) {
                 let spoke = count_above(&probabilities, SPEECH_PROB) > 0;
                 let now = Instant::now();
                 let is_busy = busy.load(Ordering::Relaxed);
-                // Barge-in (VOICE-31): the user talks over KIVO's voice.
-                if speaker.speaking() && is_busy {
+                // Barge-in (VOICE-31): the user talks over KIVO's voice. Not until the canceller
+                // has settled (about a second of KIVO talking, once per output device): before
+                // that, KIVO's own voice would interrupt it.
+                if speaker.speaking() && is_busy && echo.settled() {
                     let strong = count_above(&probabilities, BARGE_PROB);
                     if strong > 0 {
                         let b = barge.get_or_insert_with(|| {

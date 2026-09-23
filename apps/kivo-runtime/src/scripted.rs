@@ -107,8 +107,10 @@ pub fn rig_with_voice(
             stt: model_dir
                 .is_dir()
                 .then(|| (kivo_voice::moonshine::MODEL_ID.to_owned(), model_dir)),
+            stt_fallback: None,
             tts: Some(voice),
             threads: 4,
+            language: "en-US".into(),
         },
         Duration::from_secs(600),
     );

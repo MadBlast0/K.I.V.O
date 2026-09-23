@@ -32,6 +32,13 @@ pub struct FakeAudio {
     /// Clips for the next captures, one per opening of the microphone, before `clip` (a scripted
     /// microphone for a series of turns, BENCH-08).
     pub script: Mutex<std::collections::VecDeque<Vec<f32>>>,
+    /// A room (real-time mode): the microphone also hears what the speaker plays, this many
+    /// samples later and at this gain, and stops hearing it when the speaker stops.
+    room: Mutex<Option<(usize, f32)>>,
+    /// What the speaker played, on its way to the microphone.
+    echo_line: Arc<Mutex<std::collections::VecDeque<f32>>>,
+    /// The microphone is open (the room carries sound only then).
+    capturing: Arc<AtomicBool>,
 }
 
 impl FakeAudio {
@@ -42,7 +49,18 @@ impl FakeAudio {
             played: Arc::default(),
             realtime: false,
             script: Mutex::default(),
+            room: Mutex::default(),
+            echo_line: Arc::default(),
+            capturing: Arc::default(),
         }
+    }
+
+    /// Puts the device in a room: the microphone hears the speaker `delay_ms` later at `gain`
+    /// (VOICE-30 tests with a speaker's echo). Takes effect when the microphone next opens.
+    pub fn set_room(&self, delay_ms: u32, gain: f32) {
+        let delay =
+            usize::try_from(delay_ms).unwrap_or(0) * FAKE_FORMAT.sample_rate as usize / 1000;
+        *self.room.lock().unwrap_or_else(PoisonError::into_inner) = Some((delay, gain));
     }
 
     /// Queues `clip` for the next time the microphone opens.
@@ -123,8 +141,18 @@ impl AudioIo for FakeAudio {
             .pop_front()
             .unwrap_or_else(|| self.clip.clone());
         let realtime = self.realtime;
+        let room = *self.room.lock().unwrap_or_else(PoisonError::into_inner);
+        let echo_line = Arc::clone(&self.echo_line);
+        let capturing = Arc::clone(&self.capturing);
+        if let Some((delay, _)) = room {
+            let mut line = echo_line.lock().unwrap_or_else(PoisonError::into_inner);
+            line.clear();
+            line.extend(std::iter::repeat_n(0.0, delay));
+            capturing.store(true, Ordering::SeqCst);
+        }
         Ok(Box::new(FakeStream::spawn(move |stop| {
             let started = std::time::Instant::now();
+            let mut heard = Vec::with_capacity(CHUNK);
             for (i, chunk) in clip.chunks(CHUNK).enumerate() {
                 if stop.load(Ordering::SeqCst) {
                     break;
@@ -136,8 +164,22 @@ impl AudioIo for FakeAudio {
                         std::thread::sleep(wait);
                     }
                 }
-                sink(chunk, FAKE_FORMAT);
+                match room {
+                    Some((_, gain)) => {
+                        let mut line = echo_line.lock().unwrap_or_else(PoisonError::into_inner);
+                        heard.clear();
+                        heard.extend(
+                            chunk
+                                .iter()
+                                .map(|s| s + line.pop_front().unwrap_or(0.0) * gain),
+                        );
+                        drop(line);
+                        sink(&heard, FAKE_FORMAT);
+                    }
+                    None => sink(chunk, FAKE_FORMAT),
+                }
             }
+            capturing.store(false, Ordering::SeqCst);
         })))
     }
 
@@ -150,6 +192,8 @@ impl AudioIo for FakeAudio {
     ) -> PlatformResult<Box<dyn AudioStream>> {
         if self.realtime {
             let played = Arc::clone(&self.played);
+            let echo_line = Arc::clone(&self.echo_line);
+            let capturing = Arc::clone(&self.capturing);
             return Ok(Box::new(FakeStream::spawn(move |stop| {
                 let mut buffer = [0.0f32; CHUNK];
                 let started = std::time::Instant::now();
@@ -161,6 +205,12 @@ impl AudioIo for FakeAudio {
                         .lock()
                         .unwrap_or_else(PoisonError::into_inner)
                         .extend_from_slice(&buffer);
+                    if capturing.load(Ordering::SeqCst) {
+                        echo_line
+                            .lock()
+                            .unwrap_or_else(PoisonError::into_inner)
+                            .extend(buffer.iter().copied());
+                    }
                     n += 1;
                     let due = std::time::Duration::from_millis(10 * n);
                     if let Some(wait) = due.checked_sub(started.elapsed()) {

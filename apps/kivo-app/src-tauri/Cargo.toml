@@ -32,6 +32,8 @@ tokio-util.workspace = true
 [target.'cfg(windows)'.dependencies]
 webview2-com = "0.38"
 windows-core = "0.61"
+# UI Automation notifications for screen readers (announce.rs, UX-53).
+windows = { version = "0.61", features = ["Win32_UI_Accessibility", "Win32_Foundation"] }
 
 [lints]
 workspace = true

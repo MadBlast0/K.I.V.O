@@ -10,9 +10,11 @@ pub mod kws;
 pub mod language;
 pub mod moonshine;
 pub mod recommend;
+pub mod registry;
 pub mod silero;
 pub mod smart_turn;
 pub mod speaker;
+pub mod supertonic;
 pub mod system_tts;
 pub mod traits;
 pub mod wakeword;
@@ -21,7 +23,9 @@ pub use engine::{Accel, EngineInfo, EngineKind, EngineSlot, ResourceEstimate};
 
 /// Every speech engine KIVO ships, for choosing one and for the privacy check (VOICE-07).
 pub fn engines() -> Vec<EngineInfo> {
-    vec![moonshine::info(), system_tts::info(), kokoro::info()]
+    let mut all = moonshine::infos();
+    all.extend([system_tts::info(), kokoro::info(), supertonic::info()]);
+    all
 }
 
 /// The engine with this id, if KIVO has it.

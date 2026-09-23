@@ -8,6 +8,9 @@ use crate::infer::{Engines, Infer};
 use kivo_core::KivoConfig;
 use kivo_ipc::protocol::{ModelItem, SpeechStatus};
 use kivo_store::models::{HttpFetcher, ModelKind, ModelManifest, ModelStore, Progress, catalog};
+use kivo_voice::EngineSlot;
+use kivo_voice::recommend::{Needs, Priority, Recommendation};
+use kivo_voice::registry::RegistryEntry;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -20,6 +23,10 @@ pub struct Models {
     downloads: Mutex<HashMap<String, (CancellationToken, Progress)>>,
     /// Threads the hardware recommendation allows (PLAN-01).
     recommended_threads: std::sync::atomic::AtomicUsize,
+    /// What this PC is doing, for recommendations (VOICE-44).
+    system: Mutex<Option<Arc<dyn kivo_platform::SystemInfo>>>,
+    /// KIVO's latest speech benchmarks on this PC: metric names with their medians, and when.
+    measurements: Mutex<(Vec<(String, f64)>, i64)>,
 }
 
 impl Models {
@@ -30,7 +37,81 @@ impl Models {
             infer,
             downloads: Mutex::default(),
             recommended_threads: std::sync::atomic::AtomicUsize::new(4),
+            system: Mutex::default(),
+            measurements: Mutex::default(),
         }
+    }
+
+    pub fn set_system(&self, system: Arc<dyn kivo_platform::SystemInfo>) {
+        *lock(&self.system) = Some(system);
+    }
+
+    /// Reads KIVO's latest `stt` and `tts` benchmark runs on this PC (VOICE-42).
+    pub fn load_measurements(&self, db: &kivo_store::Database) {
+        let mut metrics = Vec::new();
+        let mut at = 0;
+        for suite in ["stt", "tts"] {
+            let Ok(Some((started, json))) = db.latest_benchmark(suite) else {
+                continue;
+            };
+            at = at.max(started);
+            let parsed: serde_json::Value = serde_json::from_str(&json).unwrap_or_default();
+            for metric in parsed["metrics"].as_array().into_iter().flatten() {
+                if let (Some(name), Some(p50)) = (metric["name"].as_str(), metric["p50"].as_f64()) {
+                    metrics.push((name.to_owned(), p50));
+                }
+            }
+        }
+        *lock(&self.measurements) = (metrics, at);
+    }
+
+    /// The engine registry with KIVO's measurements on this PC (VOICE-42).
+    pub fn registry(&self) -> Vec<RegistryEntry> {
+        let mut entries = kivo_voice::registry::registry();
+        let (metrics, at) = lock(&self.measurements).clone();
+        kivo_voice::registry::apply_measurements(&mut entries, &metrics, at);
+        entries
+    }
+
+    /// Engines ready to run: their model is on this PC, or they need none.
+    pub fn ready_engines(&self) -> Vec<String> {
+        kivo_voice::engines()
+            .into_iter()
+            .filter(|e| {
+                e.model
+                    .as_deref()
+                    .is_none_or(|m| self.store.installed(m).is_some())
+            })
+            .map(|e| e.id)
+            .collect()
+    }
+
+    /// The recommendation for this PC and these settings (VOICE-44).
+    pub fn recommend(
+        &self,
+        machine: &kivo_platform::SystemSnapshot,
+        config: &KivoConfig,
+        priority: Priority,
+    ) -> Recommendation {
+        let registry = self.registry();
+        let installed = self.ready_engines();
+        kivo_voice::recommend::recommend(
+            machine,
+            &Needs {
+                language: &config.general.language,
+                local_only: !speech_may_leave(config),
+                priority,
+                installed: &installed,
+                registry: &registry,
+            },
+        )
+    }
+
+    /// The recommendation with what the PC is doing right now, if KIVO can read it.
+    pub fn recommend_now(&self, config: &KivoConfig, priority: Priority) -> Option<Recommendation> {
+        let system = lock(&self.system).clone()?;
+        let machine = system.snapshot().ok()?;
+        Some(self.recommend(&machine, config, priority))
     }
 
     /// The hardware recommendation's thread count (PLAN-01); speech models never use more.
@@ -45,9 +126,30 @@ impl Models {
         if !chosen.is_empty() {
             return chosen.to_owned();
         }
-        kivo_voice::language::pack(&config.general.language)
-            .and_then(|p| p.stt_engines.first().cloned())
-            .unwrap_or_else(|| kivo_voice::moonshine::MODEL_ID.to_owned())
+        default_stt(&config.general.language)
+    }
+
+    /// The engine KIVO listens with: the chosen one, else the first installed one for the
+    /// language, else the language's default (which the user is offered to download).
+    pub fn listening_engine(&self, config: &KivoConfig) -> String {
+        if !config.voice.stt_engine.trim().is_empty() {
+            return Self::wanted_stt(config);
+        }
+        let ready = self.ready_engines();
+        kivo_voice::registry::compatible(EngineSlot::Stt, &config.general.language)
+            .into_iter()
+            .map(|e| e.engine.id)
+            .find(|id| ready.contains(id))
+            .unwrap_or_else(|| Self::wanted_stt(config))
+    }
+
+    /// Another installed recognizer for the language, used if the chosen one fails (VOICE-47).
+    fn stt_fallback(&self, config: &KivoConfig, primary: &str) -> Option<(String, PathBuf)> {
+        kivo_voice::registry::compatible(EngineSlot::Stt, &config.general.language)
+            .into_iter()
+            .map(|e| e.engine.id)
+            .filter(|id| id != primary && speech_may_use(id, config))
+            .find_map(|id| self.installed_dir(&id).map(|dir| (id, dir)))
     }
 
     /// Everything KIVO can install, with what is already here (DIST-13).
@@ -198,8 +300,17 @@ impl Models {
             )));
     }
 
-    /// Deletes a model and its unfinished download.
-    pub fn remove(self: &Arc<Self>, id: &str) -> Result<(), String> {
+    /// Deletes a model and its unfinished download. The recognizer KIVO listens with goes only
+    /// when another one can take over, or when the user confirmed losing it (VOICE-45).
+    pub fn remove(self: &Arc<Self>, id: &str, confirmed: bool) -> Result<(), String> {
+        let config = self.core.config();
+        if !confirmed
+            && self.listening_engine(&config) == id
+            && self.store.installed(id).is_some()
+            && self.stt_fallback(&config, id).is_none()
+        {
+            return Err(kivo_core::text::t("voice.removeActive"));
+        }
         if let Some((cancel, _)) = self
             .downloads
             .lock()
@@ -217,12 +328,13 @@ impl Models {
     /// Tells the worker which engines to use (they load on the first request, VOICE-34) and the
     /// UI whether KIVO can hear.
     pub fn apply_engines(self: &Arc<Self>, config: &KivoConfig) {
-        let wanted = Self::wanted_stt(config);
+        let wanted = self.listening_engine(config);
         let stt = self
             .installed_dir(&wanted)
             .map(|dir| (wanted.clone(), dir))
             .filter(|(id, _)| speech_may_use(id, config));
-        let ready = stt.is_some();
+        let stt_fallback = self.stt_fallback(config, &wanted);
+        let ready = stt.is_some() || stt_fallback.is_some();
         let tts = (!config.voice.tts_engine.is_empty())
             .then(|| config.voice.tts_engine.clone())
             .map(|id| self.tts_engine(id, config));
@@ -235,11 +347,13 @@ impl Models {
         self.infer.configure(
             Engines {
                 stt,
+                stt_fallback,
                 tts,
                 threads: threads_for(config).min(
                     self.recommended_threads
                         .load(std::sync::atomic::Ordering::Relaxed),
                 ),
+                language: config.general.language.clone(),
             },
             std::time::Duration::from_secs(warm_minutes.max(1) * 60),
         );
@@ -294,6 +408,32 @@ impl Models {
         }
         installed
     }
+}
+
+fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// The language's default recognizer: its Recommended profile, else its Multilingual one.
+fn default_stt(language: &str) -> String {
+    let cards = kivo_voice::registry::profiles(EngineSlot::Stt, language);
+    [
+        kivo_voice::registry::Profile::Recommended,
+        kivo_voice::registry::Profile::Multilingual,
+    ]
+    .iter()
+    .find_map(|p| {
+        cards
+            .iter()
+            .find(|c| c.profile == *p)
+            .and_then(|c| c.engine.clone())
+    })
+    .unwrap_or_else(|| kivo_voice::moonshine::MODEL_ID.to_owned())
+}
+
+/// True when the privacy mode lets speech go to a cloud engine.
+fn speech_may_leave(config: &KivoConfig) -> bool {
+    kivo_security::privacy::speech_egress(true, config.privacy.mode, &config.capabilities).is_ok()
 }
 
 #[allow(clippy::cast_possible_truncation, reason = "0–100")]
@@ -351,6 +491,9 @@ mod tests {
         assert_eq!(Models::wanted_stt(&config), "moonshine-base-en");
         config.voice.stt_engine = "whisper-turbo".into();
         assert_eq!(Models::wanted_stt(&config), "whisper-turbo");
+        config.voice.stt_engine.clear();
+        config.general.language = "es-ES".into();
+        assert_eq!(Models::wanted_stt(&config), "moonshine-base-es");
     }
 
     #[test]

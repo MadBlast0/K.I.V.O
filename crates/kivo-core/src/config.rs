@@ -67,6 +67,8 @@ pub struct General {
     pub low_memory_mode: bool,
     /// The one-time "KIVO is still running" notice after the first close has been shown (UX §1).
     pub first_close_seen: bool,
+    /// Setup has been finished or skipped; until then the Control Center opens on it (UX-33).
+    pub onboarded: bool,
 }
 
 impl Default for General {
@@ -79,6 +81,7 @@ impl Default for General {
             languages: Vec::new(),
             low_memory_mode: false,
             first_close_seen: false,
+            onboarded: false,
         }
     }
 }

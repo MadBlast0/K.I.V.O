@@ -266,8 +266,28 @@
     "guest": "Only the owner can approve this. Tap Approve on the card if it's you.",
     "click": "This one needs a click to approve. Tap Approve on the card.",
     "notOwner": "I didn't recognize your voice, so I can't approve this by voice. Tap Approve on the card.",
-    "explain": "{action}. {why} Say approve, cancel, or wait.",
-    "editLater": "I can't change the request by voice yet. Say approve, cancel, or wait.",
-    "sayAgain": "Sorry, say approve, cancel, or wait."
+    "explain": "{action}. {why} Say allow, deny, or wait.",
+    "editLater": "I can't change the request by voice yet. Say allow, deny, or wait.",
+    "sayAgain": "Sorry, say allow, deny, or wait."
+  },
+  "voice": {
+    "removeActive": "KIVO listens with this model and no other can take over. Download another one first, or confirm removing it.",
+    "fallbackTts": "{from} stopped working, so KIVO is using the Windows voices for now. Your choice is kept.",
+    "fallbackStt": "{from} stopped working, so KIVO is listening with {to} for now. Your choice is kept.",
+    "fallbackNone": "{from} couldn’t start, so KIVO can’t hear you. Open Voice to try again or pick another recognizer.",
+    "incompatible": "{engine} doesn’t understand {language}. These do: {alternatives}.",
+    "incompatibleNone": "{engine} doesn’t understand {language}, and KIVO has no engine for it yet.",
+    "notAllowed": "Your privacy setting keeps speech on this PC, so KIVO can’t use {engine}.",
+    "unknownEngine": "KIVO doesn’t know a speech engine called {id}.",
+    "downloadFailed": "The download didn’t finish. Check the connection and try again.",
+    "loadFailed": "It didn’t start on this PC: {error}",
+    "testFailed": "It started, but the test didn’t pass: {error}",
+    "silent": "It made no sound.",
+    "misheard": "It heard “{heard}” instead of “{said}”.",
+    "preview": "Hi, I’m KIVO. How can I help?",
+    "testPhrase": "Open the calculator",
+    "switched": "Now using {engine}",
+    "noHardware": "KIVO couldn’t read this PC’s hardware, so it can’t recommend engines right now.",
+    "notDownloaded": "Download it first; then you can try it."
   }
 }

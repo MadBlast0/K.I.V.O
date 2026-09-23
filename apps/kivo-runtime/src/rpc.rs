@@ -203,8 +203,17 @@ impl Handler for Rpc {
                     models.install(&id).map(|()| Value::Null).map_err(refuse)
                 }
                 method::MODELS_REMOVE => {
-                    let Id { id } = parse(params)?;
-                    models.remove(&id).map(|()| Value::Null).map_err(refuse)
+                    #[derive(serde::Deserialize)]
+                    struct Remove {
+                        id: String,
+                        #[serde(default)]
+                        confirmed: bool,
+                    }
+                    let Remove { id, confirmed } = parse(params)?;
+                    models
+                        .remove(&id, confirmed)
+                        .map(|()| Value::Null)
+                        .map_err(refuse)
                 }
                 method::UI_WINDOW_CLOSED => Ok(serde_json::json!({
                     "keepRunning": lifecycle.window_closed()

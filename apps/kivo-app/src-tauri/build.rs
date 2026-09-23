@@ -11,6 +11,7 @@ fn main() {
         "overlay_focus",
         "overlay_hover",
         "island_request",
+        "announce",
     ]);
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(manifest))
         .expect("failed to run the Tauri build script");

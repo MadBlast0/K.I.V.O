@@ -229,7 +229,7 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 **Emergency stop (§8)**
 
 - [x] **SEC-25** · M1 · Emergency stop from the Ctrl+Alt+Shift+Esc hotkey (low-level hook fallback), tray "Stop everything" and the overlay/Control Center Stop button (§8) → done: the emergency stop (`Engine::stop_everything`: the turn, the voice, and tasks once they exist) from Ctrl+Alt+Shift+Esc (with the keyboard-hook fallback when another app owns it), the tray's Stop everything, Home's Stop everything button and the command palette; the Island's Stop cancels the current request · verified: core, tray and hotkey tests, `cancelling_stops_every_layer_within_100_ms` (emergency stop < 1 ms), the RPC stop test (2026-09-23)
-- [ ] **SEC-26** · M2 · Voice trigger via the command spotter (§8, VOICE-19)
+- [x] **SEC-26** · M2 · Voice trigger via the command spotter (§8, VOICE-19) → done: the command spotter's stop words cancel a busy turn without the wake word (VOICE-19), and "stop" as a whole request ends the turn · verified: `saying_stop_while_kivo_talks_stops_it` (2026-09-23)
 - [ ] **SEC-27** · M4 · Full effect: cancel all turns and tasks, stop TTS, kill tool Job Objects, `session/cancel` to ACP agents, stop input injection, pause background tasks, audit entry (§8)
 
 **Hardening (§9)**
