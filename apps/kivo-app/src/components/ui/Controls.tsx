@@ -90,11 +90,11 @@ export function RadioGroup<T extends string>({
   );
 }
 
-/** A bare radio circle; use inside RadioGroup. */
-export function Radio({ value, children }: { value: string; children?: ReactNode }) {
+/** A bare radio circle; use inside RadioGroup. Without `children`, give it a `label`. */
+export function Radio({ value, children, label }: { value: string; children?: ReactNode; label?: string }) {
   return (
     <label className="k-label">
-      <BRadio.Root value={value} className="k-radio">
+      <BRadio.Root value={value} className="k-radio" aria-label={label}>
         <BRadio.Indicator className="k-radio__dot" />
       </BRadio.Root>
       {children}

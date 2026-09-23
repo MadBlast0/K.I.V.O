@@ -129,6 +129,24 @@ pub fn recommend(s: &SystemSnapshot, needs: &Needs<'_>) -> Recommendation {
         let tiny = e.engine.id.contains("-tiny-");
         (tiny != light, !installed(e), e.engine.resources.disk_mb)
     });
+    // How well each recognizer heard the owner's enrollment (VOICE-23): one clearly better on
+    // this voice (5 points of WER or more) goes first.
+    let voice_wer = |e: &RegistryEntry| e.measured.as_ref().and_then(|m| m.voice_word_error_rate);
+    let best = stt
+        .iter()
+        .filter_map(|e| voice_wer(e).map(|w| (w, e.engine.id.clone())))
+        .min_by(|a, b| a.0.total_cmp(&b.0));
+    if let Some((best_wer, best_id)) = best {
+        let beats_first = stt
+            .first()
+            .and_then(|e| voice_wer(e))
+            .is_some_and(|first| first - best_wer >= 0.05);
+        if beats_first && let Some(i) = stt.iter().position(|e| e.engine.id == best_id) {
+            let chosen = stt.remove(i);
+            stt.insert(0, chosen);
+            why.push("it heard your voice best when you set up voice recognition");
+        }
+    }
     let stt_engine = stt.first().map(|e| e.engine.id.clone());
     let stt_fallback = stt.get(1).map(|e| e.engine.id.clone());
 
@@ -303,5 +321,43 @@ mod tests {
             },
         );
         assert_eq!(r.stt_engine.as_deref(), Some("moonshine-tiny-en"));
+    }
+
+    #[test]
+    fn the_recognizer_that_hears_the_owner_best_is_recommended() {
+        fn needs(registry: &[RegistryEntry]) -> Needs<'_> {
+            Needs {
+                language: "en",
+                local_only: true,
+                priority: Priority::Balanced,
+                installed: &[],
+                registry,
+            }
+        }
+        let mut registry = crate::registry::registry();
+        let base = recommend(&pc(16, 16, 6), &needs(&registry));
+        assert_eq!(base.stt_engine.as_deref(), Some("moonshine-base-en"));
+        // Tiny heard the enrollment clearly better than Base: it's recommended, with the reason.
+        let wers = [
+            ("moonshine-base-en".to_owned(), 0.22),
+            ("moonshine-tiny-en".to_owned(), 0.08),
+        ]
+        .into_iter()
+        .collect();
+        crate::registry::apply_voice_wer(&mut registry, &wers, 1);
+        let r = recommend(&pc(16, 16, 6), &needs(&registry));
+        assert_eq!(r.stt_engine.as_deref(), Some("moonshine-tiny-en"));
+        assert!(r.reason.contains("heard your voice best"), "{}", r.reason);
+        // A small difference doesn't override the hardware choice.
+        let close = [
+            ("moonshine-base-en".to_owned(), 0.10),
+            ("moonshine-tiny-en".to_owned(), 0.08),
+        ]
+        .into_iter()
+        .collect();
+        let mut registry = crate::registry::registry();
+        crate::registry::apply_voice_wer(&mut registry, &close, 1);
+        let r = recommend(&pc(16, 16, 6), &needs(&registry));
+        assert_eq!(r.stt_engine.as_deref(), Some("moonshine-base-en"));
     }
 }

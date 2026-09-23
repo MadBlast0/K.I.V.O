@@ -27,8 +27,23 @@ impl SpeechSynth for WindowsSpeech {
     }
 
     fn synthesize(&self, text: &str, voice: Option<&str>) -> PlatformResult<SynthAudio> {
+        self.synthesize_at(text, voice, 1.0)
+    }
+
+    fn synthesize_at(
+        &self,
+        text: &str,
+        voice: Option<&str>,
+        rate: f64,
+    ) -> PlatformResult<SynthAudio> {
         let _com = Com::init()?;
         let synth = SpeechSynthesizer::new().map_err(|e| os_error(&e))?;
+        if (rate - 1.0).abs() > f64::EPSILON {
+            // SpeakingRate is 0.5–6.0 (Windows 10 1803+); older builds ignore it.
+            if let Ok(options) = synth.Options() {
+                let _ = options.SetSpeakingRate(rate.clamp(0.5, 2.0));
+            }
+        }
         if let Some(wanted) = voice {
             let all = SpeechSynthesizer::AllVoices().map_err(|e| os_error(&e))?;
             if let Some(info) = all
@@ -106,6 +121,21 @@ fn parse_wav(wav: &[u8]) -> Option<SynthAudio> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// UX-61: the speaking speed reaches the Windows voice (into memory; nothing is played).
+    #[test]
+    fn a_faster_speaking_rate_gives_shorter_audio() {
+        let text = "This sentence is spoken at two different speeds for the test.";
+        let normal = WindowsSpeech
+            .synthesize(text, None)
+            .expect("a Windows voice");
+        let fast = WindowsSpeech
+            .synthesize_at(text, None, 1.6)
+            .expect("a Windows voice");
+        #[allow(clippy::cast_precision_loss, reason = "sample counts")]
+        let ratio = fast.samples.len() as f64 / normal.samples.len() as f64;
+        assert!(ratio < 0.85, "fast/normal = {ratio}");
+    }
 
     fn wav(rate: u32, channels: u16, pcm: &[i16]) -> Vec<u8> {
         let data: Vec<u8> = pcm.iter().flat_map(|s| s.to_le_bytes()).collect();

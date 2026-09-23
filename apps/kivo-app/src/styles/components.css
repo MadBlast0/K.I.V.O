@@ -1672,3 +1672,17 @@ button.k-island__chip {
 .k-tray-tip span {
   color: var(--text-2);
 }
+.k-island__misroute {
+  margin-top: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--isl-2);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.k-island__misroute:hover {
+  color: var(--isl-fg);
+  text-decoration: underline;
+}

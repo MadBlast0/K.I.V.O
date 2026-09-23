@@ -34,6 +34,8 @@ export interface IslandHandlers {
   edit: (text: string) => void;
   /** Listens for a new request (the footer's mic). */
   talk: () => void;
+  /** "That's not what I meant" on a brain's answer (BRAIN-06). */
+  misroute: (turnId: string) => void;
 }
 
 /** The card width for text content (UX §2: up to 520 px). */
@@ -91,6 +93,19 @@ function Heard({ turn, t, on }: { turn: TurnView; t?: TFunction; on?: IslandHand
     >
       {turn.transcript}
     </button>
+  );
+}
+
+/** The brain answering and why (UX-09, PLAN-17): "Coding · Claude Code", the routing reason on
+ * hover, and a cost estimate when the user shows costs (BRAINS §9). */
+function brainChip(turn: TurnView | null | undefined, t: TFunction) {
+  const chip = turn?.brain;
+  if (!chip) return null;
+  const cost = chip.cost != null ? ` · ≈ $${chip.cost.toFixed(chip.cost < 0.01 ? 4 : 2)}` : "";
+  return (
+    <span className="k-island__chip" title={chip.reason} aria-label={t("island.brainChip", { reason: chip.reason })}>
+      {`${chip.profile} · ${chip.name}${cost}`}
+    </span>
   );
 }
 
@@ -296,6 +311,7 @@ export function islandForTurn(snapshot: StateSnapshot, t: TFunction, on: IslandH
         trail: (
           <>
             {guestChip(turn, t)}
+            {brainChip(turn, t)}
             <IslandSpin />
           </>
         ),
@@ -311,6 +327,7 @@ export function islandForTurn(snapshot: StateSnapshot, t: TFunction, on: IslandH
         trail: (
           <>
             {guestChip(turn, t)}
+            {brainChip(turn, t)}
             <ModeChip mode={snapshot.mode} t={t} on={on} />
             <IslandSpin />
           </>
@@ -329,7 +346,12 @@ export function islandForTurn(snapshot: StateSnapshot, t: TFunction, on: IslandH
         width: CARD,
         label: t("island.kivo"),
         lead: appIcon(turn?.targetApp ?? null),
-        trail: guestChip(turn, t),
+        trail: (
+          <>
+            {guestChip(turn, t)}
+            {brainChip(turn, t)}
+          </>
+        ),
         wave: true,
         voice: "kivo",
         body: turn ? (
@@ -355,12 +377,17 @@ export function islandForTurn(snapshot: StateSnapshot, t: TFunction, on: IslandH
           width: CARD,
           label: t("island.kivo"),
           lead: appIcon(turn.targetApp) ?? <IslandOk />,
-          trail: <IslandChip>{t("island.stepDone").toUpperCase()}</IslandChip>,
+          trail: turn.brain ? brainChip(turn, t) : <IslandChip>{t("island.stepDone").toUpperCase()}</IslandChip>,
           body: (
             <>
               <Heard turn={turn} t={t} on={on} />
               {turn.steps.length > 0 && <Steps steps={turn.steps} />}
               <div className="k-island__answer">{turn.answer}</div>
+              {turn.brain && (
+                <button type="button" className="k-island__misroute" onClick={() => on.misroute(turn.id)}>
+                  {t("island.misroute")}
+                </button>
+              )}
               <Footer t={t} on={on} stop={false} />
             </>
           ),

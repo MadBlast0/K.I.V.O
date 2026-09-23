@@ -75,7 +75,8 @@ impl SessionState {
         let next = match (self, input) {
             (S::Idle | S::FollowUp, I::Activate) => S::Listening,
             (S::Listening, I::EndOfSpeech) => S::Thinking,
-            (S::Thinking, I::StartActing) => S::Acting,
+            // A brain's streamed answer can start speaking before it calls a tool (BRAIN-28).
+            (S::Thinking | S::Speaking, I::StartActing) => S::Acting,
             (S::Thinking | S::Acting, I::StartSpeaking) => S::Speaking,
             (S::Speaking, I::SpeechFinished) => S::FollowUp,
             (S::Thinking | S::Acting, I::Finished) => S::Idle,
@@ -87,7 +88,7 @@ impl SessionState {
             (S::FollowUp, I::Cancel) => S::Idle,
             (S::Interrupted, I::InterruptionHandled { listen: true }) => S::Listening,
             (S::Interrupted, I::InterruptionHandled { listen: false }) => S::Idle,
-            (S::Thinking | S::Acting, I::NeedConfirmation) => S::AwaitingConfirmation,
+            (S::Thinking | S::Acting | S::Speaking, I::NeedConfirmation) => S::AwaitingConfirmation,
             (S::AwaitingConfirmation, I::Confirmed) => S::Acting,
             (S::AwaitingConfirmation, I::Denied) => S::Idle,
             (S::Idle | S::FollowUp, I::Pause) => S::Paused,
@@ -199,11 +200,12 @@ mod tests {
     ];
 
     /// Every valid transition, written out independently of `next` (the spec, as a table).
-    const VALID: [(S, I, S); 31] = [
+    const VALID: [(S, I, S); 33] = [
         (S::Idle, I::Activate, S::Listening),
         (S::FollowUp, I::Activate, S::Listening),
         (S::Listening, I::EndOfSpeech, S::Thinking),
         (S::Thinking, I::StartActing, S::Acting),
+        (S::Speaking, I::StartActing, S::Acting),
         (S::Thinking, I::StartSpeaking, S::Speaking),
         (S::Acting, I::StartSpeaking, S::Speaking),
         (S::Speaking, I::SpeechFinished, S::FollowUp),
@@ -228,6 +230,7 @@ mod tests {
         ),
         (S::Thinking, I::NeedConfirmation, S::AwaitingConfirmation),
         (S::Acting, I::NeedConfirmation, S::AwaitingConfirmation),
+        (S::Speaking, I::NeedConfirmation, S::AwaitingConfirmation),
         (S::AwaitingConfirmation, I::Confirmed, S::Acting),
         (S::AwaitingConfirmation, I::Denied, S::Idle),
         (S::Idle, I::Pause, S::Paused),

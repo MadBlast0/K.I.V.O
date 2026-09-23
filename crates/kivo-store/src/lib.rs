@@ -2,6 +2,7 @@
 //! Where those files live is `kivo_platform::Paths`. Secrets live in the OS store behind
 //! `kivo-platform::Secrets`. Speech models are downloaded and verified by `models`.
 
+pub mod brains;
 pub mod config;
 pub mod crashes;
 pub mod db;

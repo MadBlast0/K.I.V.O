@@ -25,4 +25,15 @@ pub trait SpeechSynth: Send + Sync {
     /// Speaks `text` with `voice` (an id from `voices`; the system default when `None` or
     /// unknown) into memory.
     fn synthesize(&self, text: &str, voice: Option<&str>) -> PlatformResult<SynthAudio>;
+    /// As `synthesize`, at `rate` times the normal speed (0.5–2.0). Voices without a rate
+    /// control speak at their normal speed.
+    fn synthesize_at(
+        &self,
+        text: &str,
+        voice: Option<&str>,
+        rate: f64,
+    ) -> PlatformResult<SynthAudio> {
+        let _ = rate;
+        self.synthesize(text, voice)
+    }
 }

@@ -169,6 +169,8 @@ Idle ─wake/hotkey─► Listening ─endpoint─► Thinking ─┬─► Acti
                                                            Error ─► Idle (after message)
 ```
 
+- A brain's streamed answer can start speaking before it calls a tool, so Speaking also moves to
+  Acting and to AwaitingConfirmation (BRAIN-28; DECISIONS "Speaking can move to Acting").
 - The runtime owns the machine; UIs render the `SessionState` they receive.
 - An invalid transition is a bug, and it is logged at `error`.
 
@@ -301,7 +303,7 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 
 - [x] **ARCH-11** · M0 · `kivo-platform` defines every trait in the §2 table (`AudioIo`, `EchoCancel`, `Hotkeys`, `Tray`, `Apps`, `Windows`, `UiAutomation`, `Input`, `Screen`, `Ocr`, `Secrets`, `SystemInfo`, `Notifications`); core crates depend only on the traits (§2) → done: `crates/kivo-platform` (AudioIo + FrameSink/FrameSource, EchoCancel, Hotkeys, Tray, Apps, Windows, UiAutomation, Input, Screen, Ocr, Secrets, SystemInfo, Notifications; object-safe; user-safe PlatformError) · verified: 7 unit tests, builds on Windows, Ubuntu and macOS in CI
 - [x] **ARCH-12** · M0 · A `Capabilities` struct is filled at startup (Windows build, OS AEC, Mica, NPU, …); Windows 10 differences are handled only inside `kivo-platform-windows` (§2) → done: `crates/kivo-platform-windows/src/capabilities.rs` (RtlGetVersion build, DisplayVersion, OS AEC from 22621, Mica from 22000, package identity, NPU via DXCore GENERIC_ML + NPU attribute GUIDs from the Windows SDK header) · verified: on this PC reports "Windows 11 25H2 (build 26200)", AEC and Mica true, not packaged; NPU=false here (a positive NPU result still needs a Copilot+ PC to confirm)
-- [~] **ARCH-13** · M0 · `kivo-testkit` provides fake platform, fake audio and fake brain implementations for tests (§7) → partial: `crates/kivo-testkit` fakes for hotkeys (conflicts), tray, notifications, apps, windows, secrets, system info and a scripted audio device (capture on a thread, deterministic playback), 9 tests, stable over 25 runs · missing: the fake brain (needs the BrainProvider trait, M3)
+- [x] **ARCH-13** · M0 · `kivo-testkit` provides fake platform, fake audio and fake brain implementations for tests (§7) → done: `crates/kivo-testkit` provides fakes for hotkeys (conflicts), tray, notifications, apps, windows, secrets, system info, a scripted audio device, and the fake brain (`ScriptedBrain`, `MockServer` for adapter contract tests, re-exported from `kivo-brain::testing`) · verified: testkit tests stable over 25 runs; the brain end-to-end tests run on `ScriptedBrain` (2026-09-23)
 
 **IPC (§3)**
 
@@ -341,6 +343,6 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 
 **Invariant enforcement (§8)**
 
-- [ ] **ARCH-38** · M3 · A CI check fails if `kivo-core` gains a provider dependency (§8)
+- [x] **ARCH-38** · M3 · A CI check fails if `kivo-core` gains a provider dependency (§8) → done: `crates/kivo-core/tests/no_provider_dependencies.rs` reads kivo-core's manifest and fails on any dependency outside its allowed list or any target-specific one; CI's `cargo test --workspace` runs it · verified: the test passes in the workspace run (2026-09-23)
 - [x] **ARCH-39** · M0 · `kivo-app` has no access to the store, secrets or tools; its only API is IPC (reviewed in every milestone) (§8) → done: the app depends only on `kivo-core` (types), `kivo-ipc` and `kivo-platform` (paths) — no store, secrets or tools crates; its webview gets three commands (`ui_ready`, `runtime_request`, `runtime_start`) · verified: `apps/kivo-app/src-tauri/Cargo.toml` review; re-check every milestone
 - [ ] **ARCH-40** · M8 · Diagnostics bundle: versions, OS, hardware, capabilities, provider health, recent errors and metrics; generated locally, shown to the user for review, no secrets or content (§6, plan §109)

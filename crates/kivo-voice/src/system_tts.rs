@@ -14,6 +14,7 @@ pub const ENGINE_ID: &str = "system";
 pub struct SystemTts {
     info: EngineInfo,
     synth: Arc<dyn SpeechSynth>,
+    speed: f32,
 }
 
 /// The Windows voices, as an engine.
@@ -41,6 +42,7 @@ impl SystemTts {
         Self {
             info: info(),
             synth,
+            speed: 1.0,
         }
     }
 }
@@ -48,6 +50,10 @@ impl SystemTts {
 impl TtsEngine for SystemTts {
     fn info(&self) -> &EngineInfo {
         &self.info
+    }
+
+    fn set_speed(&mut self, speed: f32) {
+        self.speed = speed.clamp(0.5, 2.0);
     }
 
     fn voices(&self) -> Vec<VoiceInfo> {
@@ -76,7 +82,7 @@ impl TtsEngine for SystemTts {
             }
             let audio = self
                 .synth
-                .synthesize(sentence, voice)
+                .synthesize_at(sentence, voice, f64::from(self.speed))
                 .map_err(|e| VoiceError::Engine(format!("{e:?}")))?;
             if cancel.is_cancelled() {
                 return Err(VoiceError::Cancelled);

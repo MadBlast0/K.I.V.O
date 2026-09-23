@@ -63,6 +63,22 @@ const LEVEL_PERIOD: Duration = Duration::from_millis(33);
 const FLOOR_DB: f32 = -60.0;
 const TOP_DB: f32 = -10.0;
 const RATE: usize = kivo_audio::capture::RATE as usize;
+
+/// The listening timings, for the Voice page's advanced view (VOICE-49), in milliseconds.
+pub fn timing() -> serde_json::Value {
+    let ms = |d: Duration| u64::try_from(d.as_millis()).unwrap_or(u64::MAX);
+    serde_json::json!({
+        "vadFrameMs": VAD_FRAME_MS,
+        "speechProbability": SPEECH_PROB,
+        "endSilenceMs": ms(END_SILENCE),
+        "turnCheckMs": ms(TURN_CHECK),
+        "turnMaxPauseMs": ms(TURN_MAX_PAUSE),
+        "noSpeechTimeoutMs": ms(NO_SPEECH_TIMEOUT),
+        "maxUtteranceMs": ms(MAX_UTTERANCE),
+        "partialEveryMs": kivo_voice::moonshine::PARTIAL_EVERY_MS,
+        "bargeInAfterMs": BARGE_AFTER_MS,
+    })
+}
 /// Audio the spotter sees from just before speech starts, so a word's first sound isn't lost.
 const SPOTTER_PREROLL: usize = RATE * 600 / 1000;
 /// The spotter keeps listening this long after the last speech (sherpa resets after 1.5 s).
@@ -128,6 +144,8 @@ enum Command {
     },
     /// Listen for a follow-up without the wake word until then (UX-45), or stop.
     FollowUp(Option<Instant>),
+    /// Use this microphone from now on (`None`: the Windows default); an open one is reopened.
+    Device(Option<DeviceId>),
     Quit,
 }
 
@@ -245,6 +263,11 @@ impl Listener {
     /// Listen for a follow-up until `until` (UX-45), or stop listening for one.
     pub fn follow_up(&self, until: Option<Instant>) {
         let _ = self.commands.send(Command::FollowUp(until));
+    }
+
+    /// The microphone to use (UX-61); `None` follows the Windows default.
+    pub fn set_device(&self, device: Option<DeviceId>) {
+        let _ = self.commands.send(Command::Device(device));
     }
 
     /// Whether hands-free listening is running (the microphone is open for wake words).
@@ -469,7 +492,7 @@ fn run(pipeline: Pipeline, commands: &Receiver<Command>, flags: &Flags) {
     let keep = || keep_audio.load(Ordering::Relaxed).then(Vec::new);
     let Pipeline {
         audio,
-        device,
+        mut device,
         vad_model,
         turn_model,
         infer,
@@ -612,6 +635,24 @@ fn run(pipeline: Pipeline, commands: &Receiver<Command>, flags: &Flags) {
                     let _ = levels.send_replace(0.0);
                 }
                 Ok(Command::FollowUp(until)) => follow_until = until,
+                Ok(Command::Device(next)) => {
+                    if next != device {
+                        device = next;
+                        // Hands-free listening keeps the mic open: reopen it on the new device.
+                        if mic.is_some() && current.is_none() {
+                            let (w, r) = capture_ring(RING_SECONDS);
+                            writer = w;
+                            reader = r;
+                            heard = 0;
+                            history.clear();
+                            mic = if hands.is_some() {
+                                open_microphone(&audio, device.as_ref(), &mut writer, &signals)
+                            } else {
+                                None
+                            };
+                        }
+                    }
+                }
                 Ok(Command::HandsFree(config)) => {
                     hands = config.and_then(|c| match Hands::load(&c) {
                         Ok(h) => {

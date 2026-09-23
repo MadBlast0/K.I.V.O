@@ -123,7 +123,9 @@ const END: i64 = 2;
 /// Moonshine produces at most about 6.5 tokens per second of speech.
 const TOKENS_PER_SECOND: f32 = 6.5;
 /// Re-transcribe for a partial after this much new audio.
-const PARTIAL_EVERY: usize = SAMPLE_RATE as usize / 2;
+const PARTIAL_EVERY: usize = SAMPLE_RATE as usize * PARTIAL_EVERY_MS as usize / 1000;
+/// How often a partial transcript comes, in milliseconds of new audio.
+pub const PARTIAL_EVERY_MS: u64 = 500;
 /// Too little audio to be a word.
 const MIN_AUDIO: usize = SAMPLE_RATE as usize * 3 / 10;
 

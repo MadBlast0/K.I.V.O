@@ -288,6 +288,58 @@ impl Switcher {
         result
     }
 
+    /// Scores every installed recognizer for the language on the owner's enrollment recordings
+    /// (VOICE-23), each in a separate worker so the engine KIVO listens with is untouched.
+    /// Returns word error rates, 0–1, per engine.
+    pub async fn voice_wer(
+        &self,
+        clips: &[(String, Vec<f32>)],
+    ) -> std::collections::BTreeMap<String, f64> {
+        let config = self.core.config();
+        let language = config.general.language.clone();
+        let mut out = std::collections::BTreeMap::new();
+        for entry in kivo_voice::registry::compatible(kivo_voice::EngineSlot::Stt, &language) {
+            let id = entry.engine.id.clone();
+            let Some(dir) = entry
+                .engine
+                .model
+                .as_deref()
+                .and_then(|m| self.models.installed_dir(m))
+            else {
+                continue;
+            };
+            let Ok(mut probe) = Probe::start(
+                self.engine.infer.program().to_path_buf(),
+                InferSlot::Stt,
+                &id,
+                Some(dir),
+                &language,
+            )
+            .await
+            else {
+                continue;
+            };
+            let mut tally = kivo_voice::wer::Tally::default();
+            let mut heard_all = true;
+            for (said, audio) in clips {
+                let mut padded = audio.clone();
+                padded.extend(std::iter::repeat_n(0.0, 8_000));
+                match probe.transcribe(&padded, &language).await {
+                    Ok(heard) => tally.add(said, &heard),
+                    Err(_) => {
+                        heard_all = false;
+                        break;
+                    }
+                }
+            }
+            probe.close().await;
+            if heard_all && tally.words > 0 {
+                out.insert(id, tally.rate());
+            }
+        }
+        out
+    }
+
     /// The engine passed: it becomes the choice, and the running worker switches to it.
     fn activate(&self, slot: InferSlot, id: &str, voice: Option<String>) {
         let saved = self.core.update_config(|c| match slot {

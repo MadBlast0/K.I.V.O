@@ -194,6 +194,22 @@ fn notification_state() -> (bool, bool) {
     }
 }
 
+/// Minutes to add to UTC for local time now, daylight saving included (limit periods reset at
+/// local midnight, BRAINS §9).
+pub fn utc_offset_minutes() -> i32 {
+    use windows::Win32::System::Time::{GetTimeZoneInformation, TIME_ZONE_INFORMATION};
+    let mut info = TIME_ZONE_INFORMATION::default();
+    // SAFETY: `info` is a valid, writable TIME_ZONE_INFORMATION. 2 is TIME_ZONE_ID_DAYLIGHT.
+    let id = unsafe { GetTimeZoneInformation(&raw mut info) };
+    let bias = info.Bias
+        + if id == 2 {
+            info.DaylightBias
+        } else {
+            info.StandardBias
+        };
+    -bias
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

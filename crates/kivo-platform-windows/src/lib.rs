@@ -11,6 +11,7 @@ mod com;
 mod control;
 pub mod crash;
 mod desktop;
+pub mod environment;
 pub mod hotkeys;
 pub mod instance;
 mod secrets;
@@ -28,7 +29,7 @@ pub use desktop::{WindowsApps, WindowsWindows};
 pub use hotkeys::WindowsHotkeys;
 pub use secrets::WindowsSecrets;
 pub use speech::WindowsSpeech;
-pub use system::WindowsSystemInfo;
+pub use system::{WindowsSystemInfo, utc_offset_minutes};
 pub use toast::{ToastAnswer, WindowsNotifications};
 pub use tray::{TrayEvent, WindowsTray};
 

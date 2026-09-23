@@ -18,7 +18,7 @@ automatically, and nothing is sent anywhere during detection. Anything that brin
 
 | What | How it's detected | Shown as |
 |---|---|---|
-| CLI agents: `claude`, `codex`, `gemini`, `copilot`, `opencode`, `goose`, `qwen`, `kimi`… | Search `PATH` and known install dirs (npm global, `%LOCALAPPDATA%\Programs`, winget/Scoop shims). Run `--version`. Check sign-in where the CLI exposes it (a status command or a credential file that exists; its contents are never read). Cross-check against the ACP registry | "Found on this PC · signed in / needs sign-in" + **Use** |
+| CLI agents: `claude`, `codex`, `gemini`, `copilot`, `opencode`, `goose`, `qwen`, `kimi`… | Search `PATH` and known install dirs (npm global, `%LOCALAPPDATA%\Programs`, winget/Scoop shims). Run `--version`. Check sign-in where the CLI exposes it (a status command or a credential file that exists; its contents are never read). Cross-check against KIVO's catalog of ACP agents, which mirrors the ACP registry (DECISIONS "CLI agents found") | "Found on this PC · signed in / needs sign-in" + **Use** |
 | Local model servers: Ollama, LM Studio, llama.cpp server, any OpenAI-compatible localhost | Probe known ports (`11434` `/api/tags`, `1234` `/v1/models`, `8080` `/v1/models`) and list their models | "Running on this PC · N models" + **Use** |
 | Desktop AI apps: Claude Desktop, ChatGPT, Microsoft Copilot | Installed-apps index (Start menu + AppX packages) | Agents page → Desktop AI apps |
 
@@ -93,14 +93,14 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 
 **Framework (§3 implementation notes)**
 
-- [ ] **DISC-01** · M3 · `Detector { id, scope, run() → Vec<Found> }` trait; discovery runs in the runtime on a low-priority EcoQoS task, never in the UI (§3)
-- [ ] **DISC-02** · M3 · Results cached in a `discovery` table with `checked_at`, shown instantly and then updated (§3)
-- [ ] **DISC-03** · M3 · Detection suggests, the user enables: nothing is switched on automatically, nothing is sent anywhere, credential contents are never read (§1, §3)
+- [x] **DISC-01** · M3 · `Detector { id, scope, run() → Vec<Found> }` trait; discovery runs in the runtime on a low-priority EcoQoS task, never in the UI (§3) → done: `discovery.rs`: `Detector { id, scope, run() }`, run by the runtime in the background, never the UI · verified: discovery tests (2026-09-23)
+- [x] **DISC-02** · M3 · Results cached in a `discovery` table with `checked_at`, shown instantly and then updated (§3) → done: results in the `discovery` table with `checked_at`; the page shows the cache at once, then updates · verified: discovery tests (2026-09-23)
+- [x] **DISC-03** · M3 · Detection suggests, the user enables: nothing is switched on automatically, nothing is sent anywhere, credential contents are never read (§1, §3) → done: found items only suggest (Use / Sign in); nothing is connected or sent; sign-in files are checked for existence, never read · verified: the CLI detector test (a credentials file that isn't JSON is never read), onboarding test (nothing connects unasked) (2026-09-23)
 
 **Brains and agents (§1.1)**
 
-- [ ] **DISC-04** · M3 · CLI agent detector: PATH and known install dirs, `--version`, sign-in state where exposed, cross-checked with the ACP registry → "Found on this PC · signed in / needs sign-in" + Use (§1.1)
-- [ ] **DISC-05** · M3 · Local model server detector: ports 11434, 1234, 8080 with model lists → "Running on this PC · N models" + Use (§1.1)
+- [x] **DISC-04** · M3 · CLI agent detector: PATH and known install dirs, `--version`, sign-in state where exposed, cross-checked with the ACP registry → "Found on this PC · signed in / needs sign-in" + Use (§1.1) → done: PATH (as Windows has it now) plus npm, WinGet, pnpm, Scoop and Bun folders; `--version`; signed-in files; ACP adapter presence from KIVO's catalog (DECISIONS "CLI agents found") · verified: `cli_agents_are_found_with_version_and_sign_in_state_without_reading_credentials` (2026-09-23)
+- [x] **DISC-05** · M3 · Local model server detector: ports 11434, 1234, 8080 with model lists → "Running on this PC · N models" + Use (§1.1) → done: probes 11434, 1234, 8080 `/v1/models` with a short timeout, listing models · verified: `local_servers_are_found_with_their_models` (2026-09-23)
 - [ ] **DISC-06** · M5 · Desktop AI apps detector (Claude Desktop, ChatGPT, Copilot) from the installed-apps index (§1.1)
 - [ ] **DISC-07** · M8 · In-app CLI install: explain + exact command from the catalog, dependency check (Node via winget with consent), visible progress sheet, verify, start sign-in, test prompt (§1.1)
 
@@ -113,10 +113,10 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 
 **Refresh and freshness (§2–3)**
 
-- [ ] **DISC-12** · M3 · Every discovery section shows "Checked … · Refresh"; Refresh re-runs only that section's detectors; new items get a New label until viewed (§2)
+- [x] **DISC-12** · M3 · Every discovery section shows "Checked … · Refresh"; Refresh re-runs only that section's detectors; new items get a New label until viewed (§2) → done: "Checked … · Refresh" per section; Refresh re-runs that section only; New until viewed · verified: discovery and Brains tests (2026-09-23)
 - [x] **DISC-13** · M1 · Live state (Island, Tasks, Activity, agent progress, usage) is pushed over IPC; nothing polls it (§3) → done: state, the live turn, mic and voice levels and Activity changes are pushed over IPC (`runtime://link`, `runtime://level`, `runtime://event`); the UI has no timers polling the runtime · verified: no `setInterval` in the UI, Activity refreshes on the pushed event (2026-09-23); tasks, agents and usage join when they exist (M3–M7)
-- [ ] **DISC-14** · M3 · Brain health: on page open if older than 5 min, every 5 min while visible, immediately after errors, lazily before use (§3)
-- [ ] **DISC-15** · M3 · CLI/local-server re-detection: app start (after 30 s, low priority), `WM_SETTINGCHANGE` PATH changes, page open if older than 10 min (§3)
+- [x] **DISC-14** · M3 · Brain health: on page open if older than 5 min, every 5 min while visible, immediately after errors, lazily before use (§3) → done: page open (older than 5 min), every 5 min while visible, at once after errors, lazily before use (background) (DECISIONS "Health checked around use") · verified: brains tests, `a_failing_provider…` (2026-09-23)
+- [x] **DISC-15** · M3 · CLI/local-server re-detection: app start (after 30 s, low priority), `WM_SETTINGCHANGE` PATH changes, page open if older than 10 min (§3) → done: 30 s after start at low priority; `WM_SETTINGCHANGE` "Environment" re-reads PATH from the registry and re-detects CLIs; page open if older than 10 min · verified: `the_current_path_comes_from_the_registry`, `a_watch_starts_and_stops`, discovery tests (2026-09-23)
 - [ ] **DISC-16** · M6 · File watchers on other apps' MCP configs and skills folders; MCP `tools/list_changed` handling with description-hash comparison (§3)
 - [ ] **DISC-17** · M8 · Signed catalogs (connector directory, plugin index, model catalog, CLI install catalog) fetched daily with an offline cache (§3)
 - [ ] **DISC-18** · M8 · Performance metrics sampled every 2 s only while the Performance page is open (§3)

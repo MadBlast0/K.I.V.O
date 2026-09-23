@@ -1219,7 +1219,8 @@ async fn talking_over_kivo_works_with_speakers_echoing_its_voice() {
     );
     // The user says nothing for 3 s, then talks over the reply.
     let mut mic = vec![0.0; 16_000 * 3];
-    mic.extend(spoken("Open Chrome."));
+    // A short, distinct command: "Chrome" was sometimes heard as "crew" under the echo residue.
+    mic.extend(spoken("Mute the sound."));
     mic.extend(vec![0.0; 16_000 * 6]);
     rig.audio.say_next(mic);
     rig.listener.set_busy(true);
@@ -1242,12 +1243,19 @@ async fn talking_over_kivo_works_with_speakers_echoing_its_voice() {
     })
     .await;
     rig.engine.speaker.speak(&reply, 16_000);
-    until(
-        "Chrome to open over KIVO's echo",
-        Duration::from_secs(40),
-        || !rig.apps.launched.lock().unwrap().is_empty(),
-    )
-    .await;
+    let deadline = Instant::now() + Duration::from_secs(40);
+    while !rig.control.volume.lock().unwrap().muted {
+        assert!(
+            Instant::now() < deadline,
+            "KIVO never muted over its own echo; Activity: {:?}",
+            rig.recorder
+                .recent(None, 10)
+                .into_iter()
+                .map(|a| (a.kind, a.title))
+                .collect::<Vec<_>>()
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
     let heard = rig
         .recorder
         .recent(None, 20)
@@ -1260,6 +1268,121 @@ async fn talking_over_kivo_works_with_speakers_echoing_its_voice() {
         "KIVO's own voice wasn't taken for the user's: {heard:?}"
     );
     rig.listener.set_hands_free(None);
+    rig.core.quit();
+    let _ = tokio::time::timeout(Duration::from_secs(5), worker_task).await;
+    pump.abort();
+}
+
+/// VOICE-23: the owner's enrollment recordings (here, Windows' voice reading the prompts) are
+/// transcribed by every installed recognizer in separate workers, and each gets a word error
+/// rate on this voice, which the recommendation uses.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn every_installed_recognizer_is_scored_on_the_owners_voice() {
+    let _turn = ONE_AT_A_TIME.lock().await;
+    let paths = Paths::user().expect("per-user folders");
+    let Some(model) = ModelStore::new(paths.models()).installed(kivo_voice::moonshine::MODEL_ID)
+    else {
+        eprintln!("the speech model isn't installed on this machine; skipping");
+        return;
+    };
+    if !worker().is_file() {
+        eprintln!("kivo-infer isn't built beside the tests; skipping");
+        return;
+    }
+    let (rig, worker_task, pump) = rig(Vec::new(), model.dir);
+    let models = std::sync::Arc::new(kivo_runtime::models::Models::new(
+        paths.models(),
+        std::sync::Arc::clone(&rig.core),
+        rig.infer.clone(),
+    ));
+    let switcher = kivo_runtime::switch::Switcher::new(
+        std::sync::Arc::clone(&rig.core),
+        std::sync::Arc::clone(&rig.engine),
+        std::sync::Arc::clone(&models),
+    );
+    let takes: Vec<(String, Vec<f32>)> = kivo_runtime::voiceid::PROMPTS
+        .iter()
+        .skip(3)
+        .map(|p| ((*p).to_owned(), spoken(p)))
+        .collect();
+    let wers = switcher.voice_wer(&takes).await;
+    eprintln!("enrollment WER: {wers:?}");
+    let base = wers
+        .get(kivo_voice::moonshine::MODEL_ID)
+        .copied()
+        .expect("Moonshine Base was scored");
+    assert!(base < 0.35, "Windows' clear voice is mostly heard: {base}");
+    models.set_voice_wers(wers.clone(), 1);
+    let registry = models.registry();
+    let entry = registry
+        .iter()
+        .find(|e| e.engine.id == kivo_voice::moonshine::MODEL_ID)
+        .unwrap();
+    assert_eq!(
+        entry
+            .measured
+            .as_ref()
+            .and_then(|m| m.voice_word_error_rate),
+        Some(base)
+    );
+    rig.core.quit();
+    let _ = tokio::time::timeout(Duration::from_secs(5), worker_task).await;
+    pump.abort();
+}
+
+/// CONV-27 "edit": a spoken change to a waiting decision drops the action and hands the
+/// corrected request to a brain. In Ask mode "Open Chrome." waits for a yes; "Change it to
+/// Firefox." instead never opens Chrome, and the brain is asked with the change.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn changing_a_decision_by_voice_goes_to_a_brain() {
+    let _turn = ONE_AT_A_TIME.lock().await;
+    let paths = Paths::user().expect("per-user folders");
+    let Some(model) = ModelStore::new(paths.models()).installed(kivo_voice::moonshine::MODEL_ID)
+    else {
+        eprintln!("the speech model isn't installed on this machine; skipping");
+        return;
+    };
+    if !worker().is_file() {
+        eprintln!("kivo-infer isn't built beside the tests; skipping");
+        return;
+    }
+    let (rig, worker_task, pump) = rig(Vec::new(), model.dir);
+    rig.core.update_config(|c| {
+        c.capabilities.set(Capability::SpeakResponses, false);
+    });
+    rig.core
+        .set_mode(kivo_core::config::PermissionMode::Ask)
+        .expect("Ask mode");
+    let brain = std::sync::Arc::new(kivo_brain::testing::ScriptedBrain::new(
+        "anthropic",
+        kivo_brain::PrivacyClass::Cloud,
+        vec![kivo_brain::testing::Script::text("Okay, Firefox instead.")],
+    ));
+    rig.brains.insert(brain.clone());
+    rig.audio.say_next(spoken("Open Chrome."));
+    rig.audio.say_next(spoken("Change it to Firefox."));
+    rig.engine
+        .talk(TurnSource::PushToTalk)
+        .await
+        .expect("KIVO starts listening");
+    until("the brain's answer", Duration::from_secs(45), || {
+        rig.core.turn_view().and_then(|t| t.answer).as_deref() == Some("Okay, Firefox instead.")
+    })
+    .await;
+    assert!(
+        rig.apps.launched.lock().unwrap().is_empty(),
+        "Chrome wasn't opened"
+    );
+    let asked = brain.requests.lock().unwrap()[0]
+        .messages
+        .last()
+        .unwrap()
+        .text()
+        .to_lowercase();
+    assert!(
+        asked.contains("chrome") && asked.contains("firefox"),
+        "{asked}"
+    );
     rig.core.quit();
     let _ = tokio::time::timeout(Duration::from_secs(5), worker_task).await;
     pump.abort();

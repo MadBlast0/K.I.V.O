@@ -55,6 +55,11 @@ pub struct Speaker {
 }
 
 impl Speaker {
+    /// The audio devices (the Voice page's microphone and speaker choices).
+    pub fn audio(&self) -> Arc<dyn AudioIo> {
+        Arc::clone(&self.audio)
+    }
+
     pub fn new(audio: Arc<dyn AudioIo>, device: Option<DeviceId>) -> Self {
         Self {
             audio,

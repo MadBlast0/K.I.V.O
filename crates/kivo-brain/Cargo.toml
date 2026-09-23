@@ -8,6 +8,21 @@ license.workspace = true
 publish = false
 
 [dependencies]
+kivo-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["rt", "sync", "time", "macros", "process", "io-util", "net"] }
+tokio-util.workspace = true
+tracing.workspace = true
+futures-util = { workspace = true, features = ["std"] }
+bytes.workspace = true
+reqwest.workspace = true
+async-trait.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "test-util"] }
 
 [lints]
 workspace = true

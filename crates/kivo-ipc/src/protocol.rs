@@ -16,7 +16,8 @@ use serde_json::Value;
 /// 1.1 added the permission mode and "Island hidden" to the snapshot, and `permissions.setMode`.
 /// 1.2 added the live turn (transcript, steps, answer, confirmation), capabilities, Activity,
 /// speech models and the requests the Island and the Control Center make.
-pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 2 };
+/// 1.3 added brains: the turn's brain chip, and the Brains, Chat, Usage and preference requests.
+pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 3 };
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -72,6 +73,12 @@ pub mod method {
     pub const MODELS_INSTALL: &str = "models.install";
     /// Client → runtime: delete a downloaded model (`{ "id": … }`).
     pub const MODELS_REMOVE: &str = "models.remove";
+    /// Client → runtime: pause a download (it resumes where it stopped) or cancel it (UX-61).
+    pub const MODELS_PAUSE: &str = "models.pause";
+    pub const MODELS_CANCEL: &str = "models.cancel";
+    /// Client → runtime: use the speech engine that runs on this model, switched safely
+    /// (VOICE-45; UX-61 "Set as default").
+    pub const MODELS_SET_DEFAULT: &str = "models.setDefault";
     /// Client → runtime: the settings the Control Center edits.
     pub const SETTINGS_GET: &str = "settings.get";
     /// Client → runtime: change settings (merged into the current values).
@@ -118,7 +125,55 @@ pub mod method {
     pub const VOICE_PREVIEW: &str = "voice.preview";
     /// Onboarding's microphone check (UX-33) and a recognizer's "Try sample" (UX-60).
     pub const VOICE_MIC_CHECK: &str = "voice.micCheck";
+    /// Client → runtime: the microphones and speakers (UX-61).
+    pub const VOICE_DEVICES: &str = "voice.devices";
+    /// Client → runtime: the advanced view's details (VOICE-49).
+    pub const VOICE_ADVANCED: &str = "voice.advanced";
     pub const VOICE_TRY_SAMPLE: &str = "voice.trySample";
+    /// Brains (BRAINS §4–5, UX-22): what KIVO can connect, what is connected and found, and
+    /// connecting (sign-in, write-only keys, local servers, CLI agents).
+    pub const BRAINS_CATALOG: &str = "brains.catalog";
+    pub const BRAINS_LIST: &str = "brains.list";
+    pub const BRAINS_CHECK: &str = "brains.check";
+    pub const BRAINS_CONNECT: &str = "brains.connect";
+    pub const BRAINS_DISCONNECT: &str = "brains.disconnect";
+    pub const BRAINS_SET_KEY: &str = "brains.setKey";
+    pub const BRAINS_TEST_KEY: &str = "brains.testKey";
+    pub const BRAINS_SIGN_IN: &str = "brains.signIn";
+    pub const BRAINS_SET_DEFAULT: &str = "brains.setDefault";
+    pub const BRAINS_SAVE_PROFILE: &str = "brains.saveProfile";
+    pub const BRAINS_DELETE_PROFILE: &str = "brains.deleteProfile";
+    pub const BRAINS_DISCOVERY: &str = "brains.discovery";
+    pub const BRAINS_REFRESH: &str = "brains.refresh";
+    pub const BRAINS_VIEWED: &str = "brains.viewed";
+    pub const BRAINS_SET_WORKSPACE: &str = "brains.setWorkspace";
+    /// Context (Settings → Context, CONV-30): the layers and their sizes.
+    pub const BRAINS_CONTEXT: &str = "brains.context";
+    /// Usage and cost (BRAINS §9): totals, limits, task caps, price overrides, CSV export.
+    pub const USAGE_SUMMARY: &str = "usage.summary";
+    pub const USAGE_SET_LIMITS: &str = "usage.setLimits";
+    pub const USAGE_SET_CAPS: &str = "usage.setCaps";
+    pub const USAGE_SET_PRICE: &str = "usage.setPrice";
+    pub const USAGE_EXPORT: &str = "usage.export";
+    /// Chat (UX-21, CONVERSATION §0–1): threads, messages, sending, compaction, search, and the
+    /// "that's not what I meant" report (BRAIN-06).
+    pub const CHAT_THREADS: &str = "chat.threads";
+    pub const CHAT_THREAD: &str = "chat.thread";
+    pub const CHAT_NEW: &str = "chat.new";
+    pub const CHAT_UPDATE: &str = "chat.update";
+    pub const CHAT_DELETE: &str = "chat.delete";
+    pub const CHAT_SEND: &str = "chat.send";
+    pub const CHAT_COMPACT: &str = "chat.compact";
+    pub const CHAT_SEARCH: &str = "chat.search";
+    pub const CHAT_MISROUTE: &str = "chat.misroute";
+    /// The user's own words for recognition and transcript repair (VOICE-23).
+    pub const VOICE_VOCABULARY: &str = "voice.vocabulary";
+    pub const VOICE_ADD_WORD: &str = "voice.addWord";
+    pub const VOICE_REMOVE_WORD: &str = "voice.removeWord";
+    /// Stated preferences ("call me Sam", MEM-03).
+    pub const MEMORY_PREFERENCES: &str = "memory.preferences";
+    pub const MEMORY_SET_PREFERENCE: &str = "memory.setPreference";
+    pub const MEMORY_DELETE_PREFERENCE: &str = "memory.deletePreference";
 }
 
 /// The name the desktop app gives in `hello`; the runtime supervises the client with this name.
@@ -215,6 +270,39 @@ pub struct TurnView {
     /// The user said "wait": the card stays, "Waiting for you", with no timeout (UX-08).
     #[serde(default)]
     pub waiting: bool,
+    /// The brain answering and why (PLAN-17): the card's chip, with the reason on hover.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub brain: Option<BrainChip>,
+}
+
+/// The card header's brain chip (UX-09): "Coding · Claude Code", the routing reason, and a cost
+/// estimate when the user shows costs (BRAINS §9).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrainChip {
+    /// The brain's name ("Claude Code").
+    pub name: String,
+    /// The profile's name ("Coding").
+    pub profile: String,
+    /// "Coding · Claude Code — because this looked like a coding task".
+    pub reason: String,
+    /// It runs on this PC.
+    pub local: bool,
+    /// Estimated dollars so far; `None` when hidden or unknown (always an estimate).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub cost: Option<f64>,
+    /// A spending-limit warning ("80% of your daily limit").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub warning: Option<String>,
+    /// Context used by this request, in tokens, and the budget (the context meter, UX-21).
+    #[serde(default)]
+    pub context_used: u32,
+    #[serde(default)]
+    pub context_budget: u32,
 }
 
 /// A point on the desktop, in physical pixels.
@@ -334,6 +422,17 @@ pub struct ModelItem {
     /// `unloading`; `None` until the worker reports it.
     #[serde(default)]
     pub residency: Option<String>,
+    /// `notInstalled`, `downloading`, `installing`, `paused`, `ready`, `updateAvailable` or
+    /// `error` (UX-61).
+    #[serde(default)]
+    pub state: String,
+    /// Why the last download failed, in plain words.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub error: Option<String>,
+    /// The speech engine KIVO uses now runs on this model.
+    #[serde(default)]
+    pub in_use: bool,
 }
 
 /// A speech engine in the registry, as the Voice page and onboarding show it (VOICE-42).
@@ -389,6 +488,10 @@ pub struct MeasuredItem {
     pub real_time_factor: Option<f64>,
     pub latency_ms: Option<f64>,
     pub word_error_rate: Option<f64>,
+    /// How well it heard the owner's enrollment recordings (VOICE-23).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub voice_word_error_rate: Option<f64>,
     /// Unix milliseconds.
     pub measured_at: i64,
 }

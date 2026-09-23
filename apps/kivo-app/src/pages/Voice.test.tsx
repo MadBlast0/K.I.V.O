@@ -19,6 +19,8 @@ const models: ModelItem[] = [
     diskBytes: 141_300_566,
     downloading: null,
     residency: null,
+    state: "ready",
+    inUse: true,
   },
   {
     id: "kokoro-82m",
@@ -33,6 +35,8 @@ const models: ModelItem[] = [
     diskBytes: 0,
     downloading: null,
     residency: null,
+    state: "notInstalled",
+    inUse: false,
   },
 ];
 
@@ -141,7 +145,47 @@ runtime.request = (method: string, params?: unknown) => {
     return Promise.resolve({ enrolled: false, prompts: ["Hey Kivo"], recorded: [false], embeddings: 0 });
   }
   if (method === "settings.get") {
-    return Promise.resolve({ voice: { "tts-engine": "system", "follow-up-seconds": 8, "speaker-mode": "off" } });
+    return Promise.resolve({
+      voice: { "tts-engine": "system", "follow-up-seconds": 8, "speaker-mode": "off", "tts-speed": 100 },
+      general: { language: "en" },
+      performance: {},
+    });
+  }
+  if (method === "brains.list") return Promise.resolve({ persona: "calm", customPersona: "" });
+  if (method === "voice.vocabulary" || method === "voice.addWord") return Promise.resolve(["Kubernetes"]);
+  if (method === "voice.advanced") {
+    return Promise.resolve({
+      stt: {
+        engine: "moonshine-base-en",
+        name: "Moonshine Base",
+        model: "moonshine-base-en",
+        path: "D:/models/moonshine-base-en",
+        devices: ["cpu"],
+        streaming: true,
+        license: "MIT",
+      },
+      tts: {
+        engine: "system",
+        name: "Windows voices",
+        model: null,
+        path: null,
+        devices: ["cpu"],
+        streaming: true,
+        license: "System",
+      },
+      sttFallback: "moonshine-tiny-en",
+      fallbackOn: true,
+      threads: 4,
+      threadsSetting: 0,
+      cores: 16,
+      sttWarmMinutes: 10,
+      ttsWarmMinutes: 10,
+      timing: { endSilenceMs: 800, partialEveryMs: 500 },
+      modelsFolder: "D:/models",
+    });
+  }
+  if (method === "voice.devices") {
+    return Promise.resolve({ inputs: [{ id: "mic-1", name: "USB Headset", isDefault: true }], outputs: [] });
   }
   return Promise.resolve(null);
 };
@@ -164,6 +208,14 @@ async function mount() {
   await act(async () => {
     await new Promise((r) => setTimeout(r, 0));
   });
+  // The engine choosers open from the summary's Change (UX-61).
+  const change = screen.queryAllByRole("button", { name: "Change" })[0];
+  if (change) {
+    fireEvent.click(change);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+  }
 }
 
 const hearing = () => within(screen.getByRole("radiogroup", { name: "How KIVO hears you" }));
@@ -239,5 +291,31 @@ describe("Voice page", () => {
     expect(screen.getByText("Moonshine Base (English)")).toBeTruthy();
     expect(screen.getByText(/MIT · 141 MB on this PC/)).toBeTruthy();
     expect(screen.getByText(/Apache-2.0 · 101 MB to download/)).toBeTruthy();
+  });
+
+  it("sets the speed, personality and words, manages models and shows the advanced view (UX-61, VOICE-49)", async () => {
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: "Faster" }));
+    await settle();
+    expect(calls).toContainEqual({ method: "settings.set", params: { voice: { "tts-speed": 125 } } });
+
+    fireEvent.click(screen.getByRole("radio", { name: "Witty" }));
+    await settle();
+    expect(calls).toContainEqual({ method: "brains.setDefault", params: { persona: "witty", customPersona: "" } });
+
+    fireEvent.change(screen.getByLabelText("Add a word"), { target: { value: "Kubernetes" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    await settle();
+    expect(calls).toContainEqual({ method: "voice.addWord", params: { word: "Kubernetes" } });
+    expect(screen.getByText("Kubernetes")).toBeTruthy();
+
+    // The model in use says so; the other one downloads after its licence.
+    expect(screen.getAllByText("In use").length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole("switch", { name: "Show advanced" }));
+    await settle();
+    expect(screen.getByText(/Speech uses 4 of 16 processor threads/)).toBeTruthy();
+    expect(screen.getByText("moonshine-tiny-en")).toBeTruthy();
+    expect(await violations()).toEqual([]);
   });
 });

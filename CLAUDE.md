@@ -69,9 +69,19 @@ own keyword spotter, echo cancellation with echo-path detection, barge-in, "stop
 owner-voice enrollment and speaker modes, decisions answered by voice, sound sets, the speech
 engine registry with profiles, recommendation, safe switching and fallbacks (Moonshine sizes and
 languages, Supertonic 3), onboarding steps 1–5, the Island's M2 states and screen-reader
-announcements. Still open in M2: the wake corpus benchmark (deferred with the other bench runs),
-a live barge-in check on the laptop's speakers, and voice "edit" handed to a brain (M3).
-**Next: M3.** Progress per milestone is in the table at the top of [docs/ROADMAP.md](docs/ROADMAP.md).
+announcements. Still open in M2: the wake corpus benchmark (deferred with the other bench runs)
+and a live barge-in check on the laptop's speakers. **M3 — brains** is built: requests the
+grammar (and, with its optional model, the semantic stage) can't handle go to a brain — Anthropic,
+OpenAI, Gemini, OpenRouter and other OpenAI-compatible services, local servers, and CLI agents over
+ACP — routed with a reason, answered as a stream that is spoken phrase by phrase, with tool calls
+and agents' permission requests through the permission engine, same-privacy failover,
+conversation threads with compaction, usage, cost estimates and limits; no-key sign-in
+(OpenRouter OAuth, the CLIs' own logins, local servers found on this PC), write-only keys in
+Credential Manager, discovery with Refresh, and the Chat, Brains (with Context) and Voice pages,
+onboarding step 6 and the Island's brain chip. Still open in M3: a live run with Claude Code and
+Codex (their ACP adapters aren't installed here), semantic recall of old messages (full-text
+today), and the brain benchmark (M3-X1, deferred). **Next: M4.** Progress per milestone is in the
+table at the top of [docs/ROADMAP.md](docs/ROADMAP.md).
 Update this section as milestones land.
 
 ## Build, run, check
@@ -89,6 +99,7 @@ Update this section as milestones land.
 | Installer build (release sidecars + NSIS/MSI; ask the owner first) | `pnpm build` |
 | Is the running runtime healthy? (exit code 0/1) | `kivo-runtime --health` |
 | Sync ROADMAP from the spec checklists | `pnpm docs:sync` |
+| Real CLI agents' ACP handshake (no prompt, no quota) | `KIVO_TEST_REAL_AGENTS=1 cargo test -p kivo-brain speaks_acp` |
 | Regenerate the UI's IPC types | `KIVO_WRITE_TS=1 cargo test -p kivo-ipc --features ts --test ts_bindings` |
 
 The tree must stay free of warnings from tsc, Vite, rustc and clippy. The native title

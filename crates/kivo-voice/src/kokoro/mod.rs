@@ -76,6 +76,8 @@ pub struct Kokoro {
     lexicon: g2p::Lexicon,
     /// id → 510 × 256 style vectors.
     voices: Vec<(String, Vec<f32>)>,
+    /// Speaking speed (the model's own `speed` input).
+    speed: f32,
 }
 
 impl Kokoro {
@@ -116,6 +118,7 @@ impl Kokoro {
             session,
             lexicon: g2p::Lexicon::load(dir)?,
             voices,
+            speed: 1.0,
         })
     }
 
@@ -140,7 +143,7 @@ impl Kokoro {
         let outputs = self.session.run(ort::inputs![
             "input_ids" => Tensor::from_array(([1usize, input.len()], input))?,
             "style" => Tensor::from_array(([1usize, STYLE_WIDTH], style))?,
-            "speed" => Tensor::from_array(([1usize], vec![1.0_f32]))?,
+            "speed" => Tensor::from_array(([1usize], vec![self.speed]))?,
         ])?;
         let (_, audio) = outputs[0].try_extract_tensor::<f32>()?;
         Ok(audio.to_vec())
@@ -180,6 +183,10 @@ fn chunks(ids: &[i64]) -> Vec<&[i64]> {
 impl TtsEngine for Kokoro {
     fn info(&self) -> &EngineInfo {
         &self.info
+    }
+
+    fn set_speed(&mut self, speed: f32) {
+        self.speed = speed.clamp(0.5, 2.0);
     }
 
     fn voices(&self) -> Vec<VoiceInfo> {

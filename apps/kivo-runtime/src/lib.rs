@@ -3,9 +3,13 @@
 //! worker's supervisor, the speaker, the records, the IPC handler, the tray and the hotkeys.
 
 pub mod activity;
+pub mod agents;
 pub mod app;
 pub mod args;
+pub mod brains;
+pub mod brains_rpc;
 pub mod core;
+pub mod discovery;
 pub mod engine;
 #[cfg(windows)]
 pub mod hotkeys;
@@ -15,6 +19,8 @@ pub mod models;
 pub mod rpc;
 #[cfg(windows)]
 pub mod scripted;
+pub mod semantic;
+pub mod signin;
 pub mod sounds;
 pub mod speaker;
 pub mod switch;

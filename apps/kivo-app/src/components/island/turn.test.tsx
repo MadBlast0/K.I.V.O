@@ -40,6 +40,7 @@ function handlers(): IslandHandlers {
     enable: vi.fn<IslandHandlers["enable"]>(),
     edit: vi.fn<IslandHandlers["edit"]>(),
     talk: vi.fn<IslandHandlers["talk"]>(),
+    misroute: vi.fn<IslandHandlers["misroute"]>(),
   };
 }
 
@@ -160,5 +161,37 @@ describe("Island M2 states (UX-08, UX-45, CONV-26)", () => {
     const model = islandForTurn(snapshot, t, handlers());
     expect(model?.label).toBe("Waiting for you");
     expect(hasButtons(model)).toBe(true);
+  });
+});
+
+describe("Island for a brain's answer (PLAN-17, BRAIN-06)", () => {
+  it("shows which brain answered and why, and takes a misroute report", () => {
+    const on = handlers();
+    const t = i18n.t.bind(i18n);
+    const snapshot = acting("auto");
+    snapshot.session = "idle";
+    if (!snapshot.turn) throw new Error("turn");
+    snapshot.turn.steps = [];
+    snapshot.turn.answer = "Paris is the capital of France.";
+    snapshot.turn.brain = {
+      name: "Claude Code",
+      profile: "Coding",
+      reason: "Coding · Claude Code — because this looked like a coding task",
+      local: false,
+      cost: 0.004,
+      contextUsed: 1200,
+      contextBudget: 32000,
+    };
+    const model = islandForTurn(snapshot, t, on);
+    render(
+      <>
+        {model?.trail}
+        {model?.body}
+      </>,
+    );
+    const chip = screen.getByText("Coding · Claude Code · ≈ $0.0040");
+    expect(chip.getAttribute("title")).toBe("Coding · Claude Code — because this looked like a coding task");
+    fireEvent.click(screen.getByRole("button", { name: "That’s not what I meant" }));
+    expect(on.misroute).toHaveBeenCalledWith("t1");
   });
 });

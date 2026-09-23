@@ -131,6 +131,105 @@ const SCHEMA: &[&str] = &[
              created_at INTEGER NOT NULL,
              updated_at INTEGER NOT NULL
          ) STRICT;",
+    // 6: brains (M3). Conversations and their messages with full-text recall (MEM-01, CONV-01/06),
+    // stated preferences (MEM-03), metered usage (BRAIN-34), CLI agent sessions to resume
+    // (CONV-02), "that's not what I meant" reports (BRAIN-06), the user's own words for
+    // recognition and repair (VOICE-23), and the discovery cache (DISC-02, about the machine).
+    "CREATE TABLE conversations (
+             id           TEXT PRIMARY KEY,
+             profile_id   TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+             kind         TEXT NOT NULL CHECK (kind IN ('voice', 'chat')),
+             title        TEXT NOT NULL DEFAULT '',
+             summary      TEXT NOT NULL DEFAULT '',
+             summarized   INTEGER NOT NULL DEFAULT 0,
+             brain        TEXT,
+             pinned       INTEGER NOT NULL DEFAULT 0 CHECK (pinned IN (0, 1)),
+             created_at   INTEGER NOT NULL,
+             updated_at   INTEGER NOT NULL
+         ) STRICT;
+     CREATE INDEX conversations_by_time ON conversations (updated_at);
+     CREATE TABLE messages (
+             id              INTEGER PRIMARY KEY,
+             conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+             profile_id      TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+             ts              INTEGER NOT NULL,
+             role            TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'tool')),
+             text            TEXT NOT NULL,
+             brain           TEXT,
+             turn_id         TEXT,
+             data            TEXT CHECK (data IS NULL OR json_valid(data))
+         ) STRICT;
+     CREATE INDEX messages_by_conversation ON messages (conversation_id, id);
+     CREATE VIRTUAL TABLE messages_fts USING fts5 (text, content='messages', content_rowid='id');
+     CREATE TRIGGER messages_fts_insert AFTER INSERT ON messages BEGIN
+         INSERT INTO messages_fts (rowid, text) VALUES (new.id, new.text);
+     END;
+     CREATE TRIGGER messages_fts_delete AFTER DELETE ON messages BEGIN
+         INSERT INTO messages_fts (messages_fts, rowid, text) VALUES ('delete', old.id, old.text);
+     END;
+     CREATE TABLE preferences (
+             profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+             key        TEXT NOT NULL,
+             value      TEXT NOT NULL,
+             source     TEXT NOT NULL,
+             updated_at INTEGER NOT NULL,
+             PRIMARY KEY (profile_id, key)
+         ) STRICT;
+     CREATE TABLE usage (
+             id            INTEGER PRIMARY KEY,
+             profile_id    TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+             ts            INTEGER NOT NULL,
+             kind          TEXT NOT NULL CHECK (kind IN ('brain', 'stt', 'tts', 'realtime', 'computerUse', 'agent')),
+             provider      TEXT NOT NULL,
+             model         TEXT NOT NULL,
+             brain_profile TEXT,
+             input_tokens  INTEGER NOT NULL DEFAULT 0,
+             output_tokens INTEGER NOT NULL DEFAULT 0,
+             cached_tokens INTEGER NOT NULL DEFAULT 0,
+             audio_seconds REAL NOT NULL DEFAULT 0,
+             images        INTEGER NOT NULL DEFAULT 0,
+             requests      INTEGER NOT NULL DEFAULT 1,
+             cost          REAL,
+             turn_id       TEXT,
+             task_id       TEXT,
+             routine_id    TEXT
+         ) STRICT;
+     CREATE INDEX usage_by_time ON usage (ts);
+     CREATE TABLE agent_sessions (
+             id              TEXT PRIMARY KEY,
+             profile_id      TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+             agent           TEXT NOT NULL,
+             workspace       TEXT NOT NULL,
+             conversation_id TEXT,
+             created_at      INTEGER NOT NULL,
+             last_used       INTEGER NOT NULL
+         ) STRICT;
+     CREATE TABLE misroutes (
+             id         INTEGER PRIMARY KEY,
+             profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+             ts         INTEGER NOT NULL,
+             turn_id    TEXT NOT NULL,
+             transcript TEXT NOT NULL,
+             route      TEXT NOT NULL,
+             note       TEXT NOT NULL DEFAULT ''
+         ) STRICT;
+     CREATE TABLE user_vocabulary (
+             profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+             word       TEXT NOT NULL,
+             uses       INTEGER NOT NULL DEFAULT 1,
+             PRIMARY KEY (profile_id, word)
+         ) STRICT;
+     CREATE TABLE discovery (
+             section    TEXT NOT NULL,
+             id         TEXT NOT NULL,
+             data       TEXT NOT NULL CHECK (json_valid(data)),
+             checked_at INTEGER NOT NULL,
+             first_seen INTEGER NOT NULL,
+             viewed     INTEGER NOT NULL DEFAULT 0 CHECK (viewed IN (0, 1)),
+             PRIMARY KEY (section, id)
+         ) STRICT;
+     -- The brain's hidden reasoning, only when the user turns the reasoning log on (BRAIN-09).
+     ALTER TABLE turns ADD COLUMN reasoning TEXT;",
 ];
 
 static MIGRATIONS: LazyLock<Migrations<'static>> =
@@ -278,7 +377,7 @@ mod tests {
     use super::*;
 
     /// Tables that are about the app itself rather than a person.
-    const UNSCOPED_TABLES: &[&str] = &["app_meta", "profiles", "benchmarks"];
+    const UNSCOPED_TABLES: &[&str] = &["app_meta", "profiles", "benchmarks", "discovery"];
 
     /// Tables holding personal data that lack a `profile_id` column tied to `profiles`.
     fn unscoped_tables(conn: &Connection) -> Vec<String> {
@@ -303,7 +402,16 @@ mod tests {
                     |r| r.get(0),
                 )
                 .unwrap();
-            if is_virtual {
+            // FTS5 keeps its index in shadow tables named `<virtual table>_…`.
+            let is_shadow: bool = conn
+                .query_row(
+                    "SELECT COUNT(*) > 0 FROM sqlite_schema
+                     WHERE sql LIKE 'CREATE VIRTUAL%' AND substr(?1, 1, length(name) + 1) = name || '_'",
+                    [table],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            if is_virtual || is_shadow {
                 continue;
             }
             let fk: Option<String> = conn

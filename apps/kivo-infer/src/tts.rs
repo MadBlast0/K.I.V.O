@@ -179,6 +179,7 @@ fn speak_one(
 ) -> TtsDone {
     let id = engine.info().id.clone();
     report(peer, &id, Residency::Active);
+    engine.set_speed(speak.speed.unwrap_or(1.0));
     let result = engine.speak(
         &speak.text,
         speak.voice.as_deref(),

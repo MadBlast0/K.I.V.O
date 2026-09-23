@@ -254,6 +254,45 @@ impl Recorder {
         });
     }
 
+    /// Which brain answers and why (PLAN-17): an Activity row and the turn's route.
+    pub fn brain_route(&self, turn: &str, reason: &str, data: Value) {
+        self.add(NewActivity {
+            ts: now_ms(),
+            turn_id: optional(turn),
+            task_id: None,
+            kind: "brain".into(),
+            title: reason.to_owned(),
+            detail: None,
+            status: "done".into(),
+            data: Some(data),
+        });
+        if let Err(e) = self.db().set_turn_route(turn, reason, None) {
+            tracing::warn!(%e, "couldn't record the route");
+        }
+    }
+
+    /// A brain failed or was replaced by a fallback (BRAIN-22, PLAN-05).
+    pub fn brain_problem(&self, turn: &str, title: &str, detail: &str) {
+        self.add(NewActivity {
+            ts: now_ms(),
+            turn_id: optional(turn),
+            task_id: None,
+            kind: "brain".into(),
+            title: title.to_owned(),
+            detail: Some(detail.to_owned()),
+            status: "failed".into(),
+            data: None,
+        });
+    }
+
+    /// The brain's hidden reasoning, kept only when the user turned the reasoning log on
+    /// (BRAIN-09). It is never shown in Activity or spoken.
+    pub fn reasoning(&self, turn: &str, route: &str, text: &str) {
+        if let Err(e) = self.db().set_turn_route(turn, route, Some(text)) {
+            tracing::warn!(%e, "couldn't keep the reasoning");
+        }
+    }
+
     /// The turn ended: fill in the record and its timings.
     pub fn turn_finished(
         &self,

@@ -1,9 +1,10 @@
 /**
- * First-launch setup (UX §4, UX-33 steps 1–5 and UX-60): Welcome, then the Voice phase — check the
- * microphone, how you call KIVO, how it hears and speaks (recommended for this PC, with the other
- * profiles a click away), a summary of the choices, and optionally the owner's voice. One decision
- * per screen, the recommended answer preselected; Finish (or skipping from Welcome's fine print)
- * marks setup done and opens the Control Center. The brain and control phases join in M3/M7.
+ * First-launch setup (UX §4, UX-33 steps 1–5, UX-60 and UX-34): Welcome, then the Voice phase —
+ * check the microphone, how you call KIVO, how it hears and speaks (recommended for this PC, with
+ * the other profiles a click away), a summary of the choices, and optionally the owner's voice —
+ * then step 6, connecting a brain (optional; sign-in without keys, free options marked). One
+ * decision per screen, the recommended answer preselected; Finish (or skipping from Welcome's fine
+ * print) marks setup done and opens the Control Center. The control phase joins in M7.
  */
 import { AnimatePresence, motion, useReducedMotionConfig } from "motion/react";
 import { useEffect, useState, type ReactNode } from "react";
@@ -14,20 +15,21 @@ import { MicCheck } from "../components/voice/MicCheck";
 import { Recommended, SpeechChooser, VoiceList } from "../components/voice/SpeechChooser";
 import { useSpeech, type Speech } from "../components/voice/useSpeech";
 import { HeyKivoSwitch } from "../components/voice/WakeWords";
-import { Button, Group, Row, Section, ShortcutRecorder, useToast } from "../components/ui";
+import { Button, Group, Monogram, Pill, Row, Section, ShortcutRecorder, Spinner, useToast } from "../components/ui";
+import { brainColor, monogram, type BrainsList, type DiscoverySection } from "../ipc/brains";
 import { Icon } from "../icons";
 import { Method } from "../ipc/generated";
 import { useRuntime } from "../ipc/runtime";
 
-const STEPS = ["welcome", "mic", "activation", "speech", "summary", "voice"] as const;
+const STEPS = ["welcome", "mic", "activation", "speech", "summary", "voice", "brain"] as const;
 type Step = (typeof STEPS)[number];
-/** The phases the progress capsule shows; steps after Welcome are the Voice phase. */
-const PHASES = ["welcome", "voice"] as const;
-const OPTIONAL: ReadonlySet<Step> = new Set<Step>(["voice"]);
+/** The phases the progress capsule shows: Welcome, the Voice steps, then the brain. */
+const PHASES = ["welcome", "voice", "brain"] as const;
+const OPTIONAL: ReadonlySet<Step> = new Set<Step>(["voice", "brain"]);
 
 function Header({ step }: { step: Step }) {
   const { t } = useTranslation();
-  const phase = step === "welcome" ? 0 : 1;
+  const phase = step === "welcome" ? 0 : step === "brain" ? 2 : 1;
   return (
     <div className="k-onboarding__bar">
       <span className="k-onboarding__progress">
@@ -150,6 +152,102 @@ function Speaking({ speech }: { speech: Speech }) {
   );
 }
 
+/** Step 6 (UX-34): connect a brain — what's already on this PC first, then OpenRouter's sign-in;
+ * free options marked (CONV-08). Nothing is connected without a click (DISC-03). */
+function ConnectBrain() {
+  const { t } = useTranslation();
+  const { link, request } = useRuntime();
+  const toast = useToast();
+  const connected = link?.status === "connected";
+  const [found, setFound] = useState<DiscoverySection["items"] | null>(null);
+  const [brains, setBrains] = useState<BrainsList | null>(null);
+  const fail = (e: unknown) => toast(e instanceof Error ? e.message : String(e));
+  const load = () => {
+    void request<BrainsList>(Method.brainsList)
+      .then(setBrains)
+      .catch(() => {});
+  };
+  useEffect(() => {
+    if (!connected) return;
+    load();
+    // Look now: setup is when the user most wants to see what's here.
+    void Promise.all(
+      ["cli", "local"].map((section) =>
+        request<DiscoverySection>(Method.brainsRefresh, { section })
+          .then((s) => s.items)
+          .catch(() => []),
+      ),
+    ).then((lists) => setFound(lists.flat()));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, when connected
+  }, [connected]);
+  const isConnected = (id: string) => brains?.connected.some((b) => b.id === id) ?? false;
+  const use = (id: string, baseUrl?: string) =>
+    request(Method.brainsConnect, { id, ...(baseUrl ? { baseUrl } : {}) })
+      .then(load)
+      .catch(fail);
+  return (
+    <>
+      <Section title={t("onboarding.brain.found")} />
+      {found === null ? (
+        <Spinner label={t("onboarding.brain.searching")} />
+      ) : found.length === 0 ? (
+        <p className="k-note">{t("onboarding.brain.nothingFound")}</p>
+      ) : (
+        <Group>
+          {found.map((i) => {
+            const name = i.data.name ?? i.id;
+            const free = i.data.free ?? (i.data.url ? t("onboarding.brain.free") : null);
+            return (
+              <Row
+                key={i.id}
+                lead={<Monogram text={monogram(name)} color={brainColor(i.id)} />}
+                title={name}
+                subtitle={free ?? undefined}
+                end={
+                  <>
+                    {free && <Pill tone="success">{t("onboarding.brain.free")}</Pill>}
+                    {isConnected(i.id) ? (
+                      <Pill tone="success">{t("onboarding.brain.connected")}</Pill>
+                    ) : i.data.signedIn === false ? (
+                      <Button size="sm" onClick={() => void request(Method.brainsSignIn, { id: i.id }).catch(fail)}>
+                        {t("onboarding.brain.signIn")}
+                      </Button>
+                    ) : i.data.needsAdapter ? null : (
+                      <Button size="sm" variant="primary" onClick={() => void use(i.id, i.data.url)}>
+                        {t("onboarding.brain.use")}
+                      </Button>
+                    )}
+                  </>
+                }
+              />
+            );
+          })}
+        </Group>
+      )}
+      <Group>
+        <Row
+          lead={<Monogram text={monogram("Open Router")} color={brainColor("openrouter")} />}
+          title={t("onboarding.brain.openRouter")}
+          subtitle={t("onboarding.brain.openRouterHint")}
+          end={
+            isConnected("openrouter") ? (
+              <Pill tone="success">{t("onboarding.brain.connected")}</Pill>
+            ) : (
+              <Button
+                size="sm"
+                onClick={() => void request(Method.brainsSignIn, { id: "openrouter" }).then(load).catch(fail)}
+              >
+                {t("onboarding.brain.connect")}
+              </Button>
+            )
+          }
+        />
+      </Group>
+      <p className="k-note">{t("onboarding.brain.keysLater")}</p>
+    </>
+  );
+}
+
 /** The confirm step (UX-60): what KIVO will use, in words. */
 function Summary({ speech }: { speech: Speech }) {
   const { t } = useTranslation();
@@ -225,7 +323,8 @@ export function Onboarding({ onFinish }: { onFinish: () => void }) {
     activation: <Activation />,
     speech: <Speaking speech={speech} />,
     summary: <Summary speech={speech} />,
-    voice: <Enrollment onDone={() => void finish()} />,
+    voice: <Enrollment onDone={() => go(1)} />,
+    brain: <ConnectBrain />,
   };
 
   // Steps slide 18 px in the direction of travel (DESIGN_SYSTEM §5).

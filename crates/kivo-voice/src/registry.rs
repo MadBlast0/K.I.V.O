@@ -72,6 +72,9 @@ pub struct Measured {
     pub latency_ms: Option<f64>,
     /// Word error rate on the benchmark set, 0–1 (STT).
     pub word_error_rate: Option<f64>,
+    /// Word error rate on the owner's own enrollment recordings, 0–1 (STT, VOICE-23).
+    #[serde(default)]
+    pub voice_word_error_rate: Option<f64>,
     /// Unix milliseconds of the run.
     pub measured_at: i64,
 }
@@ -338,6 +341,7 @@ pub fn apply_measurements(entries: &mut [RegistryEntry], metrics: &[(String, f64
             latency_ms: find("end of speech → final (median utterance)")
                 .or_else(|| find("first audio")),
             word_error_rate: find("WER").map(|percent| percent / 100.0),
+            voice_word_error_rate: None,
             measured_at: at,
         };
         if measured.real_time_factor.is_some()
@@ -345,6 +349,26 @@ pub fn apply_measurements(entries: &mut [RegistryEntry], metrics: &[(String, f64
             || measured.word_error_rate.is_some()
         {
             entry.measured = Some(measured);
+        }
+    }
+}
+
+/// Fills in how well each recognizer heard the owner's enrollment recordings (VOICE-23).
+pub fn apply_voice_wer(
+    entries: &mut [RegistryEntry],
+    wers: &std::collections::BTreeMap<String, f64>,
+    at: i64,
+) {
+    for entry in entries {
+        if let Some(wer) = wers.get(&entry.engine.id) {
+            let measured = entry.measured.get_or_insert(Measured {
+                real_time_factor: None,
+                latency_ms: None,
+                word_error_rate: None,
+                voice_word_error_rate: None,
+                measured_at: at,
+            });
+            measured.voice_word_error_rate = Some(*wer);
         }
     }
 }

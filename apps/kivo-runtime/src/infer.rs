@@ -102,6 +102,8 @@ pub struct Infer {
     program: PathBuf,
     /// Engines that failed to load this session; their fallbacks stand in (VOICE-47).
     failed: Arc<Mutex<std::collections::HashSet<String>>>,
+    /// Speaking speed in percent (UX-61).
+    speed: Arc<Mutex<u16>>,
 }
 
 impl Infer {
@@ -126,6 +128,7 @@ impl Infer {
                 pid: Arc::default(),
                 program,
                 failed: Arc::default(),
+                speed: Arc::new(Mutex::new(100)),
             },
             rx,
             tx,
@@ -303,12 +306,19 @@ impl Infer {
         self.notify(method::STT_CANCEL, json!(UtteranceId { id }))
     }
 
+    /// The speaking speed for replies, in percent (UX-61).
+    pub fn set_speed(&self, percent: u16) {
+        *lock(&self.speed) = percent.clamp(50, 200);
+    }
+
     /// Speaks `text`; the audio arrives as `InferEvent::Speech`, then `SpeakDone`.
     pub async fn speak(&self, id: u64, text: &str, voice: Option<&str>) -> Result<(), InferError> {
+        let speed = f32::from(*lock(&self.speed)) / 100.0;
         let params = json!(TtsSpeak {
             id,
             text: text.to_owned(),
-            voice: voice.map(str::to_owned)
+            voice: voice.map(str::to_owned),
+            speed: ((speed - 1.0).abs() > f32::EPSILON).then_some(speed),
         });
         self.request(method::TTS_SPEAK, params).await.map(|_| ())
     }

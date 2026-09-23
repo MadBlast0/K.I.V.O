@@ -25,6 +25,8 @@ pub struct Rpc {
     lifecycle: Arc<Lifecycle>,
     /// Wake words, voice enrollment and sounds (VOICE §4–6).
     voice: Option<Arc<crate::voice_rpc::VoiceRpc>>,
+    /// Brains, Chat, Usage and preferences (BRAINS, CONVERSATION).
+    brains: Option<Arc<crate::brains_rpc::BrainsRpc>>,
 }
 
 impl Rpc {
@@ -42,7 +44,15 @@ impl Rpc {
             recorder,
             lifecycle,
             voice: None,
+            brains: None,
         }
+    }
+
+    /// Adds the brain requests.
+    #[must_use]
+    pub fn with_brains(mut self, brains: Arc<crate::brains_rpc::BrainsRpc>) -> Self {
+        self.brains = Some(brains);
+        self
     }
 
     /// Adds the voice requests.
@@ -73,7 +83,13 @@ impl Handler for Rpc {
         let recorder = self.recorder.clone();
         let lifecycle = Arc::clone(&self.lifecycle);
         let voice = self.voice.clone();
+        let brains = self.brains.clone();
         Box::pin(async move {
+            if let Some(brains) = brains
+                && let Some(result) = brains.call(&name, params.clone()).await
+            {
+                return result;
+            }
             if let Some(voice) = voice
                 && let Some(result) = voice.call(&name, params.clone()).await
             {
@@ -215,6 +231,28 @@ impl Handler for Rpc {
                         .map(|()| Value::Null)
                         .map_err(refuse)
                 }
+                method::MODELS_PAUSE => {
+                    #[derive(serde::Deserialize)]
+                    struct Id {
+                        id: String,
+                    }
+                    let Id { id } = parse(params)?;
+                    models.pause(&id);
+                    Ok(Value::Null)
+                }
+                method::MODELS_CANCEL => {
+                    #[derive(serde::Deserialize)]
+                    struct Id {
+                        id: String,
+                    }
+                    let Id { id } = parse(params)?;
+                    let models = Arc::clone(&models);
+                    tokio::task::spawn_blocking(move || models.cancel(&id))
+                        .await
+                        .map_err(|e| RpcError::new(RpcError::INTERNAL, e.to_string()))?
+                        .map(|()| Value::Null)
+                        .map_err(refuse)
+                }
                 method::UI_WINDOW_CLOSED => Ok(serde_json::json!({
                     "keepRunning": lifecycle.window_closed()
                 })),
@@ -319,6 +357,15 @@ mod tests {
             router: IntentRouter::new(Grammar::bundled("en").unwrap()),
             system: Arc::new(kivo_testkit::FakeSystemInfo::default()),
             fallback_voice: None,
+            brains: Arc::new(crate::brains::Brains::new(
+                Arc::new(Mutex::new(Database::in_memory().unwrap())),
+                Arc::new(kivo_testkit::FakeSecrets::default()),
+                0,
+            )),
+            agents: crate::agents::Agents::new(
+                Arc::new(Mutex::new(Database::in_memory().unwrap())),
+                std::env::temp_dir(),
+            ),
         }));
         let lifecycle = Arc::new(Lifecycle::new(
             Arc::clone(&core),

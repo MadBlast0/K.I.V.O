@@ -121,6 +121,7 @@ export function Overlay() {
         void invoke("overlay_focus");
       },
       talk: () => request(Method.sessionTalk),
+      misroute: (turnId) => request(Method.chatMisroute, { turnId, note: "" }),
     }),
     [],
   );

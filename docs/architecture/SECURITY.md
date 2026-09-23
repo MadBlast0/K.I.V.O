@@ -211,9 +211,9 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 
 **Secrets (§5)**
 
-- [ ] **SEC-17** · M3 · Secrets in Credential Manager (`keyring`) referenced as `secret://kivo/<provider>/<name>`; loaded only inside the adapter or tool executor (§5)
+- [x] **SEC-17** · M3 · Secrets in Credential Manager (`keyring`) referenced as `secret://kivo/<provider>/<name>`; loaded only inside the adapter or tool executor (§5) → done: `WindowsSecrets` on Credential Manager (`kivo/<provider>/<name>`), referenced as `secret://kivo/…` in config, read only inside the brain adapter · verified: `keys_round_trip_through_credential_manager`, brains tests (2026-09-23)
 - [x] **SEC-18** · M0 · `Secret<String>` newtype: no `Display`, `Debug` prints `***`, no `Serialize`, zeroized on drop (§5) → done: `crates/kivo-core/src/secret.rs` · verified: tests for Debug `***`, expose, zeroize; no Display/Serialize impls
-- [ ] **SEC-19** · M3 · Secrets never reach prompts, logs, activity, diagnostics or IPC to the UI; the UI can only set (write-only) and ask the runtime to test (§5)
+- [x] **SEC-19** · M3 · Secrets never reach prompts, logs, activity, diagnostics or IPC to the UI; the UI can only set (write-only) and ask the runtime to test (§5) → done: keys never enter prompts, logs, Activity or IPC; the UI can only set and ask for a test · verified: brains view test (no key material), `the_control_centers_brain_requests` (not in list or config), `Brains.test.tsx` (write-only field) (2026-09-23)
 
 **Privacy (§6)**
 

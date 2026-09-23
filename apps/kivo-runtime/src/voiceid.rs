@@ -309,6 +309,15 @@ impl VoiceId {
         Take { ok, seconds }
     }
 
+    /// The recorded prompts with their text, for scoring recognizers on this voice (VOICE-23).
+    pub fn takes(&self) -> Vec<(String, Vec<f32>)> {
+        lock(&self.takes)
+            .iter()
+            .enumerate()
+            .filter_map(|(i, t)| t.clone().map(|a| (PROMPTS[i].to_owned(), a)))
+            .collect()
+    }
+
     /// Drops an unfinished enrollment.
     pub fn cancel_enrollment(&self) {
         *lock(&self.takes) = vec![None; PROMPTS.len()];

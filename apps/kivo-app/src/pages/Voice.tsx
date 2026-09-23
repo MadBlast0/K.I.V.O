@@ -1,8 +1,11 @@
 /**
- * Voice (UX §3; the M2 part of UX-23): how KIVO hears and speaks — profile cards with the
- * recommendation for this PC and safe switching (VOICE §11), the voices with previews — plus wake
- * words, follow-ups, the owner's voice, and the speech models on this PC (DIST-13) with each
- * licence shown before anything downloads. Lists update from the runtime's pushed events.
+ * Voice (UX §3, UX-23, UX-61, UX-62): how KIVO hears and speaks — recognition and speaking at a
+ * glance (engine, status, language, live transcript, microphone, voice, preview, speed), profile
+ * cards with the recommendation for this PC and safe switching (VOICE §11), the voice cards with
+ * previews — plus wake words, follow-ups, the owner's voice, KIVO's personality, the user's own
+ * words, the speech models on this PC (DIST-13) with each licence shown before anything
+ * downloads (download, pause, cancel, remove, set as default, update), and the advanced view
+ * (VOICE-49). Lists update from the runtime's pushed events.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -20,6 +23,7 @@ import {
   Tag,
   useToast,
 } from "../components/ui";
+import { AdvancedVoice, Personality, SpeechSummary, Vocabulary } from "../components/voice/Details";
 import { Enrollment, SpeakerMode } from "../components/voice/Enrollment";
 import { Recommended, SpeechChooser, VoiceList } from "../components/voice/SpeechChooser";
 import { useSpeech } from "../components/voice/useSpeech";
@@ -72,6 +76,104 @@ function FollowUp() {
   );
 }
 
+/** A model's state and what can be done with it (UX-61). */
+function ModelEnd({
+  model: m,
+  onRemove,
+  onDownload,
+  act,
+}: {
+  model: ModelItem;
+  onRemove: () => void;
+  onDownload: () => void;
+  act: (method: Method, id: string) => void;
+}) {
+  const { t } = useTranslation();
+  const speechEngine = m.kind === "stt" || m.kind === "tts";
+  switch (m.state) {
+    case "downloading":
+    case "installing":
+      return (
+        <span className="k-voice__model-end">
+          <Tag>
+            {m.state === "installing"
+              ? t("voice.state.installing")
+              : t("voice.downloading", { percent: m.downloading ?? 0 })}
+          </Tag>
+          {m.state === "downloading" && (
+            <IconButton
+              icon="pause"
+              size="sm"
+              label={t("voice.pause", { name: m.name })}
+              onClick={() => act(Method.modelsPause, m.id)}
+            />
+          )}
+          <IconButton
+            icon="close"
+            size="sm"
+            label={t("voice.cancelDownload", { name: m.name })}
+            onClick={() => act(Method.modelsCancel, m.id)}
+          />
+        </span>
+      );
+    case "paused":
+      return (
+        <span className="k-voice__model-end">
+          <Tag tone="warning">{t("voice.state.paused")}</Tag>
+          <Button size="sm" icon="play" onClick={() => act(Method.modelsInstall, m.id)}>
+            {t("voice.resume")}
+          </Button>
+          <IconButton
+            icon="close"
+            size="sm"
+            label={t("voice.cancelDownload", { name: m.name })}
+            onClick={() => act(Method.modelsCancel, m.id)}
+          />
+        </span>
+      );
+    case "error":
+      return (
+        <span className="k-voice__model-end">
+          <Tag tone="danger">{t("voice.state.error")}</Tag>
+          <Button size="sm" icon="refresh" onClick={() => act(Method.modelsInstall, m.id)}>
+            {t("voice.retry")}
+          </Button>
+        </span>
+      );
+    case "ready":
+    case "updateAvailable":
+      return (
+        <span className="k-voice__model-end">
+          {m.state === "updateAvailable" && (
+            <Button size="sm" icon="download" onClick={() => act(Method.modelsInstall, m.id)}>
+              {t("voice.update")}
+            </Button>
+          )}
+          {m.residency && m.residency !== "unloaded" && (
+            // Loaded in memory right now (PLAN-02); it unloads after going unused.
+            <Tag tone={m.residency === "active" ? "success" : "neutral"}>{t(`voice.residency.${m.residency}`)}</Tag>
+          )}
+          {m.inUse ? (
+            <Tag tone="success">{t("voice.state.inUse")}</Tag>
+          ) : speechEngine ? (
+            <Button size="sm" onClick={() => act(Method.modelsSetDefault, m.id)}>
+              {t("voice.setDefault")}
+            </Button>
+          ) : (
+            <Tag>{t("voice.state.ready")}</Tag>
+          )}
+          <IconButton icon="delete" label={t("voice.remove", { name: m.name })} onClick={onRemove} />
+        </span>
+      );
+    default:
+      return (
+        <Button size="sm" icon="download" onClick={onDownload}>
+          {t("voice.download")}
+        </Button>
+      );
+  }
+}
+
 function Models() {
   const { t, i18n } = useTranslation();
   const { link, request } = useRuntime();
@@ -95,6 +197,7 @@ function Models() {
   });
 
   const fail = (e: unknown) => toast(e instanceof Error ? e.message : String(e));
+  const act = (method: Method, id: string) => void request(method, { id }).then(load).catch(fail);
   const download = () => {
     if (!offer) return;
     const model = offer;
@@ -128,34 +231,15 @@ function Models() {
             key={m.id}
             icon={m.kind === "stt" ? "mic" : m.kind === "tts" ? "volume" : "cpu"}
             title={m.name}
-            subtitle={t("voice.modelLine", {
-              license: m.license,
-              size: m.installed ? size(m.diskBytes) : size(m.size),
-              where: m.installed ? t("voice.onThisPc") : t("voice.toDownload"),
-            })}
-            end={
-              m.downloading !== null ? (
-                <Tag>{t("voice.downloading", { percent: m.downloading })}</Tag>
-              ) : m.installed ? (
-                <span className="k-voice__model-end">
-                  {m.residency && m.residency !== "unloaded" && (
-                    // Loaded in memory right now (PLAN-02); it unloads after going unused.
-                    <Tag tone={m.residency === "active" ? "success" : "neutral"}>
-                      {t(`voice.residency.${m.residency}`)}
-                    </Tag>
-                  )}
-                  <IconButton
-                    icon="delete"
-                    label={t("voice.remove", { name: m.name })}
-                    onClick={() => setRemoving(m)}
-                  />
-                </span>
-              ) : (
-                <Button size="sm" icon="download" onClick={() => setOffer(m)}>
-                  {t("voice.download")}
-                </Button>
-              )
+            subtitle={
+              m.error ??
+              t("voice.modelLine", {
+                license: m.license,
+                size: m.installed ? size(m.diskBytes) : size(m.size),
+                where: m.installed ? t("voice.onThisPc") : t("voice.toDownload"),
+              })
             }
+            end={<ModelEnd model={m} onRemove={() => setRemoving(m)} onDownload={() => setOffer(m)} act={act} />}
           />
         ))}
       </Group>
@@ -216,6 +300,7 @@ function Models() {
 export function Voice() {
   const { t } = useTranslation();
   const speech = useSpeech();
+  const [choosing, setChoosing] = useState(false);
 
   if (!speech.connected) {
     return (
@@ -229,14 +314,18 @@ export function Voice() {
   return (
     <>
       <PageHeader title={t("nav.voice")} subtitle={t("voice.subtitle")} />
-      <Recommended speech={speech} />
-
-      <Section title={t("speech.sttTitle")} aside={t("speech.sttHint")} />
-      <SpeechChooser slot="stt" speech={speech} />
-
-      <Section title={t("speech.ttsTitle")} aside={t("speech.ttsHint")} />
-      <SpeechChooser slot="tts" speech={speech} />
+      <SpeechSummary speech={speech} onChange={() => setChoosing((c) => !c)} />
+      {choosing && (
+        <>
+          <Recommended speech={speech} />
+          <Section title={t("speech.sttTitle")} aside={t("speech.sttHint")} />
+          <SpeechChooser slot="stt" speech={speech} />
+          <Section title={t("speech.ttsTitle")} aside={t("speech.ttsHint")} />
+          <SpeechChooser slot="tts" speech={speech} />
+        </>
+      )}
       <VoiceList speech={speech} />
+      <Personality />
 
       <Section title={t("wake.title")} aside={t("wake.hint")} />
       <WakeWords />
@@ -246,8 +335,11 @@ export function Voice() {
       <Enrollment />
       <SpeakerMode />
 
+      <Vocabulary />
+
       <Section title={t("voice.models")} aside={t("voice.modelsHint")} />
       <Models />
+      <AdvancedVoice />
     </>
   );
 }

@@ -264,6 +264,18 @@ async fn run(
             Grammar::bundled("en").expect("the English grammar ships with KIVO")
         }
     };
+    // The brains (BRAINS §3–5): built from the user's connections, keys read from Credential
+    // Manager inside the runtime only (SEC-17).
+    let brains = Arc::new(kivo_runtime::brains::Brains::new(
+        Arc::clone(&db),
+        Arc::new(kivo_platform_windows::WindowsSecrets),
+        kivo_platform_windows::utc_offset_minutes(),
+    ));
+    brains.reload(&config);
+    let agents = kivo_runtime::agents::Agents::new(
+        Arc::clone(&db),
+        dirs::home_dir().unwrap_or_else(std::env::temp_dir),
+    );
     let engine = Arc::new(Engine::new(engine::Parts {
         core: Arc::clone(&core),
         infer: infer.clone(),
@@ -276,7 +288,100 @@ async fn run(
         router: IntentRouter::new(grammar),
         system: Arc::clone(&platform.system),
         fallback_voice: Some(Arc::new(kivo_platform_windows::WindowsSpeech)),
+        brains: Arc::clone(&brains),
+        agents: Arc::clone(&agents),
     }));
+    // Agents' permission requests go to the turn engine's permission flow (BRAIN-15).
+    agents.set_permissions(Arc::new(engine::EnginePermissions(Arc::downgrade(&engine))));
+    // What's already on this PC: CLI agents and local model servers (DISCOVERY §1.1).
+    let home = dirs::home_dir().unwrap_or_else(std::env::temp_dir);
+    let discovery = kivo_runtime::discovery::Discovery::new(
+        Arc::clone(&db),
+        vec![
+            Arc::new(kivo_runtime::discovery::CliDetector {
+                path: {
+                    let home = home.clone();
+                    Arc::new(move || {
+                        let mut dirs = kivo_platform_windows::environment::current_path();
+                        dirs.extend(kivo_runtime::discovery::install_folders(&home));
+                        dirs
+                    })
+                },
+                home,
+            }),
+            Arc::new(kivo_runtime::discovery::LocalServerDetector::default()),
+        ],
+        Arc::clone(&brains),
+    );
+    let brains_rpc = Arc::new(kivo_runtime::brains_rpc::BrainsRpc::new(
+        Arc::clone(&core),
+        Arc::clone(&engine),
+        discovery,
+        recorder.clone(),
+        Arc::clone(&platform.control),
+        Arc::new(kivo_platform_windows::environment::open_in_terminal),
+    ));
+    brains_rpc.start_background(core.shutdown());
+    brains_rpc.start_pruning(core.shutdown());
+    // Paraphrased commands (BRAIN-03): when the small embedding model is on this PC, and as soon
+    // as the user downloads it.
+    {
+        let engine = Arc::clone(&engine);
+        let models = Arc::clone(&models);
+        let core = Arc::clone(&core);
+        let mut events = core.bus.subscribe();
+        tokio::spawn(async move {
+            let load = |engine: Arc<Engine>, models: Arc<Models>, language: String| async move {
+                let dir = models.installed_dir(kivo_store::models::EMBEDDING_MODEL);
+                let semantic = match dir {
+                    Some(dir) => tokio::task::spawn_blocking(move || {
+                        kivo_runtime::semantic::load(&dir, &language)
+                    })
+                    .await
+                    .ok()
+                    .flatten(),
+                    None => None,
+                };
+                engine.set_semantic(semantic);
+            };
+            load(
+                Arc::clone(&engine),
+                Arc::clone(&models),
+                core.config().general.language,
+            )
+            .await;
+            loop {
+                let event = match events.recv().await {
+                    kivo_core::Received::Event(event) => event,
+                    kivo_core::Received::Missed(_) => continue,
+                    kivo_core::Received::Closed => break,
+                };
+                if let kivo_core::EventKind::System(kivo_core::event::SystemEvent::ModelChanged {
+                    id,
+                    percent: None,
+                    ..
+                }) = &event.kind
+                    && id == kivo_store::models::EMBEDDING_MODEL
+                {
+                    load(
+                        Arc::clone(&engine),
+                        Arc::clone(&models),
+                        core.config().general.language,
+                    )
+                    .await;
+                }
+            }
+        });
+    }
+    // A program installed while KIVO runs changes PATH: look for CLIs again (DISC-15).
+    let _environment = {
+        let rpc = Arc::clone(&brains_rpc);
+        let handle = tokio::runtime::Handle::current();
+        kivo_platform_windows::environment::watch(move || {
+            let rpc = Arc::clone(&rpc);
+            handle.spawn(async move { rpc.environment_changed() });
+        })
+    };
     {
         // The app index is read once at startup, off the startup path.
         let engine = Arc::clone(&engine);
@@ -404,7 +509,8 @@ async fn run(
                     recorder.clone(),
                     Arc::new(kivo_platform_windows::WindowsSecrets),
                     paths.voice(),
-                ))),
+                )))
+                .with_brains(Arc::clone(&brains_rpc)),
             ),
             core.bus.clone(),
             core.state(),

@@ -136,12 +136,15 @@ pub struct SttFinal {
     pub millis: u64,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TtsSpeak {
     pub id: u64,
     pub text: String,
     pub voice: Option<String>,
+    /// Speaking speed, 1.0 normal (UX-61).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub speed: Option<f32>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

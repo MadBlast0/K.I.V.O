@@ -16,6 +16,8 @@ import { RuntimeProvider, useRuntime, useRuntimeEvents } from "./ipc/runtime";
 import { ThemeProvider } from "./lib/theme";
 import { Gallery } from "./pages/Gallery";
 import { Activity } from "./pages/Activity";
+import { Brains } from "./pages/Brains";
+import { Chat } from "./pages/Chat";
 import { Voice } from "./pages/Voice";
 import { Home } from "./pages/Home";
 import { Onboarding } from "./pages/Onboarding";
@@ -180,6 +182,10 @@ function Shell({ page, setPage }: { page: PageId; setPage: (page: PageId) => voi
           />
         ) : page === "activity" ? (
           <Activity />
+        ) : page === "chat" ? (
+          <Chat onOpenPermissions={() => setPage("permissions")} />
+        ) : page === "brains" ? (
+          <Brains />
         ) : page === "voice" ? (
           <Voice />
         ) : page === "settings" ? (

@@ -114,6 +114,9 @@ pub type AudioSink<'a> = &'a mut dyn FnMut(&[f32], u32) -> VoiceResult<()>;
 
 pub trait TtsEngine: Send {
     fn info(&self) -> &EngineInfo;
+    /// Speaking speed for what follows, 1.0 normal, 0.5–2.0 (UX-61). Engines without a speed
+    /// control ignore it.
+    fn set_speed(&mut self, _speed: f32) {}
     fn voices(&self) -> Vec<VoiceInfo>;
     /// Speaks `text` in `voice` (an id from `voices`, or the default), streaming audio into
     /// `sink` sentence by sentence. Stops with `VoiceError::Cancelled` once `cancel` fires.

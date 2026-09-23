@@ -299,8 +299,10 @@ pub fn overlay_typing_done(window: tauri::WebviewWindow) {
 
 /// What the Island may ask the runtime: only the actions its own buttons offer (SECURITY §9: the
 /// overlay window gets almost nothing).
-const ISLAND_METHODS: [&str; 5] = [
+const ISLAND_METHODS: [&str; 6] = [
     kivo_ipc::method::SESSION_CANCEL,
+    // "That's not what I meant" on a brain's answer (BRAIN-06): it only records a report.
+    kivo_ipc::method::CHAT_MISROUTE,
     kivo_ipc::method::SESSION_SAY,
     kivo_ipc::method::SESSION_TALK,
     kivo_ipc::method::PERMISSIONS_ANSWER,

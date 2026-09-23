@@ -109,6 +109,10 @@ pub struct Voice {
     pub tts_voice: String,
     /// Speak answers to typed requests too (UX §8: off, text in, text out).
     pub speak_typed_replies: bool,
+    /// Speaking speed in percent, 50–200 (UX-61).
+    pub tts_speed: u16,
+    /// Keep another installed recognizer ready in case the chosen one fails (VOICE-47, VOICE-49).
+    pub stt_fallback: bool,
 }
 
 impl Default for Voice {
@@ -126,6 +130,8 @@ impl Default for Voice {
             tts_engine: "system".into(),
             tts_voice: String::new(),
             speak_typed_replies: false,
+            tts_speed: 100,
+            stt_fallback: true,
         }
     }
 }
@@ -387,6 +393,8 @@ pub struct Performance {
     /// Minutes to keep speech models loaded after use (VOICE §8).
     pub stt_warm_minutes: u16,
     pub tts_warm_minutes: u16,
+    /// Processor threads speech models may use; 0 lets KIVO choose (VOICE-49).
+    pub speech_threads: u8,
 }
 
 impl Default for Performance {
@@ -395,6 +403,7 @@ impl Default for Performance {
             profile: PerformanceProfile::Auto,
             stt_warm_minutes: 10,
             tts_warm_minutes: 10,
+            speech_threads: 0,
         }
     }
 }
@@ -409,9 +418,65 @@ pub enum PerformanceProfile {
     Gaming,
 }
 
+/// Brains (BRAINS §4–5, §9–10; CONVERSATION §1). Keys are never here: a connection names its key
+/// by handle (`secret://kivo/<provider>/api-key`) and the value stays in Credential Manager
+/// (SEC-17). User-made profiles, limits and price overrides live in the store.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
+pub struct Brains {
+    /// The profile used when nothing else decides (BRAINS §5).
+    pub default_profile: String,
+    /// Calm, Friendly, Witty or Custom (BRAINS §10).
+    pub persona: String,
+    /// The user's own style, for the Custom persona.
+    pub custom_persona: String,
+    /// The brains the user connected. Detection only suggests; nothing is added by itself
+    /// (DISC-03).
+    pub connections: Vec<BrainConnection>,
+    /// Keep the model's hidden reasoning in the turn log for debugging (BRAIN-09; off).
+    pub keep_reasoning: bool,
+    /// Refresh the price table weekly from LiteLLM (BRAIN-35).
+    pub refresh_prices: bool,
+    /// Show a live "≈ $0.12" in the card (BRAINS §9).
+    pub show_cost: bool,
+    /// A voice session ends after this many minutes of silence (CONV-01).
+    pub voice_session_minutes: u16,
+    /// Voice sessions within this many minutes join the same thread (CONV-01).
+    pub thread_join_minutes: u16,
+}
+
+impl Default for Brains {
+    fn default() -> Self {
+        Self {
+            default_profile: "default".into(),
+            persona: "calm".into(),
+            custom_persona: String::new(),
+            connections: Vec::new(),
+            keep_reasoning: false,
+            refresh_prices: true,
+            show_cost: false,
+            voice_session_minutes: 2,
+            thread_join_minutes: 30,
+        }
+    }
+}
+
+/// One connected brain.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
-pub struct Brains {}
+pub struct BrainConnection {
+    /// A catalog id (`anthropic`, `ollama`, `claude-code`, …) or `custom-<name>`.
+    pub id: String,
+    /// The name shown, for custom connections.
+    pub name: String,
+    /// Overrides the catalog address (a local server on another port, a custom service).
+    pub base_url: String,
+    /// A custom service that runs on this PC (private) rather than in the cloud.
+    pub local: bool,
+    /// `secret://kivo/<provider>/<name>`, or empty when no key is needed.
+    pub key: String,
+    pub enabled: bool,
+}
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
@@ -467,6 +532,33 @@ impl KivoConfig {
             !self.general.language.is_empty(),
             "general.language",
             "can't be empty",
+        );
+        check(
+            self.performance.speech_threads <= 16,
+            "performance.speech-threads",
+            "must be 0–16",
+        );
+        check(
+            (50..=200).contains(&self.voice.tts_speed),
+            "voice.tts-speed",
+            "must be 50–200",
+        );
+        check(
+            self.brains.voice_session_minutes >= 1 && self.brains.voice_session_minutes <= 60,
+            "brains.voice-session-minutes",
+            "must be 1–60",
+        );
+        check(
+            self.brains.thread_join_minutes <= 24 * 60,
+            "brains.thread-join-minutes",
+            "must be at most a day",
+        );
+        check(
+            self.brains.connections.iter().all(|c| {
+                !c.id.is_empty() && (c.key.is_empty() || c.key.starts_with("secret://kivo/"))
+            }),
+            "brains.connections",
+            "each needs an id, and keys only as secret:// handles",
         );
         if problems.is_empty() {
             Ok(())

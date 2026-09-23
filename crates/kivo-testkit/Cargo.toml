@@ -10,6 +10,8 @@ publish = false
 [dependencies]
 kivo-core.workspace = true
 kivo-platform.workspace = true
+# The fake brain lives beside the brain contract; it is re-exported here with the other fakes.
+kivo-brain = { path = "../kivo-brain" }
 
 [lints]
 workspace = true

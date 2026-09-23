@@ -53,7 +53,7 @@ percent: number | null, installed: boolean, } | { "type": "modelResidency", engi
 
 export type DeviceKind = "microphone" | "speaker";
 
-export type ProviderEvent = { "type": "healthChanged", provider: string, healthy: boolean, } | { "type": "rateLimited", provider: string, retryAfterMs: number | null, } | { "type": "authFailed", provider: string, };
+export type ProviderEvent = { "type": "healthChanged", provider: string, healthy: boolean, } | { "type": "rateLimited", provider: string, retryAfterMs: number | null, } | { "type": "authFailed", provider: string, } | { "type": "discoveryChanged", section: string, } | { "type": "usageRecorded", provider: string, cost: number | null, } | { "type": "threadChanged", thread: string, };
 
 export type UiEvent = { "type": "controlCenterRequested", page: string | null, } | { "type": "overlayShown" } | { "type": "overlayHidden" } | { "type": "userConfirmed", callId: string, } | { "type": "userCancelled" };
 
@@ -125,7 +125,41 @@ answering: boolean,
 /**
  * The user said "wait": the card stays, "Waiting for you", with no timeout (UX-08).
  */
-waiting: boolean, };
+waiting: boolean, 
+/**
+ * The brain answering and why (PLAN-17): the card's chip, with the reason on hover.
+ */
+brain?: BrainChip, };
+
+export type BrainChip = { 
+/**
+ * The brain's name ("Claude Code").
+ */
+name: string, 
+/**
+ * The profile's name ("Coding").
+ */
+profile: string, 
+/**
+ * "Coding · Claude Code — because this looked like a coding task".
+ */
+reason: string, 
+/**
+ * It runs on this PC.
+ */
+local: boolean, 
+/**
+ * Estimated dollars so far; `None` when hidden or unknown (always an estimate).
+ */
+cost?: number, 
+/**
+ * A spending-limit warning ("80% of your daily limit").
+ */
+warning?: string, 
+/**
+ * Context used by this request, in tokens, and the budget (the context meter, UX-21).
+ */
+contextUsed: number, contextBudget: number, };
 
 export type StepView = { 
 /**
@@ -248,7 +282,20 @@ downloading: number | null,
  * Loaded or not right now (PLAN-02): `unloaded`, `warming`, `warm`, `active`, `idle`,
  * `unloading`; `None` until the worker reports it.
  */
-residency: string | null, };
+residency: string | null, 
+/**
+ * `notInstalled`, `downloading`, `installing`, `paused`, `ready`, `updateAvailable` or
+ * `error` (UX-61).
+ */
+state: string, 
+/**
+ * Why the last download failed, in plain words.
+ */
+error?: string, 
+/**
+ * The speech engine KIVO uses now runs on this model.
+ */
+inUse: boolean, };
 
 export type SpeechEngineItem = { id: string, name: string, 
 /**
@@ -295,6 +342,10 @@ export type VoiceItem = { id: string, name: string,
 style: string, languages: Array<string>, };
 
 export type MeasuredItem = { realTimeFactor: number | null, latencyMs: number | null, wordErrorRate: number | null, 
+/**
+ * How well it heard the owner's enrollment recordings (VOICE-23).
+ */
+voiceWordErrorRate?: number, 
 /**
  * Unix milliseconds.
  */
@@ -366,6 +417,9 @@ export const Method = {
   modelsList: "models.list",
   modelsInstall: "models.install",
   modelsRemove: "models.remove",
+  modelsPause: "models.pause",
+  modelsCancel: "models.cancel",
+  modelsSetDefault: "models.setDefault",
   settingsGet: "settings.get",
   settingsSet: "settings.set",
   wakeList: "wake.list",
@@ -390,7 +444,45 @@ export const Method = {
   voiceSwitch: "voice.switch",
   voicePreview: "voice.preview",
   voiceMicCheck: "voice.micCheck",
+  voiceDevices: "voice.devices",
+  voiceAdvanced: "voice.advanced",
   voiceTrySample: "voice.trySample",
+  voiceVocabulary: "voice.vocabulary",
+  voiceAddWord: "voice.addWord",
+  voiceRemoveWord: "voice.removeWord",
+  brainsCatalog: "brains.catalog",
+  brainsList: "brains.list",
+  brainsCheck: "brains.check",
+  brainsConnect: "brains.connect",
+  brainsDisconnect: "brains.disconnect",
+  brainsSetKey: "brains.setKey",
+  brainsTestKey: "brains.testKey",
+  brainsSignIn: "brains.signIn",
+  brainsSetDefault: "brains.setDefault",
+  brainsSaveProfile: "brains.saveProfile",
+  brainsDeleteProfile: "brains.deleteProfile",
+  brainsDiscovery: "brains.discovery",
+  brainsRefresh: "brains.refresh",
+  brainsViewed: "brains.viewed",
+  brainsSetWorkspace: "brains.setWorkspace",
+  brainsContext: "brains.context",
+  usageSummary: "usage.summary",
+  usageSetLimits: "usage.setLimits",
+  usageSetCaps: "usage.setCaps",
+  usageSetPrice: "usage.setPrice",
+  usageExport: "usage.export",
+  chatThreads: "chat.threads",
+  chatThread: "chat.thread",
+  chatNew: "chat.new",
+  chatUpdate: "chat.update",
+  chatDelete: "chat.delete",
+  chatSend: "chat.send",
+  chatCompact: "chat.compact",
+  chatSearch: "chat.search",
+  chatMisroute: "chat.misroute",
+  memoryPreferences: "memory.preferences",
+  memorySetPreference: "memory.setPreference",
+  memoryDeletePreference: "memory.deletePreference",
 } as const;
 
 export type Method = (typeof Method)[keyof typeof Method];

@@ -242,6 +242,7 @@ impl VoiceRpc {
                     real_time_factor: m.real_time_factor,
                     latency_ms: m.latency_ms,
                     word_error_rate: m.word_error_rate,
+                    voice_word_error_rate: m.voice_word_error_rate,
                     measured_at: m.measured_at,
                 }),
                 model: e.engine.model,
@@ -480,6 +481,52 @@ impl VoiceRpc {
                         seconds,
                     })
                 })
+            }
+            method::VOICE_ADVANCED => Ok(self.models.advanced(&self.core.config())),
+            method::VOICE_DEVICES => {
+                let audio = self.engine.speaker.audio();
+                let list = |devices: kivo_platform::PlatformResult<
+                    Vec<kivo_platform::AudioDevice>,
+                >| {
+                    devices
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|d| serde_json::json!({ "id": d.id.0, "name": d.name, "isDefault": d.is_default }))
+                        .collect::<Vec<_>>()
+                };
+                Ok(serde_json::json!({
+                    "inputs": list(audio.input_devices()),
+                    "outputs": list(audio.output_devices()),
+                }))
+            }
+            method::MODELS_SET_DEFAULT => {
+                #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
+                struct Params {
+                    id: String,
+                }
+                match parse::<Params>(params) {
+                    Ok(p) => {
+                        let language = self.core.config().general.language;
+                        let engine = kivo_voice::engines().into_iter().find(|e| {
+                            e.model.as_deref() == Some(p.id.as_str()) && e.supports(&language)
+                        });
+                        match engine {
+                            Some(e) => {
+                                let slot = match e.slot {
+                                    kivo_voice::EngineSlot::Tts => InferSlot::Tts,
+                                    _ => InferSlot::Stt,
+                                };
+                                self.switcher
+                                    .start(slot, &e.id, None)
+                                    .map(|()| Value::Null)
+                                    .map_err(refuse)
+                            }
+                            None => Err(refuse(text::t("voice.notAnEngine"))),
+                        }
+                    }
+                    Err(e) => Err(e),
+                }
             }
             method::VOICE_TRY_SAMPLE => {
                 #[derive(Deserialize)]
@@ -863,6 +910,7 @@ impl VoiceRpc {
                 let Some(voice_id) = self.engine.voice_id() else {
                     return Some(Err(refuse(text::t("voiceId.busy"))));
                 };
+                let takes = voice_id.takes();
                 let finished = tokio::task::spawn_blocking(move || voice_id.finish_enrollment())
                     .await
                     .map_err(|e| e.to_string())
@@ -879,6 +927,22 @@ impl VoiceRpc {
                         });
                         self.recorder
                             .user_action("voiceId.finish", &text::t("voiceId.saved"));
+                        // Which recognizer hears this voice best (VOICE-23), in the background.
+                        let switcher = Arc::clone(&self.switcher);
+                        let models = Arc::clone(&self.models);
+                        let db = Arc::clone(&self.db);
+                        tokio::spawn(async move {
+                            let wers = switcher.voice_wer(&takes).await;
+                            if wers.is_empty() {
+                                return;
+                            }
+                            let at = kivo_store::brains::now_ms();
+                            if let Ok(raw) = serde_json::to_string(&(&wers, at)) {
+                                let _ = lock(&db).set_meta(crate::models::VOICE_WER_KEY, &raw);
+                            }
+                            tracing::info!(?wers, "enrollment word error rates");
+                            models.set_voice_wers(wers, at);
+                        });
                         ok(&status)
                     }
                     Err(e) => Err(refuse(e)),

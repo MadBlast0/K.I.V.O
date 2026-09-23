@@ -378,20 +378,20 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 
 **Sessions and threads (§0–1)**
 
-- [ ] **CONV-01** · M3 · Voice sessions end after 2 min of silence (setting); threads join voice sessions within 30 min on the same topic; "Kivo, new topic" starts a new thread; typed chats choose a thread (§1)
-- [ ] **CONV-02** · M3 · Agent sessions: the CLI agent's session id is stored so KIVO can resume it (§1)
+- [x] **CONV-01** · M3 · Voice sessions end after 2 min of silence (setting); threads join voice sessions within 30 min on the same topic; "Kivo, new topic" starts a new thread; typed chats choose a thread (§1) → done: voice sessions end after `brains.voice-session-minutes` (2) of silence; a new session joins a thread from the last 30 min on the same topic; "Kivo, new topic" starts one; Chat picks its thread · verified: `follow_ups_continue_the_thread_and_new_topic_starts_another` (2026-09-23)
+- [x] **CONV-02** · M3 · Agent sessions: the CLI agent's session id is stored so KIVO can resume it (§1) → done: the agent's session id is stored per agent and workspace and resumed with `session/load` when the agent restarts · verified: the Claude Code e2e test checks the stored id; `a_stored_session_is_resumed_when_the_agent_can` (2026-09-23)
 - [ ] **CONV-03** · M7 · Chat power features: rename, pin, continue, branch, export, delete, context meter, Compact now (§0)
 
 **Context budgets and compaction (§2)**
 
-- [ ] **CONV-04** · M3 · Per-request budget by model class (small local, large local, cloud chat 32k / voice 12k, CLI handoff, realtime), user-adjustable per profile (§2)
-- [ ] **CONV-05** · M3 · Assembly order 1–8 with guaranteed space for the first items and at least the last 4 turns verbatim (§2)
-- [ ] **CONV-06** · M3 · Compaction into a stored running summary by the cheapest suitable model; full history kept in SQLite and recallable by semantic search (§2)
-- [ ] **CONV-07** · M3 · Prompt caching: the stable prefix (layers 1, 2, 3, 6) marked cacheable for Anthropic, OpenAI and Gemini (§2, §8)
+- [x] **CONV-04** · M3 · Per-request budget by model class (small local, large local, cloud chat 32k / voice 12k, CLI handoff, realtime), user-adjustable per profile (§2) → done: `budget()` per model class (small/large local, cloud 32k chat / 12k voice, agent handoff), overridable per profile (max context) · verified: budget tests (2026-09-23)
+- [x] **CONV-05** · M3 · Assembly order 1–8 with guaranteed space for the first items and at least the last 4 turns verbatim (§2) → done: `assemble()` in the 1–8 order with guaranteed first layers and at least the last four turns verbatim · verified: context tests, compaction e2e (older turn dropped, last four kept) (2026-09-23)
+- [~] **CONV-06** · M3 · Compaction into a stored running summary by the cheapest suitable model; full history kept in SQLite and recallable by semantic search (§2) → partial: older turns are summarized into the thread's stored running summary by the cheapest suitable brain, automatically and by "Compact now"; the full history stays in SQLite, searchable (FTS5) and recalled into requests · missing: recall by semantic (embedding) search; recall uses full-text search today
+- [x] **CONV-07** · M3 · Prompt caching: the stable prefix (layers 1, 2, 3, 6) marked cacheable for Anthropic, OpenAI and Gemini (§2, §8) → done: the stable prefix (system, instructions, workspace, skills) is marked cacheable; Anthropic gets `cache_control`, OpenAI and Gemini cache the leading blocks themselves · verified: contract tests, e2e request check (2026-09-23)
 
 **Free options (§3)**
 
-- [ ] **CONV-08** · M3 · Free and low-cost options labelled "Free" in onboarding and Brains (local models, Gemini CLI, Codex with ChatGPT, OpenRouter free models) (§3)
+- [x] **CONV-08** · M3 · Free and low-cost options labelled "Free" in onboarding and Brains (local models, Gemini CLI, Codex with ChatGPT, OpenRouter free models) (§3) → done: free options are labelled in the catalog and shown as "Free" in Brains and onboarding (local models, Gemini CLI, Codex with ChatGPT, OpenRouter free models) · verified: Brains and onboarding tests (2026-09-23)
 
 **Instructions and workspaces (§4)**
 
@@ -401,7 +401,7 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 
 **Driving other AIs (§5)**
 
-- [ ] **CONV-12** · M3 · KIVO-run ACP sessions: "Tell Claude …" follow-ups into the same session, progress in the Island, Tasks and Chat (§5.1)
+- [x] **CONV-12** · M3 · KIVO-run ACP sessions: "Tell Claude …" follow-ups into the same session, progress in the Island, Tasks and Chat (§5.1) → done: "Tell Claude Code …" goes into the same live ACP session; progress shows in the Island and Chat · verified: the Claude Code e2e test (second prompt in the same session) (2026-09-23) · note: the Tasks view joins with Tasks (M5)
 - [ ] **CONV-13** · M5 · "Open in terminal": hand the session to a visible terminal where the agent supports resuming (§5.1)
 - [ ] **CONV-14** · M5 · Visible terminal agents: launch Windows Terminal with cwd + agent command (mode flags from the app registry; bypass/yolo launch is High risk), track the session, paste prompts via UIA/clipboard, wait for "send", read replies via TextPattern (§5.2)
 - [ ] **CONV-15** · M5 · Prompt Draft card: target, text, Send · Edit · Cancel, voice edits live ("add …", "remove the last sentence", "read it back") (§5.4)
@@ -422,13 +422,13 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 **Conversational confirmations (§7)**
 
 - [x] **CONV-26** · M2 · Decisions play the `question` earcon, listen without the wake word for 10 s (extended while the user talks), show a mic ring and voice hints matching the buttons (§7, DESIGN_SYSTEM voice-hint rule) → done: a decision plays `question`, listens 10 s (extended while the user talks), and the Island shows the mic ring and the buttons' words ("allow", "always allow", "deny", "wait") · verified: `decisions_are_answered_by_voice_but_high_risk_needs_a_click`, Island hint tests (2026-09-23)
-- [~] **CONV-27** · M2 · Local confirmation grammar (EN + HI): approve, approve with scope, deny, defer ("Waiting for you", no timeout), edit (to the brain), explain ("why?") (§7) → partial: `kivo_intent::answers` (EN + HI): approve, approve with scope, deny, defer ("Waiting for you", no timeout) and explain ("why?") all work by voice · missing: edit is recognized but, with no brain until M3, KIVO says it can't change the request by voice yet
+- [x] **CONV-27** · M2 · Local confirmation grammar (EN + HI): approve, approve with scope, deny, defer ("Waiting for you", no timeout), edit (to the brain), explain ("why?") (§7) → done: `kivo_intent::answers` (EN + HI): approve, approve with scope, deny, defer ("Waiting for you", no timeout), explain ("why?"), and edit, which drops the waiting action and hands the corrected request to a brain · verified: answers tests, `changing_a_decision_by_voice_goes_to_a_brain` (2026-09-23)
 - [x] **CONV-28** · M2 · Voice approval rules: Medium needs the owner's voice (or signed-in device with recognition off); guests can't approve; speech heard during KIVO's own TTS is ignored (§7) → done: Medium needs the owner's voice (or recognition off), guests can't approve, High needs a click; speech heard during KIVO's own TTS is ignored for answers · verified: `decisions_are_answered_by_voice_but_high_risk_needs_a_click`, voice-ID tests (2026-09-23)
 - [ ] **CONV-29** · M4 · High risk: voice "approve" triggers Windows Hello; a click also works; voice alone never suffices (§7)
 
 **Context layers (§8)**
 
-- [ ] **CONV-30** · M3 · Context layers 1–8 with the default sizes, lazy-loading tools and skills (~1.5k tokens at start), CLI handoff = request + ≤ 300 tokens of memory (§8)
+- [x] **CONV-30** · M3 · Context layers 1–8 with the default sizes, lazy-loading tools and skills (~1.5k tokens at start), CLI handoff = request + ≤ 300 tokens of memory (§8) → done: layers 1–8 with the default sizes; tools are chosen per request, the agent handoff is the request plus ≤ 300 tokens of saved context; Brains → Context shows each layer · verified: context tests, `Brains.test.tsx` · note: skills load with M6 (2026-09-23)
 - [ ] **CONV-31** · M7 · Settings → Context: per-layer toggles and edit links, per-profile budget, auto-compaction threshold, "Start each conversation fresh", estimated cost per session, "Preview what the AI sees" with secrets redacted (§8)
 
 **Skills (§9)**

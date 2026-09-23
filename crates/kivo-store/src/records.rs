@@ -275,10 +275,26 @@ impl Database {
         Ok(())
     }
 
+    /// How a brain turn was routed (the card's reason, PLAN-17), and its hidden reasoning when
+    /// the user keeps a reasoning log (BRAIN-09).
+    pub fn set_turn_route(
+        &self,
+        id: &str,
+        route: &str,
+        reasoning: Option<&str>,
+    ) -> Result<(), DbError> {
+        self.connection().execute(
+            "UPDATE turns SET route = ?2, reasoning = COALESCE(?3, reasoning) WHERE id = ?1",
+            params![id, route, reasoning],
+        )?;
+        Ok(())
+    }
+
     /// Fills in what a turn heard, how it was routed, how it ended and what KIVO said.
     pub fn finish_turn(&self, turn: &TurnRecord) -> Result<(), DbError> {
         self.connection().execute(
-            "UPDATE turns SET ended_at = ?2, transcript = ?3, route = ?4, outcome = ?5, reply = ?6
+            "UPDATE turns SET ended_at = ?2, transcript = ?3, route = COALESCE(?4, route),
+                              outcome = ?5, reply = ?6
              WHERE id = ?1",
             params![
                 turn.id,

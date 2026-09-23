@@ -102,6 +102,8 @@ pub struct Supertonic {
     styles: Vec<(String, Style)>,
     language: String,
     noise: Noise,
+    /// The user's speaking speed on top of Supertone's recommended pace.
+    speed: f32,
 }
 
 fn session(path: &Path, threads: usize) -> VoiceResult<Session> {
@@ -158,6 +160,7 @@ impl Supertonic {
                 "en"
             }
             .to_owned(),
+            speed: 1.0,
             noise: Noise::new(),
         })
     }
@@ -192,7 +195,7 @@ impl Supertonic {
                 "text_mask" => mask_t.clone(),
             ])?;
             let (_, d) = out["duration"].try_extract_tensor::<f32>()?;
-            d.first().copied().unwrap_or(0.0) / SPEED
+            d.first().copied().unwrap_or(0.0) / (SPEED * self.speed)
         };
         let ttl_t = tensor(&style.ttl.0, style.ttl.1.clone())?;
         let (emb_shape, emb) = {
@@ -249,6 +252,10 @@ impl Supertonic {
 impl TtsEngine for Supertonic {
     fn info(&self) -> &EngineInfo {
         &self.info
+    }
+
+    fn set_speed(&mut self, speed: f32) {
+        self.speed = speed.clamp(0.5, 2.0);
     }
 
     fn voices(&self) -> Vec<VoiceInfo> {

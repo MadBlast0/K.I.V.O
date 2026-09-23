@@ -2,6 +2,7 @@
 //! text and text to speech, plus the wake-word, speaker and turn-detection traits that M2 fills
 //! in. Local engines run on ONNX Runtime (`ort`); nothing here links GPL code (DIST-17).
 
+pub mod embed;
 pub mod engine;
 pub mod error;
 pub mod fbank;
@@ -18,6 +19,7 @@ pub mod supertonic;
 pub mod system_tts;
 pub mod traits;
 pub mod wakeword;
+pub mod wer;
 
 pub use engine::{Accel, EngineInfo, EngineKind, EngineSlot, ResourceEstimate};
 

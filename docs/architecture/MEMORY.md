@@ -54,9 +54,9 @@ Status: Draft v1, 2026-09-21. Implements plan §62–65. Research:
 Status marks and the build protocol: [docs/README.md](../README.md). Memory v2 items (graph,
 vault, capture modes) are in [CONVERSATION.md](CONVERSATION.md) as CONV-17 to CONV-25.
 
-- [ ] **MEM-01** · M3 · `conversations` and `messages` tables with the retention setting (30 days default, "never keep" option) (§1)
+- [x] **MEM-01** · M3 · `conversations` and `messages` tables with the retention setting (30 days default, "never keep" option) (§1) → done: `conversations` and `messages` (FTS5) with the retention setting; retention 0 keeps nothing on disk (the session is kept in memory only) · verified: store tests, e2e thread checks (2026-09-23)
 - [ ] **MEM-02** · M5 · `tasks` and `task_steps` kept until deleted; completed tasks summarized after 90 days (§1)
-- [ ] **MEM-03** · M3 · `preferences` table for explicit settings and stated preferences ("call me Sam", "use metric") (§1)
+- [x] **MEM-03** · M3 · `preferences` table for explicit settings and stated preferences ("call me Sam", "use metric") (§1) → done: `preferences` table, edited in Brains → Context ("About me") and sent in every request · verified: `the_control_centers_brain_requests` ("Call me Sam" in the next request) (2026-09-23)
 - [ ] **MEM-04** · M7 · `memories` + `memories_fts` (FTS5) with `text, scope, sensitivity, source, created_at, last_used_at, use_count` (§1, §2)
 - [ ] **MEM-05** · M7 · "Remember …" and the card's "Remember this" button create memories; inline proposals ("Want me to remember …?") (§2)
 - [ ] **MEM-06** · M7 · Memory page: list, search, edit, delete, "forget everything", export to JSON (§2)
@@ -64,4 +64,4 @@ vault, capture modes) are in [CONVERSATION.md](CONVERSATION.md) as CONV-17 to CO
 - [ ] **MEM-08** · M7 · Retrieval: FTS5 + scope filter, top memories injected as `System` provenance marked "user-provided memory", ≤ 400 tokens per request (§3)
 - [ ] **MEM-09** · M8 · Embeddings (MiniLM-class via `fastembed`/`ort`, 384-dim, shared with the intent router) in `sqlite-vec`; model id stored per vector, background re-embed on change (§3)
 - [ ] **MEM-10** · M7 · "Why did you say that?" in Activity shows which memories were used (§3)
-- [ ] **MEM-11** · M3 · `ContextSnapshot` per session with `ContextDelta`s ("active app changed: VS Code, main.rs"); rebuilt for a new brain session or after failover (§4)
+- [x] **MEM-11** · M3 · `ContextSnapshot` per session with `ContextDelta`s ("active app changed: VS Code, main.rs"); rebuilt for a new brain session or after failover (§4) → done: a live snapshot per thread and per agent session with "what changed" deltas; rebuilt whole for a new session or brain · verified: context tests, agent e2e (2026-09-23)

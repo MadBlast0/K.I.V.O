@@ -16,6 +16,9 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tokio_util::sync::CancellationToken;
 
+/// Where the enrollment word error rates are kept.
+pub const VOICE_WER_KEY: &str = "voice.enrollmentWer";
+
 pub struct Models {
     store: ModelStore,
     core: Arc<Core>,
@@ -27,6 +30,10 @@ pub struct Models {
     system: Mutex<Option<Arc<dyn kivo_platform::SystemInfo>>>,
     /// KIVO's latest speech benchmarks on this PC: metric names with their medians, and when.
     measurements: Mutex<(Vec<(String, f64)>, i64)>,
+    /// How well each recognizer heard the owner's enrollment (VOICE-23), and when.
+    voice_wers: Mutex<(std::collections::BTreeMap<String, f64>, i64)>,
+    /// The last download failure per model, until it is tried again (UX-61 "Error").
+    errors: Mutex<HashMap<String, String>>,
 }
 
 impl Models {
@@ -39,7 +46,18 @@ impl Models {
             recommended_threads: std::sync::atomic::AtomicUsize::new(4),
             system: Mutex::default(),
             measurements: Mutex::default(),
+            voice_wers: Mutex::default(),
+            errors: Mutex::default(),
         }
+    }
+
+    /// Word error rates on the owner's enrollment recordings, per recognizer (VOICE-23).
+    pub fn set_voice_wers(&self, wers: std::collections::BTreeMap<String, f64>, at: i64) {
+        *lock(&self.voice_wers) = (wers, at);
+    }
+
+    pub fn voice_wers(&self) -> std::collections::BTreeMap<String, f64> {
+        lock(&self.voice_wers).0.clone()
     }
 
     pub fn set_system(&self, system: Arc<dyn kivo_platform::SystemInfo>) {
@@ -48,6 +66,12 @@ impl Models {
 
     /// Reads KIVO's latest `stt` and `tts` benchmark runs on this PC (VOICE-42).
     pub fn load_measurements(&self, db: &kivo_store::Database) {
+        if let Ok(Some(raw)) = db.meta(VOICE_WER_KEY)
+            && let Ok((wers, at)) =
+                serde_json::from_str::<(std::collections::BTreeMap<String, f64>, i64)>(&raw)
+        {
+            self.set_voice_wers(wers, at);
+        }
         let mut metrics = Vec::new();
         let mut at = 0;
         for suite in ["stt", "tts"] {
@@ -70,6 +94,8 @@ impl Models {
         let mut entries = kivo_voice::registry::registry();
         let (metrics, at) = lock(&self.measurements).clone();
         kivo_voice::registry::apply_measurements(&mut entries, &metrics, at);
+        let (wers, wers_at) = lock(&self.voice_wers).clone();
+        kivo_voice::registry::apply_voice_wer(&mut entries, &wers, wers_at);
         entries
     }
 
@@ -145,6 +171,9 @@ impl Models {
 
     /// Another installed recognizer for the language, used if the chosen one fails (VOICE-47).
     fn stt_fallback(&self, config: &KivoConfig, primary: &str) -> Option<(String, PathBuf)> {
+        if !config.voice.stt_fallback {
+            return None;
+        }
         kivo_voice::registry::compatible(EngineSlot::Stt, &config.general.language)
             .into_iter()
             .map(|e| e.engine.id)
@@ -154,6 +183,7 @@ impl Models {
 
     /// Everything KIVO can install, with what is already here (DIST-13).
     pub fn list(&self) -> Vec<ModelItem> {
+        let config = self.core.config();
         let downloads = self
             .downloads
             .lock()
@@ -164,7 +194,27 @@ impl Models {
                 let installed = self.store.installed(&m.id);
                 #[allow(clippy::cast_possible_truncation, reason = "0–100")]
                 let downloading = downloads.get(&m.id).map(|(_, p)| percent(*p));
+                let error = lock(&self.errors).get(&m.id).cloned();
+                let state = match (&installed, downloading) {
+                    (_, Some(100)) => "installing",
+                    (_, Some(_)) => "downloading",
+                    (Some(i), None) if self.store.update_available(i, &m) => "updateAvailable",
+                    (Some(_), None) => "ready",
+                    (None, None) if error.is_some() => "error",
+                    (None, None) if self.store.has_partial(&m.id) => "paused",
+                    (None, None) => "notInstalled",
+                };
+                let in_use = [&config.voice.stt_engine, &config.voice.tts_engine]
+                    .iter()
+                    .any(|e| {
+                        kivo_voice::engine(e).and_then(|e| e.model).as_deref()
+                            == Some(m.id.as_str())
+                    })
+                    || Self::wanted_stt(&config) == m.id;
                 ModelItem {
+                    state: state.to_owned(),
+                    error,
+                    in_use,
                     kind: serde_json::to_value(m.kind)
                         .ok()
                         .and_then(|v| v.as_str().map(str::to_owned))
@@ -206,9 +256,14 @@ impl Models {
                 .downloads
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if downloads.contains_key(id) || self.store.installed(id).is_some() {
+            let outdated = self
+                .store
+                .installed(id)
+                .is_some_and(|i| self.store.update_available(&i, &manifest));
+            if downloads.contains_key(id) || (self.store.installed(id).is_some() && !outdated) {
                 return Ok(());
             }
+            lock(&self.errors).remove(id);
             // A child of the shutdown token: quitting KIVO stops the download (Remove too).
             downloads.insert(
                 id.to_owned(),
@@ -239,34 +294,55 @@ impl Models {
                     .set_speech_status(SpeechStatus::Downloading { percent: 0 });
             }
             let mut last_percent = None;
-            let result =
+            let update = models
+                .store
+                .installed(&id)
+                .is_some_and(|i| models.store.update_available(&i, &manifest));
+            let fetcher = HttpFetcher::new();
+            let mut on_progress = |progress: Progress| {
+                let percent = percent(progress);
+                if last_percent != Some(percent) {
+                    last_percent = Some(percent);
+                    models.changed(&id, Some(percent), false);
+                }
+                if let Some(entry) = models
+                    .downloads
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .get_mut(&id)
+                {
+                    entry.1 = progress;
+                }
+                if hearing {
+                    models
+                        .core
+                        .set_speech_status(SpeechStatus::Downloading { percent });
+                }
+            };
+            let result = if update {
                 models
                     .store
-                    .install(&manifest, &HttpFetcher::new(), &cancel, &mut |progress| {
-                        let percent = percent(progress);
-                        if last_percent != Some(percent) {
-                            last_percent = Some(percent);
-                            models.changed(&id, Some(percent), false);
-                        }
-                        if let Some(entry) = models
-                            .downloads
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner)
-                            .get_mut(&id)
-                        {
-                            entry.1 = progress;
-                        }
-                        if hearing {
-                            models
-                                .core
-                                .set_speech_status(SpeechStatus::Downloading { percent });
-                        }
-                    });
+                    .update(&manifest, &fetcher, &cancel, &mut on_progress)
+            } else {
+                models
+                    .store
+                    .install(&manifest, &fetcher, &cancel, &mut on_progress)
+            };
+            let paused = cancel.is_cancelled();
             models
                 .downloads
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .remove(&id);
+            if paused && result.is_err() {
+                // Paused or cancelled by the user: not an error. The partial files stay for a
+                // resume unless Cancel removed them.
+                models.changed(&id, None, false);
+                if hearing {
+                    models.core.set_speech_status(SpeechStatus::Missing);
+                }
+                return;
+            }
             match result {
                 Ok(installed) => {
                     tracing::info!(model = id, bytes = installed.bytes, "model installed");
@@ -275,6 +351,7 @@ impl Models {
                 }
                 Err(e) => {
                     tracing::error!(%e, model = id, "the model download failed");
+                    lock(&models.errors).insert(id.clone(), e.to_string());
                     models.changed(&id, None, false);
                     if hearing {
                         models.core.set_speech_status(SpeechStatus::Failed {
@@ -285,6 +362,33 @@ impl Models {
             }
         });
         Ok(())
+    }
+
+    /// Pauses a download; installing again resumes it where it stopped (UX-61).
+    pub fn pause(&self, id: &str) {
+        if let Some((cancel, _)) = lock(&self.downloads).get(id) {
+            cancel.cancel();
+        }
+    }
+
+    /// Stops a download and drops what it had fetched (UX-61).
+    pub fn cancel(&self, id: &str) -> Result<(), String> {
+        let running = lock(&self.downloads).remove(id);
+        if let Some((cancel, _)) = running {
+            cancel.cancel();
+        }
+        lock(&self.errors).remove(id);
+        // The download thread may still hold the partial files for a moment.
+        for _ in 0..50 {
+            match self.store.discard_partial(id) {
+                Ok(()) => {
+                    self.changed(id, None, false);
+                    return Ok(());
+                }
+                Err(_) => std::thread::sleep(std::time::Duration::from_millis(20)),
+            }
+        }
+        self.store.discard_partial(id).map_err(|e| e.to_string())
     }
 
     /// Tells the Control Center a model changed (DIST-13: its list updates by push).
@@ -323,6 +427,47 @@ impl Models {
         self.changed(id, None, false);
         self.apply_engines(&self.core.config());
         Ok(())
+    }
+
+    /// What the Voice page's advanced view shows (VOICE-49): the exact engines, their models and
+    /// where they are, the devices they run on, the timing settings, the thread limit, the
+    /// fallback and how long models stay loaded.
+    pub fn advanced(self: &Arc<Self>, config: &KivoConfig) -> serde_json::Value {
+        let stt = self.listening_engine(config);
+        let tts = config.voice.tts_engine.clone();
+        let describe = |id: &str| {
+            let engine = kivo_voice::engine(id);
+            let model = engine.as_ref().and_then(|e| e.model.clone());
+            serde_json::json!({
+                "engine": id,
+                "name": engine.as_ref().map(|e| e.name.clone()),
+                "model": model,
+                "path": model.as_deref().and_then(|m| self.installed_dir(m)),
+                "devices": engine.as_ref().map(|e| e.accel.iter().map(|a| format!("{a:?}").to_lowercase()).collect::<Vec<_>>()),
+                "streaming": engine.as_ref().is_some_and(|e| e.streaming),
+                "license": engine.as_ref().map(|e| e.license.clone()),
+            })
+        };
+        let recommended = self
+            .recommended_threads
+            .load(std::sync::atomic::Ordering::Relaxed);
+        serde_json::json!({
+            "stt": describe(&stt),
+            "tts": describe(&tts),
+            "sttFallback": self.stt_fallback(config, &stt).map(|(id, _)| id),
+            "fallbackOn": config.voice.stt_fallback,
+            "threads": threads_for(config).min(recommended.max(1)),
+            "threadsSetting": config.performance.speech_threads,
+            "cores": std::thread::available_parallelism().map_or(1, std::num::NonZero::get),
+            "sttWarmMinutes": config.performance.stt_warm_minutes,
+            "ttsWarmMinutes": config.performance.tts_warm_minutes,
+            "timing": crate::voice::timing(),
+            "modelsFolder": self.store_root(),
+        })
+    }
+
+    fn store_root(&self) -> PathBuf {
+        self.store.root().to_path_buf()
     }
 
     /// Tells the worker which engines to use (they load on the first request, VOICE-34) and the
@@ -447,6 +592,10 @@ fn percent(progress: Progress) -> u8 {
 /// KIVO never takes the whole CPU).
 fn threads_for(config: &KivoConfig) -> usize {
     let cores = std::thread::available_parallelism().map_or(2, std::num::NonZero::get);
+    // The user's own limit (VOICE-49), never more than the machine has.
+    if config.performance.speech_threads > 0 {
+        return usize::from(config.performance.speech_threads).min(cores);
+    }
     let limit = match config.performance.profile {
         kivo_core::config::PerformanceProfile::Battery
         | kivo_core::config::PerformanceProfile::Gaming => 2,

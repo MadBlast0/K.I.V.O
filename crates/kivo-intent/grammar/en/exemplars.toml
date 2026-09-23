@@ -1,0 +1,85 @@
+# Paraphrase exemplars for the router's semantic stage, English (BRAINS §2 stage 2, BRAIN-03).
+# Each `command` is a phrase the grammar in commands.toml understands; `{app}` and `{window}` are
+# filled with what the user named, and the grammar resolves them. `phrases` are other ways people
+# say it. Power actions (restart, shut down) are left out on purpose: a misheard paraphrase should
+# reach a brain, not a power action, even though those always ask first.
+
+[[exemplar]]
+command = "mute"
+phrases = ["kill the sound", "silence the audio", "make it quiet", "no sound please", "cut the audio", "turn off the sound", "shh", "hush"]
+
+[[exemplar]]
+command = "unmute"
+phrases = ["bring the sound back", "i can't hear anything", "turn on the audio", "restore the sound", "give me sound again"]
+
+[[exemplar]]
+command = "volume up"
+phrases = ["make it louder", "i can barely hear it", "pump up the volume", "crank it up", "more volume", "bump the volume"]
+
+[[exemplar]]
+command = "volume down"
+phrases = ["make it softer", "it's too loud", "bring the volume down", "less volume", "lower the sound"]
+
+[[exemplar]]
+command = "mute the microphone"
+phrases = ["turn my mic off", "stop my microphone", "silence my mic", "disable the microphone"]
+
+[[exemplar]]
+command = "unmute the microphone"
+phrases = ["turn my mic back on", "enable the microphone", "switch my mic on"]
+
+[[exemplar]]
+command = "pause"
+phrases = ["hold the music", "stop playing", "freeze the video", "pause playback", "hold on the song"]
+
+[[exemplar]]
+command = "play"
+phrases = ["keep playing", "continue the song", "start the music again", "carry on playing"]
+
+[[exemplar]]
+command = "next song"
+phrases = ["i don't like this song", "play something else", "skip ahead", "change the song", "move to the next track"]
+
+[[exemplar]]
+command = "previous song"
+phrases = ["play that last song again", "go back one track", "the song before this one"]
+
+[[exemplar]]
+command = "what's playing"
+phrases = ["who sings this", "what's the name of this song", "tell me what song this is", "what am i listening to", "identify this song", "which track is playing", "the name of the song that's on"]
+
+[[exemplar]]
+command = "take a screenshot"
+phrases = ["snap the screen", "save what's on my screen", "grab a picture of my screen", "screen capture please"]
+
+[[exemplar]]
+command = "lock"
+phrases = ["lock it up", "secure my pc", "i'm stepping away lock the screen", "lock my workstation"]
+
+[[exemplar]]
+command = "go to sleep"
+phrases = ["put the pc to rest", "suspend the computer", "let the computer sleep"]
+
+[[exemplar]]
+command = "open {app}"
+phrases = ["pull up {app}", "get {app} going", "i want to use {app}", "load {app}", "boot up {app}", "can i get {app}", "bring {app} up"]
+
+[[exemplar]]
+command = "close {app}"
+phrases = ["get rid of {app}", "i'm done with {app}", "shut {app} down", "end {app}", "make {app} go away"]
+
+[[exemplar]]
+command = "restart {app}"
+phrases = ["turn {app} off and on again", "give {app} a fresh start", "{app} is stuck restart it"]
+
+[[exemplar]]
+command = "switch to {window}"
+phrases = ["take me to {window}", "jump to {window}", "show me {window}", "bring up the {window} window"]
+
+[[exemplar]]
+command = "minimize this window"
+phrases = ["hide this", "get this window out of the way", "shrink this window", "send this window to the taskbar"]
+
+[[exemplar]]
+command = "maximize this window"
+phrases = ["make this window bigger", "fill the screen with this", "expand this window"]

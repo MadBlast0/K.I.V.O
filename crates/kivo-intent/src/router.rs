@@ -1,8 +1,10 @@
-//! The intent router (BRAINS §2): the first confident stage wins. M1 has the grammar stage; the
-//! semantic stage and the brain join in M3 (BRAIN-03, BRAIN-04). Every decision is timed, and the
-//! router keeps the `fast_path_ratio` and per-stage p95 latency (BRAIN-05).
+//! The intent router (BRAINS §2): the first confident stage wins — the grammar, then (when the
+//! small local embedding model is installed) the semantic stage for paraphrases (BRAIN-03), then
+//! the brain. Every decision is timed, and the router keeps the `fast_path_ratio` and per-stage
+//! p95 latency (BRAIN-05).
 
 use crate::grammar::{Context, Grammar, Match};
+use crate::semantic::Semantic;
 use serde::Serialize;
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
@@ -43,6 +45,11 @@ pub struct RouterMetrics {
     /// heavy AI", plan §160).
     pub fast_path_ratio: f64,
     pub grammar_p95_micros: u64,
+    /// Requests the semantic stage recognized as a paraphrase of a command.
+    pub semantic: u64,
+    pub semantic_p95_micros: u64,
+    /// "That's not what I meant" reports this run (BRAIN-06).
+    pub misroutes: u64,
 }
 
 pub struct IntentRouter {
@@ -50,6 +57,10 @@ pub struct IntentRouter {
     requests: u64,
     fast_path: u64,
     grammar_times: VecDeque<Duration>,
+    misroutes: u64,
+    semantic: Option<Semantic>,
+    semantic_hits: u64,
+    semantic_times: VecDeque<Duration>,
 }
 
 impl IntentRouter {
@@ -59,7 +70,25 @@ impl IntentRouter {
             requests: 0,
             fast_path: 0,
             grammar_times: VecDeque::with_capacity(WINDOW),
+            misroutes: 0,
+            semantic: None,
+            semantic_hits: 0,
+            semantic_times: VecDeque::with_capacity(WINDOW),
         }
+    }
+
+    /// Turns on the semantic stage (the embedding model is installed and loaded).
+    pub fn set_semantic(&mut self, semantic: Option<Semantic>) {
+        self.semantic = semantic;
+    }
+
+    pub fn has_semantic(&self) -> bool {
+        self.semantic.is_some()
+    }
+
+    /// The user said a request went to the wrong place (BRAIN-06).
+    pub fn misrouted(&mut self) {
+        self.misroutes += 1;
     }
 
     pub fn grammar(&self) -> &Grammar {
@@ -75,16 +104,36 @@ impl IntentRouter {
             self.grammar_times.pop_front();
         }
         self.grammar_times.push_back(took);
-        let route = match matched {
-            Some(m) => {
-                self.fast_path += 1;
-                Route::FastPath(m)
+        let mut stages = vec![(Stage::Grammar, took)];
+        if let Some(m) = matched {
+            self.fast_path += 1;
+            return Decision {
+                route: Route::FastPath(m),
+                stages,
+            };
+        }
+        // Stage 2: a paraphrase of a known command, only when confident and resolvable.
+        if let Some(semantic) = &self.semantic {
+            let started = Instant::now();
+            let found = semantic.match_text(text, &self.grammar, cx);
+            let took = started.elapsed();
+            if self.semantic_times.len() == WINDOW {
+                self.semantic_times.pop_front();
             }
-            None => Route::Unhandled,
-        };
+            self.semantic_times.push_back(took);
+            stages.push((Stage::Semantic, took));
+            if let Some(m) = found {
+                self.fast_path += 1;
+                self.semantic_hits += 1;
+                return Decision {
+                    route: Route::FastPath(m),
+                    stages,
+                };
+            }
+        }
         Decision {
-            route,
-            stages: vec![(Stage::Grammar, took)],
+            route: Route::Unhandled,
+            stages,
         }
     }
 
@@ -101,6 +150,10 @@ impl IntentRouter {
             fast_path_ratio: ratio,
             grammar_p95_micros: u64::try_from(p95(&self.grammar_times).as_micros())
                 .unwrap_or(u64::MAX),
+            semantic: self.semantic_hits,
+            semantic_p95_micros: u64::try_from(p95(&self.semantic_times).as_micros())
+                .unwrap_or(u64::MAX),
+            misroutes: self.misroutes,
         }
     }
 }

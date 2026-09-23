@@ -78,6 +78,9 @@ vi.mock("../ipc/runtime", () => ({
   useRuntimeEvents: () => {},
 }));
 
+const sectionOf = (params: unknown) =>
+  typeof params === "object" && params !== null && "section" in params ? String(params.section) : "";
+
 runtime.request = (method: string, params?: unknown) => {
   calls.push({ method, params });
   switch (method) {
@@ -95,6 +98,34 @@ runtime.request = (method: string, params?: unknown) => {
       return Promise.resolve({ words: [], modelInstalled: false, listening: false });
     case "voiceId.status":
       return Promise.resolve({ enrolled: false, prompts: ["Hey Kivo"], recorded: [false], embeddings: 0 });
+    case "brains.list":
+      return Promise.resolve({ connected: [], profiles: [], defaultProfile: "default" });
+    case "brains.refresh":
+      return Promise.resolve(
+        sectionOf(params) === "cli"
+          ? {
+              section: "cli",
+              checkedAt: 1,
+              items: [
+                {
+                  id: "gemini-cli",
+                  new: true,
+                  data: { name: "Gemini CLI", signedIn: true, free: "Free with a Google account", program: "gemini" },
+                },
+              ],
+            }
+          : {
+              section: "local",
+              checkedAt: 1,
+              items: [
+                {
+                  id: "ollama",
+                  new: true,
+                  data: { name: "Ollama", url: "http://127.0.0.1:11434/v1", models: ["llama3.2"] },
+                },
+              ],
+            },
+      );
     default:
       return Promise.resolve(null);
   }
@@ -131,7 +162,7 @@ async function next() {
   await settle();
 }
 
-describe("Onboarding (UX-33, UX-60)", () => {
+describe("Onboarding (UX-33, UX-60, UX-34)", () => {
   beforeEach(() => {
     calls.length = 0;
   });
@@ -165,6 +196,21 @@ describe("Onboarding (UX-33, UX-60)", () => {
     await next();
 
     expect(await screen.findByText("Teach KIVO your voice")).toBeTruthy();
+    await next();
+
+    // Step 6 (UX-34): what's on this PC, free options marked; nothing is connected unasked.
+    expect(await screen.findByText("Connect a brain")).toBeTruthy();
+    expect(await screen.findByText("Gemini CLI")).toBeTruthy();
+    expect(screen.getByText("Ollama")).toBeTruthy();
+    expect(screen.getAllByText("Free").length).toBeGreaterThanOrEqual(2);
+    expect(calls.some((c) => c.method === "brains.connect")).toBe(false);
+    expect(await violations()).toEqual([]);
+    fireEvent.click(screen.getAllByRole("button", { name: "Use" })[1]);
+    await settle();
+    expect(calls).toContainEqual({
+      method: "brains.connect",
+      params: { id: "ollama", baseUrl: "http://127.0.0.1:11434/v1" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Finish" }));
     await settle();
     expect(calls).toContainEqual({ method: "settings.set", params: { general: { onboarded: true } } });

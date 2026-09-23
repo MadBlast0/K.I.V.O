@@ -66,6 +66,8 @@ pub struct Rig {
     pub screenshots: PathBuf,
     /// The system controls (volume, power): fakes that only record what they were asked.
     pub control: Arc<FakeSystemControl>,
+    pub brains: Arc<crate::brains::Brains>,
+    pub agents: Arc<crate::agents::Agents>,
 }
 
 impl Drop for Rig {
@@ -147,6 +149,13 @@ pub fn rig_with_voice(
     });
     let registry = Arc::new(kivo_tools::Registry::new(kivo_tools::builtin(&env)));
     let heard = Arc::new(Heard::default());
+    // Brains are put in by each test (scripted brains, a fake agent); none by default.
+    let brains = Arc::new(crate::brains::Brains::new(
+        Arc::clone(&db),
+        Arc::new(kivo_testkit::FakeSecrets::default()),
+        0,
+    ));
+    let agents = crate::agents::Agents::new(Arc::clone(&db), std::env::temp_dir());
     let system = Arc::new(kivo_testkit::FakeSystemInfo::default());
     let engine = Arc::new(Engine::new(engine::Parts {
         core: Arc::clone(&core),
@@ -160,7 +169,10 @@ pub fn rig_with_voice(
         router: kivo_intent::IntentRouter::new(kivo_intent::Grammar::bundled("en").unwrap()),
         system: system.clone(),
         fallback_voice: Some(heard.clone()),
+        brains: Arc::clone(&brains),
+        agents: Arc::clone(&agents),
     }));
+    agents.set_permissions(Arc::new(engine::EnginePermissions(Arc::downgrade(&engine))));
     engine.refresh_apps();
     let (signals, mut voice_signals) = tokio::sync::mpsc::unbounded_channel();
     let (levels, _levels_rx) = tokio::sync::watch::channel(0.0);
@@ -215,6 +227,8 @@ pub fn rig_with_voice(
             audio: mic,
             screenshots,
             control,
+            brains,
+            agents,
         },
         worker_task,
         pump,

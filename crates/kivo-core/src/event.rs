@@ -353,6 +353,19 @@ pub enum ProviderEvent {
     AuthFailed {
         provider: String,
     },
+    /// Discovery found something new or something went away (DISC-12): the section to reload.
+    DiscoveryChanged {
+        section: String,
+    },
+    /// A request was metered (BRAINS §9): the Usage page and the card update.
+    UsageRecorded {
+        provider: String,
+        cost: Option<f64>,
+    },
+    /// A conversation thread changed (a message, a summary, a new thread): Chat reloads it.
+    ThreadChanged {
+        thread: String,
+    },
 }
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]

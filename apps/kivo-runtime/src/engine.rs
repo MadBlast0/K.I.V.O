@@ -5,7 +5,13 @@
 //! The turn owns a cancellation token; Stop, Esc, the emergency stop and a new turn all cancel it,
 //! and cancellation reaches recognition, the tool and the speaker within 100 ms (ARCH-26).
 
+mod agent;
+mod brain;
+
+pub use agent::EnginePermissions;
+
 use crate::activity::Recorder;
+use crate::brains::Brains;
 use crate::core::Core;
 use crate::infer::{Infer, InferEvent};
 use crate::speaker::{Cue, Speaker};
@@ -69,6 +75,51 @@ struct Running {
     answer_audio: Option<Vec<f32>>,
     /// Times KIVO has asked again after an answer it didn't understand.
     reasked: u8,
+    /// Phrases of a streamed answer waiting behind the one being spoken (BRAIN-28).
+    phrases: std::collections::VecDeque<String>,
+    /// A brain's answer is still arriving.
+    streaming: bool,
+    /// Something of this turn's answer was spoken.
+    spoken_any: bool,
+    /// A brain turn waiting for the user's decision: (allow, always, how).
+    waiter: Option<tokio::sync::oneshot::Sender<(bool, bool, ConfirmedBy)>>,
+    /// The profile chosen for this request (Chat's brain switcher).
+    brain_choice: Option<String>,
+    /// The thread chosen for this request (Chat), instead of the voice session's.
+    thread: Option<String>,
+    /// Files attached in Chat: (name, text). Their contents are untrusted data (SECURITY §4).
+    attachments: Vec<(String, String)>,
+}
+
+impl Running {
+    fn new(id: String, utterance: u64, source: TurnSource) -> Self {
+        Self {
+            id,
+            utterance,
+            source,
+            cancel: CancellationToken::new(),
+            started: Instant::now(),
+            spans: serde_json::Map::new(),
+            transcript: String::new(),
+            pending: None,
+            speaking: None,
+            stt_started: tokio::sync::watch::channel(true).1,
+            outcome: "done",
+            wake_phrase: None,
+            reply: String::new(),
+            guest: false,
+            answering: false,
+            answer_audio: None,
+            reasked: 0,
+            phrases: std::collections::VecDeque::new(),
+            streaming: false,
+            spoken_any: false,
+            waiter: None,
+            brain_choice: None,
+            thread: None,
+            attachments: Vec::new(),
+        }
+    }
 }
 
 /// What the engine is built from.
@@ -88,6 +139,10 @@ pub struct Parts {
     /// Windows' own voice, in this process: speaks a failure when the speech worker is gone
     /// (ARCH-09). `None` keeps failures on screen only.
     pub fallback_voice: Option<Arc<dyn kivo_platform::SpeechSynth>>,
+    /// The connected brains (BRAINS §3–5).
+    pub brains: Arc<Brains>,
+    /// CLI agents over ACP (BRAINS §4, §7).
+    pub agents: Arc<crate::agents::Agents>,
 }
 
 pub struct Engine {
@@ -112,6 +167,10 @@ pub struct Engine {
     voice_id: RwLock<Option<Arc<crate::voiceid::VoiceId>>>,
     /// Speech ids of previews playing outside a turn ("hear it", voice previews).
     previews: Mutex<std::collections::HashSet<u64>>,
+    pub brains: Arc<Brains>,
+    pub agents: Arc<crate::agents::Agents>,
+    /// The voice session and its thread (CONVERSATION §1).
+    session: Mutex<brain::VoiceSession>,
 }
 
 impl Engine {
@@ -135,6 +194,9 @@ impl Engine {
             echo_cancelled: std::sync::atomic::AtomicBool::new(false),
             voice_id: RwLock::new(None),
             previews: Mutex::new(std::collections::HashSet::new()),
+            brains: parts.brains,
+            agents: parts.agents,
+            session: Mutex::new(brain::VoiceSession::default()),
         }
     }
 
@@ -398,7 +460,8 @@ impl Engine {
                 );
                 self.speak(&explanation).await;
             }
-            Some(Said::Edit(_)) => self.speak(&text::t("decision.editLater")).await,
+            // "No, make it …": the change goes to a brain as a corrected request (CONV-27).
+            Some(Said::Edit(change)) => self.edit_request(&spec, &change).await,
             None => {
                 if reasked < 2 {
                     if let Some(t) = lock(&self.turn).as_mut() {
@@ -537,6 +600,7 @@ impl Engine {
             return Err(message);
         }
         self.infer.warm();
+        self.prewarm();
         let id = self.turn_id();
         self.core.begin_turn(&id, source, "").map_err(|e| e.0)?;
         self.anchor_island();
@@ -545,23 +609,8 @@ impl Engine {
         let utterance = pre_started.unwrap_or_else(|| self.infer.next_utterance());
         let (started, started_rx) = tokio::sync::watch::channel(false);
         let running = Running {
-            id: id.clone(),
-            utterance,
-            source,
-            cancel: CancellationToken::new(),
-            started: Instant::now(),
-            spans: serde_json::Map::new(),
-            transcript: String::new(),
-            pending: None,
-            speaking: None,
-            outcome: "done",
             stt_started: started_rx,
-            wake_phrase: None,
-            reply: String::new(),
-            guest: false,
-            answering: false,
-            answer_audio: None,
-            reasked: 0,
+            ..Running::new(id.clone(), utterance, source)
         };
         *lock(&self.turn) = Some(running);
         self.recorder.turn_started(&id, source);
@@ -585,6 +634,19 @@ impl Engine {
         Ok(())
     }
 
+    /// Predictive prewarming while the user speaks (PLAN-10), never with side effects: the app
+    /// index the fast path resolves against, and the connection to the brain a request would
+    /// most likely go to. (Speech recognition is warmed by `infer.warm`.)
+    fn prewarm(self: &Arc<Self>) {
+        if read(&self.app_index).1.elapsed() > APPS_TTL {
+            let engine = Arc::clone(self);
+            tokio::task::spawn_blocking(move || engine.refresh_apps());
+        }
+        let brains = Arc::clone(&self.brains);
+        let config = self.core.config();
+        tokio::spawn(async move { brains.prewarm(&config).await });
+    }
+
     /// Starts recognition for `utterance` as soon as the worker is up; `started` says when.
     fn start_recognition(
         self: &Arc<Self>,
@@ -594,9 +656,17 @@ impl Engine {
         let engine = Arc::clone(self);
         let language = self.core.config().general.language;
         tokio::spawn(async move {
-            let vocabulary = kivo_voice::language::pack(&language)
+            // The language's own words plus the user's (names, apps, projects): engines that
+            // take hotwords or a prompt use them (VOICE-23).
+            let mut vocabulary = kivo_voice::language::pack(&language)
                 .map(|p| p.vocabulary)
                 .unwrap_or_default();
+            let db = engine.brains.database();
+            let own = db
+                .lock()
+                .map(|db| db.vocabulary(100).unwrap_or_default())
+                .unwrap_or_default();
+            vocabulary.extend(own);
             let result = if engine.infer.wait_ready(WORKER_START).await {
                 engine
                     .infer
@@ -646,6 +716,17 @@ impl Engine {
 
     /// The settings changed: apply the ones the engine and the speaker hold (UX §5).
     pub fn settings_changed(&self, config: &kivo_core::KivoConfig) {
+        self.brains.reload(config);
+        self.infer.set_speed(config.voice.tts_speed);
+        if let Some(listener) = self.listener() {
+            listener.set_device(
+                config
+                    .voice
+                    .input_device
+                    .clone()
+                    .map(kivo_platform::DeviceId),
+            );
+        }
         self.speaker.configure(&config.sounds);
         self.speaker.set_output_device(
             config
@@ -670,6 +751,17 @@ impl Engine {
 
     /// A typed request behaves exactly like a spoken one (UX §8).
     pub async fn say(self: &Arc<Self>, text: &str) -> Result<(), String> {
+        self.say_in(text, None, None, Vec::new()).await
+    }
+
+    /// A typed request in a chosen thread and with a chosen profile (Chat, UX-21).
+    pub async fn say_in(
+        self: &Arc<Self>,
+        text: &str,
+        thread: Option<String>,
+        profile: Option<String>,
+        attachments: Vec<(String, String)>,
+    ) -> Result<(), String> {
         let text = text.trim();
         if text.is_empty() {
             return Err(text::t("turn.nothingToSend"));
@@ -682,23 +774,11 @@ impl Engine {
         self.anchor_island();
         self.quiet_if_busy();
         *lock(&self.turn) = Some(Running {
-            id: id.clone(),
-            utterance: 0,
-            source: TurnSource::Typed,
-            cancel: CancellationToken::new(),
-            started: Instant::now(),
-            spans: serde_json::Map::new(),
             transcript: text.to_owned(),
-            pending: None,
-            speaking: None,
-            outcome: "done",
-            stt_started: tokio::sync::watch::channel(true).1,
-            wake_phrase: None,
-            reply: String::new(),
-            guest: false,
-            answering: false,
-            answer_audio: None,
-            reasked: 0,
+            thread,
+            brain_choice: profile,
+            attachments,
+            ..Running::new(id.clone(), 0, TurnSource::Typed)
         });
         self.recorder.turn_started(&id, TurnSource::Typed);
         self.core.advance(SessionInput::EndOfSpeech);
@@ -897,23 +977,8 @@ impl Engine {
                 };
                 self.run_call(call).await;
             }
-            Route::Unhandled => {
-                self.core
-                    .bus
-                    .publish(Event::new(EventKind::Turn(TurnEvent::IntentDetected {
-                        path: IntentPath::Brain,
-                        intent: "unknown".into(),
-                    })));
-                // Routed nowhere: said plainly, recorded as unhandled (brains arrive in M3).
-                let reply = text::t("turn.notUnderstood");
-                if let Some(running) = lock(&self.turn).as_mut() {
-                    running.outcome = "unhandled";
-                }
-                self.core
-                    .update_turn(|view| view.answer = Some(reply.clone()));
-                self.recorder.answer(&self.turn_key(), &reply, "unhandled");
-                self.speak(&reply).await;
-            }
+            // Everything else goes to a brain (BRAINS §1).
+            Route::Unhandled => self.brain_turn(&text).await,
         }
     }
 
@@ -1038,6 +1103,23 @@ impl Engine {
             view.confirm = None;
             view.waiting = false;
         });
+        // A brain or an agent is waiting for this decision: it carries on from here.
+        let waiter = lock(&self.turn).as_mut().and_then(|t| t.waiter.take());
+        if let Some(waiter) = waiter {
+            self.recorder
+                .confirmation(&self.turn_key(), &call, allow, by);
+            if allow && always && spec.allow_always {
+                self.recorder.add_grant(&call);
+            }
+            if allow {
+                if by == ConfirmedBy::Voice {
+                    self.speaker.cue(Cue::Approved);
+                }
+                self.core.advance(SessionInput::Confirmed);
+            }
+            let _ = waiter.send((allow, always && spec.allow_always, by));
+            return Ok(());
+        }
         if !allow {
             self.core.advance(SessionInput::Denied);
             self.recorder
@@ -1076,6 +1158,28 @@ impl Engine {
         permit: kivo_security::Permit,
         title: &str,
     ) {
+        let (result, output) = self.run_step(tool, &call, permit, title).await;
+        match (&result.status, output) {
+            (Ok(_), Some(output)) => self.speak_and_finish(&output.say).await,
+            (Err(error), _) => {
+                self.speaker.cue(Cue::Error);
+                let message = retry_hint(error);
+                self.core
+                    .update_turn(|view| view.error = Some(message.clone()));
+                self.speak_and_finish(&message).await;
+            }
+            (Ok(_), None) => self.finish_turn("done", None),
+        }
+    }
+
+    /// Runs an approved call as a step in the Island and records it; returns what it did.
+    async fn run_step(
+        self: &Arc<Self>,
+        tool: Arc<dyn kivo_tools::Tool>,
+        call: &ToolCall,
+        permit: kivo_security::Permit,
+        title: &str,
+    ) -> (kivo_core::tool::ToolResult, Option<kivo_tools::Output>) {
         let cancel = lock(&self.turn)
             .as_ref()
             .map_or_else(CancellationToken::new, |t| t.cancel.child_token());
@@ -1102,10 +1206,10 @@ impl Engine {
                 call_id: call.id.clone(),
             },
         )));
-        let (result, output) = kivo_tools::execute(tool, &call, permit, &cancel).await;
+        let (result, output) = kivo_tools::execute(tool, call, permit, &cancel).await;
         self.mark("t8ToolDone");
-        self.recorder.tool_result(&self.turn_key(), &call, &result);
-        match (&result.status, output) {
+        self.recorder.tool_result(&self.turn_key(), call, &result);
+        match (&result.status, &output) {
             (Ok(_), Some(output)) => {
                 self.core.set_step(StepView {
                     id: call.id.clone(),
@@ -1118,7 +1222,6 @@ impl Engine {
                     let engine = Arc::clone(self);
                     tokio::task::spawn_blocking(move || engine.refresh_apps());
                 }
-                self.speak_and_finish(&output.say).await;
             }
             (Err(error), _) => {
                 self.core.set_step(StepView {
@@ -1127,14 +1230,10 @@ impl Engine {
                     status: StepStatus::Failed,
                     detail: Some(error.message.clone()),
                 });
-                self.speaker.cue(Cue::Error);
-                let message = retry_hint(error);
-                self.core
-                    .update_turn(|view| view.error = Some(message.clone()));
-                self.speak_and_finish(&message).await;
             }
-            (Ok(_), None) => self.finish_turn("done", None),
+            (Ok(_), None) => {}
         }
+        (result, output)
     }
 
     /// Says `text` and ends the turn once it has been spoken.
@@ -1145,20 +1244,23 @@ impl Engine {
         self.speak(text).await;
     }
 
+    /// Whether this turn's replies are spoken (or only shown, with a soft cue).
+    fn speak_replies(&self) -> bool {
+        let config = self.core.config();
+        let typed = lock(&self.turn)
+            .as_ref()
+            .is_some_and(|t| t.source == TurnSource::Typed);
+        let capability_on = config
+            .capabilities
+            .enabled(kivo_core::Capability::SpeakResponses);
+        // Over a fullscreen app or in Focus, KIVO uses sounds only (UX §2, UX-11).
+        let quiet = self.core.turn_view().is_some_and(|v| v.quiet.is_some());
+        capability_on && !quiet && (!typed || config.voice.speak_typed_replies)
+    }
+
     /// Streams `text` through the voice; `SpeakDone` finishes the turn.
     async fn speak(self: &Arc<Self>, text: &str) {
-        let speak_replies = {
-            let config = self.core.config();
-            let typed = lock(&self.turn)
-                .as_ref()
-                .is_some_and(|t| t.source == TurnSource::Typed);
-            let capability_on = config
-                .capabilities
-                .enabled(kivo_core::Capability::SpeakResponses);
-            // Over a fullscreen app or in Focus, KIVO uses sounds only (UX §2, UX-11).
-            let quiet = self.core.turn_view().is_some_and(|v| v.quiet.is_some());
-            capability_on && !quiet && (!typed || config.voice.speak_typed_replies)
-        };
+        let speak_replies = self.speak_replies();
         let state = self.core.state().borrow().session;
         if state == SessionState::Thinking || state == SessionState::Acting {
             self.core.advance(SessionInput::StartSpeaking);
@@ -1240,9 +1342,31 @@ impl Engine {
         if let Some(message) = error {
             tracing::warn!(message, "speaking failed");
         }
-        if !cancelled {
-            self.finish_speaking();
+        if cancelled {
+            return;
         }
+        // A streamed answer: the next phrase, or wait for more (BRAIN-28).
+        let (next, streaming, pending) = {
+            let mut turn = lock(&self.turn);
+            let Some(t) = turn.as_mut() else { return };
+            let next = t.phrases.pop_front();
+            if next.is_none() {
+                t.speaking = None;
+            }
+            (next, t.streaming, t.pending.is_some())
+        };
+        if let Some(next) = next {
+            let engine = Arc::clone(self);
+            tokio::spawn(async move { engine.start_phrase(next).await });
+            return;
+        }
+        if streaming {
+            if pending {
+                self.listen_for_answer();
+            }
+            return;
+        }
+        self.finish_speaking();
     }
 
     /// Waits for the speaker to drain, then ends the turn (or starts a follow-up). After a
@@ -1448,6 +1572,15 @@ impl Engine {
     }
 
     /// How requests have been routed: the fast-path share and per-stage p95 (BRAIN-05).
+    /// Turns the router's semantic stage on (or off) (BRAIN-03).
+    pub fn set_semantic(&self, semantic: Option<kivo_intent::Semantic>) {
+        lock(&self.router).set_semantic(semantic);
+    }
+
+    pub fn has_semantic(&self) -> bool {
+        lock(&self.router).has_semantic()
+    }
+
     pub fn router_metrics(&self) -> kivo_intent::RouterMetrics {
         lock(&self.router).metrics()
     }

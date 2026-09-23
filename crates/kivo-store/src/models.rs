@@ -87,8 +87,46 @@ pub fn catalog() -> Vec<ModelManifest> {
         supertonic(),
         keyword_spotter(),
         campplus(),
+        minilm(),
     ]);
     all
+}
+
+/// The sentence-embedding model's id: the intent router's semantic stage (BRAIN-03).
+pub const EMBEDDING_MODEL: &str = "minilm-l6-v2";
+
+/// all-MiniLM-L6-v2 (sentence-transformers, Apache-2.0): the quantized ONNX export and its
+/// WordPiece vocabulary, pinned. Lets KIVO understand paraphrased commands ("kill the sound")
+/// without a brain.
+fn minilm() -> ModelManifest {
+    const REPO: &str = "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/1110a243fdf4706b3f48f1d95db1a4f5529b4d41";
+    ModelManifest {
+        id: EMBEDDING_MODEL.into(),
+        name: "Command understanding (paraphrases)".into(),
+        kind: ModelKind::Embedding,
+        license: "Apache-2.0".into(),
+        attribution: "all-MiniLM-L6-v2 by sentence-transformers (UKP Lab), Apache License 2.0."
+            .into(),
+        source: "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2".into(),
+        languages: vec!["en".into()],
+        files: vec![
+            ModelFile {
+                name: "model.onnx".into(),
+                url: format!("{REPO}/onnx/model_quint8_avx2.onnx"),
+                size: 23_046_789,
+                sha256: "b941bf19f1f1283680f449fa6a7336bb5600bdcd5f84d10ddc5cd72218a0fd21".into(),
+                unpack: Vec::new(),
+            },
+            ModelFile {
+                name: "vocab.txt".into(),
+                url: format!("{REPO}/vocab.txt"),
+                size: 231_508,
+                sha256: "07eced375cec144d27c900241f3e339478dec958f92fddbc551f295c992038a3".into(),
+                unpack: Vec::new(),
+            },
+        ],
+        requires: Vec::new(),
+    }
 }
 
 /// A Moonshine model from the sherpa-onnx author's releases, pinned.
@@ -666,8 +704,50 @@ impl ModelStore {
         Ok(())
     }
 
+    /// The folder models live in.
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
     fn partial_dir(&self, id: &str) -> PathBuf {
         self.root.join(format!("{id}.partial"))
+    }
+
+    /// A download was started and stopped before it finished (Pause): it resumes from here.
+    pub fn has_partial(&self, id: &str) -> bool {
+        self.partial_dir(id).is_dir()
+    }
+
+    /// Drops an unfinished download (Cancel).
+    pub fn discard_partial(&self, id: &str) -> Result<(), ModelError> {
+        let dir = self.partial_dir(id);
+        if dir.exists() {
+            fs::remove_dir_all(&dir)?;
+        }
+        Ok(())
+    }
+
+    /// The catalog has a different version of an installed model (other files or checksums).
+    pub fn update_available(&self, installed: &InstalledModel, latest: &ModelManifest) -> bool {
+        let files = |m: &ModelManifest| {
+            m.files
+                .iter()
+                .map(|f| (f.name.clone(), f.sha256.clone()))
+                .collect::<Vec<_>>()
+        };
+        files(&installed.manifest) != files(latest)
+    }
+
+    /// Installs the catalog's version of a model that is already installed: the new files are
+    /// downloaded beside it and swapped in when complete.
+    pub fn update(
+        &self,
+        manifest: &ModelManifest,
+        fetcher: &dyn Fetcher,
+        cancel: &CancellationToken,
+        progress: &mut dyn FnMut(Progress),
+    ) -> Result<InstalledModel, ModelError> {
+        self.install_files(manifest, fetcher, cancel, progress)
     }
 
     /// Downloads and installs `manifest`, resuming an earlier partial download. `progress` is
@@ -682,6 +762,16 @@ impl ModelStore {
         if let Some(done) = self.installed(&manifest.id) {
             return Ok(done);
         }
+        self.install_files(manifest, fetcher, cancel, progress)
+    }
+
+    fn install_files(
+        &self,
+        manifest: &ModelManifest,
+        fetcher: &dyn Fetcher,
+        cancel: &CancellationToken,
+        progress: &mut dyn FnMut(Progress),
+    ) -> Result<InstalledModel, ModelError> {
         let partial = self.partial_dir(&manifest.id);
         fs::create_dir_all(&partial)?;
         let total = manifest.download_size();
@@ -939,6 +1029,63 @@ mod tests {
             cut_first_after: Mutex::new(cut),
             range_requests: AtomicUsize::new(0),
         }
+    }
+
+    /// UX-61: a paused download resumes where it stopped; Cancel drops it; a changed catalog
+    /// entry reads as an update, which replaces the installed files.
+    #[test]
+    fn pause_resume_cancel_and_update() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = ModelStore::new(tmp.path().to_path_buf());
+        let files: [(&str, &[u8]); 2] = [("a.onnx", &[7; 4000]), ("b.bin", &[9; 3000])];
+        let m = manifest(&files);
+        // Pause: the first file is cut off and the download stopped.
+        let cancel = CancellationToken::new();
+        let fake = server(&files, Some(1000));
+        let first = store.install(&m, &fake, &cancel, &mut |p| {
+            if p.done >= 900 {
+                cancel.cancel();
+            }
+        });
+        assert!(first.is_err());
+        assert!(store.has_partial("test-model"), "kept for a resume");
+        assert!(store.installed("test-model").is_none());
+        // Resume: continues with a range request.
+        let fake = server(&files, None);
+        let installed = store
+            .install(&m, &fake, &CancellationToken::new(), &mut |_| {})
+            .unwrap();
+        assert!(fake.range_requests.load(Ordering::Relaxed) >= 1);
+        assert!(!store.update_available(&installed, &m));
+        // A new version in the catalog is an update, and updating swaps the files in.
+        let newer_files: [(&str, &[u8]); 2] = [("a.onnx", &[8; 4000]), ("b.bin", &[9; 3000])];
+        let newer = manifest(&newer_files);
+        assert!(store.update_available(&installed, &newer));
+        let updated = store
+            .update(
+                &newer,
+                &server(&newer_files, None),
+                &CancellationToken::new(),
+                &mut |_| {},
+            )
+            .unwrap();
+        assert_eq!(
+            std::fs::read(updated.dir.join("a.onnx")).unwrap(),
+            vec![8; 4000]
+        );
+        assert!(!store.update_available(&updated, &newer));
+        // Cancel: an unfinished download is dropped.
+        let other = ModelManifest {
+            id: "other".into(),
+            ..manifest(&files)
+        };
+        let cancel = CancellationToken::new();
+        let _ = store.install(&other, &server(&files, Some(500)), &cancel, &mut |_| {
+            cancel.cancel()
+        });
+        assert!(store.has_partial("other"));
+        store.discard_partial("other").unwrap();
+        assert!(!store.has_partial("other"));
     }
 
     #[test]
