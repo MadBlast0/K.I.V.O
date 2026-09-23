@@ -103,7 +103,25 @@ quiet: QuietIsland | null,
  * The centre of the window in front when the request began (physical pixels): the Island
  * appears on that window's monitor (UX-06).
  */
-anchor?: ScreenPoint, };
+anchor?: ScreenPoint, 
+/**
+ * Someone other than the enrolled owner is talking: a guest turn (UX-08, VOICE-22).
+ */
+guest: boolean, 
+/**
+ * Listening for a follow-up without the wake word for this many seconds from when it
+ * appears (UX-45: the Island's ring counts down).
+ */
+followUp?: number, 
+/**
+ * KIVO is listening for a spoken answer to the decision (CONV-26): the mic ring and the
+ * voice hints show.
+ */
+answering: boolean, 
+/**
+ * The user said "wait": the card stays, "Waiting for you", with no timeout (UX-08).
+ */
+waiting: boolean, };
 
 export type StepView = { 
 /**

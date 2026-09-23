@@ -13,6 +13,8 @@ allow = [
   # Permissive, added with the speech benchmarks (DECISIONS "License checks (M0)"): ISC
   # (libloading, rustls-webpki, untrusted), CDLA-Permissive-2.0 (webpki-roots, a CA list).
   "ISC", "CDLA-Permissive-2.0",
+  # The bzip2 licence (BSD-style, permissive): libbz2-rs-sys, for unpacking model archives.
+  "bzip2-1.0.6",
 ]
 confidence-threshold = 0.9
 # KIVO's own crates are unpublished and not yet licensed (DECISIONS: license still to choose).

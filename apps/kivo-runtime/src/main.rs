@@ -255,7 +255,7 @@ async fn run(
             .clone()
             .map(kivo_platform::DeviceId),
     ));
-    speaker.set_sounds(config.sounds.enabled, config.sounds.volume);
+    speaker.configure(&config.sounds);
     let grammar = match Grammar::bundled(&config.general.language) {
         Ok(grammar) => grammar,
         Err(e) => {
@@ -289,6 +289,9 @@ async fn run(
             .clone()
             .map(kivo_platform::DeviceId),
         vad_model: models.vad_model(),
+        turn_model: models
+            .installed_dir(kivo_store::models::SMART_TURN)
+            .unwrap_or_else(|| paths.models().join(kivo_store::models::SMART_TURN)),
         infer: infer.clone(),
         speaker: Arc::clone(&speaker),
         levels,
@@ -296,6 +299,38 @@ async fn run(
         qos: Arc::new(kivo_platform_windows::WindowsThreadQos),
     }));
     engine.set_listener(Arc::clone(&listener));
+
+    // Recognizing the owner's voice (VOICE §5): the model and profile load when first needed.
+    let voice_id = {
+        let models = Arc::clone(&models);
+        Arc::new(kivo_runtime::voiceid::VoiceId::new(
+            paths.voice(),
+            Arc::new(kivo_platform_windows::WindowsSecrets),
+            Arc::clone(&db),
+            move || {
+                let dir = models.installed_dir(kivo_store::models::SPEAKER_MODEL)?;
+                kivo_voice::speaker::CamPlusPlus::load(&dir)
+                    .map_err(|e| {
+                        tracing::warn!(detail = e.detail(), "voice recognition unavailable")
+                    })
+                    .ok()
+                    .map(|c| Arc::new(c) as Arc<dyn kivo_voice::traits::SpeakerVerifier>)
+            },
+        ))
+    };
+    engine.set_voice_id(Arc::clone(&voice_id));
+    // The voice pipeline removes KIVO's own output while it plays (VOICE-30).
+    engine.set_echo_cancelled(true);
+
+    // Hands-free listening: wake words and the stop words (VOICE §4).
+    let wake = kivo_runtime::wake::Wake::new(
+        Arc::clone(&core),
+        Arc::clone(&models),
+        Arc::clone(&db),
+        Arc::clone(&listener),
+    );
+    wake.start();
+    let wake_task = tokio::spawn(Arc::clone(&wake).run());
 
     // What this PC can do, for the speech engines' threads (PLAN-01).
     match platform.system.snapshot() {
@@ -346,18 +381,32 @@ async fn run(
             .ok();
     }
 
-    let ipc = tokio::spawn(server.run(
-        Arc::new(rpc::Rpc::new(
-            Arc::clone(&core),
-            Arc::clone(&engine),
-            Arc::clone(&models),
-            recorder.clone(),
-            Arc::clone(&lifecycle),
-        )),
-        core.bus.clone(),
-        core.state(),
-        core.shutdown(),
-    ));
+    let ipc = tokio::spawn(
+        server.run(
+            Arc::new(
+                rpc::Rpc::new(
+                    Arc::clone(&core),
+                    Arc::clone(&engine),
+                    Arc::clone(&models),
+                    recorder.clone(),
+                    Arc::clone(&lifecycle),
+                )
+                .with_voice(Arc::new(kivo_runtime::voice_rpc::VoiceRpc::new(
+                    Arc::clone(&core),
+                    Arc::clone(&engine),
+                    Arc::clone(&models),
+                    Arc::clone(&db),
+                    Arc::clone(&wake),
+                    recorder.clone(),
+                    Arc::new(kivo_platform_windows::WindowsSecrets),
+                    paths.voice(),
+                ))),
+            ),
+            core.bus.clone(),
+            core.state(),
+            core.shutdown(),
+        ),
+    );
 
     // Models load when a request starts and unload after going unused (VOICE-34).
     let cooling = tokio::spawn(infer.clone().cool_down(core.shutdown()));
@@ -441,6 +490,8 @@ async fn run(
     let mut code = ExitCode::SUCCESS;
     // Stop new work, then the voice pipeline and the worker (plan §127).
     engine.cancel(kivo_core::event::CancelReason::Shutdown);
+    let _ = wake_task.await;
+    drop(wake);
     drop(listener);
     infer.shutdown().await;
     let _ = worker.await;

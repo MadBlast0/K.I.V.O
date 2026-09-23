@@ -50,6 +50,11 @@ impl Paths {
         self.local.join("models")
     }
 
+    /// Voice enrollment clips, encrypted (VOICE §5, SECURITY §5).
+    pub fn voice(&self) -> PathBuf {
+        self.local.join("data").join("voice")
+    }
+
     /// The runtime's session token and other per-run files (ARCHITECTURE §3).
     pub fn run(&self) -> PathBuf {
         self.local.join("run")

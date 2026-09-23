@@ -3,6 +3,7 @@
 //! VAD, and the playback mixer for speech and earcons.
 
 pub mod capture;
+pub mod echo;
 pub mod frames;
 pub mod gate;
 pub mod mixer;

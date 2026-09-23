@@ -8,6 +8,8 @@ pub mod db;
 pub mod logging;
 pub mod models;
 pub mod records;
+pub mod voice;
+pub mod wake;
 
 pub use config::{Loaded, Notice};
 pub use db::Database;

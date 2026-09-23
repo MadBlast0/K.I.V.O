@@ -23,6 +23,8 @@ pub struct Rpc {
     models: Arc<Models>,
     recorder: Recorder,
     lifecycle: Arc<Lifecycle>,
+    /// Wake words, voice enrollment and sounds (VOICE §4–6).
+    voice: Option<Arc<crate::voice_rpc::VoiceRpc>>,
 }
 
 impl Rpc {
@@ -39,7 +41,15 @@ impl Rpc {
             models,
             recorder,
             lifecycle,
+            voice: None,
         }
+    }
+
+    /// Adds the voice requests.
+    #[must_use]
+    pub fn with_voice(mut self, voice: Arc<crate::voice_rpc::VoiceRpc>) -> Self {
+        self.voice = Some(voice);
+        self
     }
 }
 
@@ -62,7 +72,13 @@ impl Handler for Rpc {
         let models = Arc::clone(&self.models);
         let recorder = self.recorder.clone();
         let lifecycle = Arc::clone(&self.lifecycle);
+        let voice = self.voice.clone();
         Box::pin(async move {
+            if let Some(voice) = voice
+                && let Some(result) = voice.call(&name, params.clone()).await
+            {
+                return result;
+            }
             let refused = |e: crate::core::Refused| RpcError::new(RpcError::REFUSED, e.0);
             let refuse = |message: String| RpcError::new(RpcError::REFUSED, message);
             match name.as_str() {

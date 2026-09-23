@@ -4,13 +4,18 @@
 
 pub mod engine;
 pub mod error;
+pub mod fbank;
 pub mod kokoro;
+pub mod kws;
 pub mod language;
 pub mod moonshine;
 pub mod recommend;
 pub mod silero;
+pub mod smart_turn;
+pub mod speaker;
 pub mod system_tts;
 pub mod traits;
+pub mod wakeword;
 
 pub use engine::{Accel, EngineInfo, EngineKind, EngineSlot, ResourceEstimate};
 

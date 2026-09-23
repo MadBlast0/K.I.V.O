@@ -36,6 +36,12 @@ windows = "0.62.2"
 ort = { version = "=2.0.0-rc.13", default-features = false, features = ["std", "download-binaries", "tls-native", "api-22"] }
 base64 = "0.22"
 rubato = "5.0"
+realfft = "3.5"
+# WebRTC AEC3 in pure Rust (BSD-3-Clause): echo cancellation (VOICE-30).
+sonora = "0.2"
+# Model archives (.tar.bz2, as sherpa-onnx publishes its keyword-spotting models).
+tar = "0.4"
+bzip2 = "0.6"
 ringbuf = "0.5"
 sha2 = "0.10"
 ureq = { version = "3.4", default-features = false, features = ["native-tls", "gzip"] }

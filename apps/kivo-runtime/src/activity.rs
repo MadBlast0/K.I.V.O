@@ -168,7 +168,13 @@ impl Recorder {
     }
 
     /// The user answered a confirmation card.
-    pub fn confirmation(&self, turn: &str, call: &ToolCall, allowed: bool) {
+    pub fn confirmation(
+        &self,
+        turn: &str,
+        call: &ToolCall,
+        allowed: bool,
+        by: kivo_core::tool::ConfirmedBy,
+    ) {
         self.audit(&AuditRecord {
             ts: now_ms(),
             turn_id: optional(turn),
@@ -177,7 +183,7 @@ impl Recorder {
             args_summary: summarize(&call.args),
             risk: "unknown".into(),
             decision: if allowed { "allow" } else { "deny" }.to_owned(),
-            confirmed_by: Some("click".into()),
+            confirmed_by: Some(format!("{by:?}").to_lowercase()),
             result: None,
             error: None,
         });
@@ -312,6 +318,33 @@ impl Recorder {
                 capability.label(),
                 if on { "on" } else { "off" }
             ),
+            detail: None,
+            status: "done".into(),
+            data: None,
+        });
+    }
+
+    /// Something the user did in the Control Center that the audit log keeps (consent to voice
+    /// enrollment, deleting voice data, SECURITY §5): who (a click), what, and that it happened.
+    pub fn user_action(&self, tool: &str, summary: &str) {
+        self.audit(&AuditRecord {
+            ts: now_ms(),
+            turn_id: None,
+            task_id: None,
+            tool: tool.into(),
+            args_summary: summary.into(),
+            risk: "medium".into(),
+            decision: "allow".into(),
+            confirmed_by: Some("click".into()),
+            result: Some("ok".into()),
+            error: None,
+        });
+        self.add(NewActivity {
+            ts: now_ms(),
+            turn_id: None,
+            task_id: None,
+            kind: "setting".into(),
+            title: summary.into(),
             detail: None,
             status: "done".into(),
             data: None,
@@ -503,7 +536,7 @@ mod tests {
         let r = recorder(true);
         let call = call();
         r.tool_denied("t1", &call, "Apps & windows is off. Turn it on?");
-        r.confirmation("t1", &call, true);
+        r.confirmation("t1", &call, true, kivo_core::tool::ConfirmedBy::Click);
         r.capability_changed(kivo_core::Capability::Shell, true);
         r.emergency_stop();
         let rows = r.audit_rows(10);

@@ -10,6 +10,7 @@ publish = false
 [dependencies]
 rubato.workspace = true
 ringbuf.workspace = true
+sonora.workspace = true
 
 [lints]
 workspace = true

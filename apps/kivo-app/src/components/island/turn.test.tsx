@@ -23,6 +23,9 @@ function acting(mode: PermissionMode): StateSnapshot {
       targetApp: "Google Chrome",
       capabilityOff: null,
       quiet: null,
+      guest: false,
+      answering: false,
+      waiting: false,
     },
   };
 }

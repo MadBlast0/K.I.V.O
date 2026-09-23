@@ -47,6 +47,8 @@ struct Shared {
     gain: AtomicU32,
     /// Loudest speech RMS since last read.
     peak: AtomicU32,
+    /// Where the mixed output goes for echo cancellation (VOICE-30).
+    tap: Mutex<Option<crate::echo::Reference>>,
 }
 
 /// The mixer for one open playback stream.
@@ -63,6 +65,7 @@ impl Mixer {
             stopping: AtomicBool::new(false),
             gain: AtomicU32::new(1000),
             peak: AtomicU32::new(0),
+            tap: Mutex::new(None),
         }))
     }
 
@@ -164,6 +167,16 @@ impl Mixer {
                 i += 1;
             }
         }
+        if let Ok(tap) = shared.tap.try_lock()
+            && let Some(reference) = tap.as_ref()
+        {
+            reference.push(out, shared.format.channels, shared.format.rate);
+        }
+    }
+
+    /// Sends everything this mixer plays to `reference` (echo cancellation's input).
+    pub fn set_reference(&self, reference: crate::echo::Reference) {
+        *lock(&self.0.tap) = Some(reference);
     }
 }
 

@@ -13,21 +13,15 @@ use std::time::{Duration, Instant};
 
 /// How long the speaker stays open after the last sound.
 const KEEP_OPEN: Duration = Duration::from_secs(3);
+/// −12 dB.
+const DUCKED_GAIN: f32 = 0.25;
 /// Ignore the microphone for this long after a cue ends (VOICE §6).
 const GATE_TAIL: Duration = Duration::from_millis(50);
-/// The rate cues are generated at.
-const CUE_RATE: u32 = 24_000;
+use crate::sounds::{CUE_RATE, earcon};
 
-/// The sounds KIVO makes (VOICE §6). The set is KIVO's own: soft, rounded tones.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum Cue {
-    ListenStart,
-    ListenStop,
-    Done,
-    Error,
-    Thinking,
-    Hangup,
-}
+/// The sounds KIVO makes (VOICE §6); the sets live in `sounds`.
+pub use kivo_core::config::SoundCue as Cue;
+use kivo_core::config::{SoundSet, Sounds};
 
 struct Open {
     stream: Box<dyn AudioStream>,
@@ -45,10 +39,16 @@ pub struct Speaker {
     speaking_level: Mutex<f32>,
     enabled: Mutex<bool>,
     volume: Mutex<f32>,
+    /// Cues switched off in Settings → Sounds.
+    off: Mutex<Vec<Cue>>,
+    set: Mutex<SoundSet>,
     /// Called when sound starts, so a sleeping level loop wakes to pulse the Island.
     on_sound: Mutex<Option<Box<dyn Fn() + Send>>>,
-    /// Every cue, rendered once at full level (VOICE-24: pre-decoded, so a cue plays at once).
-    cues: Vec<(Cue, Vec<f32>)>,
+    /// Every cue of the current set, rendered once at full level (VOICE-24: pre-decoded, so a
+    /// cue plays at once).
+    cues: Mutex<Vec<(Cue, Vec<f32>)>>,
+    /// Everything played, for echo cancellation (VOICE-30).
+    reference: kivo_audio::echo::Reference,
 }
 
 impl Speaker {
@@ -61,8 +61,11 @@ impl Speaker {
             speaking_level: Mutex::new(0.0),
             enabled: Mutex::new(true),
             volume: Mutex::new(0.7),
+            off: Mutex::new(Vec::new()),
+            set: Mutex::new(SoundSet::Soft),
             on_sound: Mutex::new(None),
-            cues: ALL_CUES.iter().map(|&c| (c, earcon(c, 1.0))).collect(),
+            cues: Mutex::new(render(SoundSet::Soft)),
+            reference: kivo_audio::echo::Reference::default(),
         }
     }
 
@@ -81,6 +84,26 @@ impl Speaker {
     pub fn set_sounds(&self, enabled: bool, volume_percent: u8) {
         *lock(&self.enabled) = enabled;
         *lock(&self.volume) = f32::from(volume_percent.min(100)) / 100.0;
+    }
+
+    /// Settings → Sounds as a whole: on/off, volume, the set and the cues switched off
+    /// (VOICE-27).
+    pub fn configure(&self, sounds: &Sounds) {
+        self.set_sounds(sounds.enabled, sounds.volume);
+        lock(&self.off).clone_from(&sounds.off);
+        let mut set = lock(&self.set);
+        if *set != sounds.set {
+            *set = sounds.set;
+            *lock(&self.cues) = render(sounds.set);
+        }
+    }
+
+    /// Plays a cue from any set without changing the settings (the set picker's preview). It
+    /// plays even when sounds are off: the user asked to hear it.
+    pub fn preview(&self, set: SoundSet, cue: Cue) {
+        let volume = *lock(&self.volume);
+        let samples: Vec<f32> = earcon(set, cue, volume);
+        self.play(&samples);
     }
 
     pub fn set_output_device(&self, device: Option<DeviceId>) {
@@ -129,6 +152,7 @@ impl Speaker {
             }
             std::thread::sleep(Duration::from_millis(2));
         };
+        mixer.set_reference(self.reference.clone());
         *open = Some(Open {
             stream,
             mixer: mixer.clone(),
@@ -139,20 +163,23 @@ impl Speaker {
 
     /// Plays a cue. Returns when it has been queued, not when it has been heard.
     pub fn cue(&self, cue: Cue) {
-        if !*lock(&self.enabled) {
+        if !*lock(&self.enabled) || lock(&self.off).contains(&cue) {
             return;
         }
         let volume = *lock(&self.volume);
-        let Some(mixer) = self.mixer() else { return };
-        let samples: Vec<f32> = self
-            .cues
+        let samples: Vec<f32> = lock(&self.cues)
             .iter()
             .find(|(c, _)| *c == cue)
             .map(|(_, pcm)| pcm.iter().map(|s| s * volume).collect())
             .unwrap_or_default();
+        self.play(&samples);
+    }
+
+    fn play(&self, samples: &[f32]) {
+        let Some(mixer) = self.mixer() else { return };
         #[allow(clippy::cast_precision_loss, reason = "a short cue")]
         let length = Duration::from_secs_f32(samples.len() as f32 / CUE_RATE as f32);
-        mixer.play_cue(&mixer.to_device(&samples, CUE_RATE));
+        mixer.play_cue(&mixer.to_device(samples, CUE_RATE));
         *lock(&self.gate_until) = Instant::now() + length + GATE_TAIL;
         self.sounded();
     }
@@ -160,8 +187,26 @@ impl Speaker {
     /// Queues spoken audio (any rate, mono).
     pub fn speak(&self, pcm: &[f32], rate: u32) {
         let Some(mixer) = self.mixer() else { return };
+        if mixer.speech_queued() == 0 {
+            // A new reply: at full level, even if the last one was ducked (VOICE-31).
+            mixer.set_speech_gain(1.0);
+        }
         mixer.queue_speech(&mixer.to_device(pcm, rate));
         self.sounded();
+    }
+
+    /// What KIVO plays, for echo cancellation (VOICE-30).
+    pub fn reference(&self) -> kivo_audio::echo::Reference {
+        self.reference.clone()
+    }
+
+    /// Barge-in (VOICE-31): KIVO's voice drops 12 dB while the user may be talking over it, and
+    /// comes back if they weren't.
+    pub fn duck(&self, ducked: bool) {
+        if let Some(open) = lock(&self.open).as_ref() {
+            open.mixer
+                .set_speech_gain(if ducked { DUCKED_GAIN } else { 1.0 });
+        }
     }
 
     /// Stops speaking with a short fade (cancel → silence, VOICE §7).
@@ -223,130 +268,30 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
-/// One note: a soft, marimba-like tone (a sine with a quiet second harmonic and a quick decay).
-fn note(out: &mut Vec<f32>, hz: f32, seconds: f32, gain: f32) {
-    #[allow(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        clippy::cast_precision_loss
-    )]
-    let samples = (CUE_RATE as f32 * seconds) as usize;
-    for i in 0..samples {
-        #[allow(clippy::cast_precision_loss, reason = "sample index")]
-        let t = i as f32 / CUE_RATE as f32;
-        // Fast attack, exponential decay and a short release: rounded, never clicky.
-        let attack = (t / 0.008).min(1.0);
-        let decay = (-t * 7.0).exp();
-        #[allow(clippy::cast_precision_loss, reason = "sample index")]
-        let release = ((samples - i) as f32 / (CUE_RATE as f32 * 0.012)).min(1.0);
-        let wave = (t * hz * std::f32::consts::TAU).sin()
-            + 0.18 * (t * hz * 2.0 * std::f32::consts::TAU).sin();
-        out.push(wave * 0.5 * attack * decay * release * gain);
-    }
-}
-
-fn silence(out: &mut Vec<f32>, seconds: f32) {
-    #[allow(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        clippy::cast_precision_loss
-    )]
-    let samples = (CUE_RATE as f32 * seconds) as usize;
-    out.resize(out.len() + samples, 0.0);
-}
-
-/// KIVO's Soft sound set, generated rather than shipped as files (VOICE §6). Every cue is under
-/// 300 ms, so wake → audio stays inside the 150 ms budget.
-/// Every cue KIVO has.
-pub const ALL_CUES: [Cue; 6] = [
-    Cue::ListenStart,
-    Cue::ListenStop,
-    Cue::Done,
-    Cue::Error,
-    Cue::Thinking,
-    Cue::Hangup,
-];
-
-pub fn earcon(cue: Cue, gain: f32) -> Vec<f32> {
-    let mut out = Vec::new();
-    match cue {
-        // Rising two notes: "I'm listening".
-        Cue::ListenStart => {
-            note(&mut out, 587.33, 0.09, gain);
-            silence(&mut out, 0.01);
-            note(&mut out, 880.00, 0.16, gain);
-        }
-        // One soft note: "I stopped listening".
-        Cue::ListenStop => note(&mut out, 587.33, 0.16, gain),
-        // A gentle confirmation.
-        Cue::Done => {
-            note(&mut out, 783.99, 0.07, gain * 0.9);
-            silence(&mut out, 0.01);
-            note(&mut out, 1046.50, 0.14, gain * 0.9);
-        }
-        // Low descending two notes: something went wrong.
-        Cue::Error => {
-            note(&mut out, 392.00, 0.10, gain);
-            silence(&mut out, 0.01);
-            note(&mut out, 293.66, 0.18, gain);
-        }
-        // A quiet single tick, only after a second of thinking.
-        Cue::Thinking => note(&mut out, 659.25, 0.08, gain * 0.5),
-        // The conversation ended.
-        Cue::Hangup => {
-            note(&mut out, 587.33, 0.07, gain * 0.7);
-            silence(&mut out, 0.01);
-            note(&mut out, 440.00, 0.14, gain * 0.7);
-        }
-    }
-    out
+/// A set's cues, rendered at full level.
+fn render(set: SoundSet) -> Vec<(Cue, Vec<f32>)> {
+    Cue::ALL.iter().map(|&c| (c, earcon(set, c, 1.0))).collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn seconds(samples: usize) -> f32 {
-        #[allow(clippy::cast_precision_loss)]
-        let s = samples as f32 / CUE_RATE as f32;
-        s
-    }
-
     #[test]
-    fn every_cue_is_short_audible_and_starts_and_ends_quietly() {
-        for cue in [
-            Cue::ListenStart,
-            Cue::ListenStop,
-            Cue::Done,
-            Cue::Error,
-            Cue::Thinking,
-            Cue::Hangup,
-        ] {
-            let samples = earcon(cue, 1.0);
-            let length = seconds(samples.len());
-            assert!(
-                length < 0.3,
-                "{cue:?} is {length}s (VOICE §6: under 300 ms)"
-            );
-            assert!(
-                samples.iter().any(|s| s.abs() > 0.1),
-                "{cue:?} is inaudible"
-            );
-            assert!(samples.iter().all(|s| s.abs() <= 1.0), "{cue:?} clips");
-            assert!(samples[0].abs() < 0.01, "{cue:?} starts with a click");
-            assert!(
-                samples[samples.len() - 1].abs() < 0.05,
-                "{cue:?} ends with a click"
-            );
-        }
-    }
-
-    #[test]
-    fn the_volume_setting_scales_the_cues() {
-        let loud = earcon(Cue::Done, 1.0);
-        let quiet = earcon(Cue::Done, 0.25);
-        let peak = |s: &[f32]| s.iter().fold(0.0_f32, |m, v| m.max(v.abs()));
-        assert!((peak(&loud) * 0.25 - peak(&quiet)).abs() < 1e-6);
+    fn switched_off_cues_are_silent_and_the_set_can_change() {
+        let speaker = Speaker::new(
+            Arc::new(kivo_testkit::FakeAudio::with_clip(Vec::new())),
+            None,
+        );
+        speaker.configure(&Sounds {
+            off: vec![Cue::Done],
+            set: SoundSet::Glass,
+            ..Sounds::default()
+        });
+        speaker.cue(Cue::Done);
+        assert!(!speaker.muting_microphone(), "an off cue doesn't play");
+        let glass = lock(&speaker.cues).clone();
+        assert_eq!(glass, render(SoundSet::Glass));
     }
 
     #[test]

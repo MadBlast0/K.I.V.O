@@ -42,6 +42,9 @@ function snapshot(confirm: boolean): StateSnapshot {
       targetApp: null,
       capabilityOff: null,
       quiet: null,
+      guest: false,
+      answering: false,
+      waiting: false,
       confirm: confirm
         ? {
             callId: "c1",

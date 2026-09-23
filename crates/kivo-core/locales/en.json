@@ -194,6 +194,7 @@
     "notUnderstood": "I can’t do that yet.",
     "downloading": "I’m still downloading my speech model ({percent}%).",
     "sttMissing": "My speech recognition isn’t installed yet. Open Voice settings to get it.",
+    "handsFreeFailed": "Hands-free listening couldn’t start. Push-to-talk still works; check the wake-word model on the Voice page.",
     "listenFailed": "I couldn’t start listening. {error}",
     "nothingToSend": "There was nothing to send.",
     "sttSlow": "My speech engine didn’t start in time. Try again.",
@@ -241,5 +242,32 @@
     "cancel": "KIVO isn’t busy ({state})",
     "stopping": "KIVO isn’t stopping ({state})",
     "listen": "KIVO can listen only when it isn’t busy or paused ({state})"
+  },
+  "preview": {
+    "busy": "KIVO is busy with a request. Try the preview again when it's done."
+  },
+  "voiceId": {
+    "needMore": "Record at least {count} of the prompts first.",
+    "modelMissing": "The voice-recognition model is still downloading. Try again when it's ready.",
+    "consent": "Voice enrollment started (consent given)",
+    "saved": "Voice profile saved",
+    "deleted": "Voice data deleted",
+    "notHeard": "KIVO didn't hear anything. Try again a little closer to the microphone.",
+    "busy": "KIVO is listening for a request right now. Try again in a moment."
+  },
+  "wake": {
+    "noModel": "The wake-word listener isn't downloaded yet.",
+    "unknown": "There's no wake word with that name.",
+    "added": "Wake word “{phrase}” added",
+    "deleted": "Wake word “{phrase}” deleted",
+    "noSamples": "Record a few samples first."
+  },
+  "decision": {
+    "guest": "Only the owner can approve this. Tap Approve on the card if it's you.",
+    "click": "This one needs a click to approve. Tap Approve on the card.",
+    "notOwner": "I didn't recognize your voice, so I can't approve this by voice. Tap Approve on the card.",
+    "explain": "{action}. {why} Say approve, cancel, or wait.",
+    "editLater": "I can't change the request by voice yet. Say approve, cancel, or wait.",
+    "sayAgain": "Sorry, say approve, cancel, or wait."
   }
 }

@@ -15,7 +15,11 @@ pub mod models;
 pub mod rpc;
 #[cfg(windows)]
 pub mod scripted;
+pub mod sounds;
 pub mod speaker;
 #[cfg(windows)]
 pub mod tray;
 pub mod voice;
+pub mod voice_rpc;
+pub mod voiceid;
+pub mod wake;

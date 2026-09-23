@@ -96,6 +96,41 @@ const SCHEMA: &[&str] = &[
              created_at INTEGER NOT NULL,
              expires_at INTEGER
          ) STRICT;",
+    // 4: wake words (VOICE §4, VOICE-15). The built-in "Hey Kivo" can be disabled, not deleted.
+    "CREATE TABLE wake_words (
+             id          TEXT PRIMARY KEY,
+             profile_id  TEXT NOT NULL REFERENCES profiles(id),
+             phrase      TEXT NOT NULL,
+             phonetic    TEXT,
+             engine      TEXT NOT NULL CHECK (engine IN ('kws', 'trained')),
+             model_path  TEXT,
+             enabled     INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+             built_in    INTEGER NOT NULL DEFAULT 0 CHECK (built_in IN (0, 1)),
+             sensitivity REAL NOT NULL DEFAULT 0.5 CHECK (sensitivity BETWEEN 0 AND 1),
+             samples     TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(samples)),
+             verifier    BLOB,
+             quality     TEXT NOT NULL CHECK (quality IN ('good', 'fair', 'risky')),
+             fa_test     TEXT CHECK (fa_test IS NULL OR json_valid(fa_test)),
+             created_at  INTEGER NOT NULL
+         ) STRICT;",
+    // 5: voice enrollment (VOICE §5, SECURITY §5): the recorded clips (the files are encrypted
+    // on disk; rows point at them) and the speaker profile, whose embeddings are stored
+    // encrypted too. Deleting voice data removes both.
+    "CREATE TABLE voice_clips (
+             id         INTEGER PRIMARY KEY,
+             profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+             prompt     TEXT NOT NULL,
+             file       TEXT NOT NULL,
+             created_at INTEGER NOT NULL
+         ) STRICT;
+     CREATE TABLE speaker_profiles (
+             profile_id TEXT PRIMARY KEY REFERENCES profiles(id) ON DELETE CASCADE,
+             model_id   TEXT NOT NULL,
+             threshold  REAL NOT NULL,
+             embeddings BLOB NOT NULL,
+             created_at INTEGER NOT NULL,
+             updated_at INTEGER NOT NULL
+         ) STRICT;",
 ];
 
 static MIGRATIONS: LazyLock<Migrations<'static>> =

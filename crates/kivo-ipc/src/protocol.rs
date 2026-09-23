@@ -88,6 +88,28 @@ pub mod method {
     pub const UI_WINDOW_CLOSED: &str = "ui.windowClosed";
     /// Runtime → client notification: a model download's progress.
     pub const MODEL_PROGRESS: &str = "models.progress";
+    /// Wake words (VOICE §4): list, check a phrase, add or edit, delete, turn on/off or tune,
+    /// hear it spoken, try it, record samples, tune from them, and a false-alarm test.
+    pub const WAKE_LIST: &str = "wake.list";
+    pub const WAKE_CHECK: &str = "wake.check";
+    pub const WAKE_SAVE: &str = "wake.save";
+    pub const WAKE_DELETE: &str = "wake.delete";
+    pub const WAKE_SET: &str = "wake.set";
+    pub const WAKE_HEAR: &str = "wake.hear";
+    pub const WAKE_TRY: &str = "wake.try";
+    pub const WAKE_SAMPLE: &str = "wake.sample";
+    pub const WAKE_TUNE: &str = "wake.tune";
+    pub const WAKE_FALSE_ALARMS: &str = "wake.falseAlarms";
+    /// Your voice (VOICE §5): status, start (with consent), record a prompt, finish, cancel, and
+    /// delete all voice data.
+    pub const VOICE_ID_STATUS: &str = "voiceId.status";
+    pub const VOICE_ID_START: &str = "voiceId.start";
+    pub const VOICE_ID_RECORD: &str = "voiceId.record";
+    pub const VOICE_ID_FINISH: &str = "voiceId.finish";
+    pub const VOICE_ID_CANCEL: &str = "voiceId.cancel";
+    pub const VOICE_ID_DELETE: &str = "voiceId.delete";
+    /// Settings → Sounds: play a set's cues (VOICE-27).
+    pub const SOUNDS_PREVIEW: &str = "sounds.preview";
 }
 
 /// The name the desktop app gives in `hello`; the runtime supervises the client with this name.
@@ -169,6 +191,21 @@ pub struct TurnView {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "ts", ts(optional))]
     pub anchor: Option<ScreenPoint>,
+    /// Someone other than the enrolled owner is talking: a guest turn (UX-08, VOICE-22).
+    #[serde(default)]
+    pub guest: bool,
+    /// Listening for a follow-up without the wake word for this many seconds from when it
+    /// appears (UX-45: the Island's ring counts down).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub follow_up: Option<u8>,
+    /// KIVO is listening for a spoken answer to the decision (CONV-26): the mic ring and the
+    /// voice hints show.
+    #[serde(default)]
+    pub answering: bool,
+    /// The user said "wait": the card stays, "Waiting for you", with no timeout (UX-08).
+    #[serde(default)]
+    pub waiting: bool,
 }
 
 /// A point on the desktop, in physical pixels.

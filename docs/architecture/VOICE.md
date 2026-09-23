@@ -21,9 +21,11 @@ TTS stream (kivo-infer) → playback mixer (TTS + earcons) → AudioIo render  �
   - capture runs on an MMCSS "Audio" thread and writes the ring buffer lock-free;
   - detection runs on one worker thread with EcoQoS while idle;
   - model inference runs in kivo-infer.
-- **Pre-roll:** the STT stream starts from the buffer 300 ms before the wake word ends. A
-  "Hey Kivo, open Chrome" said in one breath is therefore transcribed in full, and the wake phrase
-  is stripped by alignment with the known phrase.
+- **Pre-roll:** the STT stream starts from the buffer just before the wake phrase begins (the
+  keyword spotter's word boundaries are approximate; starting 300 ms before its end clipped the
+  request, DECISIONS "Hands-free voice: measured choices"). A "Hey Kivo, open Chrome" said in one
+  breath is therefore transcribed in full, and the wake phrase is stripped by alignment with the
+  known phrase, by words or by sound.
 
 ## 2. Provider traits
 
@@ -48,7 +50,7 @@ trait TurnDetector     { fn end_probability(&self, audio_tail, transcript) -> f3
 |---|---|---|
 | VAD | Silero v6 (ort) | — |
 | AEC | OS AEC (Win11 22621+ where the device exposes it), else WebRTC AEC3 (`sonora`) | — |
-| Wake, built-in | "Hey Kivo" model trained by KIVO with the openWakeWord pipeline | — |
+| Wake, built-in | "Hey Kivo" on the open-vocabulary keyword spotter, with its pronunciation variants (no trained model: DECISIONS "No training") | — |
 | Wake, custom | sherpa-onnx open-vocabulary KWS | Optional "Enhance" trained model |
 | Wake verifier | Few-shot template (enrollment) + stage-2 model | — |
 | Speaker verify | CAM++ (sherpa-onnx or ort) | WeSpeaker ResNet34 |

@@ -64,6 +64,8 @@ pub struct Rig {
     pub audio: Arc<FakeAudio>,
     /// Where "take a screenshot" saves: a folder of this rig's own under the temp folder.
     pub screenshots: PathBuf,
+    /// The system controls (volume, power): fakes that only record what they were asked.
+    pub control: Arc<FakeSystemControl>,
 }
 
 impl Drop for Rig {
@@ -131,10 +133,11 @@ pub fn rig_with_voice(
         std::process::id(),
         RIGS.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     ));
+    let control = Arc::new(FakeSystemControl::default());
     let env = Arc::new(kivo_tools::Env {
         apps: apps.clone(),
         windows: windows.clone(),
-        control: Arc::new(FakeSystemControl::default()),
+        control: control.clone(),
         screen: Arc::new(PlainScreen),
         notifications: Arc::new(FakeNotifications::default()),
         catalog: Arc::clone(&catalog),
@@ -162,6 +165,10 @@ pub fn rig_with_voice(
     let listener = Arc::new(voice::start(voice::Pipeline {
         audio,
         device: None,
+        // The end-of-turn model if this PC has it (VOICE-33); silence decides otherwise.
+        turn_model: kivo_platform::Paths::user()
+            .map(|p| p.models().join(kivo_store::models::SMART_TURN))
+            .unwrap_or_default(),
         vad_model: PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../../assets/models/silero_vad.onnx"),
         infer: infer.clone(),
@@ -205,6 +212,7 @@ pub fn rig_with_voice(
             db,
             audio: mic,
             screenshots,
+            control,
         },
         worker_task,
         pump,

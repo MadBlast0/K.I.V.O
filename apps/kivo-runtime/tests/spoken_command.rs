@@ -481,6 +481,10 @@ async fn saying_mute_mutes_with_no_ai_and_a_brief_answer() {
         rig.core.turn_view().and_then(|t| t.answer).is_some()
     })
     .await;
+    eprintln!(
+        "DEBUG heard: {:?}",
+        rig.core.turn_view().unwrap().transcript
+    );
     assert_eq!(
         rig.core.turn_view().unwrap().answer.as_deref(),
         Some("Muted."),
@@ -582,6 +586,217 @@ async fn the_m1_commands_act_within_500_ms_of_the_end_of_speech() {
         "the screenshot was saved in the rig's folder"
     );
     assert_eq!(*rig.apps.launched.lock().unwrap(), ["Chrome"]);
+    rig.core.quit();
+    let _ = tokio::time::timeout(Duration::from_secs(5), worker_task).await;
+    pump.abort();
+}
+
+/// SEC-10 / CONV-26: a decision waits for its answer. The question is asked, the card stays
+/// (it used to end with the question), and a click approves it. The power controls are fakes.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_decision_waits_for_its_answer_and_a_click_approves_it() {
+    let _turn = ONE_AT_A_TIME.lock().await;
+    let (rig, worker_task, pump) = rig(Vec::new(), PathBuf::from("no-model"));
+    rig.core.update_config(|c| {
+        c.capabilities.set(Capability::SpeakResponses, false);
+    });
+    rig.engine.say("shut down").await.expect("accepted");
+    until("the question", Duration::from_secs(10), || {
+        rig.core.turn_view().and_then(|t| t.confirm).is_some()
+    })
+    .await;
+    // The card is still waiting a while later: nothing ended the turn.
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    let view = rig.core.turn_view().expect("the turn is still there");
+    let confirm = view.confirm.expect("still asking");
+    assert_eq!(
+        rig.core.state().borrow().session,
+        SessionState::AwaitingConfirmation
+    );
+    assert!(!view.answering, "a typed request waits for a click");
+    assert!(rig.control.power.lock().unwrap().is_empty());
+    rig.engine
+        .answer_confirmation(&confirm.call_id, true, false)
+        .await
+        .expect("approved");
+    until("the power action", Duration::from_secs(10), || {
+        !rig.control.power.lock().unwrap().is_empty()
+    })
+    .await;
+    rig.core.quit();
+    let _ = tokio::time::timeout(Duration::from_secs(5), worker_task).await;
+    pump.abort();
+}
+
+/// CONV-26/27/28: a spoken request that needs a decision is answered by voice. In Ask mode
+/// "Open Chrome" needs a yes: KIVO asks, listens without the wake word, hears "yes, go ahead" and
+/// approves (the owner, as recognition is off). A high-risk "shut down" answered "yes" is not
+/// done: voice alone is never enough, and the card waits for a click. Apps and power are fakes.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn decisions_are_answered_by_voice_but_high_risk_needs_a_click() {
+    let _turn = ONE_AT_A_TIME.lock().await;
+    let paths = Paths::user().expect("per-user folders");
+    let Some(model) = ModelStore::new(paths.models()).installed(kivo_voice::moonshine::MODEL_ID)
+    else {
+        eprintln!("the speech model isn't installed on this machine; skipping");
+        return;
+    };
+    if !worker().is_file() {
+        eprintln!("kivo-infer isn't built beside the tests; skipping");
+        return;
+    }
+    let (rig, worker_task, pump) = rig(Vec::new(), model.dir);
+    rig.core.update_config(|c| {
+        c.capabilities.set(Capability::SpeakResponses, false);
+    });
+    rig.core
+        .set_mode(kivo_core::config::PermissionMode::Ask)
+        .expect("Ask mode");
+    // The request, then the answer when KIVO next listens.
+    rig.audio.say_next(spoken("Open Chrome."));
+    rig.audio.say_next(spoken("Yes, go ahead."));
+    rig.engine
+        .talk(TurnSource::PushToTalk)
+        .await
+        .expect("KIVO starts listening");
+    until("Chrome to open", Duration::from_secs(40), || {
+        !rig.apps.launched.lock().unwrap().is_empty()
+    })
+    .await;
+    assert!(
+        rig.recorder
+            .audit_rows(10)
+            .iter()
+            .any(|a| a.tool == "apps.launch" && a.confirmed_by.as_deref() == Some("voice")),
+        "approved by voice"
+    );
+    until("the turn to end", Duration::from_secs(20), || {
+        rig.core.state().borrow().session == SessionState::Idle
+    })
+    .await;
+    rig.core.clear_turn();
+
+    // High risk: a spoken yes is refused and the card stays for a click.
+    rig.audio.say_next(spoken("Shut down the computer."));
+    rig.audio.say_next(spoken("Yes."));
+    rig.engine
+        .talk(TurnSource::PushToTalk)
+        .await
+        .expect("KIVO starts listening");
+    until("the question", Duration::from_secs(30), || {
+        rig.core.turn_view().and_then(|t| t.confirm).is_some()
+    })
+    .await;
+    until(
+        "the spoken answer to be heard",
+        Duration::from_secs(30),
+        || {
+            rig.audio.script.lock().unwrap().is_empty()
+                && !rig.core.turn_view().is_some_and(|t| t.answering)
+        },
+    )
+    .await;
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    assert!(
+        rig.control.power.lock().unwrap().is_empty(),
+        "not shut down"
+    );
+    assert!(
+        rig.core.turn_view().and_then(|t| t.confirm).is_some(),
+        "the card still waits"
+    );
+    rig.core.quit();
+    let _ = tokio::time::timeout(Duration::from_secs(5), worker_task).await;
+    pump.abort();
+}
+
+/// The keyword model: `KIVO_KWS_DIR` (the unpacked release archive) or the installed one.
+fn keyword_model() -> Option<PathBuf> {
+    std::env::var_os("KIVO_KWS_DIR")
+        .map(PathBuf::from)
+        .or_else(|| Paths::user().map(|p| p.models().join(kivo_store::models::KEYWORD_SPOTTER)))
+        .filter(|d| d.join("encoder.onnx").is_file())
+}
+
+/// VOICE-05/13/14, UX-45: hands-free. Windows' voice says "Hey Kivo, mute." in one breath with no
+/// key pressed; the keyword spotter wakes KIVO, recognition hears the whole sentence from just
+/// before the wake word ended, the wake phrase is removed, and KIVO mutes. Then, within the
+/// follow-up window, "Open Chrome." works without the wake word.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn hey_kivo_wakes_kivo_hands_free_and_a_follow_up_needs_no_wake_word() {
+    let _turn = ONE_AT_A_TIME.lock().await;
+    let paths = Paths::user().expect("per-user folders");
+    let Some(model) = ModelStore::new(paths.models()).installed(kivo_voice::moonshine::MODEL_ID)
+    else {
+        eprintln!("the speech model isn't installed on this machine; skipping");
+        return;
+    };
+    let Some(kws) = keyword_model() else {
+        eprintln!("the keyword model isn't here (KIVO_KWS_DIR); skipping");
+        return;
+    };
+    if !worker().is_file() {
+        eprintln!("kivo-infer isn't built beside the tests; skipping");
+        return;
+    }
+    let (rig, worker_task, pump) = rig(Vec::new(), model.dir);
+    rig.core.update_config(|c| {
+        c.voice.follow_up_seconds = 8;
+    });
+    // One continuous "microphone": the wake phrase and request, a pause for KIVO's answer, then
+    // the follow-up.
+    let mut mic = vec![0.0; 16_000];
+    mic.extend(spoken("Hey Kivo, mute."));
+    mic.extend(vec![0.0; 16_000 * 5]);
+    mic.extend(spoken("Open Chrome."));
+    mic.extend(vec![0.0; 16_000 * 3]);
+    rig.audio.say_next(mic);
+    rig.listener
+        .set_hands_free(Some(kivo_runtime::voice::HandsFree {
+            model_dir: kws,
+            // The built-in word as KIVO sets it up, with its pronunciation variants.
+            wake: rig
+                .db
+                .lock()
+                .unwrap()
+                .wake_words()
+                .unwrap()
+                .iter()
+                .flat_map(kivo_runtime::wake::keywords_for)
+                .collect(),
+            stop: kivo_runtime::wake::stop_words(),
+        }));
+    let deadline = Instant::now() + Duration::from_secs(40);
+    while !rig
+        .recorder
+        .audit_rows(10)
+        .iter()
+        .any(|a| a.tool == "audio.mute" && a.decision == "allow")
+    {
+        if Instant::now() > deadline {
+            for a in rig.recorder.recent(None, 20) {
+                eprintln!("activity: {} | {} | {}", a.kind, a.title, a.status);
+            }
+            panic!("timed out waiting for the sound to be muted");
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    let first = rig
+        .recorder
+        .recent(None, 20)
+        .into_iter()
+        .find(|a| a.kind == "transcript")
+        .map(|a| a.title)
+        .unwrap_or_default();
+    assert!(
+        !first.to_lowercase().contains("kivo"),
+        "the wake phrase was removed: {first:?}"
+    );
+    until("Chrome to open", Duration::from_secs(40), || {
+        !rig.apps.launched.lock().unwrap().is_empty()
+    })
+    .await;
+    rig.listener.set_hands_free(None);
     rig.core.quit();
     let _ = tokio::time::timeout(Duration::from_secs(5), worker_task).await;
     pump.abort();

@@ -192,6 +192,8 @@ pub struct Sounds {
     pub volume: u8,
     /// The "thinking" cue is off by default (VOICE §6).
     pub thinking_cue: bool,
+    /// Cues switched off one by one in Settings → Sounds (VOICE-27).
+    pub off: Vec<SoundCue>,
 }
 
 impl Default for Sounds {
@@ -201,10 +203,47 @@ impl Default for Sounds {
             set: SoundSet::Soft,
             volume: 70,
             thinking_cue: false,
+            off: Vec::new(),
         }
     }
 }
 
+/// Every sound KIVO makes (VOICE §6), in every set.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SoundCue {
+    ListenStart,
+    ListenStop,
+    Done,
+    Error,
+    Thinking,
+    Hangup,
+    /// "This needs your answer" (CONVERSATION §7).
+    Question,
+    /// A decision was approved.
+    Approved,
+    Cancelled,
+    /// A proactive message.
+    Notification,
+}
+
+impl SoundCue {
+    pub const ALL: [Self; 10] = [
+        Self::ListenStart,
+        Self::ListenStop,
+        Self::Done,
+        Self::Error,
+        Self::Thinking,
+        Self::Hangup,
+        Self::Question,
+        Self::Approved,
+        Self::Cancelled,
+        Self::Notification,
+    ];
+}
+
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum SoundSet {

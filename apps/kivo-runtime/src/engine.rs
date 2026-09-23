@@ -55,6 +55,19 @@ struct Running {
     /// How the turn ends once its reply is spoken: "done", or "unhandled" when KIVO couldn't
     /// route the request.
     outcome: &'static str,
+    /// The wake phrase that started the turn, removed from the transcript (VOICE-05).
+    wake_phrase: Option<String>,
+    /// What KIVO is saying, so its own "stop" isn't taken for the user's (VOICE-19).
+    reply: String,
+    /// Someone other than the enrolled owner (VOICE-22 "Prefer owner"): a guest session with no
+    /// memory or preferences, and medium-risk actions confirmed (SECURITY §1).
+    guest: bool,
+    /// Listening for a spoken answer to the decision on the card (CONV-26).
+    answering: bool,
+    /// The spoken answer's audio, for the owner's-voice check (CONV-28).
+    answer_audio: Option<Vec<f32>>,
+    /// Times KIVO has asked again after an answer it didn't understand.
+    reasked: u8,
 }
 
 /// What the engine is built from.
@@ -92,6 +105,12 @@ pub struct Engine {
     turn: Mutex<Option<Running>>,
     listener: RwLock<Option<Arc<Listener>>>,
     next_turn: AtomicU64,
+    /// Echo cancellation is removing KIVO's own output from the microphone (VOICE-30).
+    echo_cancelled: std::sync::atomic::AtomicBool,
+    /// Recognizing the owner's voice (VOICE §5).
+    voice_id: RwLock<Option<Arc<crate::voiceid::VoiceId>>>,
+    /// Speech ids of previews playing outside a turn ("hear it", voice previews).
+    previews: Mutex<std::collections::HashSet<u64>>,
 }
 
 impl Engine {
@@ -112,7 +131,18 @@ impl Engine {
             turn: Mutex::new(None),
             listener: RwLock::new(None),
             next_turn: AtomicU64::new(1),
+            echo_cancelled: std::sync::atomic::AtomicBool::new(false),
+            voice_id: RwLock::new(None),
+            previews: Mutex::new(std::collections::HashSet::new()),
         }
+    }
+
+    pub fn set_voice_id(&self, voice_id: Arc<crate::voiceid::VoiceId>) {
+        *write(&self.voice_id) = Some(voice_id);
+    }
+
+    pub fn voice_id(&self) -> Option<Arc<crate::voiceid::VoiceId>> {
+        read(&self.voice_id).clone()
     }
 
     pub fn set_listener(&self, listener: Arc<Listener>) {
@@ -121,6 +151,11 @@ impl Engine {
 
     fn listener(&self) -> Option<Arc<Listener>> {
         read(&self.listener).clone()
+    }
+
+    /// The voice pipeline's controller (enrollment and wake-word recordings).
+    pub fn listener_handle(&self) -> Option<Arc<Listener>> {
+        self.listener()
     }
 
     fn turn_id(&self) -> String {
@@ -184,6 +219,304 @@ impl Engine {
     /// once; the speech models load in parallel (prewarm on turn start, VOICE-34) and the audio
     /// heard meanwhile is kept, so nothing the user says is lost to a cold start.
     pub async fn talk(self: &Arc<Self>, source: TurnSource) -> Result<(), String> {
+        self.start_turn(source, None).await
+    }
+
+    /// A wake word was heard (VOICE §4). The listener has already started the utterance (with the
+    /// audio from just before the wake word ended, VOICE-05); this starts the turn around it. A
+    /// request in progress is interrupted, as barge-in by wake word.
+    pub async fn woke(
+        self: &Arc<Self>,
+        utterance: u64,
+        word: &str,
+        phrase: &str,
+        score: f32,
+        clip: Vec<f32>,
+    ) {
+        // Whose voice it was is judged at the end of the request, on the whole utterance: the
+        // wake word alone is too short for a steady voiceprint (VOICE-14, VOICE-22).
+        let _ = clip;
+        if lock(&self.turn).is_some() {
+            self.cancel_turn(CancelReason::BargeIn, false);
+        }
+        self.core
+            .bus
+            .publish(Event::new(EventKind::Voice(VoiceEvent::WakeDetected {
+                word_id: word.to_owned(),
+                score,
+            })));
+        match self.start_turn(TurnSource::WakeWord, Some(utterance)).await {
+            Ok(()) => {
+                if let Some(running) = lock(&self.turn).as_mut() {
+                    running.wake_phrase = Some(phrase.to_owned());
+                }
+            }
+            // Speech isn't set up (already said): the listener's utterance goes nowhere.
+            Err(_) => self.cancel_listening(),
+        }
+    }
+
+    /// Listens for a spoken answer to the decision on the card (CONV-26): once KIVO has finished
+    /// asking (so it can't answer itself, CONV-28), for 10 s without the wake word. Typed turns
+    /// and a deferred card ("wait") just wait for a click.
+    fn listen_for_answer(self: &Arc<Self>) {
+        let voice_turn = lock(&self.turn)
+            .as_ref()
+            .is_some_and(|t| t.source != TurnSource::Typed);
+        let deferred = self.core.turn_view().is_some_and(|v| v.waiting);
+        if !voice_turn || deferred {
+            return;
+        }
+        let Some(listener) = self.listener() else {
+            return;
+        };
+        let engine = Arc::clone(self);
+        tokio::spawn(async move {
+            // The question may still be playing: it is synthesized faster than it is heard.
+            let deadline = Instant::now() + Duration::from_secs(10);
+            while engine.speaker.speaking() && Instant::now() < deadline {
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+            let utterance = engine.infer.next_utterance();
+            let (started, started_rx) = tokio::sync::watch::channel(false);
+            {
+                let mut turn = lock(&engine.turn);
+                let Some(running) = turn.as_mut().filter(|t| t.pending.is_some()) else {
+                    return;
+                };
+                running.utterance = utterance;
+                running.answering = true;
+                running.answer_audio = None;
+                running.stt_started = started_rx;
+            }
+            engine.core.update_turn(|view| view.answering = true);
+            listener.listen_for_answer(utterance);
+            engine.start_recognition(utterance, started);
+        });
+    }
+
+    /// The audio of a request or a spoken answer (for the owner's-voice check).
+    pub fn heard(&self, utterance: u64, audio: Vec<f32>) {
+        if let Some(t) = lock(&self.turn)
+            .as_mut()
+            .filter(|t| t.utterance == utterance)
+        {
+            t.answer_audio = Some(audio);
+        }
+    }
+
+    /// Stage 2 for a spoken request (VOICE-14, VOICE-22): whose voice was it? In "Owner only"
+    /// another voice's request is dropped with a soft sound; in "Prefer owner" it becomes a guest
+    /// turn. Returns false when the request is dropped.
+    async fn voice_check(self: &Arc<Self>) -> bool {
+        let config = self.core.config();
+        let mode = config.voice.speaker_mode;
+        let recognizing = mode != kivo_core::config::SpeakerMode::Off
+            && config
+                .capabilities
+                .enabled(kivo_core::Capability::SpeakerRecognition);
+        let audio = lock(&self.turn)
+            .as_mut()
+            .and_then(|t| t.answer_audio.take());
+        let (true, Some(voice_id), Some(audio)) = (recognizing, self.voice_id(), audio) else {
+            return true;
+        };
+        let verdict = tokio::task::spawn_blocking(move || voice_id.check(&audio))
+            .await
+            .unwrap_or(crate::voiceid::Verdict::Unknown);
+        if !matches!(verdict, crate::voiceid::Verdict::Stranger { .. }) {
+            return true;
+        }
+        if mode == kivo_core::config::SpeakerMode::OwnerOnly {
+            tracing::info!(?verdict, "a request in another voice; ignored");
+            self.speaker.cue(Cue::Cancelled);
+            self.cancel_turn(CancelReason::UserVoice, true);
+            return false;
+        }
+        if let Some(t) = lock(&self.turn).as_mut() {
+            t.guest = true;
+        }
+        self.core.update_turn(|view| view.guest = true);
+        true
+    }
+
+    /// What the user said to the decision (CONV-27), under the voice rules (CONV-28).
+    async fn decision_answer(self: &Arc<Self>, said: &str) {
+        use kivo_intent::answers::{Answer as Said, parse_answer};
+        let (spec, guest, audio, reasked) = {
+            let mut turn = lock(&self.turn);
+            let Some(t) = turn.as_mut() else { return };
+            t.answering = false;
+            let Some((spec, _)) = t.pending.clone() else {
+                return;
+            };
+            (spec, t.guest, t.answer_audio.take(), t.reasked)
+        };
+        self.core.update_turn(|view| view.answering = false);
+        let language = self.core.config().general.language;
+        match parse_answer(said, &language) {
+            Some(answer @ (Said::Approve | Said::ApproveAlways)) => {
+                if guest {
+                    self.speak(&text::t("decision.guest")).await;
+                    return;
+                }
+                if spec.strength == kivo_core::tool::Strength::Strong {
+                    // High risk: a click (Windows Hello from M4); voice alone is never enough.
+                    self.speak(&text::t("decision.click")).await;
+                    return;
+                }
+                if !self.owner_said_it(audio).await {
+                    self.speak(&text::t("decision.notOwner")).await;
+                    return;
+                }
+                let always = answer == Said::ApproveAlways && spec.allow_always;
+                if let Err(e) = self
+                    .answer_by(&spec.call_id, true, always, ConfirmedBy::Voice)
+                    .await
+                {
+                    tracing::warn!(e, "voice approval refused");
+                }
+            }
+            Some(Said::Deny) => {
+                let _ = self
+                    .answer_by(&spec.call_id, false, false, ConfirmedBy::Voice)
+                    .await;
+            }
+            Some(Said::Defer) => {
+                // The card stays with no timeout ("Waiting for you"), and no sound.
+                self.core.update_turn(|view| view.waiting = true);
+            }
+            Some(Said::Explain) => {
+                let explanation = text::tf(
+                    "decision.explain",
+                    &[("action", &spec.action), ("why", &spec.why)],
+                );
+                self.speak(&explanation).await;
+            }
+            Some(Said::Edit(_)) => self.speak(&text::t("decision.editLater")).await,
+            None => {
+                if reasked < 2 {
+                    if let Some(t) = lock(&self.turn).as_mut() {
+                        t.reasked += 1;
+                    }
+                    self.speak(&text::t("decision.sayAgain")).await;
+                }
+            }
+        }
+    }
+
+    /// CONV-28: with speaker recognition on, a spoken approval counts only in the owner's voice.
+    /// With it off, the signed-in user at this PC is taken to be the owner.
+    async fn owner_said_it(&self, audio: Option<Vec<f32>>) -> bool {
+        let config = self.core.config();
+        let recognizing = config.voice.speaker_mode != kivo_core::config::SpeakerMode::Off
+            && config
+                .capabilities
+                .enabled(kivo_core::Capability::SpeakerRecognition);
+        let (true, Some(voice_id)) = (recognizing, self.voice_id()) else {
+            return true;
+        };
+        let Some(audio) = audio else {
+            return false;
+        };
+        let verdict = tokio::task::spawn_blocking(move || voice_id.check(&audio))
+            .await
+            .unwrap_or(crate::voiceid::Verdict::Unknown);
+        !matches!(verdict, crate::voiceid::Verdict::Stranger { .. })
+    }
+
+    /// The user talked over KIVO (VOICE-31): its reply stops with a short fade and what they
+    /// said becomes the next request (the listener has already started the utterance).
+    pub async fn barge_in(self: &Arc<Self>, utterance: u64) {
+        if lock(&self.turn).is_some() {
+            self.cancel_turn(CancelReason::BargeIn, false);
+        }
+        if self
+            .start_turn(TurnSource::FollowUp, Some(utterance))
+            .await
+            .is_err()
+        {
+            self.cancel_listening();
+        }
+    }
+
+    /// Speech in the follow-up window (UX-45): a new request without the wake word.
+    pub async fn follow_up_heard(self: &Arc<Self>, utterance: u64) {
+        if self
+            .start_turn(TurnSource::FollowUp, Some(utterance))
+            .await
+            .is_err()
+        {
+            self.cancel_listening();
+        }
+    }
+
+    /// "Kivo stop", "stop" or "cancel" while KIVO was busy (VOICE-19, SEC-26). Without echo
+    /// cancellation the microphone also hears KIVO, so a stop word that is in KIVO's own reply
+    /// while it plays is taken for KIVO's voice (VOICE-30 removes that voice first).
+    pub fn stop_heard(&self, word: &str) {
+        let said = word.replace('-', " ");
+        let own_voice = lock(&self.turn).as_ref().is_some_and(|t| {
+            let reply = t.reply.to_lowercase();
+            reply
+                .split(|c: char| !c.is_alphanumeric())
+                .any(|w| !w.is_empty() && said.split(' ').any(|s| s == w))
+        });
+        if own_voice && self.speaker.busy() && !self.echo_cancelled() {
+            tracing::debug!(word, "stop word in KIVO's own reply; ignored");
+            return;
+        }
+        tracing::info!(word, "stopped by voice");
+        self.cancel(CancelReason::UserVoice);
+    }
+
+    /// Whether the microphone signal has KIVO's own output removed (VOICE-30).
+    fn echo_cancelled(&self) -> bool {
+        self.echo_cancelled
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Says whether echo cancellation is running (set by the audio pipeline).
+    pub fn set_echo_cancelled(&self, on: bool) {
+        self.echo_cancelled
+            .store(on, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Speaks `text` outside a turn, with `voice` or the chosen one: "hear it" for a wake word and
+    /// voice previews (VOICE-16, UX-62). Not while a request is running.
+    pub async fn preview(self: &Arc<Self>, text: &str, voice: Option<&str>) -> Result<(), String> {
+        if lock(&self.turn).is_some() {
+            return Err(text::t("preview.busy"));
+        }
+        self.infer.warm();
+        if !self.infer.wait_ready(WORKER_START).await {
+            // No worker: Windows' voice says it in this process.
+            self.say_in_process(text);
+            return Ok(());
+        }
+        let id = self.infer.next_utterance();
+        lock(&self.previews).insert(id);
+        let config_voice = self.core.config().voice.tts_voice;
+        let voice = voice
+            .map(str::to_owned)
+            .or_else(|| (!config_voice.is_empty()).then_some(config_voice));
+        let result = self.infer.speak(id, text, voice.as_deref()).await;
+        if result.is_err() {
+            lock(&self.previews).remove(&id);
+        }
+        result.map_err(|e| e.to_string())
+    }
+
+    /// The fallback voice, for synthesizing background speech in the wake-word false-alarm test.
+    pub fn system_voice(&self) -> Option<Arc<dyn kivo_platform::SpeechSynth>> {
+        self.fallback_voice.clone()
+    }
+
+    async fn start_turn(
+        self: &Arc<Self>,
+        source: TurnSource,
+        pre_started: Option<u64>,
+    ) -> Result<(), String> {
         if !matches!(self.core.speech_status(), SpeechStatus::Ready) {
             // Speech isn't installed yet: say so instead of listening into nothing.
             let message = match self.core.speech_status() {
@@ -202,7 +535,7 @@ impl Engine {
         self.anchor_island();
         self.quiet_if_busy();
         let config = self.core.config();
-        let utterance = self.infer.next_utterance();
+        let utterance = pre_started.unwrap_or_else(|| self.infer.next_utterance());
         let (started, started_rx) = tokio::sync::watch::channel(false);
         let running = Running {
             id: id.clone(),
@@ -216,6 +549,12 @@ impl Engine {
             speaking: None,
             outcome: "done",
             stt_started: started_rx,
+            wake_phrase: None,
+            reply: String::new(),
+            guest: false,
+            answering: false,
+            answer_audio: None,
+            reasked: 0,
         };
         *lock(&self.turn) = Some(running);
         self.recorder.turn_started(&id, source);
@@ -226,17 +565,27 @@ impl Engine {
             .bus
             .publish(Event::new(EventKind::Voice(VoiceEvent::SpeechStarted)));
         self.speaker.cue(Cue::ListenStart);
-        if let Some(listener) = self.listener() {
+        if pre_started.is_none()
+            && let Some(listener) = self.listener()
+        {
             listener.listen(
                 utterance,
                 config.voice.auto_end_on_silence || source != TurnSource::PushToTalk,
             );
         }
         self.mark("t1Listening");
+        self.start_recognition(utterance, started);
+        Ok(())
+    }
 
-        // Start recognition as soon as the worker is up.
+    /// Starts recognition for `utterance` as soon as the worker is up; `started` says when.
+    fn start_recognition(
+        self: &Arc<Self>,
+        utterance: u64,
+        started: tokio::sync::watch::Sender<bool>,
+    ) {
         let engine = Arc::clone(self);
-        let language = config.general.language.clone();
+        let language = self.core.config().general.language;
         tokio::spawn(async move {
             let vocabulary = kivo_voice::language::pack(&language)
                 .map(|p| p.vocabulary)
@@ -265,7 +614,6 @@ impl Engine {
                 }
             }
         });
-        Ok(())
     }
 
     /// Over a fullscreen app or during Focus the Island hides or shrinks to a dot (the setting);
@@ -291,8 +639,7 @@ impl Engine {
 
     /// The settings changed: apply the ones the engine and the speaker hold (UX §5).
     pub fn settings_changed(&self, config: &kivo_core::KivoConfig) {
-        self.speaker
-            .set_sounds(config.sounds.enabled, config.sounds.volume);
+        self.speaker.configure(&config.sounds);
         self.speaker.set_output_device(
             config
                 .voice
@@ -339,6 +686,12 @@ impl Engine {
             speaking: None,
             outcome: "done",
             stt_started: tokio::sync::watch::channel(true).1,
+            wake_phrase: None,
+            reply: String::new(),
+            guest: false,
+            answering: false,
+            answer_audio: None,
+            reasked: 0,
         });
         self.recorder.turn_started(&id, TurnSource::Typed);
         self.core.advance(SessionInput::EndOfSpeech);
@@ -354,6 +707,11 @@ impl Engine {
             .as_ref()
             .is_some_and(|t| t.utterance == utterance);
         if !matches {
+            return;
+        }
+        let answering = lock(&self.turn).as_ref().is_some_and(|t| t.answering);
+        if answering {
+            self.answer_heard(utterance).await;
             return;
         }
         self.mark("t4EndOfSpeech");
@@ -379,6 +737,16 @@ impl Engine {
             }
         };
         self.mark("t5FinalTranscript");
+        if !self.voice_check().await {
+            return;
+        }
+        let wake_phrase = lock(&self.turn)
+            .as_ref()
+            .and_then(|t| t.wake_phrase.clone());
+        let text = match wake_phrase {
+            Some(phrase) => kivo_intent::strip_wake_phrase(&text, &phrase),
+            None => text,
+        };
         if text.trim().is_empty() {
             let message = text::t("turn.notCaught");
             self.show_error(&message);
@@ -388,8 +756,35 @@ impl Engine {
         self.handle_transcript(&text).await;
     }
 
+    /// The spoken answer to a decision ended: recognize it and act on it.
+    async fn answer_heard(self: &Arc<Self>, utterance: u64) {
+        let started = lock(&self.turn).as_ref().map(|t| t.stt_started.clone());
+        if let Some(mut started) = started {
+            let ready = tokio::time::timeout(WORKER_START, started.wait_for(|s| *s)).await;
+            if !matches!(ready, Ok(Ok(_))) {
+                return;
+            }
+        }
+        match self.infer.finish_stt(utterance).await {
+            Ok(said) => self.decision_answer(&said.text).await,
+            Err(e) => tracing::warn!(%e, "couldn't recognize the answer"),
+        }
+    }
+
     /// Nothing was said (or the microphone is blocked).
     pub fn nothing_heard(&self, utterance: u64) {
+        // No spoken answer: the card waits for a click (CONV-26).
+        let answering = lock(&self.turn).as_mut().is_some_and(|t| {
+            let was = t.utterance == utterance && t.answering;
+            if was {
+                t.answering = false;
+            }
+            was
+        });
+        if answering {
+            self.core.update_turn(|view| view.answering = false);
+            return;
+        }
         let matches = lock(&self.turn)
             .as_ref()
             .is_some_and(|t| t.utterance == utterance);
@@ -401,7 +796,10 @@ impl Engine {
     /// A partial transcript from the worker.
     pub fn partial(&self, utterance: u64, text: &str, stable: bool) {
         let mut turn = lock(&self.turn);
-        let Some(running) = turn.as_mut().filter(|t| t.utterance == utterance) else {
+        let Some(running) = turn
+            .as_mut()
+            .filter(|t| t.utterance == utterance && !t.answering)
+        else {
             return;
         };
         if !stable {
@@ -538,7 +936,11 @@ impl Engine {
             &call,
             &SecurityContext {
                 mode: self.core.state().borrow().mode,
-                session: SessionKind::Owner,
+                session: if lock(&self.turn).as_ref().is_some_and(|t| t.guest) {
+                    SessionKind::Guest
+                } else {
+                    SessionKind::Owner
+                },
                 taint: Taint::Clean,
                 capabilities: &capabilities,
                 limits: &limits,
@@ -562,6 +964,8 @@ impl Engine {
                     view.confirm = Some(confirm.clone());
                     view.target_app = confirm.target.clone();
                 });
+                // A distinct cue says "this needs your answer" (CONV-26).
+                self.speaker.cue(Cue::Question);
                 let question = format!("{title}?");
                 self.speak(&question).await;
             }
@@ -584,6 +988,27 @@ impl Engine {
         allow: bool,
         always: bool,
     ) -> Result<(), String> {
+        // A click while KIVO listens for a spoken answer: stop listening.
+        let answering = lock(&self.turn).as_mut().is_some_and(|t| {
+            let was = t.answering;
+            t.answering = false;
+            was
+        });
+        if answering {
+            self.cancel_listening();
+            self.core.update_turn(|view| view.answering = false);
+        }
+        self.answer_by(call_id, allow, always, ConfirmedBy::Click)
+            .await
+    }
+
+    async fn answer_by(
+        self: &Arc<Self>,
+        call_id: &str,
+        allow: bool,
+        always: bool,
+        by: ConfirmedBy,
+    ) -> Result<(), String> {
         let pending = lock(&self.turn).as_mut().and_then(|t| {
             t.pending
                 .as_ref()
@@ -594,25 +1019,27 @@ impl Engine {
         let Some((spec, call)) = pending else {
             return Err(text::t("turn.nothingWaiting"));
         };
-        self.core.update_turn(|view| view.confirm = None);
+        self.core.update_turn(|view| {
+            view.confirm = None;
+            view.waiting = false;
+        });
         if !allow {
             self.core.advance(SessionInput::Denied);
-            self.recorder.confirmation(&self.turn_key(), &call, false);
-            self.speaker.cue(Cue::Hangup);
+            self.recorder
+                .confirmation(&self.turn_key(), &call, false, by);
+            self.speaker.cue(Cue::Cancelled);
             self.core
                 .update_turn(|view| view.answer = Some(text::t("reply.cancelled")));
             self.finish_turn("cancelled", Some(&text::t("reply.cancelled")));
             return Ok(());
         }
-        let permit = kivo_security::confirmed(
-            &spec,
-            &call,
-            Answer::Allow {
-                by: ConfirmedBy::Click,
-            },
-        )
-        .map_err(|e| e.message)?;
-        self.recorder.confirmation(&self.turn_key(), &call, true);
+        let permit =
+            kivo_security::confirmed(&spec, &call, Answer::Allow { by }).map_err(|e| e.message)?;
+        if by == ConfirmedBy::Voice {
+            self.speaker.cue(Cue::Approved);
+        }
+        self.recorder
+            .confirmation(&self.turn_key(), &call, true, by);
         if always && spec.allow_always {
             self.recorder.add_grant(&call);
         }
@@ -746,6 +1173,7 @@ impl Engine {
         let id = self.infer.next_utterance();
         if let Some(running) = lock(&self.turn).as_mut() {
             running.speaking = Some(id);
+            text.clone_into(&mut running.reply);
         }
         let voice = self.core.config().voice.tts_voice;
         let voice = (!voice.is_empty()).then_some(voice);
@@ -760,6 +1188,10 @@ impl Engine {
 
     /// Audio for a spoken reply arrived.
     pub fn speech_audio(&self, id: u64, rate: u32, pcm: &[f32]) {
+        if lock(&self.previews).contains(&id) {
+            self.speaker.speak(pcm, rate);
+            return;
+        }
         let ours = lock(&self.turn)
             .as_ref()
             .is_some_and(|t| t.speaking == Some(id));
@@ -780,7 +1212,10 @@ impl Engine {
     }
 
     /// A spoken reply finished (or failed).
-    pub fn speech_done(&self, id: u64, error: Option<&str>, cancelled: bool) {
+    pub fn speech_done(self: &Arc<Self>, id: u64, error: Option<&str>, cancelled: bool) {
+        if lock(&self.previews).remove(&id) {
+            return;
+        }
         let ours = lock(&self.turn)
             .as_ref()
             .is_some_and(|t| t.speaking == Some(id));
@@ -795,8 +1230,16 @@ impl Engine {
         }
     }
 
-    /// Waits for the speaker to drain, then ends the turn (or starts a follow-up).
-    fn finish_speaking(&self) {
+    /// Waits for the speaker to drain, then ends the turn (or starts a follow-up). After a
+    /// question the turn waits for the answer instead (by click, or by voice, CONV-26).
+    fn finish_speaking(self: &Arc<Self>) {
+        if lock(&self.turn)
+            .as_ref()
+            .is_some_and(|t| t.pending.is_some())
+        {
+            self.listen_for_answer();
+            return;
+        }
         let Some(id) = lock(&self.turn).as_ref().map(|t| t.id.clone()) else {
             return;
         };
@@ -836,23 +1279,46 @@ impl Engine {
             .publish(Event::new(EventKind::Voice(VoiceEvent::TtsStopped {
                 reason: kivo_core::event::TtsStopReason::Finished,
             })));
-        // The Island keeps the answer for a moment, then collapses (UX-10). A follow-up window
-        // (M2) keeps it listening; for now the session just returns to Idle.
+        // After a spoken answer, hands-free KIVO listens for a follow-up without the wake word
+        // for the chosen time, with the Island's ring counting down (UX-45); otherwise the
+        // session returns to Idle. The Island keeps the answer until then, or for a moment
+        // (UX-10).
+        let listener = self.listener().filter(|l| l.hands_free_on());
+        let window = (spoken && follow_up_seconds > 0 && !running.guest)
+            .then(|| listener.clone())
+            .flatten()
+            .map(|l| (l, Duration::from_secs(u64::from(follow_up_seconds))));
+        match &window {
+            Some((listener, length)) => {
+                listener.follow_up(Some(Instant::now() + *length));
+                self.core
+                    .update_turn(|view| view.follow_up = Some(follow_up_seconds));
+            }
+            None => {
+                if self.core.state().borrow().session == SessionState::FollowUp {
+                    self.core.advance(SessionInput::FollowUpTimeout);
+                }
+            }
+        }
         let core = Arc::clone(&self.core);
         let turn_id = running.id.clone();
+        let wait = window
+            .as_ref()
+            .map_or(COLLAPSE_AFTER, |(_, length)| (*length).max(COLLAPSE_AFTER));
+        let listener = window.map(|(l, _)| l);
         tokio::spawn(async move {
-            tokio::time::sleep(COLLAPSE_AFTER).await;
+            tokio::time::sleep(wait).await;
             let same_turn = core.turn_view().is_some_and(|v| v.id == turn_id);
             if same_turn {
                 core.clear_turn();
                 if core.state().borrow().session == SessionState::FollowUp {
                     core.advance(SessionInput::FollowUpTimeout);
                 }
+                if let Some(listener) = listener {
+                    listener.follow_up(None);
+                }
             }
         });
-        if follow_up_seconds == 0 && self.core.state().borrow().session == SessionState::FollowUp {
-            self.core.advance(SessionInput::FollowUpTimeout);
-        }
     }
 
     /// Shows an error in the Island (and moves the session to Error).
@@ -897,6 +1363,12 @@ impl Engine {
     /// Stops the turn (Esc, Stop, the emergency stop, barge-in): recognition, the tool and the
     /// voice all stop, and the Island clears (ARCH-26).
     pub fn cancel(&self, reason: CancelReason) {
+        self.cancel_turn(reason, true);
+    }
+
+    /// Cancels the turn; `stop_listening: false` keeps an utterance the listener has just started
+    /// (a wake word interrupting KIVO).
+    fn cancel_turn(&self, reason: CancelReason, stop_listening: bool) {
         let Some(running) = lock(&self.turn).take() else {
             // Nothing running: stop whatever the session is doing and clear what the Island shows
             // ("Not now" on a finished request's card). The reply may still be playing (it is
@@ -912,7 +1384,7 @@ impl Engine {
             let _ = self.infer.cancel_speech(id);
         }
         self.speaker.stop();
-        if let Some(listener) = self.listener() {
+        if stop_listening && let Some(listener) = self.listener() {
             listener.cancel();
         }
         let _ = self.core.cancel_turn();
@@ -1033,6 +1505,28 @@ pub async fn handle_signal(engine: &Arc<Engine>, signal: VoiceSignal) {
         VoiceSignal::NoSpeech { utterance } => engine.nothing_heard(utterance),
         VoiceSignal::MicrophoneUnavailable => {
             engine.fail_turn(&text::t("turn.micBlocked"));
+        }
+        VoiceSignal::Wake {
+            utterance,
+            word,
+            phrase,
+            score,
+            clip,
+        } => engine.woke(utterance, &word, &phrase, score, clip).await,
+        VoiceSignal::StopHeard { word } => engine.stop_heard(&word),
+        VoiceSignal::BargeIn { utterance } => engine.barge_in(utterance).await,
+        VoiceSignal::FollowUpSpeech { utterance } => engine.follow_up_heard(utterance).await,
+        VoiceSignal::Heard { utterance, audio } => engine.heard(utterance, audio),
+        VoiceSignal::Recorded { id, audio } => {
+            if let Some(voice_id) = engine.voice_id() {
+                voice_id.recorded(id, audio);
+            }
+        }
+        VoiceSignal::HandsFreeFailed { message } => {
+            tracing::warn!(message, "hands-free listening is off");
+            engine
+                .core
+                .flash_error(&text::t("turn.handsFreeFailed"), COLLAPSE_AFTER);
         }
     }
 }

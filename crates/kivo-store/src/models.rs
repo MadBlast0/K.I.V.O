@@ -1,7 +1,8 @@
 //! The model manager (DISTRIBUTION §4, DIST-12): models are never bundled; each is downloaded
-//! when the user chooses it. Each model has a manifest of files with sizes and sha256 hashes. Downloads resume with
-//! HTTP ranges, every file is verified, and a model appears in `%LOCALAPPDATA%\KIVO\models\<id>`
-//! only once all of it is there and verified (the folder is renamed into place).
+//! when the user chooses it. Each model has a manifest of files with sizes and sha256 hashes.
+//! Downloads resume with HTTP ranges, every file is verified, archives are unpacked, and a model
+//! appears in `%LOCALAPPDATA%\KIVO\models\<id>` only once all of it is there and verified (the
+//! folder is renamed into place).
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -19,6 +20,8 @@ pub enum ModelKind {
     Vad,
     Wake,
     Embedding,
+    /// Recognizing the owner's voice (VOICE §5).
+    Speaker,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -30,6 +33,20 @@ pub struct ModelFile {
     pub size: u64,
     /// Lower-case hex sha256.
     pub sha256: String,
+    /// For a `.tar.bz2` archive: the members to keep, and the file names they get. The archive
+    /// itself is deleted once they are out.
+    #[serde(default)]
+    pub unpack: Vec<Unpack>,
+}
+
+/// One member taken out of a model archive.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Unpack {
+    /// Its path inside the archive.
+    pub from: String,
+    /// Its name in the model folder.
+    pub to: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -61,7 +78,76 @@ impl ModelManifest {
 /// The models KIVO knows how to download.
 pub fn catalog() -> Vec<ModelManifest> {
     const MOONSHINE: &str = "https://huggingface.co/csukuangfj2/sherpa-onnx-moonshine-base-en-quantized-2026-02-27/resolve/main";
-    vec![moonshine(MOONSHINE), kokoro(), silero()]
+    vec![
+        moonshine(MOONSHINE),
+        kokoro(),
+        silero(),
+        smart_turn(),
+        keyword_spotter(),
+        campplus(),
+    ]
+}
+
+/// The keyword-spotting model's id: "Hey Kivo", custom wake words and "Kivo stop" (VOICE §4).
+pub const KEYWORD_SPOTTER: &str = "kws-zipformer-gigaspeech-en";
+/// The speaker model's id (VOICE §5).
+pub const SPEAKER_MODEL: &str = "campplus-voxceleb-en";
+
+/// sherpa-onnx's English keyword spotter (Apache-2.0, icefall Zipformer trained on GigaSpeech,
+/// 3.3M parameters): the int8 model, its tokens and its BPE vocabulary, out of the official
+/// release archive. KIVO runs it with its own code (DECISIONS "No training").
+fn keyword_spotter() -> ModelManifest {
+    const DIR: &str = "sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01";
+    const STEM: &str = "epoch-12-avg-2-chunk-16-left-64.int8.onnx";
+    let member = |from: String, to: &str| Unpack {
+        from: format!("{DIR}/{from}"),
+        to: to.into(),
+    };
+    ModelManifest {
+        id: KEYWORD_SPOTTER.into(),
+        name: "Wake-word listener (English)".into(),
+        kind: ModelKind::Wake,
+        license: "Apache-2.0".into(),
+        attribution: "Keyword-spotting Zipformer by the k2-fsa project (sherpa-onnx, icefall), Apache License 2.0.".into(),
+        source: "https://github.com/k2-fsa/sherpa-onnx".into(),
+        languages: vec!["en".into()],
+        files: vec![ModelFile {
+            name: format!("{DIR}.tar.bz2"),
+            url: format!("https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/{DIR}.tar.bz2"),
+            size: 17_626_723,
+            sha256: "f170013b4716e41b62b9bfd809687c207cef798ef9bc6534d524e17af9b6561a".into(),
+            unpack: vec![
+                member(format!("encoder-{STEM}"), "encoder.onnx"),
+                member(format!("decoder-{STEM}"), "decoder.onnx"),
+                member(format!("joiner-{STEM}"), "joiner.onnx"),
+                member("tokens.txt".into(), "tokens.txt"),
+                member("bpe.model".into(), "bpe.model"),
+            ],
+        }],
+        requires: Vec::new(),
+    }
+}
+
+/// CAM++ from 3D-Speaker (Apache-2.0), trained on VoxCeleb: 512-number voice embeddings for
+/// recognizing the owner (VOICE §5). Downloaded only if the user enrolls their voice.
+fn campplus() -> ModelManifest {
+    ModelManifest {
+        id: SPEAKER_MODEL.into(),
+        name: "Voice recognition (CAM++)".into(),
+        kind: ModelKind::Speaker,
+        license: "Apache-2.0".into(),
+        attribution: "CAM++ speaker model by Alibaba's 3D-Speaker project, Apache License 2.0; ONNX export by sherpa-onnx.".into(),
+        source: "https://github.com/modelscope/3D-Speaker".into(),
+        languages: vec!["*".into()],
+        files: vec![ModelFile {
+            name: "campplus.onnx".into(),
+            url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx".into(),
+            size: 29_596_978,
+            sha256: "357a834f702b80161e5b981182c038e18553c1f2ca752ed6cec2052365d4129b".into(),
+            unpack: Vec::new(),
+        }],
+        requires: Vec::new(),
+    }
 }
 
 /// Silero VAD v6 (MIT): tells KIVO when someone is speaking. Installed with any speech-recognition
@@ -80,6 +166,7 @@ fn silero() -> ModelManifest {
             url: "https://raw.githubusercontent.com/snakers4/silero-vad/4c00cd14be0ff5b8bd6846a6eec72741aac837f2/src/silero_vad/data/silero_vad.onnx".into(),
             size: 2_327_524,
             sha256: "597d30b3ec076608d059477bb14cfeffdf951bf5cae370d38f65d33bbfe82004".into(),
+            unpack: Vec::new(),
         }],
         requires: Vec::new(),
     }
@@ -87,6 +174,30 @@ fn silero() -> ModelManifest {
 
 /// The voice-activity model's id.
 pub const SILERO_VAD: &str = "silero-vad-v6";
+/// The end-of-turn model's id (VOICE-33).
+pub const SMART_TURN: &str = "smart-turn-v3";
+
+/// Smart Turn v3.2 (Daily/pipecat, BSD-2-Clause): tells a finished sentence from a pause
+/// mid-thought (VOICE-33). Installed with any speech-recognition model.
+fn smart_turn() -> ModelManifest {
+    ModelManifest {
+        id: SMART_TURN.into(),
+        name: "Smart Turn (end of sentence)".into(),
+        kind: ModelKind::Vad,
+        license: "BSD-2-Clause".into(),
+        attribution: "Smart Turn v3 by Daily (pipecat-ai), BSD 2-Clause License.".into(),
+        source: "https://github.com/pipecat-ai/smart-turn".into(),
+        languages: vec!["*".into()],
+        files: vec![ModelFile {
+            name: "smart-turn.onnx".into(),
+            url: "https://huggingface.co/pipecat-ai/smart-turn-v3/resolve/f766f81d3cfdf7737ac64aad813d91bbfd56bf93/smart-turn-v3.2-cpu.onnx".into(),
+            size: 8_679_182,
+            sha256: "2bb026316b14a660486a75b1733cd3fbab8c2fd0314dc9af7be49f8cca967e4f".into(),
+            unpack: Vec::new(),
+        }],
+        requires: Vec::new(),
+    }
+}
 
 /// Kokoro-82M (Apache-2.0): the quantized ONNX model, five voices, and misaki's US dictionaries
 /// (Apache-2.0) for KIVO's phonemizer (VOICE-09).
@@ -98,6 +209,7 @@ fn kokoro() -> ModelManifest {
         url: format!("{MODEL}/voices/{id}.bin"),
         size: 522_240,
         sha256: sha256.into(),
+        unpack: Vec::new(),
     };
     ModelManifest {
         id: "kokoro-82m".into(),
@@ -114,6 +226,7 @@ fn kokoro() -> ModelManifest {
                 url: format!("{MODEL}/onnx/model_quantized.onnx"),
                 size: 92_361_116,
                 sha256: "fbae9257e1e05ffc727e951ef9b9c98418e6d79f1c9b6b13bd59f5c9028a1478".into(),
+                unpack: Vec::new(),
             },
             voice("af_heart", "d583ccff3cdca2f7fae535cb998ac07e9fcb90f09737b9a41fa2734ec44a8f0b"),
             voice("af_bella", "f69d836209b78eb8c66e75e3cda491e26ea838a3674257e9d4e5703cbaf55c8b"),
@@ -125,12 +238,14 @@ fn kokoro() -> ModelManifest {
                 url: format!("{MISAKI}/us_gold.json"),
                 size: 3_000_469,
                 sha256: "dc414872a49a28ae6c141463d502fd945f3b2fde040484fdc47d00cc4612686f".into(),
+                unpack: Vec::new(),
             },
             ModelFile {
                 name: "us_silver.json".into(),
                 url: format!("{MISAKI}/us_silver.json"),
                 size: 3_099_517,
                 sha256: "de8f67be911bb6c659187b4a65fd966b6a30e56350e0f790d763210b053ac475".into(),
+                unpack: Vec::new(),
             },
         ],
     }
@@ -145,25 +260,28 @@ fn moonshine(base: &str) -> ModelManifest {
         attribution: "Moonshine by Useful Sensors (Moonshine AI), MIT License.".into(),
         source: "https://github.com/moonshine-ai/moonshine".into(),
         languages: vec!["en".into()],
-        requires: vec![SILERO_VAD.into()],
+        requires: vec![SILERO_VAD.into(), SMART_TURN.into()],
         files: vec![
             ModelFile {
                 name: "encoder_model.ort".into(),
                 url: format!("{base}/encoder_model.ort"),
                 size: 31_326_816,
                 sha256: "7c66495948d0d08ec1af454cd4b5514862ae6511e94712a60e6d83eaec8dc8cf".into(),
+                unpack: Vec::new(),
             },
             ModelFile {
                 name: "decoder_model_merged.ort".into(),
                 url: format!("{base}/decoder_model_merged.ort"),
                 size: 109_424_400,
                 sha256: "d9d7b333af34bc552580576ddcf248a1c6c839e0d3b43b09afb9376ed009899d".into(),
+                unpack: Vec::new(),
             },
             ModelFile {
                 name: "tokens.txt".into(),
                 url: format!("{base}/tokens.txt"),
                 size: 549_350,
                 sha256: "2870d843e14c1e187bf1913a521562a63b53933814bd7f2145120468f494a049".into(),
+                unpack: Vec::new(),
             },
         ],
     }
@@ -226,10 +344,18 @@ impl ModelStore {
         let dir = self.dir(id);
         let manifest: ModelManifest =
             serde_json::from_slice(&fs::read(dir.join("manifest.json")).ok()?).ok()?;
+        // An archive is gone once unpacked: its members are what must be there.
         let bytes = manifest
             .files
             .iter()
-            .map(|f| fs::metadata(dir.join(&f.name)).map(|m| m.len()).ok())
+            .flat_map(|f| {
+                if f.unpack.is_empty() {
+                    vec![f.name.as_str()]
+                } else {
+                    f.unpack.iter().map(|u| u.to.as_str()).collect()
+                }
+            })
+            .map(|name| fs::metadata(dir.join(name)).map(|m| m.len()).ok())
             .sum::<Option<u64>>()?;
         Some(InstalledModel {
             manifest,
@@ -286,7 +412,9 @@ impl ModelStore {
             if let Some(parent) = target.parent() {
                 fs::create_dir_all(parent)?;
             }
-            if target.is_file() && fs::metadata(&target)?.len() == file.size {
+            let unpacked = !file.unpack.is_empty()
+                && file.unpack.iter().all(|u| partial.join(&u.to).is_file());
+            if unpacked || (target.is_file() && fs::metadata(&target)?.len() == file.size) {
                 done_before += file.size;
                 continue; // finished and verified in an earlier attempt
             }
@@ -309,6 +437,10 @@ impl ModelStore {
                 }
             }
             fs::rename(&part, &target)?;
+            if !file.unpack.is_empty() {
+                unpack(&target, &file.unpack, &partial)?;
+                fs::remove_file(&target)?;
+            }
             done_before += file.size;
         }
         fs::write(
@@ -326,6 +458,34 @@ impl ModelStore {
                 file: "manifest.json".into(),
             })
     }
+}
+
+/// Takes the listed members out of a verified `.tar.bz2` archive into `dir`.
+fn unpack(archive: &Path, members: &[Unpack], dir: &Path) -> Result<(), ModelError> {
+    let reader = bzip2::read::BzDecoder::new(io::BufReader::new(File::open(archive)?));
+    let mut tar = tar::Archive::new(reader);
+    let mut found = 0;
+    for entry in tar.entries()? {
+        let mut entry = entry?;
+        let path = entry.path()?.to_string_lossy().replace('\\', "/");
+        if let Some(member) = members.iter().find(|m| m.from == path) {
+            let target = dir.join(&member.to);
+            if let Some(parent) = target.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            io::copy(&mut entry, &mut File::create(&target)?)?;
+            found += 1;
+        }
+    }
+    if found != members.len() {
+        return Err(ModelError::Corrupt {
+            file: archive
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+        });
+    }
+    Ok(())
 }
 
 /// Downloads one file into `part`, resuming from its current length, then checks its hash.
@@ -485,6 +645,7 @@ mod tests {
                     url: format!("https://example/{name}"),
                     size: data.len() as u64,
                     sha256: sha(data),
+                    unpack: Vec::new(),
                 })
                 .collect(),
         }
@@ -536,6 +697,83 @@ mod tests {
         assert_eq!(store.list().len(), 1);
         store.remove("test-model").unwrap();
         assert!(store.installed("test-model").is_none());
+    }
+
+    /// A `.tar.bz2` with the given members.
+    fn tar_bz2(members: &[(&str, &[u8])]) -> Vec<u8> {
+        let mut tar = tar::Builder::new(Vec::new());
+        for (path, data) in members {
+            let mut header = tar::Header::new_gnu();
+            header.set_size(data.len() as u64);
+            header.set_mode(0o644);
+            header.set_cksum();
+            tar.append_data(&mut header, path, *data).unwrap();
+        }
+        let raw = tar.into_inner().unwrap();
+        let mut bz = bzip2::write::BzEncoder::new(Vec::new(), bzip2::Compression::fast());
+        bz.write_all(&raw).unwrap();
+        bz.finish().unwrap()
+    }
+
+    #[test]
+    fn archives_are_verified_and_only_the_listed_members_kept() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = ModelStore::new(tmp.path().to_path_buf());
+        let archive = tar_bz2(&[
+            ("pkg/encoder-long-name.onnx", &[7; 3000]),
+            ("pkg/tokens.txt", b"<blk> 0"),
+            ("pkg/test_wavs/0.wav", &[0; 900]),
+        ]);
+        let files: [(&str, &[u8]); 1] = [("pkg.tar.bz2", &archive)];
+        let mut m = manifest(&files);
+        m.files[0].unpack = vec![
+            Unpack {
+                from: "pkg/encoder-long-name.onnx".into(),
+                to: "encoder.onnx".into(),
+            },
+            Unpack {
+                from: "pkg/tokens.txt".into(),
+                to: "tokens.txt".into(),
+            },
+        ];
+        let installed = store
+            .install(
+                &m,
+                &server(&files, None),
+                &CancellationToken::new(),
+                &mut |_| {},
+            )
+            .unwrap();
+        assert_eq!(
+            fs::read(installed.dir.join("encoder.onnx")).unwrap(),
+            [7; 3000]
+        );
+        assert!(installed.dir.join("tokens.txt").is_file());
+        assert!(
+            !installed.dir.join("pkg.tar.bz2").exists(),
+            "the archive is deleted"
+        );
+        assert!(
+            !installed.dir.join("test_wavs").exists(),
+            "unlisted members are left out"
+        );
+
+        // A member the archive doesn't have is a damaged download, not a half-installed model.
+        m.id = "other".into();
+        m.files[0].unpack.push(Unpack {
+            from: "pkg/missing.onnx".into(),
+            to: "missing.onnx".into(),
+        });
+        let err = store
+            .install(
+                &m,
+                &server(&files, None),
+                &CancellationToken::new(),
+                &mut |_| {},
+            )
+            .unwrap_err();
+        assert!(matches!(err, ModelError::Corrupt { .. }));
+        assert!(store.installed("other").is_none());
     }
 
     #[test]

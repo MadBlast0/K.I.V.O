@@ -10,6 +10,7 @@ publish = false
 [dependencies]
 kivo-platform.workspace = true
 ort.workspace = true
+realfft.workspace = true
 base64.workspace = true
 serde.workspace = true
 serde_json.workspace = true

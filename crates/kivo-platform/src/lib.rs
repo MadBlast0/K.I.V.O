@@ -26,6 +26,7 @@ pub use audio::{
 pub use automation::{ElementQuery, ElementRef, Input, MouseButton, UiAutomation, UiNode};
 pub use capabilities::{Capabilities, OsFamily};
 pub use error::{PlatformError, PlatformResult};
+pub use kivo_core::Secret;
 pub use paths::Paths;
 pub use screen::{CaptureTarget, Image, Ocr, Screen, TextLine};
 pub use secrets::{SecretHandle, Secrets};
