@@ -4,9 +4,6 @@
     "publisher": "KIVO",
     "shortDescription": "KIVO, a voice-first companion for Windows",
     "externalBin": ["binaries/kivo-runtime", "binaries/kivo-infer"],
-    "resources": {
-      "../../../assets/models/silero_vad.onnx": "resources/silero_vad.onnx"
-    },
     "windows": {
       "webviewInstallMode": { "type": "downloadBootstrapper", "silent": true },
       "nsis": {

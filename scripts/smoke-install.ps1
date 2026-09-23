@@ -34,13 +34,14 @@ function StartupEntry {
 
 # 1. Fresh silent install, with the startup option (DIST-05).
 Install @('/S', '/STARTUP')
-foreach ($file in 'KIVO.exe', 'kivo-runtime.exe', 'kivo-infer.exe', 'resources\silero_vad.onnx', 'uninstall.exe') {
+foreach ($file in 'KIVO.exe', 'kivo-runtime.exe', 'kivo-infer.exe', 'uninstall.exe') {
     Check (Test-Path (Join-Path $dir $file)) "installed $file"
 }
 Check (Test-Path $uninstallKey) 'uninstaller registered (Apps & features)'
 $shortcut = Get-ChildItem ([Environment]::GetFolderPath('Programs')) -Recurse -Filter 'KIVO.lnk' -ErrorAction SilentlyContinue
 Check ($null -ne $shortcut) 'Start-menu shortcut'
 Check ((StartupEntry) -eq "`"$runtime`" --autostart") 'startup entry registered'
+Check (-not (Get-ChildItem $dir -Recurse -Include *.onnx, *.ort, *.bin)) 'no models in the installer'
 $size = (Get-Item $Installer).Length / 1MB
 Write-Host ('installer size: {0:N1} MB' -f $size)
 

@@ -1,7 +1,9 @@
-# Bundled models
+# Models in the repository
 
-Small models that ship with KIVO (DISTRIBUTION §4). Everything larger is downloaded on demand by
-the model manager and verified against its manifest.
+KIVO ships **no models** in its installer (owner decision; DECISIONS "No models in the installer").
+Users choose what to download, and the model manager fetches it with sha256 checks
+(DISTRIBUTION §4). This copy is only for development and tests; an installed KIVO downloads the
+same file (pinned upstream commit, same hash) together with the speech model the user picks.
 
 | File | What it is | Licence |
 |---|---|---|

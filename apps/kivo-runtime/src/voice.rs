@@ -196,16 +196,22 @@ fn run(pipeline: Pipeline, commands: &Receiver<Command>, listening: &Arc<Mutex<O
     } = pipeline;
     // Efficient while waiting, full speed while listening (VOICE-03).
     let mut eco = false;
-    let mut vad = match SileroVad::load(&vad_model) {
+    // Without the VAD, push-to-talk still works: the key decides when speech ends. It is a
+    // download the user chooses (with a speech model), so it is loaded again once it's there.
+    let load_vad = || match SileroVad::load(&vad_model) {
         Ok(vad) => Some(vad),
         Err(e) => {
-            // Without the VAD, push-to-talk still works: the key decides when speech ends.
             tracing::warn!(
                 detail = e.detail(),
                 "voice activity detection is unavailable"
             );
             None
         }
+    };
+    let mut vad = if vad_model.is_file() {
+        load_vad()
+    } else {
+        None
     };
     let mut gate = EnergyGate::new();
     let mut chunker = Chunker::new(VAD_FRAME);
@@ -244,6 +250,9 @@ fn run(pipeline: Pipeline, commands: &Receiver<Command>, listening: &Arc<Mutex<O
                         writer = w;
                         reader = r;
                         mic = open_microphone(&audio, device.as_ref(), &mut writer, &signals);
+                    }
+                    if vad.is_none() && vad_model.is_file() {
+                        vad = load_vad();
                     }
                     if mic.is_some() {
                         reader.discard();

@@ -20,9 +20,13 @@ remains for IT.
 - `KIVO.exe` (Tauri);
 - `kivo-runtime.exe` and `kivo-infer.exe` (sidecars via `externalBin`);
 - the WebView2 bootstrapper (Windows 10);
-- sounds, icons, the default intent grammar, the "Hey Kivo" wake model, and Silero VAD.
+- sounds, icons and the default intent grammar.
 
-**Target size:** under 40 MB. There are **no STT, TTS or LLM models** in the installer.
+**Target size:** under 40 MB. **No models of any kind ship in the installer** (owner decision,
+2026-09-23): not STT, TTS or LLM models, and not the small ones either (Silero VAD, the "Hey Kivo"
+wake model, keyword spotting, speaker verification). The user chooses what KIVO downloads, in
+onboarding or on the Voice page; a model brings what it needs with it (speech recognition brings
+Silero VAD, §4).
 
 **How it is built (M1):**
 
@@ -31,7 +35,7 @@ remains for IT.
   `src-tauri/tauri.bundle.conf.json` merged in. The sidecars and the installer settings live only
   in that file, so `pnpm dev` and `cargo` builds don't need release binaries.
 - `mainBinaryName` is `KIVO`, so the app is `KIVO.exe` beside `kivo-runtime.exe` and
-  `kivo-infer.exe`; Silero VAD goes to `resources\silero_vad.onnx`, where the runtime looks.
+  `kivo-infer.exe`. No models are bundled; the smoke test checks there are none.
 - KIVO's sounds are synthesized by the runtime and the English grammar is compiled into it, so
   neither is a separate file. The icons come from the Tauri bundle.
 - NSIS per user, with the WebView2 bootstrapper downloaded silently when WebView2 is missing
@@ -77,6 +81,8 @@ remains for IT.
 - **Manifest per model:** `{ id, version, kind, files[{url, sha256, size}], license, attribution, min_ram, accel, languages }`.
 - **Downloads:** resumable (HTTP range), sha256-verified, stored atomically in
   `%LOCALAPPDATA%\KIVO\models`.
+- **Only on the user's choice:** nothing is downloaded at startup or in the background unasked.
+  A manifest lists the models it `requires`, and those install with it.
 - **Sources:** Hugging Face or KIVO's GitHub release mirror.
 - **License display:** CC-BY or OpenRAIL models show their license and attribution before
   download, and in About.
@@ -114,7 +120,7 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 **Installers (§1)**
 
 - [~] **DIST-01** · M1 · NSIS per-user installer (no admin, `%LOCALAPPDATA%\Programs\KIVO`) built from the Tauri bundle, with `kivo-runtime.exe` and `kivo-infer.exe` as `externalBin` sidecars (§1) → partial: `pnpm build` = `scripts/sidecars.mjs` (release `kivo-runtime`/`kivo-infer` → `src-tauri/binaries/<name>-<triple>.exe`) + `tauri build --config src-tauri/tauri.bundle.conf.json` (NSIS `installMode: currentUser` → `%LOCALAPPDATA%\Programs\KIVO`, `externalBin` sidecars, `mainBinaryName: KIVO`) · verified: the app compiles with the bundle config merged (tauri-build resolves the sidecars and resources), the runtime and app find each other and the worker beside them (2026-09-23) · missing: the first real installer build, which runs on the first `v*` tag (`release.yml`; DECISIONS "Installer and release at M1")
-- [~] **DIST-02** · M1 · Bundle contents: WebView2 bootstrapper (Windows 10), sounds, icons, default intent grammar, "Hey Kivo" model (from M2), Silero VAD; no STT, TTS or LLM models (§1) → partial: the bundle carries the three executables, icons and Silero VAD (`resources\silero_vad.onnx`, where the runtime looks); the WebView2 bootstrapper is downloaded silently when missing; sounds are synthesized by the runtime and the grammar is compiled in (§1); no STT/TTS/LLM models; "Hey Kivo" joins at M2 · verified: bundle config compiles with its resource paths (2026-09-23) · missing: contents checked in a built installer (first `v*` tag)
+- [~] **DIST-02** · M1 · Bundle contents: WebView2 bootstrapper (Windows 10), sounds, icons, default intent grammar; no models of any kind: every model is a download the user chooses (§1, DECISIONS "No models in the installer") → partial: the bundle carries the three executables and icons; the WebView2 bootstrapper is downloaded silently when missing; sounds are synthesized by the runtime and the grammar is compiled in; no models at all: Silero VAD is now a model-manager download installed with any speech-recognition model (`requires`), and the runtime downloads nothing unasked (DECISIONS "No models in the installer") · verified: `speech_recognition_brings_the_voice_activity_model`, bundle config compiles (2026-09-23) · missing: contents checked in a built installer (the smoke test asserts no model files; first `v*` tag)
 - [ ] **DIST-03** · M9 · Installer size under 40 MB, checked in the release pipeline (§1, BENCHMARKS §3)
 - [ ] **DIST-04** · M9 · MSI per-machine for IT, updater-aware (§1)
 - [~] **DIST-05** · M1 · Installer registers the startup option, Start-menu shortcut and uninstaller; supports in-place upgrades (§1, plan §110) → partial: Tauri's NSIS template adds the Start-menu shortcut, uninstaller and in-place upgrades; `src-tauri/windows/hooks.nsh` stops the runtime tree before files are replaced or removed, registers startup with `/STARTUP` and removes it on a real uninstall (upgrades keep it); the runtime adopts the installer's entry on its first start (`Lifecycle::adopt_installer_startup`) · verified: `the_installers_startup_choice_is_kept_on_the_first_start` (2026-09-23) · missing: `scripts/smoke-install.ps1` run against a built installer (first `v*` tag)
@@ -139,6 +145,6 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 
 **Telemetry and compliance (§5–6)**
 
-- [x] **DIST-15** · M1 · No telemetry by default; crash dumps stay local; the diagnostics bundle (generated on request and reviewed before sharing) is ARCH-40 (§5) → done: KIVO sends nothing anywhere by default: the only network use is a model download the user starts (or the default speech model) and web pages they open; crash dumps and reports stay in the crashes folder · verified: a search of every network client in the tree (only the model downloader), crash tests (2026-09-23)
+- [x] **DIST-15** · M1 · No telemetry by default; crash dumps stay local; the diagnostics bundle (generated on request and reviewed before sharing) is ARCH-40 (§5) → done: KIVO sends nothing anywhere by default: the only network use is a model download the user chooses and web pages they open; crash dumps and reports stay in the crashes folder · verified: a search of every network client in the tree (only the model downloader), crash tests (2026-09-23)
 - [ ] **DIST-16** · M9 · Generated `THIRD_PARTY_NOTICES` (`cargo about` + npm license checker) in the installer and in About (§6)
 - [x] **DIST-17** · M0 · `cargo deny` denies GPL/AGPL in the default graph; GPL components only as separately downloaded add-ons after legal review (§6, ARCH-35) → done: `deny.toml` denies GPL/AGPL by allow-list · verified: `cargo deny check licenses` in CI

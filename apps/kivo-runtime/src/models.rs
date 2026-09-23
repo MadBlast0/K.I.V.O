@@ -1,6 +1,6 @@
-//! Speech models on this PC (DISTRIBUTION §4, DIST-12/13). Models are never bundled: the first
-//! run downloads the speech-recognition model in the background, verifies it and installs it
-//! atomically, and the Island says so while it happens. Licences and attribution travel with the
+//! Speech models on this PC (DISTRIBUTION §4, DIST-12/13). Models are never bundled and never
+//! fetched unasked: the user chooses one (the Voice page, onboarding), and it downloads in the
+//! background with anything it needs (`requires`), verified and installed atomically. Licences and attribution travel with the
 //! manifest so the UI can show them before a download.
 
 use crate::core::Core;
@@ -96,6 +96,9 @@ impl Models {
     pub fn install(self: &Arc<Self>, id: &str) -> Result<(), String> {
         let manifest = Self::manifest(id)
             .ok_or_else(|| kivo_core::text::tf("turn.unknownModel", &[("id", &id)]))?;
+        for needed in &manifest.requires {
+            self.install(needed)?;
+        }
         {
             let mut downloads = self
                 .downloads
@@ -270,18 +273,26 @@ impl Models {
         }
     }
 
-    /// At startup: note what is installed (nothing is loaded yet), and fetch the speech model if
-    /// it is missing.
-    pub fn ensure_speech(self: &Arc<Self>, config: &KivoConfig) {
+    /// At startup: note what is installed (nothing is loaded yet). A missing speech model is
+    /// reported, not downloaded: the user chooses what to install (owner decision).
+    pub fn note_speech(self: &Arc<Self>, config: &KivoConfig) {
         self.apply_engines(config);
-        let wanted = Self::wanted_stt(config);
-        if self.installed_dir(&wanted).is_none()
-            && let Err(e) = self.install(&wanted)
-        {
-            tracing::error!(%e, "couldn't start the speech-model download");
-            self.core
-                .set_speech_status(SpeechStatus::Failed { message: e });
+    }
+
+    /// Where the voice-activity model is once installed. From the repository (development and
+    /// tests) the copy in `assets/models` is used until then.
+    pub fn vad_model(&self) -> PathBuf {
+        let installed = self
+            .store
+            .dir(kivo_store::models::SILERO_VAD)
+            .join("silero_vad.onnx");
+        let repository = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../assets/models")
+            .join("silero_vad.onnx");
+        if !installed.is_file() && repository.is_file() {
+            return repository;
         }
+        installed
     }
 }
 

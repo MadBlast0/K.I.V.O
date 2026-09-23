@@ -47,7 +47,15 @@ function keysOr(value: unknown, fallback: string[]): string[] {
 /** How many recent requests Home shows. */
 const RECENT = 4;
 
-function SpeechNote({ speech, onRetry }: { speech: SpeechStatus; onRetry: () => void }) {
+function SpeechNote({
+  speech,
+  onRetry,
+  onChoose,
+}: {
+  speech: SpeechStatus;
+  onRetry: () => void;
+  onChoose: () => void;
+}) {
   const { t } = useTranslation();
   switch (speech.state) {
     case "ready":
@@ -55,7 +63,11 @@ function SpeechNote({ speech, onRetry }: { speech: SpeechStatus; onRetry: () => 
     case "downloading":
       return <Note>{t("home.downloading", { percent: speech.percent })}</Note>;
     case "missing":
-      return <Note>{t("home.missing")}</Note>;
+      return (
+        <Alert kind="info" title={t("home.missing")}>
+          <Button onClick={onChoose}>{t("home.chooseModel")}</Button>
+        </Alert>
+      );
     case "failed":
       return (
         <Alert kind="warning" title={t("home.failed", { message: speech.message })}>
@@ -68,9 +80,11 @@ function SpeechNote({ speech, onRetry }: { speech: SpeechStatus; onRetry: () => 
 export function Home({
   onOpenPermissions,
   onOpenActivity,
+  onOpenVoice,
 }: {
   onOpenPermissions: () => void;
   onOpenActivity: () => void;
+  onOpenVoice: () => void;
 }) {
   const { t, i18n } = useTranslation();
   const { link, request, start } = useRuntime();
@@ -195,6 +209,7 @@ export function Home({
           <SpeechNote
             speech={snapshot.speech}
             onRetry={() => run(() => request(Method.modelsInstall, { id: "moonshine-base-en" }))}
+            onChoose={onOpenVoice}
           />
           {snapshot.hotkeyConflict && (
             // The rebind prompt (VOICE-41): the keys still work, but another app uses them too.

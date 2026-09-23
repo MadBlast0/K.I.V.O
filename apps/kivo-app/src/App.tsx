@@ -138,7 +138,11 @@ function Shell({ page, setPage }: { page: PageId; setPage: (page: PageId) => voi
         {page === "gallery" ? (
           <Gallery />
         ) : page === "home" ? (
-          <Home onOpenPermissions={() => setPage("permissions")} onOpenActivity={() => setPage("activity")} />
+          <Home
+            onOpenPermissions={() => setPage("permissions")}
+            onOpenActivity={() => setPage("activity")}
+            onOpenVoice={() => setPage("voice")}
+          />
         ) : page === "activity" ? (
           <Activity />
         ) : page === "voice" ? (

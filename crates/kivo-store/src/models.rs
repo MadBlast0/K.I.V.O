@@ -1,5 +1,5 @@
-//! The model manager (DISTRIBUTION §4, DIST-12): speech models are downloaded on demand, never
-//! bundled. Each model has a manifest of files with sizes and sha256 hashes. Downloads resume with
+//! The model manager (DISTRIBUTION §4, DIST-12): models are never bundled; each is downloaded
+//! when the user chooses it. Each model has a manifest of files with sizes and sha256 hashes. Downloads resume with
 //! HTTP ranges, every file is verified, and a model appears in `%LOCALAPPDATA%\KIVO\models\<id>`
 //! only once all of it is there and verified (the folder is renamed into place).
 
@@ -46,6 +46,10 @@ pub struct ModelManifest {
     pub source: String,
     pub languages: Vec<String>,
     pub files: Vec<ModelFile>,
+    /// Other models this one can't work without, installed with it (speech recognition needs the
+    /// voice-activity model).
+    #[serde(default)]
+    pub requires: Vec<String>,
 }
 
 impl ModelManifest {
@@ -57,8 +61,32 @@ impl ModelManifest {
 /// The models KIVO knows how to download.
 pub fn catalog() -> Vec<ModelManifest> {
     const MOONSHINE: &str = "https://huggingface.co/csukuangfj2/sherpa-onnx-moonshine-base-en-quantized-2026-02-27/resolve/main";
-    vec![moonshine(MOONSHINE), kokoro()]
+    vec![moonshine(MOONSHINE), kokoro(), silero()]
 }
+
+/// Silero VAD v6 (MIT): tells KIVO when someone is speaking. Installed with any speech-recognition
+/// model; not bundled (owner: no models in the installer).
+fn silero() -> ModelManifest {
+    ModelManifest {
+        id: SILERO_VAD.into(),
+        name: "Silero voice activity detection".into(),
+        kind: ModelKind::Vad,
+        license: "MIT".into(),
+        attribution: "Silero VAD by the Silero Team, MIT License.".into(),
+        source: "https://github.com/snakers4/silero-vad".into(),
+        languages: Vec::new(),
+        files: vec![ModelFile {
+            name: "silero_vad.onnx".into(),
+            url: "https://raw.githubusercontent.com/snakers4/silero-vad/4c00cd14be0ff5b8bd6846a6eec72741aac837f2/src/silero_vad/data/silero_vad.onnx".into(),
+            size: 2_327_524,
+            sha256: "597d30b3ec076608d059477bb14cfeffdf951bf5cae370d38f65d33bbfe82004".into(),
+        }],
+        requires: Vec::new(),
+    }
+}
+
+/// The voice-activity model's id.
+pub const SILERO_VAD: &str = "silero-vad-v6";
 
 /// Kokoro-82M (Apache-2.0): the quantized ONNX model, five voices, and misaki's US dictionaries
 /// (Apache-2.0) for KIVO's phonemizer (VOICE-09).
@@ -79,6 +107,7 @@ fn kokoro() -> ModelManifest {
         attribution: "Kokoro-82M by hexgrad, Apache License 2.0. Pronunciation dictionaries from misaki by hexgrad, Apache License 2.0.".into(),
         source: "https://huggingface.co/hexgrad/Kokoro-82M".into(),
         languages: vec!["en".into()],
+        requires: Vec::new(),
         files: vec![
             ModelFile {
                 name: "model_quantized.onnx".into(),
@@ -116,6 +145,7 @@ fn moonshine(base: &str) -> ModelManifest {
         attribution: "Moonshine by Useful Sensors (Moonshine AI), MIT License.".into(),
         source: "https://github.com/moonshine-ai/moonshine".into(),
         languages: vec!["en".into()],
+        requires: vec![SILERO_VAD.into()],
         files: vec![
             ModelFile {
                 name: "encoder_model.ort".into(),
@@ -447,6 +477,7 @@ mod tests {
             attribution: String::new(),
             source: String::new(),
             languages: vec!["en".into()],
+            requires: Vec::new(),
             files: files
                 .iter()
                 .map(|(name, data)| ModelFile {
@@ -588,6 +619,19 @@ mod tests {
             for f in &m.files {
                 assert_eq!(f.sha256.len(), 64, "{}", f.name);
                 assert!(f.url.starts_with("https://") && f.size > 0);
+            }
+        }
+    }
+
+    #[test]
+    fn speech_recognition_brings_the_voice_activity_model() {
+        let all = catalog();
+        for m in &all {
+            for dep in &m.requires {
+                assert!(all.iter().any(|d| &d.id == dep), "{} needs {dep}", m.id);
+            }
+            if m.kind == ModelKind::Stt {
+                assert!(m.requires.iter().any(|d| d == SILERO_VAD), "{}", m.id);
             }
         }
     }

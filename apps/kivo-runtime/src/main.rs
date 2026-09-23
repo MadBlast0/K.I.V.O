@@ -288,7 +288,7 @@ async fn run(
             .input_device
             .clone()
             .map(kivo_platform::DeviceId),
-        vad_model: vad_model_path(),
+        vad_model: models.vad_model(),
         infer: infer.clone(),
         speaker: Arc::clone(&speaker),
         levels,
@@ -317,7 +317,7 @@ async fn run(
         }
         Err(e) => tracing::warn!(%e, "couldn't read the hardware"),
     }
-    models.ensure_speech(&config);
+    models.note_speech(&config);
 
     // Startup entry, crash reports and notification buttons (UX §1, ARCH-06, ARCH-10, UX-57).
     let lifecycle = Arc::new(Lifecycle::new(
@@ -548,21 +548,6 @@ fn worker_program() -> PathBuf {
         .ok()
         .and_then(|exe| exe.parent().map(|dir| dir.join(name)))
         .unwrap_or_else(|| PathBuf::from(name))
-}
-
-/// The bundled voice-activity model: beside the runtime when installed, in `assets/models` when
-/// running from the repository.
-fn vad_model_path() -> PathBuf {
-    const NAME: &str = "silero_vad.onnx";
-    let beside = std::env::current_exe()
-        .ok()
-        .and_then(|exe| exe.parent().map(|dir| dir.join("resources").join(NAME)));
-    if let Some(path) = beside.filter(|p| p.is_file()) {
-        return path;
-    }
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../assets/models")
-        .join(NAME)
 }
 
 /// Where screenshots go: the user's Pictures\Screenshots folder, like Windows itself uses.
