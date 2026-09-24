@@ -116,7 +116,7 @@ gallery in the browser pane with no console errors; the Tauri window (drag, maxi
 **Exit criteria:**
 
 - [x] **D0-X1** · Every D0 item is ✅; the gallery shows every component in light and dark with no console errors.
-- [ ] **D0-X2** · The Island's states and motion match the mockup side by side (owner review).
+- [ ] **D0-X2** · The Island's states and motion match the mockup side by side (owner review). → open (owner): the side-by-side review of the built Island against the mockup is the owner's; every state and motion is built and tested
 
 ### D0 items
 
@@ -195,10 +195,10 @@ process; the benchmark report reviewed by the owner.
 
 **Exit criteria:**
 
-- [ ] **M0-X1** · CI is green on every PR (REL-03).
+- [ ] **M0-X1** · CI is green on every PR (REL-03). → open: CI runs only on `v*` tags (owner decision, DECISIONS "GitHub Actions only on version tags"); the same checks pass locally in the batch (fmt, clippy, deny, tests, UI checks)
 - [x] **M0-X2** · The runtime and the UI restart independently, and the UI reconnects and shows the runtime state.
-- [ ] **M0-X3** · The benchmark report is committed to `docs/benchmarks/`.
-- [ ] **M0-X4** · The engine defaults in DECISIONS.md are updated with measured numbers, and the three license checks are recorded.
+- [ ] **M0-X3** · The benchmark report is committed to `docs/benchmarks/`. → open (deferred by the owner): the bench harness and suites are built; the runs are deferred (DECISIONS "Benchmarks deferred")
+- [ ] **M0-X4** · The engine defaults in DECISIONS.md are updated with measured numbers, and the three license checks are recorded. → open (deferred by the owner): needs the deferred benchmark runs; the licence checks for the chosen engines are in DECISIONS
 
 ### M0 items
 
@@ -351,8 +351,8 @@ audit chain; a manual run through every Island state; a clean-VM install/uninsta
 
 - [x] **M1-X1** · "Mute", "open Chrome" and "take a screenshot" work offline in ≤ 500 ms after the end of speech on the mid tier.
 - [x] **M1-X2** · Cancel → silence ≤ 100 ms, enforced by a test (ARCH-26).
-- [ ] **M1-X3** · Idle budgets are met (VOICE-40, BENCH-12).
-- [ ] **M1-X4** · The installer installs, upgrades and uninstalls cleanly on a fresh Windows 11 VM and a Windows 10 VM.
+- [ ] **M1-X3** · Idle budgets are met (VOICE-40, BENCH-12). → open (deferred by the owner): idle budgets are measured by the deferred bench runs (BENCH-12); low-memory mode and unloading are built and tested
+- [ ] **M1-X4** · The installer installs, upgrades and uninstalls cleanly on a fresh Windows 11 VM and a Windows 10 VM. → open (owner): needs a built installer (first `v*` tag) and clean Windows 11/10 VMs; `pnpm build` and the smoke script are not run here by the owner's rule
 
 ### M1 items
 
@@ -527,8 +527,8 @@ laptop speakers; enrollment deletion leaves no files behind; onboarding 1–5 wa
 
 **Exit criteria:**
 
-- [ ] **M2-X1** · Wake false accepts ≤ 0.5/h and false rejects ≤ 5% on the corpus.
-- [ ] **M2-X2** · Barge-in works with speakers (no headset) on the reference laptop.
+- [ ] **M2-X1** · Wake false accepts ≤ 0.5/h and false rejects ≤ 5% on the corpus. → open (deferred by the owner): the wake-word corpus run is a benchmark run
+- [ ] **M2-X2** · Barge-in works with speakers (no headset) on the reference laptop. → open (owner): a live barge-in check on the reference laptop's speakers; the simulated speaker-echo test passes
 - [x] **M2-X3** · Voice approvals are ignored while KIVO's own TTS is playing, and guests cannot approve (tested).
 
 ### M2 items
@@ -639,7 +639,7 @@ installed CLI and Ollama; secrets absent from logs and IPC (tested).
 
 **Exit criteria:**
 
-- [ ] **M3-X1** · p50 end of speech → first audio ≤ 1.2 s on a cloud brain.
+- [ ] **M3-X1** · p50 end of speech → open (deferred by the owner): the latency figure comes from the deferred brain benchmark (M3-X1); spoken phrase-by-phrase streaming is built and tested
 - [x] **M3-X2** · Cancel works mid-stream for API brains and ACP agents.
 - [x] **M3-X3** · Killing a provider (including a CLI agent process) does not crash the runtime.
 - [x] **M3-X4** · A brain can be connected with no API key (CLI sign-in, OpenRouter OAuth or local).
@@ -790,7 +790,7 @@ except Bypass; screen awareness sends nothing to the cloud when set to local-onl
 
 **Exit criteria:**
 
-- [ ] **M4-X1** · The UIA journey on the dummy app passes in CI.
+- [ ] **M4-X1** · The UIA journey on the dummy app passes in CI. → open: CI runs only on `v*` tags; the UIA journey on the dummy app passes locally (`uia_testenv`)
 - [x] **M4-X2** · The injection test pages cannot trigger an outbound action.
 - [x] **M4-X3** · Typing into a password field is blocked in every mode (tested).
 
@@ -1111,7 +1111,7 @@ a first-run test with someone who hasn't seen KIVO.
 
 - [x] **M7-X1** · The plan §156 MVP definition is fully met (PLAN-27) → **internal alpha**. → every §156 item is built and tested (PLAN-27); the alpha tag is the owner's (2026-09-24)
 - [x] **M7-X2** · The local brain path is verified (Private/Offline profiles, PLAN-21). → `m7_acceptance` (confidential document on the local brain, cloud blocked; offline routing to the local brain) (2026-09-24)
-- [ ] **M7-X3** · Every Control Center screen matches the mockup in light and dark (owner review).
+- [ ] **M7-X3** · Every Control Center screen matches the mockup in light and dark (owner review). → open (owner): the side-by-side review of every screen against the mockup is the owner's
 
 ### M7 items
 
@@ -1218,8 +1218,8 @@ fallback, offline and privacy modes (plan §115); a week of daily use without a 
 
 **Exit criteria:**
 
-- [ ] **M8-X1** · The plan §157 beta definition is fully met (PLAN-28).
-- [ ] **M8-X2** · No known critical crash after a week of daily use.
+- [ ] **M8-X1** · The plan §157 beta definition is fully met (PLAN-28). → open: PLAN-28 is met except the benchmark runs (deferred by the owner) and the Rive Character companion (needs an asset)
+- [ ] **M8-X2** · No known critical crash after a week of daily use. → open (owner): a week of daily use can only come from the owner
 
 ### M8 items
 
@@ -1346,8 +1346,8 @@ back; installer size; signature checks on every binary.
 
 **Exit criteria:**
 
-- [ ] **M9-X1** · A signed public beta is published and gathering SmartScreen reputation.
-- [ ] **M9-X2** · The quality gates (plan §159) and the architecture invariants checklist are all green (PLAN-30, PLAN-31).
+- [ ] **M9-X1** · A signed public beta is published and gathering SmartScreen reputation. → open (owner): needs the owner's licence decision, update and code-signing keys, the `release`/`production` environments and the first tag; the pipeline is built
+- [ ] **M9-X2** · The quality gates (plan §159) and the architecture invariants checklist are all green (PLAN-30, PLAN-31). → open: the architecture invariants checklist is all green (`pnpm invariants`, PLAN-31); the quality gates wait on daily use, the deferred bench runs and the owner's onboarding review (PLAN-30)
 
 **Then:** the MSIX / package-identity spike, the macOS port (platform crates), then Linux.
 
