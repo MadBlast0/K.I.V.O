@@ -431,10 +431,19 @@ impl Infer {
     /// Asks the worker to stop (shutdown order, plan §127).
     pub async fn shutdown(&self) {
         if let Ok(peer) = self.peer() {
-            let _ = peer.request(method::SHUTDOWN, Value::Null).await;
+            let _ = ask_to_stop(&peer).await;
         }
     }
 }
+
+/// Asks the worker to stop, waiting briefly for its answer: a worker that doesn't answer is
+/// killed by the caller anyway, instead of the wait holding the kill back for ever.
+async fn ask_to_stop(peer: &Peer) {
+    let _ = tokio::time::timeout(STOP_WAIT, peer.request(method::SHUTDOWN, Value::Null)).await;
+}
+
+/// How long a stopping worker may take to answer.
+const STOP_WAIT: Duration = Duration::from_secs(2);
 
 /// Starts `kivo-infer` and keeps it running until shutdown.
 pub async fn supervise(
@@ -576,7 +585,7 @@ async fn run_worker(
                 let engines = infer.safe(engines_rx.borrow_and_update().clone());
                 if engines.stt.is_none() && engines.tts.is_none() {
                     // Nothing to hold: the worker process goes away until it is needed again.
-                    let _ = peer.request(method::SHUTDOWN, Value::Null).await;
+                    let _ = ask_to_stop(&peer).await;
                     break Ok(());
                 }
                 if let Err(e) = load_engines(&peer, &engines, &infer.failed, events).await {
@@ -585,7 +594,7 @@ async fn run_worker(
             }
             status = child.wait() => break Err(format!("the speech worker exited: {status:?}")),
             () = shutdown.cancelled() => {
-                let _ = peer.request(method::SHUTDOWN, Value::Null).await;
+                let _ = ask_to_stop(&peer).await;
                 break Ok(());
             }
         }

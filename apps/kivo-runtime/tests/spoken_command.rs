@@ -1644,3 +1644,47 @@ async fn chatterbox_speaks_the_answer_in_a_copied_windows_voice() {
     let _ = tokio::time::timeout(Duration::from_secs(5), worker_task).await;
     pump.abort();
 }
+
+/// A stopped speech worker is gone: stopping it (KIVO quitting, the models cooling down, a test
+/// worker closing after "Try sample" or a benchmark) doesn't leave its process behind.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_stopped_speech_worker_leaves_no_process_behind() {
+    if !worker().is_file() {
+        eprintln!("kivo-infer isn't built beside the tests; skipping");
+        return;
+    }
+    let (infer, _events, sender) = kivo_runtime::infer::Infer::new(worker());
+    let stop = tokio_util::sync::CancellationToken::new();
+    let task = tokio::spawn(kivo_runtime::infer::supervise(
+        infer.clone(),
+        sender,
+        stop.clone(),
+    ));
+    infer.set_engines(kivo_runtime::infer::Engines {
+        tts: Some((kivo_voice::system_tts::ENGINE_ID.to_owned(), None)),
+        threads: 1,
+        language: "en".into(),
+        ..Default::default()
+    });
+    assert!(
+        infer.wait_ready(Duration::from_secs(30)).await,
+        "it started"
+    );
+    let pid = infer.worker_pid().expect("a worker");
+    stop.cancel();
+    tokio::time::timeout(Duration::from_secs(5), task)
+        .await
+        .expect("the supervisor stopped")
+        .unwrap();
+    let alive = || {
+        let out = std::process::Command::new("tasklist")
+            .args(["/FI", &format!("PID eq {pid}"), "/NH"])
+            .output()
+            .unwrap();
+        String::from_utf8_lossy(&out.stdout).contains("kivo-infer")
+    };
+    until("the worker process exits", Duration::from_secs(5), || {
+        !alive()
+    })
+    .await;
+}

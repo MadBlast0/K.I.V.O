@@ -57,6 +57,10 @@ fn main() -> ExitCode {
         }
     };
     runtime.block_on(serve());
+    // Tokio's stdin reader is a blocking thread that can't be interrupted: waiting for it would
+    // keep the worker alive until the runtime closes the pipe. Everything is cancelled by now,
+    // and the last answer has had its moment to go out.
+    runtime.shutdown_timeout(std::time::Duration::from_millis(200));
     ExitCode::SUCCESS
 }
 
@@ -107,6 +111,8 @@ async fn serve() {
         token.cancel();
     }
     tracing::info!("kivo-infer stopping");
+    // Let the answer to `shutdown` reach the runtime before the process ends.
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 }
 
 async fn handle(
