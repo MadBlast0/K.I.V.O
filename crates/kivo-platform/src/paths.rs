@@ -46,6 +46,11 @@ impl Paths {
         self.local.join("crashes")
     }
 
+    /// Downloaded updates and the installers kept for a rollback (DIST-08/09).
+    pub fn updates(&self) -> PathBuf {
+        self.local.join("updates")
+    }
+
     /// Newer signed catalogs KIVO fetched (DISC-17).
     pub fn catalogs(&self) -> PathBuf {
         self.local.join("data").join("catalogs")

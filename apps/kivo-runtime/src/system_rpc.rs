@@ -60,6 +60,8 @@ pub struct SystemRpc {
     pub bundle: std::sync::Mutex<Option<Value>>,
     /// Opens an https page in the default browser.
     pub open_url: OpenUrl,
+    /// Opens a document KIVO ships, by path (the third-party notices).
+    pub open_document: OpenUrl,
 }
 
 /// One check on the Diagnostics tab.
@@ -200,6 +202,15 @@ impl SystemRpc {
                     Err(RpcError::new(RpcError::REFUSED, "only https links"))
                 }
             }
+            method::ABOUT_NOTICES => match notices_file() {
+                Some(path) => (self.open_document)(&path.to_string_lossy())
+                    .map(|()| Value::Null)
+                    .map_err(|e| RpcError::new(RpcError::REFUSED, e)),
+                None => Err(RpcError::new(
+                    RpcError::REFUSED,
+                    kivo_core::text::t("about.noNotices"),
+                )),
+            },
             _ => return None,
         })
     }
@@ -495,6 +506,21 @@ impl SystemRpc {
         });
         out
     }
+}
+
+/// THIRD_PARTY_NOTICES.txt (DIST-16): beside the executables in an installed KIVO; in a
+/// development build, where `pnpm licenses:gen` writes it.
+pub fn notices_file() -> Option<std::path::PathBuf> {
+    const NAME: &str = "THIRD_PARTY_NOTICES.txt";
+    let beside = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|d| d.join(NAME)));
+    let dev = cfg!(debug_assertions).then(|| {
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../kivo-app/src-tauri")
+            .join(NAME)
+    });
+    [beside, dev].into_iter().flatten().find(|p| p.is_file())
 }
 
 #[cfg(test)]

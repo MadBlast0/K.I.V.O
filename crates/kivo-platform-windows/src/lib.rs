@@ -33,6 +33,7 @@ mod system;
 mod terminals;
 pub mod toast;
 pub mod tray;
+mod trust;
 mod uia;
 
 pub use audio::WindowsAudio;
@@ -40,7 +41,7 @@ pub use autostart::WindowsAutostart;
 pub use capabilities::detect as detect_capabilities;
 pub use capture::WindowsScreen;
 pub use clipboard::WindowsClipboard;
-pub use control::{WindowsControl, open_uri};
+pub use control::{WindowsControl, open_document, open_uri};
 pub use desktop::{WindowsApps, WindowsWindows};
 pub use displays::WindowsDisplays;
 pub use files::WindowsFiles;
@@ -57,6 +58,7 @@ pub use system::{WindowsSystemInfo, utc_offset_minutes};
 pub use terminals::WindowsTerminals;
 pub use toast::{ToastAnswer, WindowsNotifications};
 pub use tray::{TrayEvent, WindowsTray};
+pub use trust::WindowsCodeTrust;
 pub use uia::WindowsUiAutomation;
 
 /// EcoQoS for the calling thread (VOICE-03): Windows runs it on efficient cores at low clocks.

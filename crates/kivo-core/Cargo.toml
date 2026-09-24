@@ -25,6 +25,7 @@ ts = ["dep:ts-rs"]
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["sync", "macros", "rt"] }
+tempfile.workspace = true
 
 [lints]
 workspace = true

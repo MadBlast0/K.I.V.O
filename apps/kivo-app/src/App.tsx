@@ -21,6 +21,7 @@ import { Chat } from "./pages/Chat";
 import { Voice } from "./pages/Voice";
 import { Home } from "./pages/Home";
 import { Onboarding } from "./pages/Onboarding";
+import { WhatsNewDialog } from "./components/updates/Updates";
 import { PERMISSIONS_TABS, Permissions } from "./pages/Permissions";
 import { SETTINGS_TABS, Settings } from "./pages/Settings";
 import { SETTINGS_INDEX } from "./pages/settings/index";
@@ -361,6 +362,7 @@ function Shell({
           <Usage />
         )}
       </AppWindow>
+      <WhatsNewDialog />
       <CommandPalette
         commands={commands}
         open={palette}

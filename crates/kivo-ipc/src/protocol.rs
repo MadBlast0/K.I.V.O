@@ -64,6 +64,16 @@ pub mod method {
     pub const SESSION_COMPUTER_PAUSE: &str = "session.computerPause";
     /// Starts a realtime conversation (the card's "Talk live", BRAIN-33).
     pub const SESSION_LIVE: &str = "session.live";
+    /// KIVO's own updates (DIST-07/08): where things stand → `UpdateView`.
+    pub const UPDATES_STATUS: &str = "updates.status";
+    /// Looks for a new version now (and downloads it) → `UpdateView`.
+    pub const UPDATES_CHECK: &str = "updates.check";
+    /// Installs the downloaded update: KIVO winds down and restarts (`{ "whenIdle": bool }`).
+    pub const UPDATES_INSTALL: &str = "updates.install";
+    /// "What's new" was seen (UX-59).
+    pub const UPDATES_SEEN: &str = "updates.seen";
+    /// Opens the full third-party notices shipped with KIVO (DIST-16).
+    pub const ABOUT_NOTICES: &str = "about.notices";
     /// The Island was dragged (the app reports where, UX-13): remembered for that monitor.
     pub const ISLAND_MOVED: &str = "island.moved";
     /// Client → runtime: answer a confirmation
@@ -1614,4 +1624,69 @@ mod tests {
             json!({"jsonrpc":"2.0","id":3,"error":{"code":-32001,"message":"wrong token"}})
         );
     }
+}
+
+/// KIVO's own update, for Settings → About and "What's new" (DIST-07/08, UX-59).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateView {
+    /// The running version.
+    pub current: String,
+    /// The channel in use (the setting, or the installed build's).
+    pub channel: kivo_core::config::UpdateChannel,
+    /// This build can update itself (it was built with KIVO's update key).
+    pub enabled: bool,
+    pub state: UpdateState,
+    /// The update that just installed, until "Got it".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub whats_new: Option<WhatsNew>,
+}
+
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "kind"
+)]
+pub enum UpdateState {
+    #[default]
+    Idle,
+    Checking,
+    /// Epoch milliseconds of the check.
+    UpToDate {
+        #[cfg_attr(feature = "ts", ts(type = "number"))]
+        checked_at: u64,
+    },
+    Downloading {
+        version: String,
+        #[cfg_attr(feature = "ts", ts(type = "number"))]
+        received: u64,
+        #[cfg_attr(feature = "ts", ts(type = "number | null"))]
+        total: Option<u64>,
+    },
+    /// Downloaded and verified; installs when the user says (or at idle).
+    Ready {
+        version: String,
+        notes: String,
+        when_idle: bool,
+    },
+    Installing {
+        version: String,
+    },
+    Failed {
+        message: String,
+    },
+}
+
+/// What changed in the version that just installed (UX-59).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WhatsNew {
+    pub version: String,
+    pub from: String,
+    pub notes: String,
 }

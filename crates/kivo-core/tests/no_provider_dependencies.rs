@@ -56,3 +56,29 @@ fn kivo_core_has_no_provider_or_platform_dependency() {
         "kivo-core has target-specific dependencies"
     );
 }
+
+/// Invariant 2, "the UI is not the core runtime" (ARCHITECTURE §8): the app reaches KIVO only over
+/// IPC. Its Rust side may use KIVO's vocabulary (`kivo-core`), the IPC crate and the platform
+/// traits, never the store, the secrets, the tools, the brains, speech or memory.
+#[test]
+fn the_app_reaches_kivo_only_through_ipc() {
+    let manifest = include_str!("../../../apps/kivo-app/src-tauri/Cargo.toml");
+    let kivo: Vec<&str> = manifest
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.starts_with('#'))
+        .filter_map(|l| l.split_once('=').map(|(name, _)| name.trim()))
+        .map(|name| name.trim_end_matches(".workspace"))
+        .filter(|name| name.starts_with("kivo-") && *name != "kivo-app")
+        .collect();
+    assert!(
+        kivo.contains(&"kivo-ipc"),
+        "the manifest was read: {kivo:?}"
+    );
+    for name in &kivo {
+        assert!(
+            ["kivo-core", "kivo-ipc", "kivo-platform"].contains(name),
+            "the app depends on `{name}`: the app is a client of the runtime and reaches it only              over IPC (ARCHITECTURE §8, invariant 2)"
+        );
+    }
+}

@@ -5,6 +5,30 @@
 use std::fmt;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
+/// A value kept out of prompts, logs and IPC (invariant 10). Its `Debug` hides it:
+///
+/// ```
+/// let key = kivo_core::Secret::new(String::from("sk-live"));
+/// assert_eq!(format!("{key:?}"), "***");
+/// assert_eq!(key.expose(), "sk-live");
+/// ```
+///
+/// and these don't compile:
+///
+/// ```compile_fail
+/// let key = kivo_core::Secret::new(String::from("sk-live"));
+/// let shown = format!("{key}"); // no Display
+/// ```
+///
+/// ```compile_fail
+/// let key = kivo_core::Secret::new(String::from("sk-live"));
+/// let sent = serde_json::to_string(&key); // no Serialize
+/// ```
+///
+/// ```compile_fail
+/// let key = kivo_core::Secret::new(String::from("sk-live"));
+/// let copy = key.clone(); // no Clone: one owner, zeroed when dropped
+/// ```
 pub struct Secret<T: Zeroize>(T);
 
 impl<T: Zeroize> Secret<T> {

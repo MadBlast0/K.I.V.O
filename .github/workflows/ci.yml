@@ -97,6 +97,8 @@ jobs:
         run: pnpm format:check
       - name: Test
         run: pnpm test
+      - name: Release scripts
+        run: pnpm test:scripts
       - name: Build
         run: pnpm --filter kivo-app build
       - name: Audit dependencies

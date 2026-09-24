@@ -45,6 +45,7 @@ tracing.workspace = true
 async-trait.workspace = true
 base64.workspace = true
 sha2.workspace = true
+minisign-verify.workspace = true
 getrandom.workspace = true
 # KIVO's own browser profile over the DevTools protocol (TOOL-25); never downloads a browser.
 chromiumoxide = { version = "0.9.1", default-features = false }
@@ -53,6 +54,7 @@ chromiumoxide = { version = "0.9.1", default-features = false }
 kivo-platform-windows = { path = "../../crates/kivo-platform-windows" }
 
 [dev-dependencies]
+minisign.workspace = true
 tempfile.workspace = true
 tracing-subscriber.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync", "time", "test-util"] }

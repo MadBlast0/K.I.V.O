@@ -340,6 +340,8 @@ pub enum SystemEvent {
     /// The settings changed (from any client, the tray, a voice command or a file edit): open
     /// pages reload them (UX-37).
     ConfigChanged,
+    /// KIVO's own update moved on (DIST-08): checking, available, downloading, ready, installed.
+    UpdateChanged,
 }
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]

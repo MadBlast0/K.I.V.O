@@ -282,6 +282,9 @@ K.I.V.O/
 | Cloud can be disabled | Privacy mode is checked in the router and in network egress for tools |
 | Useful offline | M1 exit criteria include offline fast path + local STT/TTS |
 
+`pnpm invariants` runs the tests behind each row and prints the checklist (PLAN-31); a release
+needs all twelve green.
+
 ## Build checklist
 
 Status marks and the build protocol: [docs/README.md](../README.md).

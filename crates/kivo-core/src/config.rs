@@ -35,6 +35,8 @@ pub struct KivoConfig {
     pub integrations: Integrations,
     /// Routines and watchers (M5, ROUTINES).
     pub automation: Automation,
+    /// KIVO's own updates (DISTRIBUTION §2, DIST-07/08).
+    pub updates: Updates,
 }
 
 impl Default for KivoConfig {
@@ -58,6 +60,7 @@ impl Default for KivoConfig {
             tools: Tools::default(),
             integrations: Integrations::default(),
             automation: Automation::default(),
+            updates: Updates::default(),
         }
     }
 }
@@ -826,6 +829,70 @@ impl Default for Brains {
             realtime: Realtime::default(),
         }
     }
+}
+
+/// KIVO's own updates (DISTRIBUTION §2): which channel, whether to look, and when to install.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
+pub struct Updates {
+    /// `None` follows the installed build: a beta gets Beta, an experimental build Experimental.
+    pub channel: Option<UpdateChannel>,
+    /// Look for a new version once a day (never in Strictly private).
+    pub check: bool,
+    /// Ask before installing, or install when KIVO and the PC are idle.
+    pub install: UpdateInstall,
+}
+
+impl Default for Updates {
+    fn default() -> Self {
+        Self {
+            channel: None,
+            check: true,
+            install: UpdateInstall::Ask,
+        }
+    }
+}
+
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum UpdateChannel {
+    #[default]
+    Stable,
+    Beta,
+    Experimental,
+}
+
+impl UpdateChannel {
+    /// The manifest's name (`stable.json`, …).
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::Stable => "stable",
+            Self::Beta => "beta",
+            Self::Experimental => "experimental",
+        }
+    }
+
+    /// The channel a version was released on: `-beta.N` → Beta, `-exp.N` → Experimental.
+    pub fn of_version(version: &str) -> Self {
+        if version.contains("-exp.") {
+            Self::Experimental
+        } else if version.contains("-beta.") {
+            Self::Beta
+        } else {
+            Self::Stable
+        }
+    }
+}
+
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum UpdateInstall {
+    #[default]
+    Ask,
+    WhenIdle,
 }
 
 /// Realtime conversation mode's settings (BRAINS §8, BRAIN-33).

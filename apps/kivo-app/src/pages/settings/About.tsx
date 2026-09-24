@@ -2,11 +2,12 @@
  * Settings → About (UX-31, DIST-13): the version, and every library's and model's licence and
  * attribution. Libraries come from `generated/licenses.json` (`pnpm licenses:gen`: the crates the
  * three programs are built from, and the app's npm packages); models from the model manifest.
- * Updates and channels arrive with the updater (DIST-07).
+ * Updates: the version, Check now / Install now, the channel and when to install (DIST-07/08).
  */
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Dialog, Group, Mark, Meta, PageTabs, Row, SearchField, Section, useToast } from "../../components/ui";
+import { UpdatesSection } from "../../components/updates/Updates";
+import { Button, Dialog, Group, Mark, Meta, PageTabs, Row, SearchField, Section, useToast } from "../../components/ui";
 import licenses from "../../generated/licenses.json";
 import { Method, type ModelItem } from "../../ipc/generated";
 import { useRuntime } from "../../ipc/runtime";
@@ -23,6 +24,7 @@ interface Library {
 function Licenses({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t } = useTranslation();
   const { link, request } = useRuntime();
+  const toast = useToast();
   const [tab, setTab] = useState<"libraries" | "models">("libraries");
   const [query, setQuery] = useState("");
   const [models, setModels] = useState<ModelItem[]>([]);
@@ -59,6 +61,12 @@ function Licenses({ open, onClose }: { open: boolean; onClose: () => void }) {
             content: (
               <>
                 <p className="k-meta">{counts.map(([l, n]) => `${l} (${n})`).join(" · ")}</p>
+                <Button
+                  size="sm"
+                  onClick={() => void request(Method.aboutNotices).catch((e: unknown) => toast(message(e)))}
+                >
+                  {t("settings.about.fullTexts")}
+                </Button>
                 <SearchField
                   aria-label={t("settings.about.search")}
                   placeholder={t("settings.about.search")}
@@ -123,6 +131,7 @@ export function AboutTab() {
         </p>
       </div>
       <div className="k-narrow">
+        <UpdatesSection />
         <Section title={t("settings.about.more")} />
         <Group>
           <Row

@@ -18,6 +18,7 @@ pub mod text;
 pub mod time;
 pub mod tool;
 pub mod turn;
+pub mod update;
 
 pub use bus::{EventBus, Received, Subscription};
 pub use capability::{Capability, CapabilitySettings};

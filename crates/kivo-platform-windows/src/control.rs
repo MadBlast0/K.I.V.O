@@ -151,6 +151,22 @@ pub fn open_uri(uri: &str) -> PlatformResult<()> {
 }
 
 /// Opens a document, folder or URI with its default handler.
+/// Opens a document KIVO ships (the third-party notices) in its usual app. Only an existing
+/// `.txt`, `.md` or `.pdf` file: never a program, a folder or a link.
+pub fn open_document(path: &std::path::Path) -> PlatformResult<()> {
+    let readable = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| ["txt", "md", "pdf"].contains(&e.to_ascii_lowercase().as_str()));
+    if !readable {
+        return Err(PlatformError::Unsupported);
+    }
+    if !path.is_file() {
+        return Err(PlatformError::NotFound("that document".into()));
+    }
+    shell_open(&path.to_string_lossy())
+}
+
 fn shell_open(target: &str) -> PlatformResult<()> {
     let _com = Com::init()?;
     let target = HSTRING::from(target);
@@ -320,6 +336,26 @@ impl SystemControl for WindowsControl {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_shipped_documents_open() {
+        // Refusals only: opening one would start an app on the desktop.
+        let dir = tempfile::tempdir().unwrap();
+        let program = dir.path().join("setup.exe");
+        std::fs::write(&program, b"MZ").unwrap();
+        assert!(matches!(
+            open_document(&program),
+            Err(PlatformError::Unsupported)
+        ));
+        assert!(matches!(
+            open_document(dir.path()),
+            Err(PlatformError::Unsupported)
+        ));
+        assert!(matches!(
+            open_document(&dir.path().join("THIRD_PARTY_NOTICES.txt")),
+            Err(PlatformError::NotFound(_))
+        ));
+    }
 
     #[test]
     fn settings_pages_and_folders_are_checked_before_opening() {

@@ -56,6 +56,7 @@ pub mod tasks_rpc;
 #[cfg(windows)]
 pub mod tray;
 pub mod triggers;
+pub mod updater;
 pub mod voice;
 pub mod voice_rpc;
 pub mod voiceid;

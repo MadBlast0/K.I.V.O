@@ -175,9 +175,40 @@ impl Runtime {
     }
 }
 
+/// Where updates are kept (`%LOCALAPPDATA%\KIVO\updates`).
+fn updates_dir() -> Option<std::path::PathBuf> {
+    kivo_platform::Paths::user().map(|p| p.updates())
+}
+
+/// After an update that hasn't proven itself, each start of the runtime is counted; when the new
+/// version has failed to start it twice, the previous version's installer runs instead and the
+/// app exits (DIST-09: the installer relaunches KIVO).
+fn roll_back_if_due() {
+    let Some(dir) = updates_dir() else { return };
+    let Some(previous) = kivo_core::update::app_started_runtime(&dir, env!("CARGO_PKG_VERSION"))
+    else {
+        return;
+    };
+    let kind = kivo_core::update::pending(&dir).map_or_else(|| "nsis".to_owned(), |p| p.kind);
+    let (program, args) = kivo_core::update::installer_args(&kind, &previous);
+    let mut command = std::process::Command::new(program);
+    command.args(args);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const DETACHED_PROCESS: u32 = 0x0000_0008;
+        const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
+        command.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
+    }
+    if command.spawn().is_ok() {
+        std::process::exit(0);
+    }
+}
+
 /// Starts `kivo-runtime` from the app's own folder (the installer puts it there; so does a
 /// development build). A second runtime exits at once, so starting one too many is harmless.
 pub fn start_runtime() -> Result<(), String> {
+    roll_back_if_due();
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let dir = exe.parent().ok_or("the app has no folder")?;
     let runtime = ["kivo-runtime.exe", "kivo-runtime"]
@@ -224,6 +255,23 @@ pub async fn maintain(app: AppHandle) {
         && let Err(message) = start_runtime()
     {
         runtime.set_link(&app, |l| l.message = Some(message));
+    }
+    // Just after an update, a runtime that doesn't come up is started once more; failing again
+    // rolls the update back (DIST-09).
+    if first.is_none() {
+        let app = app.clone();
+        tauri::async_runtime::spawn(async move {
+            for _ in 0..kivo_core::update::MAX_FAILED_STARTS {
+                tokio::time::sleep(std::time::Duration::from_secs(20)).await;
+                let unproven = updates_dir()
+                    .and_then(|d| kivo_core::update::pending(&d))
+                    .is_some_and(|p| p.to == env!("CARGO_PKG_VERSION") && !p.healthy);
+                if app.state::<Runtime>().connected() || !unproven {
+                    return;
+                }
+                let _ = start_runtime();
+            }
+        });
     }
 
     loop {

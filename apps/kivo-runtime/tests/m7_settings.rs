@@ -186,6 +186,7 @@ async fn performance_and_diagnostics_report_real_state() {
         Arc::clone(&r.rig.core),
         r.rig.infer.clone(),
     ));
+    let documents: Arc<std::sync::Mutex<Vec<String>>> = Arc::default();
     let system = kivo_runtime::system_rpc::SystemRpc {
         engine: Arc::clone(&r.rig.engine),
         models,
@@ -212,7 +213,31 @@ async fn performance_and_diagnostics_report_real_state() {
                 Ok(())
             })
         },
+        open_document: {
+            let documents = Arc::clone(&documents);
+            Arc::new(move |path: &str| {
+                documents.lock().unwrap().push(path.to_owned());
+                Ok(())
+            })
+        },
     };
+    // DIST-16: About opens the full notices (in a development build, where `pnpm licenses:gen`
+    // writes them).
+    if let Some(notices) = kivo_runtime::system_rpc::notices_file() {
+        system
+            .call("about.notices", Value::Null)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(
+            documents
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|p| p.ends_with("THIRD_PARTY_NOTICES.txt")),
+            "{notices:?}"
+        );
+    }
     let perf = system
         .call("performance.status", Value::Null)
         .await

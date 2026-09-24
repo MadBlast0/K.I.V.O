@@ -1510,7 +1510,8 @@
       "noModels": "The model list needs KIVO running.",
       "search": "Search libraries",
       "security": "Security policy",
-      "source": "Source code"
+      "source": "Source code",
+      "fullTexts": "Full licence texts"
     }
   },
   "brains": {
@@ -2618,5 +2619,36 @@
       "needsYou": "Your turn",
       "cancelled": "Cancelled"
     }
+  },
+  "updates": {
+    "title": "Updates",
+    "checkNow": "Check now",
+    "installNow": "Install now",
+    "upToDate": "You’re up to date",
+    "notChecked": "Not checked yet",
+    "checking": "Checking…",
+    "downloading": "Downloading KIVO {version}…",
+    "downloadingPercent": "Downloading KIVO {version} · {percent}",
+    "ready": "KIVO {version} is ready. Takes about 20 seconds; anything running is saved first.",
+    "readyWhenIdle": "KIVO {version} installs when you’re idle.",
+    "installing": "Installing KIVO {version}…",
+    "notThisBuild": "This copy can’t update itself (a development build).",
+    "channel": "Update channel",
+    "channelHint": "Beta and Experimental get features sooner",
+    "channels": {
+      "stable": "Stable",
+      "beta": "Beta",
+      "experimental": "Experimental"
+    },
+    "install": "Install updates",
+    "askMe": "Ask me",
+    "whenIdle": "When idle",
+    "daily": "Look for updates daily",
+    "dailyHint": "Never in Strictly private. Updates are signed and checked before they install.",
+    "whatsNew": "What’s new in KIVO {version}",
+    "installedNow": "Installed just now",
+    "noNotes": "Updated from {from}.",
+    "releaseNotes": "Release notes",
+    "gotIt": "Got it"
   }
 }

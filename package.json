@@ -8,7 +8,7 @@
     "dev:e2e": "node scripts/dev-e2e.mjs",
     "ui": "pnpm --filter kivo-app dev",
     "sidecars": "node scripts/sidecars.mjs",
-    "build": "node scripts/sidecars.mjs && pnpm --filter kivo-app tauri build --config src-tauri/tauri.bundle.conf.json",
+    "build": "node scripts/licenses.mjs && node scripts/sidecars.mjs && pnpm --filter kivo-app tauri build --config src-tauri/tauri.bundle.conf.json",
     "typecheck": "pnpm --filter kivo-app typecheck",
     "docs:sync": "node scripts/sync-roadmap.mjs",
     "licenses:gen": "node scripts/licenses.mjs",
@@ -17,6 +17,9 @@
     "lint": "pnpm --filter kivo-app lint",
     "format:check": "pnpm --filter kivo-app format:check",
     "test": "pnpm --filter kivo-app test",
-    "catalog:sign": "node scripts/catalog-sign.mjs"
+    "catalog:sign": "node scripts/catalog-sign.mjs",
+    "test:scripts": "node --test scripts/*.test.mjs",
+    "invariants": "node scripts/invariants.mjs",
+    "bench:gate": "node scripts/bench-gate.mjs"
   }
 }

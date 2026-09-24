@@ -39,6 +39,8 @@ pub struct Rpc {
     system: Option<Arc<crate::system_rpc::SystemRpc>>,
     /// Where "Export settings" saves (the Downloads folder).
     exports: Option<std::path::PathBuf>,
+    /// KIVO's own updates (DIST-07/08).
+    updater: Option<Arc<crate::updater::Updater>>,
 }
 
 impl Rpc {
@@ -63,7 +65,15 @@ impl Rpc {
             memory: None,
             system: None,
             exports: None,
+            updater: None,
         }
+    }
+
+    /// Adds KIVO's own updates (Settings → About).
+    #[must_use]
+    pub fn with_updater(mut self, updater: Arc<crate::updater::Updater>) -> Self {
+        self.updater = Some(updater);
+        self
     }
 
     /// Adds Settings → Performance and Diagnostics.
@@ -153,7 +163,13 @@ impl Handler for Rpc {
         let memory = self.memory.clone();
         let system = self.system.clone();
         let exports = self.exports.clone();
+        let updater = self.updater.clone();
         Box::pin(async move {
+            if let Some(updater) = updater
+                && let Some(result) = updater.call(&name, params.clone()).await
+            {
+                return result;
+            }
             if let Some(system) = system
                 && let Some(result) = system.call(&name, params.clone()).await
             {

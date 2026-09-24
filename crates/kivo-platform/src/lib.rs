@@ -18,6 +18,7 @@ mod secrets;
 mod shell;
 mod speech;
 mod system;
+mod trust;
 mod types;
 
 pub use apps::{AppEntry, Apps, WindowInfo, Windows};
@@ -47,4 +48,5 @@ pub use system::{
     Attention, Autostart, GpuInfo, MediaAction, Network, NowPlaying, PowerAction, Presence,
     ProcessUsage, SystemControl, SystemInfo, SystemSnapshot, ThreadQos, VolumeState,
 };
+pub use trust::CodeTrust;
 pub use types::{DeviceId, Point, Rect, WindowId};

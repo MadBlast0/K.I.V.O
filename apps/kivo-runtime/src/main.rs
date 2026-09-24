@@ -800,10 +800,33 @@ async fn run(
     }
     lifecycle.apply_autostart(&core.config());
     lifecycle.report_crashes();
+    // KIVO's own updates (DIST-07/08/09): checked, verified and installed by the runtime; after an
+    // update, this start is counted until the new version has proven itself.
+    let updater = kivo_runtime::updater::Updater::new(kivo_runtime::updater::Parts {
+        core: Arc::clone(&core),
+        dir: paths.updates(),
+        keys: kivo_runtime::updater::Keys::built_in(),
+        trust: Arc::new(kivo_platform_windows::WindowsCodeTrust),
+        launch: Arc::new(kivo_runtime::updater::Detached),
+        notifications: Arc::clone(&platform.notifications),
+        system: Arc::clone(&platform.system),
+    });
+    updater.watch_health();
+    {
+        let updater = Arc::clone(&updater);
+        let stop = core.shutdown();
+        tokio::spawn(async move {
+            tokio::select! {
+                () = updater.run() => {}
+                () = stop.cancelled() => {}
+            }
+        });
+    }
     #[cfg(windows)]
     {
         let lifecycle = Arc::clone(&lifecycle);
         let engine = Arc::clone(&engine);
+        let updater = Arc::clone(&updater);
         let handle = tokio::runtime::Handle::current();
         std::thread::Builder::new()
             .name("kivo-toasts".into())
@@ -817,6 +840,12 @@ async fn run(
                         handle.spawn(async move {
                             let _ = engine.say(&reply).await;
                         });
+                        continue;
+                    }
+                    // "Install now" / "When idle" on the update notification (DIST-08).
+                    if answer.action.starts_with("update.") {
+                        let _entered = handle.enter();
+                        updater.answered(&answer.action);
                         continue;
                     }
                     lifecycle.answered(&answer.action);
@@ -902,8 +931,13 @@ async fn run(
                             .open_url(url)
                             .map_err(|e| e.to_string())
                     }),
+                    open_document: Arc::new(|path: &str| {
+                        kivo_platform_windows::open_document(std::path::Path::new(path))
+                            .map_err(|e| e.to_string())
+                    }),
                 }))
-                .with_exports(dirs::download_dir().unwrap_or_else(std::env::temp_dir)),
+                .with_exports(dirs::download_dir().unwrap_or_else(std::env::temp_dir))
+                .with_updater(Arc::clone(&updater)),
             ),
             core.bus.clone(),
             core.state(),

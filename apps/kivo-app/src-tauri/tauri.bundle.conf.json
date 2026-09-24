@@ -3,14 +3,23 @@
   "bundle": {
     "publisher": "KIVO",
     "shortDescription": "KIVO, a voice-first companion for Windows",
-    "externalBin": ["binaries/kivo-runtime", "binaries/kivo-infer"],
+    "externalBin": [
+      "binaries/kivo-runtime",
+      "binaries/kivo-infer"
+    ],
     "windows": {
-      "webviewInstallMode": { "type": "downloadBootstrapper", "silent": true },
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      },
       "nsis": {
         "installMode": "currentUser",
         "displayLanguageSelector": false,
         "installerHooks": "windows/hooks.nsh"
       }
-    }
+    },
+    "resources": [
+      "THIRD_PARTY_NOTICES.txt"
+    ]
   }
 }

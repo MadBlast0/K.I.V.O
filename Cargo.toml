@@ -51,6 +51,10 @@ tar = "0.4"
 bzip2 = "0.6"
 ringbuf = "0.5"
 sha2 = "0.10"
+# Update manifests are minisign-signed (DIST-07, SEC-32): the verifier Tauri's updater uses; the
+# signer only in tests.
+minisign-verify = "0.2.5"
+minisign = "0.7"
 ureq = { version = "3.4", default-features = false, features = ["native-tls", "gzip"] }
 # Custom sounds (VOICE-28): the user's .ogg cues, decoded in pure Rust.
 lewton = "0.10"
