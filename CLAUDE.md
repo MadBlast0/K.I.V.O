@@ -58,8 +58,7 @@ review with the owner is the one open D0 exit check). **M0 — foundations and m
 built: core types, platform traits, store, secured IPC with live state and mic levels, the
 runtime (tray, single instance, app supervision, push-to-talk, permission modes, stop
 everything), the app (Home, overlay Island), WASAPI audio and the `kivo-bench` harness with all
-suites. The speech-engine benchmark runs are deferred by the owner (DECISIONS "Benchmarks
-deferred"). **M1 — first useful voice loop** is built: speak or type → grammar → permission
+suites. **M1 — first useful voice loop** is built: speak or type → grammar → permission
 engine → action → spoken answer (Moonshine STT, Kokoro or Windows voices), the Island's states,
 Activity and audit, cancel ≤ 100 ms, undo, and the installer/release pipeline. **M2 —
 wake word, enrollment, conversation audio** is built: "Hey Kivo" and custom wake words on KIVO's
