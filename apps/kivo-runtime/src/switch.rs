@@ -166,16 +166,10 @@ impl Switcher {
         };
         self.stage(slot, id, "loading", None);
         let config = self.core.config();
-        let mut probe = Probe::start(
-            self.engine.infer.program().to_path_buf(),
-            slot,
-            id,
-            dir,
-            &config.general.language,
-            self.models.cloud_access(id, &self.core.config()),
-        )
-        .await
-        .map_err(|e| text::tf("voice.loadFailed", &[("error", &e)]))?;
+        let mut probe = self
+            .probe(slot, id, dir, &config.general.language)
+            .await
+            .map_err(|e| text::tf("voice.loadFailed", &[("error", &e)]))?;
         self.stage(slot, id, "testing", None);
         let tested = match slot {
             InferSlot::Tts => probe
@@ -276,15 +270,9 @@ impl Switcher {
             .models
             .installed_dir(&model)
             .ok_or_else(|| text::t("voice.notDownloaded"))?;
-        let mut probe = Probe::start(
-            self.engine.infer.program().to_path_buf(),
-            InferSlot::Stt,
-            id,
-            Some(dir),
-            &config.general.language,
-            self.models.cloud_access(id, &self.core.config()),
-        )
-        .await?;
+        let mut probe = self
+            .probe(InferSlot::Stt, id, Some(dir), &config.general.language)
+            .await?;
         let result = self.sample(&mut probe, &config.general.language).await;
         probe.close().await;
         result
@@ -310,16 +298,7 @@ impl Switcher {
             else {
                 continue;
             };
-            let Ok(mut probe) = Probe::start(
-                self.engine.infer.program().to_path_buf(),
-                InferSlot::Stt,
-                &id,
-                Some(dir),
-                &language,
-                self.models.cloud_access(&id, &self.core.config()),
-            )
-            .await
-            else {
+            let Ok(mut probe) = self.probe(InferSlot::Stt, &id, Some(dir), &language).await else {
                 continue;
             };
             let mut tally = kivo_voice::wer::Tally::default();
@@ -373,21 +352,226 @@ impl Switcher {
             None => None,
         };
         let language = self.core.config().general.language;
-        let mut probe = Probe::start(
-            self.engine.infer.program().to_path_buf(),
-            InferSlot::Tts,
-            id,
-            dir,
-            &language,
-            self.models.cloud_access(id, &self.core.config()),
-        )
-        .await?;
+        let mut probe = self.probe(InferSlot::Tts, id, dir, &language).await?;
         let spoken = probe.speak(&text::t("voice.preview"), voice).await;
         probe.close().await;
         let (pcm, rate) = spoken?;
         self.engine.speaker.speak(&pcm, rate);
         Ok(())
     }
+
+    /// A test worker holding engine `id`, where KIVO would run it: on the graphics card when the
+    /// GPU policy puts it there (DECISIONS "Local models on the GPU first"), with the speech
+    /// models' thread count.
+    async fn probe(
+        &self,
+        slot: InferSlot,
+        id: &str,
+        dir: Option<PathBuf>,
+        language: &str,
+    ) -> Result<Probe, String> {
+        let config = self.core.config();
+        Probe::start(
+            self.engine.infer.program().to_path_buf(),
+            slot,
+            id,
+            dir,
+            language,
+            self.models.cloud_access(id, &config),
+            Place {
+                gpu: self.models.gpu_for(id, &config),
+                threads: self.models.speech_threads(),
+            },
+        )
+        .await
+    }
+
+    /// "Benchmark this engine" (BENCH-15, VOICE §11): measures an installed engine on this PC in
+    /// a separate worker, so the engines KIVO uses are untouched. A recognizer transcribes
+    /// commands a Windows voice speaks, clean and over noise: end of speech → final text, real-
+    /// time factor, word error rates. A voice speaks a short and a long text: first audio,
+    /// real-time factor, cancel → silence. Both report the worker's CPU share and memory.
+    pub async fn benchmark(&self, id: &str) -> Result<kivo_voice::registry::Measured, String> {
+        let config = self.core.config();
+        let entry = kivo_voice::engine(id).ok_or_else(|| text::t("voice.notAnEngine"))?;
+        let slot = match entry.slot {
+            kivo_voice::EngineSlot::Stt => InferSlot::Stt,
+            kivo_voice::EngineSlot::Tts => InferSlot::Tts,
+            _ => return Err(text::t("voice.notAnEngine")),
+        };
+        check(slot, id, &config)?;
+        let dir = match entry.model {
+            Some(model) => Some(
+                self.models
+                    .installed_dir(&model)
+                    .ok_or_else(|| text::t("voice.notDownloaded"))?,
+            ),
+            None => None,
+        };
+        let language = config.general.language.clone();
+        // The spoken commands come from a Windows voice, before the test worker takes the CPU.
+        let mut commands = Vec::new();
+        if slot == InferSlot::Stt {
+            let synth = self
+                .test_voice
+                .clone()
+                .or_else(|| self.engine.system_voice())
+                .ok_or_else(|| text::t("voice.benchmarkNeedsVoice"))?;
+            for said in BENCH_COMMANDS {
+                let synth = Arc::clone(&synth);
+                let audio = tokio::task::spawn_blocking(move || synth.synthesize(said, None))
+                    .await
+                    .map_err(|e| e.to_string())?
+                    .map_err(|e| e.to_string())?;
+                commands.push((
+                    *said,
+                    kivo_audio::RateConverter::convert_all(audio.rate, 16_000, &audio.samples),
+                ));
+            }
+        }
+        let mut probe = self.probe(slot, id, dir, &language).await?;
+        let system = self.models.system_info();
+        let pid = probe.infer.worker_pid();
+        let usage = || pid.and_then(|p| system.as_ref().and_then(|s| s.process_usage(p)));
+        let before = usage();
+        let started = std::time::Instant::now();
+        let measured = match slot {
+            InferSlot::Stt => bench_stt(&mut probe, &commands, &language).await,
+            // The chosen voice, when this is the engine KIVO speaks with; else its first voice.
+            InferSlot::Tts if config.voice.tts_engine == id => {
+                bench_tts(&mut probe, &config.voice.tts_voice).await
+            }
+            InferSlot::Tts => bench_tts(&mut probe, "").await,
+        };
+        let wall_ms = started.elapsed().as_secs_f64() * 1e3;
+        let after = usage();
+        let vram = pid.and_then(|p| system.as_ref().and_then(|s| s.gpu_memory(&[p])));
+        probe.close().await;
+        let mut measured = measured?;
+        let cpus = system
+            .as_ref()
+            .and_then(|s| s.snapshot().ok())
+            .map_or(1, |s| s.logical_cpus.max(1));
+        if let (Some(before), Some(after)) = (before, after) {
+            #[allow(clippy::cast_precision_loss, reason = "CPU milliseconds")]
+            let busy = after.cpu_ms.saturating_sub(before.cpu_ms) as f64;
+            measured.cpu_percent = Some(busy * 100.0 / (wall_ms.max(1.0) * f64::from(cpus)));
+            #[allow(clippy::cast_precision_loss, reason = "megabytes")]
+            let mb = after.memory_bytes as f64 / 1_048_576.0;
+            measured.memory_mb = Some(mb);
+        }
+        // The worker's GPU memory counts with its memory when it uses the GPU.
+        if let Some(bytes) = vram.filter(|b| *b > 0) {
+            #[allow(clippy::cast_precision_loss, reason = "megabytes")]
+            let mb = bytes as f64 / 1_048_576.0;
+            measured.memory_mb = Some(measured.memory_mb.unwrap_or(0.0) + mb);
+        }
+        measured.measured_at = kivo_store::brains::now_ms();
+        Ok(measured)
+    }
+}
+
+/// Commands a recognizer is benchmarked on (BENCH-15): KIVO's own kind of speech.
+const BENCH_COMMANDS: &[&str] = &[
+    "Open the calculator",
+    "Set the volume to thirty percent",
+    "Remind me to call Maya at five",
+    "What's the weather like tomorrow in Lisbon",
+    "Take a screenshot of this window",
+];
+/// A voice's short and long texts.
+const BENCH_SHORT: &str = "Done. The volume is at thirty percent.";
+const BENCH_LONG: &str = "Here's your afternoon. At two you have the design review with Maya, \
+    which usually runs long, so I moved your focus block to four. The build finished with two \
+    warnings, both in the settings page, and the report you asked for is on your desktop. It will \
+    rain after six, so if you're cycling home, leave a little earlier.";
+
+fn median(mut values: Vec<f64>) -> Option<f64> {
+    values.sort_by(f64::total_cmp);
+    values.get(values.len() / 2).copied()
+}
+
+/// Deterministic background noise (a room's hiss and mains hum) about 10 dB under the speech.
+fn with_noise(audio: &[f32]) -> Vec<f32> {
+    #[allow(clippy::cast_precision_loss, reason = "a loudness level")]
+    let rms = (audio.iter().map(|s| s * s).sum::<f32>() / audio.len().max(1) as f32).sqrt();
+    let level = rms * 0.3;
+    let mut seed: u32 = 0x2545_f491;
+    audio
+        .iter()
+        .enumerate()
+        .map(|(i, s)| {
+            seed ^= seed << 13;
+            seed ^= seed >> 17;
+            seed ^= seed << 5;
+            #[allow(clippy::cast_precision_loss, reason = "noise")]
+            let hiss = (seed as f32 / u32::MAX as f32) * 2.0 - 1.0;
+            #[allow(clippy::cast_precision_loss, reason = "a sample index")]
+            let hum = (i as f32 * std::f32::consts::TAU * 120.0 / 16_000.0).sin();
+            s + level * 0.8f32.mul_add(hiss, 0.6 * hum)
+        })
+        .collect()
+}
+
+async fn bench_stt(
+    probe: &mut Probe,
+    commands: &[(&str, Vec<f32>)],
+    language: &str,
+) -> Result<kivo_voice::registry::Measured, String> {
+    let mut clean = kivo_voice::wer::Tally::default();
+    let mut noisy = kivo_voice::wer::Tally::default();
+    let mut finals = Vec::new();
+    let mut busy_ms = 0.0;
+    let mut audio_ms = 0.0;
+    for (said, audio) in commands {
+        let mut padded = audio.clone();
+        padded.extend(std::iter::repeat_n(0.0, 8_000));
+        let (heard, final_ms, total_ms) = probe.transcribe_timed(&padded, language).await?;
+        clean.add(said, &heard);
+        finals.push(final_ms);
+        busy_ms += total_ms;
+        #[allow(clippy::cast_precision_loss, reason = "milliseconds of audio")]
+        let ms = padded.len() as f64 / 16.0;
+        audio_ms += ms;
+        let (heard, _, _) = probe
+            .transcribe_timed(&with_noise(&padded), language)
+            .await?;
+        noisy.add(said, &heard);
+    }
+    Ok(kivo_voice::registry::Measured {
+        latency_ms: median(finals),
+        real_time_factor: Some(busy_ms / f64::max(audio_ms, 1.0)),
+        word_error_rate: Some(clean.rate()),
+        noisy_word_error_rate: Some(noisy.rate()),
+        ..Default::default()
+    })
+}
+
+async fn bench_tts(
+    probe: &mut Probe,
+    voice: &str,
+) -> Result<kivo_voice::registry::Measured, String> {
+    let voice = (!voice.is_empty()).then_some(voice);
+    let mut firsts = Vec::new();
+    for _ in 0..3 {
+        firsts.push(probe.speak_timed(BENCH_SHORT, voice, false).await?.first_ms);
+    }
+    let long = probe.speak_timed(BENCH_LONG, voice, false).await?;
+    let cancelled = probe.speak_timed(BENCH_LONG, voice, true).await?;
+    Ok(kivo_voice::registry::Measured {
+        latency_ms: median(firsts),
+        real_time_factor: Some(long.total_ms / f64::max(long.seconds * 1e3, 1.0)),
+        cancel_ms: cancelled.cancel_ms,
+        ..Default::default()
+    })
+}
+
+/// What speaking one text took.
+struct Spoken {
+    first_ms: f64,
+    total_ms: f64,
+    seconds: f64,
+    cancel_ms: Option<f64>,
 }
 
 /// True when most of the sentence's words were heard ("Open the calculator" → "open the
@@ -403,6 +587,12 @@ fn heard_enough(said: &str, heard: &str) -> bool {
     let heard = words(heard);
     let found = said.iter().filter(|w| heard.contains(w)).count();
     !said.is_empty() && found * 3 >= said.len() * 2
+}
+
+/// Where a test worker runs its engine.
+struct Place {
+    gpu: Option<u32>,
+    threads: usize,
 }
 
 /// A second speech worker holding one engine to try it out; the real one is untouched.
@@ -421,6 +611,7 @@ impl Probe {
         dir: Option<PathBuf>,
         language: &str,
         cloud: Option<kivo_ipc::infer::CloudLoad>,
+        place: Place,
     ) -> Result<Self, String> {
         let (infer, events, sender) = Infer::new(program);
         let stop = CancellationToken::new();
@@ -441,12 +632,12 @@ impl Probe {
             },
             stt_fallback: None,
             tts: (slot == InferSlot::Tts).then_some((engine, dir)),
-            threads: 2,
+            threads: place.threads,
             language: language.to_owned(),
             cloud: cloud
                 .map(|c| std::collections::BTreeMap::from([(id.to_owned(), c)]))
                 .unwrap_or_default(),
-            gpu: None,
+            gpu: place.gpu,
         });
         let ready = probe.infer.wait_ready(LOAD_LIMIT).await;
         // A failed load shows up as a fallback (the worker stays up) or a lost worker.
@@ -529,6 +720,105 @@ impl Probe {
         })
         .await
         .map_err(|_| "it took too long to listen".to_owned())?
+    }
+
+    /// Transcribes like `transcribe`, timing it: the text, end of audio → final (ms), and the
+    /// whole transcription (ms).
+    async fn transcribe_timed(
+        &mut self,
+        audio: &[f32],
+        language: &str,
+    ) -> Result<(String, f64, f64), String> {
+        let id = self.infer.next_utterance();
+        let infer = &self.infer;
+        tokio::time::timeout(TEST_LIMIT, async {
+            let started = std::time::Instant::now();
+            infer
+                .start_stt(id, language, Vec::new())
+                .await
+                .map_err(|e| e.to_string())?;
+            for chunk in audio.chunks(1_280) {
+                infer.send_audio(id, chunk).map_err(|e| e.to_string())?;
+            }
+            let ended = std::time::Instant::now();
+            let text = infer
+                .finish_stt(id)
+                .await
+                .map(|f| f.text)
+                .map_err(|e| e.to_string())?;
+            Ok((
+                text,
+                ended.elapsed().as_secs_f64() * 1e3,
+                started.elapsed().as_secs_f64() * 1e3,
+            ))
+        })
+        .await
+        .map_err(|_| "it took too long to listen".to_owned())?
+    }
+
+    /// Speaks a text without playing it, timing the first audio and the whole; `cancel` stops
+    /// it at its first audio and times cancel → the end of its speech.
+    async fn speak_timed(
+        &mut self,
+        sentence: &str,
+        voice: Option<&str>,
+        cancel: bool,
+    ) -> Result<Spoken, String> {
+        let id = self.infer.next_utterance();
+        let started = std::time::Instant::now();
+        self.infer
+            .speak(id, sentence, voice)
+            .await
+            .map_err(|e| e.to_string())?;
+        let mut first_ms = None;
+        let mut cancelled_at: Option<std::time::Instant> = None;
+        let mut samples = 0usize;
+        let mut rate = 16_000u32;
+        let infer = self.infer.clone();
+        let events = &mut self.events;
+        tokio::time::timeout(TEST_LIMIT, async {
+            while let Some(event) = events.recv().await {
+                match event {
+                    InferEvent::Speech {
+                        id: of,
+                        rate: r,
+                        pcm,
+                    } if of == id => {
+                        rate = r;
+                        samples += pcm.len();
+                        if first_ms.is_none() {
+                            first_ms = Some(started.elapsed().as_secs_f64() * 1e3);
+                            if cancel {
+                                cancelled_at = Some(std::time::Instant::now());
+                                infer.cancel_speech(id).map_err(|e| e.to_string())?;
+                            }
+                        }
+                    }
+                    InferEvent::SpeakDone { id: of, error, .. } if of == id => {
+                        return match error {
+                            Some(e) if cancelled_at.is_none() => Err(e),
+                            _ => Ok(()),
+                        };
+                    }
+                    other => {
+                        if let Some(error) = failure(&other) {
+                            return Err(error);
+                        }
+                    }
+                }
+            }
+            Err("the test worker stopped".to_owned())
+        })
+        .await
+        .map_err(|_| "it took too long to speak".to_owned())??;
+        #[allow(clippy::cast_precision_loss, reason = "seconds of audio")]
+        let seconds = samples as f64 / f64::from(rate.max(1));
+        Ok(Spoken {
+            first_ms: first_ms.ok_or_else(|| text::t("voice.silent"))?,
+            total_ms: started.elapsed().as_secs_f64() * 1e3,
+            seconds,
+            cancel_ms: cancelled_at.map(|t| t.elapsed().as_secs_f64() * 1e3),
+        })
     }
 
     async fn close(self) {

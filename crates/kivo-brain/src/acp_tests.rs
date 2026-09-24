@@ -390,6 +390,12 @@ async fn the_gemini_cli_speaks_acp() {
     client.stop();
 }
 
+/// BRAIN-14: GitHub Copilot CLI speaks ACP itself (`copilot --acp`).
+#[tokio::test]
+async fn copilot_cli_speaks_acp() {
+    real_agent(&["copilot.cmd", "copilot"], &["--acp"]).await;
+}
+
 /// BRAIN-14: OpenCode speaks ACP itself (`opencode acp`), with its own free models.
 #[tokio::test]
 async fn opencode_speaks_acp() {

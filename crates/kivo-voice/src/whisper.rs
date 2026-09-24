@@ -47,7 +47,8 @@ pub fn info() -> EngineInfo {
         license: "MIT".into(),
         languages: LANGUAGES.iter().map(|l| (*l).to_owned()).collect(),
         streaming: true,
-        accel: vec![Accel::Cpu, Accel::DirectMl],
+        // DirectML crashes on these int8 files (access violation, 2026-09-24): processor only.
+        accel: vec![Accel::Cpu],
         resources: ResourceEstimate {
             ram_mb: 1_800,
             vram_mb: 0,
@@ -392,7 +393,7 @@ impl SttStream for Owned<'_> {
             return Ok(Vec::new());
         }
         self.last_partial = self.audio.len();
-        let text = self.inner.transcribe(&self.audio, &self.cancel)?;
+        let text = crate::utterance::transcribe_long(&mut self.inner, &self.audio, &self.cancel)?;
         let mut events = Vec::new();
         let stable = common_words(&self.last, &text);
         if stable.len() > self.stable.len() {
@@ -407,7 +408,8 @@ impl SttStream for Owned<'_> {
     }
 
     fn finish(&mut self) -> VoiceResult<String> {
-        self.inner.transcribe(&self.audio, &self.cancel)
+        // Past Whisper's 30 s window, in segments rather than cut off.
+        crate::utterance::transcribe_long(&mut self.inner, &self.audio, &self.cancel)
     }
 }
 

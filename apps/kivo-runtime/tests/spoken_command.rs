@@ -1045,6 +1045,79 @@ async fn a_new_speech_engine_is_tested_before_it_is_used() {
     pump.abort();
 }
 
+/// BENCH-15: "Benchmark this engine" measures a recognizer and a voice on this PC in a separate
+/// worker — real commands spoken by a Windows voice, heard clean and over noise; a text spoken
+/// short, long and cancelled — and the Voice page's registry then shows the numbers.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn an_engine_is_benchmarked_on_this_pc() {
+    let _turn = ONE_AT_A_TIME.lock().await;
+    let paths = Paths::user().expect("per-user folders");
+    let Some(model) = ModelStore::new(paths.models()).installed(kivo_voice::moonshine::MODEL_ID)
+    else {
+        eprintln!("the speech model isn't installed on this machine; skipping");
+        return;
+    };
+    if !worker().is_file() {
+        eprintln!("kivo-infer isn't built beside the tests; skipping");
+        return;
+    }
+    let (rig, worker_task, pump) = rig(Vec::new(), model.dir);
+    let models = std::sync::Arc::new(kivo_runtime::models::Models::new(
+        paths.models(),
+        std::sync::Arc::clone(&rig.core),
+        rig.infer.clone(),
+    ));
+    models.set_system(std::sync::Arc::new(
+        kivo_platform_windows::WindowsSystemInfo,
+    ));
+    let switcher = kivo_runtime::switch::Switcher::new(
+        std::sync::Arc::clone(&rig.core),
+        std::sync::Arc::clone(&rig.engine),
+        std::sync::Arc::clone(&models),
+    )
+    .with_test_voice(std::sync::Arc::new(kivo_platform_windows::WindowsSpeech));
+
+    let heard = switcher
+        .benchmark(kivo_voice::moonshine::MODEL_ID)
+        .await
+        .expect("the recognizer was measured");
+    eprintln!("recognizer: {heard:?}");
+    let wer = heard.word_error_rate.expect("clean word errors");
+    assert!(wer < 0.25, "it heard the commands: {wer}");
+    assert!(heard.noisy_word_error_rate.is_some());
+    assert!(heard.latency_ms.is_some_and(|ms| ms > 0.0 && ms < 5_000.0));
+    assert!(
+        heard
+            .real_time_factor
+            .is_some_and(|rtf| rtf > 0.0 && rtf < 2.0)
+    );
+    assert!(heard.cpu_percent.is_some_and(|p| p > 0.0));
+    assert!(heard.memory_mb.is_some_and(|mb| mb > 10.0));
+
+    let spoken = switcher
+        .benchmark(kivo_voice::system_tts::ENGINE_ID)
+        .await
+        .expect("the voice was measured");
+    eprintln!("voice: {spoken:?}");
+    assert!(spoken.latency_ms.is_some_and(|ms| ms > 0.0));
+    assert!(spoken.real_time_factor.is_some_and(|rtf| rtf > 0.0));
+    assert!(spoken.cancel_ms.is_some(), "it stopped at its first audio");
+
+    models.set_engine_benchmark(kivo_voice::moonshine::MODEL_ID, heard.clone());
+    let entry = models
+        .registry()
+        .into_iter()
+        .find(|e| e.engine.id == kivo_voice::moonshine::MODEL_ID)
+        .expect("in the registry");
+    assert_eq!(
+        entry.measured.map(|m| m.measured_at),
+        Some(heard.measured_at)
+    );
+    rig.core.quit();
+    let _ = tokio::time::timeout(Duration::from_secs(5), worker_task).await;
+    pump.abort();
+}
+
 /// VOICE-19, SEC-26: while KIVO is busy, "Kivo, stop" stops it without the wake word. KIVO is in
 /// the middle of a 12-second reply; the user says it over the reply and KIVO falls silent long
 /// before the reply would have ended.
@@ -1687,4 +1760,67 @@ async fn a_stopped_speech_worker_leaves_no_process_behind() {
         !alive()
     })
     .await;
+}
+
+/// Supertonic 3 speaks a long answer through the speech worker (VOICE-11's multilingual voice),
+/// with its model from `KIVO_SUPERTONIC_DIR`: its audio crosses in pieces under the frame limit.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn supertonic_speaks_through_the_worker() {
+    let Some(dir) = std::env::var_os("KIVO_SUPERTONIC_DIR").map(PathBuf::from) else {
+        eprintln!("KIVO_SUPERTONIC_DIR isn't set; skipping");
+        return;
+    };
+    if !worker().is_file() {
+        eprintln!("kivo-infer isn't built beside the tests; skipping");
+        return;
+    }
+    let (infer, mut events, sender) = kivo_runtime::infer::Infer::new(worker());
+    let stop = tokio_util::sync::CancellationToken::new();
+    let task = tokio::spawn(kivo_runtime::infer::supervise(
+        infer.clone(),
+        sender,
+        stop.clone(),
+    ));
+    infer.set_engines(kivo_runtime::infer::Engines {
+        tts: Some((kivo_voice::supertonic::ENGINE_ID.to_owned(), Some(dir))),
+        threads: 4,
+        language: "en".into(),
+        ..Default::default()
+    });
+    assert!(
+        infer.wait_ready(Duration::from_secs(60)).await,
+        "it started"
+    );
+    let id = infer.next_utterance();
+    // A long answer with code, a path and a link: Supertonic returns it in one piece, bigger than
+    // one IPC frame.
+    infer
+        .speak(
+            id,
+            "Here's what I found. The error comes from line 42 in src/main.rs: Config::load              returns a Result, but the variable is typed as Config. Adding a question mark fixes              it. I also checked https://docs.rs for the crate's changelog, and version 2.1 renamed              the method. Want me to make the change and run cargo check again?",
+            None,
+        )
+        .await
+        .unwrap();
+    let mut samples = 0;
+    let finished = tokio::time::timeout(Duration::from_secs(60), async {
+        while let Some(event) = events.recv().await {
+            match event {
+                kivo_runtime::infer::InferEvent::Speech { id: of, pcm, .. } if of == id => {
+                    samples += pcm.len();
+                }
+                kivo_runtime::infer::InferEvent::SpeakDone { id: of, error, .. } if of == id => {
+                    return error;
+                }
+                other => eprintln!("event: {other:?}"),
+            }
+        }
+        Some("the worker stopped".into())
+    })
+    .await
+    .expect("it finished speaking");
+    assert_eq!(finished, None);
+    assert!(samples > 44_100 * 5, "it spoke: {samples} samples");
+    stop.cancel();
+    let _ = tokio::time::timeout(Duration::from_secs(5), task).await;
 }

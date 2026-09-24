@@ -78,6 +78,21 @@ jobs:
       - run: rustup show active-toolchain || rustup toolchain install
       - run: rustup target add ${{ env.TARGET }}
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      # whisper.cpp's graphics-card backend (kivo-infer on Windows x64 only) builds against the
+      # Vulkan SDK: LunarG's installer, pinned and checked.
+      - name: Vulkan SDK
+        if: matrix.arch == 'x64'
+        shell: pwsh
+        run: |
+          $version = '1.4.357.0'
+          $exe = Join-Path $env:RUNNER_TEMP 'vulkansdk.exe'
+          Invoke-WebRequest "https://sdk.lunarg.com/sdk/download/$version/windows/vulkansdk-windows-X64-$version.exe" -OutFile $exe
+          $sha = (Get-FileHash $exe -Algorithm SHA256).Hash
+          if ($sha -ne '81F474711E9042F4CD22B31B2F7A8870DB2E428B21586FB43DD80150BE97310D') { throw "Vulkan SDK checksum: $sha" }
+          & $exe --root "C:\VulkanSDK\$version" --accept-licenses --default-answer --confirm-command install
+          "VULKAN_SDK=C:\VulkanSDK\$version" >> $env:GITHUB_ENV
+          # libclang for whisper-rs's bindings: the runner image ships LLVM.
+          "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:

@@ -89,6 +89,8 @@ pub mod method {
     pub const BROWSER_STATUS: &str = "browser.status";
     /// Client → runtime: a page of the Activity timeline (`{ "before": id?, "limit": n }`).
     pub const ACTIVITY_LIST: &str = "activity.list";
+    /// Client → runtime: the Activity timeline as CSV in Downloads (UX-20's Export).
+    pub const ACTIVITY_EXPORT: &str = "activity.export";
     /// Client → runtime: the speech models on this PC and what can be downloaded (DIST-12).
     pub const MODELS_LIST: &str = "models.list";
     /// Client → runtime: download a model (`{ "id": "moonshine-base-en" }`).
@@ -161,6 +163,8 @@ pub mod method {
     /// Client → runtime: the advanced view's details (VOICE-49).
     pub const VOICE_ADVANCED: &str = "voice.advanced";
     pub const VOICE_TRY_SAMPLE: &str = "voice.trySample";
+    /// Client → runtime: "Benchmark this engine" (BENCH-15); answers a `MeasuredItem`.
+    pub const VOICE_BENCHMARK: &str = "voice.benchmark";
     /// Brains (BRAINS §4–5, UX-22): what KIVO can connect, what is connected and found, and
     /// connecting (sign-in, write-only keys, local servers, CLI agents).
     pub const BRAINS_CATALOG: &str = "brains.catalog";
@@ -952,6 +956,22 @@ pub struct MeasuredItem {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "ts", ts(optional))]
     pub voice_word_error_rate: Option<f64>,
+    /// With background noise added (STT, BENCH-15).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub noisy_word_error_rate: Option<f64>,
+    /// Cancel → silence (TTS, BENCH-15).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub cancel_ms: Option<f64>,
+    /// The engine's share of the PC's CPU while it worked, %.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub cpu_percent: Option<f64>,
+    /// The speech worker's memory with the engine loaded (and its GPU memory), MB.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub memory_mb: Option<f64>,
     /// Unix milliseconds.
     pub measured_at: i64,
 }

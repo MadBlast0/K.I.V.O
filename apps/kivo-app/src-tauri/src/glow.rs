@@ -36,6 +36,16 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
+/// Settings → Island → Wake glow's Preview: plays it once on the Control Center's monitor.
+#[tauri::command]
+pub fn preview_glow(app: AppHandle, window: tauri::WebviewWindow) {
+    let anchor = window
+        .outer_position()
+        .ok()
+        .map(|p| (p.x.saturating_add(40), p.y.saturating_add(40)));
+    flash(&app, anchor);
+}
+
 /// Plays the glow on the monitor with `anchor` (the window in front), else the one under the
 /// pointer.
 pub fn flash(app: &AppHandle, anchor: Option<(i32, i32)>) {

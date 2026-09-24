@@ -219,6 +219,8 @@ pub struct Engine {
     router: Mutex<IntentRouter>,
     turn: Mutex<Option<Running>>,
     listener: RwLock<Option<Arc<Listener>>>,
+    /// Turn ids count up from the moment the runtime started, so they never repeat one stored
+    /// by an earlier run (the `turns` table keys on them).
     next_turn: AtomicU64,
     /// Echo cancellation is removing KIVO's own output from the microphone (VOICE-30).
     echo_cancelled: std::sync::atomic::AtomicBool,
@@ -284,7 +286,7 @@ impl Engine {
             router: Mutex::new(parts.router),
             turn: Mutex::new(None),
             listener: RwLock::new(None),
-            next_turn: AtomicU64::new(1),
+            next_turn: AtomicU64::new(u64::try_from(kivo_store::brains::now_ms()).unwrap_or(1)),
             echo_cancelled: std::sync::atomic::AtomicBool::new(false),
             voice_id: RwLock::new(None),
             previews: Mutex::new(std::collections::HashSet::new()),

@@ -15,6 +15,7 @@
     "allow-ui-ready",
     "allow-runtime-request",
     "allow-runtime-start",
-    "allow-window-effects"
+    "allow-window-effects",
+    "allow-preview-glow"
   ]
 }

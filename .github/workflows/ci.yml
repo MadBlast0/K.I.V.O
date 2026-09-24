@@ -31,6 +31,20 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: rustup show active-toolchain || rustup toolchain install
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      # whisper.cpp's graphics-card backend (kivo-infer on Windows x64) builds against the Vulkan
+      # SDK: LunarG's installer, pinned and checked (locally, `pnpm build-tools` needs no admin).
+      - name: Vulkan SDK
+        shell: pwsh
+        run: |
+          $version = '1.4.357.0'
+          $exe = Join-Path $env:RUNNER_TEMP 'vulkansdk.exe'
+          Invoke-WebRequest "https://sdk.lunarg.com/sdk/download/$version/windows/vulkansdk-windows-X64-$version.exe" -OutFile $exe
+          $sha = (Get-FileHash $exe -Algorithm SHA256).Hash
+          if ($sha -ne '81F474711E9042F4CD22B31B2F7A8870DB2E428B21586FB43DD80150BE97310D') { throw "Vulkan SDK checksum: $sha" }
+          & $exe --root "C:\VulkanSDK\$version" --accept-licenses --default-answer --confirm-command install
+          "VULKAN_SDK=C:\VulkanSDK\$version" >> $env:GITHUB_ENV
+          # libclang for whisper-rs's bindings: the runner image ships LLVM.
+          "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
       - name: Format
         run: cargo fmt --all --check
       - name: Clippy
@@ -53,7 +67,7 @@ jobs:
       # BENCHMARKS §4 smoke subset: the IPC round trip over the real pipe (the state-machine and
       # cancellation tests run above; the intent-router latency joins with the router, M1).
       - name: Smoke benchmarks
-        run: cargo run --locked --release -p kivo-bench -- ipc --runs 5 --warmup 1 --no-save
+        run: cargo run --locked --release -p kivo-bench -- ipc router --runs 5 --warmup 1 --no-save
 
   rust-portable:
     name: Rust (${{ matrix.os }}, portable crates)

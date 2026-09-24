@@ -211,7 +211,7 @@ export function islandPreset(
             </div>
             <IslandActions
               actions={[
-                { label: t("demo.approve"), kind: "primary" },
+                { label: t("island.approvePlan"), kind: "primary" },
                 { label: t("demo.edit") },
                 { label: t("demo.cancel"), kind: "danger" },
               ]}

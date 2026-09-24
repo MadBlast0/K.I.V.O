@@ -290,13 +290,7 @@ impl VoiceRpc {
                         })
                         .collect()
                 },
-                measured: e.measured.map(|m| MeasuredItem {
-                    real_time_factor: m.real_time_factor,
-                    latency_ms: m.latency_ms,
-                    word_error_rate: m.word_error_rate,
-                    voice_word_error_rate: m.voice_word_error_rate,
-                    measured_at: m.measured_at,
-                }),
+                measured: e.measured.map(measured_item),
                 model: e.engine.model,
                 license: e.engine.license,
                 languages: e.engine.languages,
@@ -306,7 +300,9 @@ impl VoiceRpc {
             .collect();
         let profiles = [kivo_voice::EngineSlot::Stt, kivo_voice::EngineSlot::Tts]
             .into_iter()
-            .flat_map(|slot| kivo_voice::registry::profiles(slot, &language))
+            .flat_map(|slot| {
+                kivo_voice::registry::profiles(slot, &language, config.performance.gpu_speech)
+            })
             .map(|c| ProfileItem {
                 slot: c.slot,
                 profile: json_name(&c.profile),
@@ -617,6 +613,30 @@ impl VoiceRpc {
                         .await
                         .map(|(said, heard)| serde_json::json!({ "said": said, "heard": heard }))
                         .map_err(refuse),
+                    Err(e) => Err(e),
+                }
+            }
+            method::VOICE_BENCHMARK => {
+                #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
+                struct Params {
+                    engine: String,
+                }
+                match parse::<Params>(params) {
+                    Ok(p) => match self.switcher.benchmark(&p.engine).await {
+                        Ok(measured) => {
+                            let runs = self
+                                .models
+                                .set_engine_benchmark(&p.engine, measured.clone());
+                            if let Ok(raw) = serde_json::to_string(&runs) {
+                                let _ =
+                                    lock(&self.db).set_meta(crate::models::ENGINE_BENCH_KEY, &raw);
+                            }
+                            tracing::info!(engine = p.engine, ?measured, "engine benchmarked");
+                            ok(&measured_item(measured))
+                        }
+                        Err(e) => Err(refuse(e)),
+                    },
                     Err(e) => Err(e),
                 }
             }
@@ -1119,6 +1139,21 @@ impl VoiceRpc {
 
 fn half() -> f32 {
     0.5
+}
+
+/// KIVO's measurement of an engine, for the Voice page.
+fn measured_item(m: kivo_voice::registry::Measured) -> MeasuredItem {
+    MeasuredItem {
+        real_time_factor: m.real_time_factor,
+        latency_ms: m.latency_ms,
+        word_error_rate: m.word_error_rate,
+        voice_word_error_rate: m.voice_word_error_rate,
+        noisy_word_error_rate: m.noisy_word_error_rate,
+        cancel_ms: m.cancel_ms,
+        cpu_percent: m.cpu_percent,
+        memory_mb: m.memory_mb,
+        measured_at: m.measured_at,
+    }
 }
 
 #[cfg(test)]

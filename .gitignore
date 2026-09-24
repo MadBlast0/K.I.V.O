@@ -69,3 +69,6 @@ test-results/
 playwright-report/
 apps/kivo-app/src-tauri/THIRD_PARTY_NOTICES.txt
 apps/kivo-app/src-tauri/tauri.sign.conf.json
+
+# Build tools fetched by scripts (Vulkan SDK parts and libclang: pnpm build-tools)
+.tools/

@@ -78,11 +78,18 @@ export function WindowControls() {
   );
 }
 
-/** The strip across the top of the page area: drag region plus window buttons. */
-export function TitleBar() {
+/** The strip across the top of the page area: the page's name (as in the mockup), the drag
+ * region and the window buttons. */
+export function TitleBar({ title }: { title?: string }) {
   return (
     <div className="k-titlebar">
-      <div className="k-titlebar__drag" data-tauri-drag-region />
+      <div className="k-titlebar__drag" data-tauri-drag-region>
+        {title && (
+          <span className="k-titlebar__title" data-tauri-drag-region>
+            {title}
+          </span>
+        )}
+      </div>
       <WindowControls />
     </div>
   );

@@ -393,6 +393,16 @@ describe("Settings → Performance and Diagnostics", () => {
     expect(calls.filter((c) => c.method === "performance.status").length).toBeGreaterThan(before);
   });
 
+  it("runs speech recognition on the graphics card first, and it can be turned off", async () => {
+    page("performance");
+    await settle();
+    const gpu = screen.getByRole("switch", { name: "Speech recognition on the graphics card" });
+    expect(gpu.getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(gpu);
+    await settle();
+    expect(set({ performance: { "gpu-speech": false } })).toBe(true);
+  });
+
   it("runs the checks and sends a problem to the page that fixes it", async () => {
     const navigate = vi.fn<(p: string) => void>();
     page("diagnostics", navigate);

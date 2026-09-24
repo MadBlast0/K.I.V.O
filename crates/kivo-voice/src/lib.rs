@@ -10,6 +10,7 @@ pub mod embed;
 pub mod engine;
 pub mod error;
 pub mod fbank;
+pub mod interrupt;
 pub mod kokoro;
 pub mod kws;
 pub mod language;
@@ -27,6 +28,7 @@ pub mod utterance;
 pub mod wakeword;
 pub mod wer;
 pub mod whisper;
+pub mod whisper_cpp;
 
 pub use engine::{Accel, EngineInfo, EngineKind, EngineSlot, ResourceEstimate};
 

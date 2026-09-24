@@ -165,6 +165,18 @@ pub const CATALOG: &[CatalogEntry] = &[
         names: &["codex"],
     },
     CatalogEntry {
+        id: "copilot-cli",
+        name: "GitHub Copilot CLI",
+        kind: ProviderKind::Cli,
+        privacy: PrivacyClass::Cloud,
+        sign_in: SignIn::CliLogin,
+        free: Some("Included with GitHub Copilot, including Copilot Free"),
+        base_url: "",
+        agent: Some(("copilot", &["--acp"])),
+        tiers: AGENT,
+        names: &["copilot cli", "github copilot"],
+    },
+    CatalogEntry {
         id: "opencode",
         name: "OpenCode",
         kind: ProviderKind::Cli,
@@ -369,6 +381,17 @@ pub const CLI_TOOLS: &[CliTool] = &[
         install: "npm install -g @openai/codex",
         adapter_install: "npm install -g @zed-industries/codex-acp",
         login: &["codex", "login"],
+    },
+    CliTool {
+        id: "copilot-cli",
+        commands: &["copilot"],
+        adapters: &[],
+        // It keeps its sign-in in Windows' credential store: the ACP handshake says whether it
+        // needs one.
+        signed_in_files: &[],
+        install: "npm install -g @github/copilot",
+        adapter_install: "",
+        login: &["copilot", "/login"],
     },
     CliTool {
         id: "opencode",

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-preview-glow"
+description = "Enables the preview_glow command without any pre-configured scope."
+commands.allow = ["preview_glow"]
+
+[[permission]]
+identifier = "deny-preview-glow"
+description = "Denies the preview_glow command without any pre-configured scope."
+commands.deny = ["preview_glow"]

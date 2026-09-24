@@ -6,13 +6,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "../components/layout/Shell";
-import { Button, Group, Note, Popover, Row, Segmented, Tag, type Tone } from "../components/ui";
+import { Button, Group, Note, Popover, Row, Segmented, Tag, useToast, type Tone } from "../components/ui";
 import type { IconName } from "../icons";
 import { Method, type ActivityItem, type AuditItem } from "../ipc/generated";
 import { useRuntime, useRuntimeEvents } from "../ipc/runtime";
 import { entries, type Entry, type Outcome } from "../lib/activity";
 
-type Filter = "all" | "voice" | "tools" | "audit";
+type Filter = "all" | "voice" | "ai" | "tools" | "audit";
 const PAGE = 100;
 
 const TONE: Record<Outcome, Tone> = {
@@ -74,6 +74,7 @@ export function Activity() {
   const { t, i18n } = useTranslation();
   const { link, request } = useRuntime();
   const connected = link?.status === "connected";
+  const toast = useToast();
   const [filter, setFilter] = useState<Filter>("all");
   const [items, setItems] = useState<ActivityItem[]>([]);
   const [audit, setAudit] = useState<AuditItem[]>([]);
@@ -106,9 +107,13 @@ export function Activity() {
     return today ? time.format(d) : `${day.format(d)} ${time.format(d)}`;
   };
 
-  const list = entries(items).filter(
-    (e) => filter === "all" || (filter === "voice" ? e.kind === "voice" : e.kind === "tool"),
+  const list = entries(items).filter((e) =>
+    filter === "all" ? true : filter === "voice" ? e.kind === "voice" : filter === "ai" ? e.ai : e.kind === "tool",
   );
+  const exportCsv = () =>
+    void request<{ file: string }>(Method.activityExport)
+      .then((r) => toast(t("activity.exported", { file: r.file })))
+      .catch((e: unknown) => toast(e instanceof Error ? e.message : String(e)));
 
   return (
     <>
@@ -116,17 +121,23 @@ export function Activity() {
         title={t("activity.title")}
         subtitle={t("activity.subtitle")}
         actions={
-          <Segmented<Filter>
-            label={t("activity.filter")}
-            value={filter}
-            onChange={setFilter}
-            options={[
-              { value: "all", label: t("activity.all") },
-              { value: "voice", label: t("activity.voice") },
-              { value: "tools", label: t("activity.tools") },
-              { value: "audit", label: t("activity.audit") },
-            ]}
-          />
+          <>
+            <Segmented<Filter>
+              label={t("activity.filter")}
+              value={filter}
+              onChange={setFilter}
+              options={[
+                { value: "all", label: t("activity.all") },
+                { value: "voice", label: t("activity.voice") },
+                { value: "ai", label: t("activity.ai") },
+                { value: "tools", label: t("activity.tools") },
+                { value: "audit", label: t("activity.audit") },
+              ]}
+            />
+            <Button icon="download" disabled={!connected} onClick={exportCsv}>
+              {t("activity.export")}
+            </Button>
+          </>
         }
       />
       {!connected ? (

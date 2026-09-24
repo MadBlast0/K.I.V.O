@@ -4,11 +4,11 @@
   "version": "0.0.0",
   "packageManager": "pnpm@11.27.1",
   "scripts": {
-    "dev": "cargo build -p kivo-runtime -p kivo-infer && pnpm --filter kivo-app tauri dev",
+    "dev": "node scripts/build-tools.mjs --quiet && cargo build -p kivo-runtime -p kivo-infer && pnpm --filter kivo-app tauri dev",
     "dev:e2e": "node scripts/dev-e2e.mjs",
     "ui": "pnpm --filter kivo-app dev",
     "sidecars": "node scripts/sidecars.mjs",
-    "build": "node scripts/licenses.mjs && node scripts/sidecars.mjs && pnpm --filter kivo-app tauri build --config src-tauri/tauri.bundle.conf.json",
+    "build": "node scripts/build-tools.mjs --quiet && node scripts/licenses.mjs && node scripts/sidecars.mjs && pnpm --filter kivo-app tauri build --config src-tauri/tauri.bundle.conf.json",
     "typecheck": "pnpm --filter kivo-app typecheck",
     "docs:sync": "node scripts/sync-roadmap.mjs",
     "licenses:gen": "node scripts/licenses.mjs",
@@ -20,6 +20,8 @@
     "catalog:sign": "node scripts/catalog-sign.mjs",
     "test:scripts": "node --test scripts/*.test.mjs",
     "invariants": "node scripts/invariants.mjs",
-    "bench:gate": "node scripts/bench-gate.mjs"
+    "bench:gate": "node scripts/bench-gate.mjs",
+    "bench:glow": "node scripts/bench-glow.mjs",
+    "build-tools": "node scripts/build-tools.mjs"
   }
 }

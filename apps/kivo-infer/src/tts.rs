@@ -231,16 +231,21 @@ fn speak_one(
         speak.voice.as_deref(),
         cancel,
         &mut |samples, rate| {
-            let audio = TtsAudio {
-                id: speak.id,
-                rate,
-                pcm: encode_pcm(samples),
-            };
-            peer.notify(
-                method::TTS_AUDIO,
-                serde_json::to_value(audio).unwrap_or_default(),
-            )
-            .map_err(|_| VoiceError::Cancelled)
+            // At most a second of audio a message: an engine that returns a long reply in one
+            // piece (Supertonic) would otherwise pass the 1 MiB frame limit and end the connection.
+            for piece in samples.chunks(usize::try_from(rate.max(1)).unwrap_or(24_000)) {
+                let audio = TtsAudio {
+                    id: speak.id,
+                    rate,
+                    pcm: encode_pcm(piece),
+                };
+                peer.notify(
+                    method::TTS_AUDIO,
+                    serde_json::to_value(audio).unwrap_or_default(),
+                )
+                .map_err(|_| VoiceError::Cancelled)?;
+            }
+            Ok(())
         },
     );
     report(peer, &id, Residency::Idle);

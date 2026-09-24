@@ -26,7 +26,7 @@ reports land here.
 ## Speech data
 
 `pnpm bench:data` downloads and unpacks everything into `%LOCALAPPDATA%\KIVO\bench` (or
-`KIVO_BENCH_DATA`), about 2 GB, outside the repository:
+`KIVO_BENCH_DATA`), about 3.5 GB, outside the repository:
 
 | What | Source |
 |---|---|
@@ -34,7 +34,9 @@ reports land here.
 | Kokoro-82M int8 EN v0.19 | sherpa-onnx `tts-models` release |
 | Keyword spotting, zipformer GigaSpeech 3.3M | sherpa-onnx `kws-models` release |
 | Silero VAD v6 | github.com/snakers4/silero-vad (tag v6.0) |
-| LibriSpeech test-clean | openslr.org/12 |
+| LibriSpeech test-clean and test-other (10.7 h: `stt` WER, `wake` negatives) | openslr.org/12 |
+| EdAcc test shard 4 (accented English WER, CC BY-SA 4.0) | huggingface.co/datasets/edinburghcstr/edacc, pinned revision |
+| whisper.cpp small q8, large-v3-turbo q5, base.en (the GPU engine) | huggingface.co/ggerganov/whisper.cpp, the revision KIVO's model manager pins |
 
 The speech suites use sherpa-onnx (Apache-2.0, with ONNX Runtime) in `kivo-bench` only. Its TTS
 phonemizes with espeak-ng (GPL-3.0), so it stays out of KIVO's shipped binaries (DECISIONS

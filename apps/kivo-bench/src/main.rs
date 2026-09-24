@@ -7,7 +7,7 @@
 //!
 //! Options: --runs N (default 5, at least 5 for saved results) · --warmup N (default 1) ·
 //! --out DIR (default: the current folder; results go to bench-results/ and docs/benchmarks/) ·
-//! --no-save (print only) · --tier low (emulate the low tier, BENCHMARKS §2: this process runs
+//! --no-save (print only) · KIVO_BENCH_LOG=info shows KIVO's own logs · --tier low (emulate the low tier, BENCHMARKS §2: this process runs
 //! on 4 physical cores and its results are saved under a separate, "emulated" machine id).
 
 mod harness;
@@ -84,6 +84,14 @@ fn parse(args: impl IntoIterator<Item = String>) -> Result<Options, String> {
 fn main() -> ExitCode {
     #[cfg(windows)]
     win::dpi_aware();
+    // KIVO_BENCH_LOG=info (or debug, …) shows what KIVO's own parts log, like the speech worker's
+    // errors in the `stt` suite.
+    if let Ok(filter) = std::env::var("KIVO_BENCH_LOG") {
+        tracing_subscriber::fmt()
+            .with_writer(std::io::stderr)
+            .with_env_filter(tracing_subscriber::EnvFilter::new(filter))
+            .init();
+    }
     let options = match parse(std::env::args().skip(1)) {
         Ok(o) => o,
         Err(e) => {

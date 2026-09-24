@@ -283,7 +283,7 @@ impl TtsEngine for Supertonic {
             300
         };
         let rate = self.sample_rate();
-        for (i, chunk) in chunks(text, max_len).iter().enumerate() {
+        for (i, chunk) in first_apart(chunks(text, max_len)).iter().enumerate() {
             if cancel.is_cancelled() {
                 return Err(VoiceError::Cancelled);
             }
@@ -381,6 +381,20 @@ fn is_emoji(c: char) -> bool {
 
 /// Sentence groups of at most `max_len` bytes (paragraphs, then sentences, then commas, then
 /// words), as Supertone's example splits long text.
+/// The first sentence on its own, so a long reply starts speaking after one sentence rather than
+/// a whole group (first audio 3.9 s → about 0.5 s on a long answer, `kivo-bench tts`).
+pub fn first_apart(mut groups: Vec<String>) -> Vec<String> {
+    if let Some(first) = groups.first() {
+        let sentences = split_sentences(first);
+        if sentences.len() > 1 {
+            let head = sentences[0].clone();
+            let rest = sentences[1..].join(" ");
+            groups.splice(0..1, [head, rest]);
+        }
+    }
+    groups
+}
+
 pub fn chunks(text: &str, max_len: usize) -> Vec<String> {
     let mut out = Vec::new();
     for para in text.split("\n\n").map(str::trim).filter(|p| !p.is_empty()) {
@@ -530,6 +544,13 @@ mod tests {
     }
 
     #[test]
+    fn the_first_sentence_is_spoken_on_its_own() {
+        let groups = first_apart(chunks("Here's what I found. It is long. Very long.", 300));
+        assert_eq!(groups, ["Here's what I found.", "It is long. Very long."]);
+        assert_eq!(first_apart(chunks("Short.", 300)), ["Short."]);
+    }
+
+    #[test]
     fn the_noise_is_standard_normal() {
         let mut n = Noise::new();
         let samples: Vec<f32> = (0..20_000).map(|_| n.next()).collect();
@@ -575,6 +596,25 @@ mod tests {
             assert!((0.8..8.0).contains(&seconds), "{seconds}");
             assert!(audio.iter().any(|s| s.abs() > 0.05), "audible");
         }
+    }
+
+    /// Code, paths and links in an answer (a coding reply) are spoken, not a crash.
+    #[test]
+    fn speaks_code_paths_and_links_when_the_model_is_here() {
+        let Some(dir) = std::env::var_os("KIVO_SUPERTONIC_DIR").map(std::path::PathBuf::from)
+        else {
+            eprintln!("KIVO_SUPERTONIC_DIR not set; skipping");
+            return;
+        };
+        let mut tts = Supertonic::load(&dir, 4, "en").unwrap();
+        let text = "Here's what I found. The error comes from line 42 in src/main.rs: Config::load returns a              Result, but the variable is typed as Config. Adding a question mark fixes it. I also              checked https://docs.rs for the crate's changelog, and version 2.1 renamed the method.              Want me to make the change and run cargo check again?";
+        let mut samples = 0;
+        tts.speak(text, None, &CancellationToken::new(), &mut |pcm, _| {
+            samples += pcm.len();
+            Ok(())
+        })
+        .unwrap();
+        assert!(samples > 44_100 * 5, "{samples}");
     }
 
     fn tts_rate() -> u32 {

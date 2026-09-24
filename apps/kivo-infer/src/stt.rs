@@ -114,13 +114,25 @@ fn run(rx: &mpsc::Receiver<Command>, peer: &Peer, tokens: &Tokens) {
                             )
                         })
                         .map(|e| Box::new(e) as Box<dyn SttEngine>),
+                    // whisper.cpp: on the graphics card through Vulkan when the policy gives it one.
+                    #[cfg(all(windows, target_arch = "x86_64"))]
+                    (id, Some(dir)) if kivo_voice::whisper_cpp::variant(id).is_some() => {
+                        kivo_voice::whisper_cpp::variant(id)
+                            .ok_or_else(|| VoiceError::Unavailable(id.to_owned()))
+                            .and_then(|v| {
+                                kivo_voice::whisper_cpp::WhisperCpp::load(
+                                    Path::new(dir),
+                                    v,
+                                    load.threads.max(1),
+                                    load.gpu.is_some(),
+                                )
+                            })
+                            .map(|e| Box::new(e) as Box<dyn SttEngine>)
+                    }
+                    // On the processor always: DirectML crashes on Whisper's files.
                     (kivo_voice::whisper::MODEL_ID, Some(dir)) => {
-                        kivo_voice::whisper::Whisper::load_on(
-                            Path::new(dir),
-                            load.threads.max(1),
-                            device(&load),
-                        )
-                        .map(|e| Box::new(e) as Box<dyn SttEngine>)
+                        kivo_voice::whisper::Whisper::load(Path::new(dir), load.threads.max(1))
+                            .map(|e| Box::new(e) as Box<dyn SttEngine>)
                     }
                     (parakeet::MODEL_ID, Some(dir)) => {
                         Parakeet::load_on(Path::new(dir), load.threads.max(1), device(&load))

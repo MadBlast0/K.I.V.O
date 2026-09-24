@@ -174,7 +174,8 @@ pub fn run() {
             overlay::overlay_drag,
             overlay::island_request,
             announce::announce,
-            effects::window_effects
+            effects::window_effects,
+            glow::preview_glow
         ])
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {

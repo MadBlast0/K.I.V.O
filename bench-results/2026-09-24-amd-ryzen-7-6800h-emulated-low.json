@@ -1,0 +1,525 @@
+{
+  "date": "2026-09-24",
+  "machine": {
+    "id": "amd-ryzen-7-6800h-emulated-low",
+    "cpu": "AMD Ryzen 7 6800H with Radeon Graphics limited to 4 cores (emulated low tier, approximate)",
+    "logicalCpus": 4,
+    "ramMb": 15556,
+    "gpus": [
+      {
+        "name": "NVIDIA GeForce RTX 3060 Laptop GPU",
+        "vramMb": 5994
+      },
+      {
+        "name": "AMD Radeon(TM) Graphics",
+        "vramMb": 485
+      }
+    ],
+    "os": "Windows 11 25H2 (build 26200)",
+    "power": "AC"
+  },
+  "suites": [
+    {
+      "suite": "stt",
+      "startedAt": 1790273333777,
+      "runs": 5,
+      "warmup": 1,
+      "metrics": [
+        {
+          "name": "moonshine: cold load",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            951.9458,
+            1143.7537,
+            1021.1092,
+            1486.6837,
+            985.4343
+          ],
+          "p50": 1021.1092,
+          "p95": 1486.6837,
+          "min": 951.9458,
+          "max": 1486.6837,
+          "mean": 1117.78534
+        },
+        {
+          "name": "moonshine: end of speech → final (median utterance)",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            2935.5264,
+            3416.3374000000003,
+            3239.6494,
+            3622.014,
+            3015.3731
+          ],
+          "p50": 3239.6494,
+          "p95": 3622.014,
+          "min": 2935.5264,
+          "max": 3622.014,
+          "mean": 3245.78006
+        },
+        {
+          "name": "moonshine: end of speech → final (p95 utterance)",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            7745.9513,
+            8216.369999999999,
+            8598.1662,
+            8679.3728,
+            7736.3876
+          ],
+          "p50": 8216.369999999999,
+          "p95": 8679.3728,
+          "min": 7736.3876,
+          "max": 8679.3728,
+          "mean": 8195.24958
+        },
+        {
+          "name": "moonshine: real-time factor",
+          "unit": "×",
+          "lowerIsBetter": true,
+          "samples": [
+            0.3811496055355636,
+            0.44092667247448686,
+            0.4206535802975089,
+            0.5015552799437272,
+            0.3728541681895217
+          ],
+          "p50": 0.4206535802975089,
+          "p95": 0.5015552799437272,
+          "min": 0.3728541681895217,
+          "max": 0.5015552799437272,
+          "mean": 0.4234278612881616
+        },
+        {
+          "name": "moonshine: WER",
+          "unit": "%",
+          "lowerIsBetter": true,
+          "samples": [
+            2.9268292682926833,
+            2.9268292682926833,
+            2.9268292682926833,
+            2.9268292682926833,
+            2.9268292682926833
+          ],
+          "p50": 2.9268292682926833,
+          "p95": 2.9268292682926833,
+          "min": 2.9268292682926833,
+          "max": 2.9268292682926833,
+          "mean": 2.9268292682926833
+        },
+        {
+          "name": "moonshine: worker peak memory",
+          "unit": "MB",
+          "lowerIsBetter": true,
+          "samples": [
+            224.5078125,
+            224.44921875,
+            222.71484375,
+            224.8828125,
+            223.0546875
+          ],
+          "p50": 224.44921875,
+          "p95": 224.8828125,
+          "min": 222.71484375,
+          "max": 224.8828125,
+          "mean": 223.921875
+        }
+      ],
+      "notes": [
+        "LibriSpeech test-clean, first 20 utterances (156 s of speech), 16 kHz; WER after lower-casing and removing punctuation (engines that write numbers as digits lose a little against the spelled-out references).",
+        "moonshine: Moonshine v2 base EN, quantized (2026-02-27) in KIVO's own engine (`kivo-voice`), in the `kivo-infer` worker as KIVO runs it (ONNX Runtime, CPU, 4 threads); each run loads it cold in a fresh worker.",
+        "These engines decode whole utterances, so there is no first-partial time. Accented-English WER needs a licensed test set (L2-ARCTIC or Common Voice) and is not measured."
+      ]
+    },
+    {
+      "suite": "tts",
+      "startedAt": 1790273731315,
+      "runs": 5,
+      "warmup": 1,
+      "metrics": [
+        {
+          "name": "kokoro: cold load",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            1927.6625,
+            2248.5822,
+            2084.1924,
+            2134.208,
+            2080.8319
+          ],
+          "p50": 2084.1924,
+          "p95": 2248.5822,
+          "min": 1927.6625,
+          "max": 2248.5822,
+          "mean": 2095.0953999999997
+        },
+        {
+          "name": "kokoro: short: first audio",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            439.1223,
+            466.57349999999997,
+            450.2809,
+            765.023,
+            465.63890000000004
+          ],
+          "p50": 465.63890000000004,
+          "p95": 765.023,
+          "min": 439.1223,
+          "max": 765.023,
+          "mean": 517.32772
+        },
+        {
+          "name": "kokoro: short: real-time factor",
+          "unit": "×",
+          "lowerIsBetter": true,
+          "samples": [
+            0.34628294017094013,
+            0.3625846495726495,
+            0.3766598290598291,
+            0.478733641025641,
+            0.3561215042735043
+          ],
+          "p50": 0.3625846495726495,
+          "p95": 0.478733641025641,
+          "min": 0.34628294017094013,
+          "max": 0.478733641025641,
+          "mean": 0.38407651282051275
+        },
+        {
+          "name": "kokoro: first audio",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            439.1223,
+            466.57349999999997,
+            450.2809,
+            765.023,
+            465.63890000000004
+          ],
+          "p50": 465.63890000000004,
+          "p95": 765.023,
+          "min": 439.1223,
+          "max": 765.023,
+          "mean": 517.32772
+        },
+        {
+          "name": "kokoro: medium: first audio",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            734.0862000000001,
+            785.3023999999999,
+            768.7687,
+            735.8531,
+            992.3689
+          ],
+          "p50": 768.7687,
+          "p95": 992.3689,
+          "min": 734.0862000000001,
+          "max": 992.3689,
+          "mean": 803.27586
+        },
+        {
+          "name": "kokoro: medium: real-time factor",
+          "unit": "×",
+          "lowerIsBetter": true,
+          "samples": [
+            0.3505995606060606,
+            0.37378462121212125,
+            0.3774084848484849,
+            0.3560202878787878,
+            0.4151407272727273
+          ],
+          "p50": 0.37378462121212125,
+          "p95": 0.4151407272727273,
+          "min": 0.3505995606060606,
+          "max": 0.4151407272727273,
+          "mean": 0.3745907363636364
+        },
+        {
+          "name": "kokoro: long: first audio",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            600.5034,
+            646.965,
+            741.0649000000001,
+            621.0729,
+            821.63
+          ],
+          "p50": 646.965,
+          "p95": 821.63,
+          "min": 600.5034,
+          "max": 821.63,
+          "mean": 686.24724
+        },
+        {
+          "name": "kokoro: long: real-time factor",
+          "unit": "×",
+          "lowerIsBetter": true,
+          "samples": [
+            0.35339126785714287,
+            0.3749726964285714,
+            0.3818238303571428,
+            0.38006560267857137,
+            0.3302540625
+          ],
+          "p50": 0.3749726964285714,
+          "p95": 0.3818238303571428,
+          "min": 0.3302540625,
+          "max": 0.3818238303571428,
+          "mean": 0.36410149196428565
+        },
+        {
+          "name": "kokoro: real-time factor",
+          "unit": "×",
+          "lowerIsBetter": true,
+          "samples": [
+            0.35339126785714287,
+            0.3749726964285714,
+            0.3818238303571428,
+            0.38006560267857137,
+            0.3302540625
+          ],
+          "p50": 0.3749726964285714,
+          "p95": 0.3818238303571428,
+          "min": 0.3302540625,
+          "max": 0.3818238303571428,
+          "mean": 0.36410149196428565
+        },
+        {
+          "name": "kokoro: cancel → silence",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            6.008699999999999,
+            5.7223999999999995,
+            5.7355,
+            5.4339,
+            6.612500000000001
+          ],
+          "p50": 5.7355,
+          "p95": 6.612500000000001,
+          "min": 5.4339,
+          "max": 6.612500000000001,
+          "mean": 5.9026000000000005
+        },
+        {
+          "name": "kokoro: worker peak memory",
+          "unit": "MB",
+          "lowerIsBetter": true,
+          "samples": [
+            574.4296875,
+            573.98046875,
+            574.1875,
+            574.0078125,
+            574.03515625
+          ],
+          "p50": 574.03515625,
+          "p95": 574.4296875,
+          "min": 573.98046875,
+          "max": 574.4296875,
+          "mean": 574.128125
+        },
+        {
+          "name": "windows: cold load",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            25.392000000000003,
+            24.931600000000003,
+            24.7748,
+            23.6887,
+            22.2931
+          ],
+          "p50": 24.7748,
+          "p95": 25.392000000000003,
+          "min": 22.2931,
+          "max": 25.392000000000003,
+          "mean": 24.21604
+        },
+        {
+          "name": "windows: short: first audio",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            74.2924,
+            82.9411,
+            84.94019999999999,
+            93.2025,
+            64.34660000000001
+          ],
+          "p50": 82.9411,
+          "p95": 93.2025,
+          "min": 64.34660000000001,
+          "max": 93.2025,
+          "mean": 79.94456
+        },
+        {
+          "name": "windows: short: real-time factor",
+          "unit": "×",
+          "lowerIsBetter": true,
+          "samples": [
+            0.03772586490939045,
+            0.0419139373970346,
+            0.04259799011532126,
+            0.047710576606260297,
+            0.03253621087314662
+          ],
+          "p50": 0.0419139373970346,
+          "p95": 0.047710576606260297,
+          "min": 0.03253621087314662,
+          "max": 0.047710576606260297,
+          "mean": 0.04049691598023065
+        },
+        {
+          "name": "windows: first audio",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            74.2924,
+            82.9411,
+            84.94019999999999,
+            93.2025,
+            64.34660000000001
+          ],
+          "p50": 82.9411,
+          "p95": 93.2025,
+          "min": 64.34660000000001,
+          "max": 93.2025,
+          "mean": 79.94456
+        },
+        {
+          "name": "windows: medium: first audio",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            41.5857,
+            44.6017,
+            41.3338,
+            42.732,
+            38.317
+          ],
+          "p50": 41.5857,
+          "p95": 44.6017,
+          "min": 38.317,
+          "max": 44.6017,
+          "mean": 41.71404
+        },
+        {
+          "name": "windows: medium: real-time factor",
+          "unit": "×",
+          "lowerIsBetter": true,
+          "samples": [
+            0.014215356386732532,
+            0.01330969654199012,
+            0.012477346506704306,
+            0.01296697247706422,
+            0.011376019760056458
+          ],
+          "p50": 0.01296697247706422,
+          "p95": 0.014215356386732532,
+          "min": 0.011376019760056458,
+          "max": 0.014215356386732532,
+          "mean": 0.012869078334509527
+        },
+        {
+          "name": "windows: long: first audio",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            46.5934,
+            48.092299999999994,
+            38.394999999999996,
+            40.5345,
+            33.685399999999994
+          ],
+          "p50": 40.5345,
+          "p95": 48.092299999999994,
+          "min": 33.685399999999994,
+          "max": 48.092299999999994,
+          "mean": 41.46012
+        },
+        {
+          "name": "windows: long: real-time factor",
+          "unit": "×",
+          "lowerIsBetter": true,
+          "samples": [
+            0.009619493998153279,
+            0.009618777469990767,
+            0.008981218836565098,
+            0.009253806094182826,
+            0.007757289012003694
+          ],
+          "p50": 0.009253806094182826,
+          "p95": 0.009619493998153279,
+          "min": 0.007757289012003694,
+          "max": 0.009619493998153279,
+          "mean": 0.009046117082179131
+        },
+        {
+          "name": "windows: real-time factor",
+          "unit": "×",
+          "lowerIsBetter": true,
+          "samples": [
+            0.009619493998153279,
+            0.009618777469990767,
+            0.008981218836565098,
+            0.009253806094182826,
+            0.007757289012003694
+          ],
+          "p50": 0.009253806094182826,
+          "p95": 0.009619493998153279,
+          "min": 0.007757289012003694,
+          "max": 0.009619493998153279,
+          "mean": 0.009046117082179131
+        },
+        {
+          "name": "windows: cancel → silence",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            55.54,
+            61.1185,
+            57.7358,
+            64.3026,
+            47.7019
+          ],
+          "p50": 57.7358,
+          "p95": 64.3026,
+          "min": 47.7019,
+          "max": 64.3026,
+          "mean": 57.279759999999996
+        },
+        {
+          "name": "windows: worker peak memory",
+          "unit": "MB",
+          "lowerIsBetter": true,
+          "samples": [
+            5.02734375,
+            4.921875,
+            4.9921875,
+            5.0625,
+            4.87890625
+          ],
+          "p50": 4.9921875,
+          "p95": 5.0625,
+          "min": 4.87890625,
+          "max": 5.0625,
+          "mean": 4.9765625
+        }
+      ],
+      "notes": [
+        "kokoro: Kokoro-82M v1.0, fp16 (the file KIVO downloads) in KIVO's own engine, in the `kivo-infer` worker as KIVO runs it (CPU, 4 threads, the default voice); each run loads it cold in a fresh worker.",
+        "windows: the Windows voices (SAPI/OneCore) in KIVO's own engine, in the `kivo-infer` worker as KIVO runs it (CPU, 4 threads, the default voice); each run loads it cold in a fresh worker.",
+        "Speech streams sentence by sentence, so first audio arrives after the first sentence; nothing is played aloud."
+      ]
+    }
+  ]
+}

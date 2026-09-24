@@ -199,13 +199,14 @@ impl Parakeet {
         if files.iter().any(|f| !dir.join(f).is_file()) {
             return Err(VoiceError::ModelMissing("speech recognition".into()));
         }
-        let mut gpu = false;
-        let mut session = |file: &str| -> VoiceResult<Session> {
-            let (session, on_gpu) = crate::accel::session(&dir.join(file), threads, device)?;
-            gpu |= on_gpu;
-            Ok(session)
+        // Only the encoder, the heavy network, goes to the graphics card. The decoder and joiner
+        // run once per output step, hundreds of tiny calls an utterance, and each GPU call costs
+        // more than the work it does: they stay on the processor.
+        let (encoder, gpu) =
+            crate::accel::session(&dir.join("encoder.int8.onnx"), threads, device)?;
+        let session = |file: &str| -> VoiceResult<Session> {
+            Ok(crate::accel::session(&dir.join(file), threads, crate::accel::Device::Cpu)?.0)
         };
-        let encoder = session("encoder.int8.onnx")?;
         let meta = |key: &str| -> Option<usize> {
             encoder.metadata().ok()?.custom(key)?.trim().parse().ok()
         };

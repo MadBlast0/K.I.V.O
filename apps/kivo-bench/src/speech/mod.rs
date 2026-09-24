@@ -2,6 +2,7 @@
 //! activity and echo cancellation, and the wake word, with their test data and scoring.
 
 pub mod data;
+pub mod edacc;
 pub mod stt;
 pub mod tts;
 pub mod vad_aec;

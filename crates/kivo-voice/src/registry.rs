@@ -62,8 +62,9 @@ pub struct VoiceOption {
     pub languages: Vec<String>,
 }
 
-/// KIVO's own measurement of an engine on this PC (`kivo-bench stt`/`tts`).
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+/// KIVO's own measurement of an engine on this PC (`kivo-bench stt`/`tts`, or "Benchmark this
+/// engine" in the Control Center, BENCH-15).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Measured {
     /// Processing time over audio time; below 1 is faster than real time.
@@ -75,8 +76,37 @@ pub struct Measured {
     /// Word error rate on the owner's own enrollment recordings, 0–1 (STT, VOICE-23).
     #[serde(default)]
     pub voice_word_error_rate: Option<f64>,
+    /// Word error rate with background noise added (STT, BENCH-15).
+    #[serde(default)]
+    pub noisy_word_error_rate: Option<f64>,
+    /// Cancel → silence, ms (TTS, BENCH-15).
+    #[serde(default)]
+    pub cancel_ms: Option<f64>,
+    /// The engine's share of the whole PC's CPU while it worked, % (BENCH-15).
+    #[serde(default)]
+    pub cpu_percent: Option<f64>,
+    /// The speech worker's private memory with the engine loaded, MB (BENCH-15).
+    #[serde(default)]
+    pub memory_mb: Option<f64>,
     /// Unix milliseconds of the run.
     pub measured_at: i64,
+}
+
+/// KIVO's thresholds for a measured engine (VOICE §10–11): what "meets KIVO's budget" means on
+/// the benchmark cards.
+pub mod thresholds {
+    /// End of speech → final transcript, local on the CPU (VOICE §10).
+    pub const STT_FINAL_MS: f64 = 300.0;
+    /// Text → first audio for a voice: a quarter of the 1.2 s end of speech → first audio budget.
+    pub const TTS_FIRST_AUDIO_MS: f64 = 300.0;
+    /// Processing time over audio time: faster than real time.
+    pub const REAL_TIME_FACTOR: f64 = 1.0;
+    /// Cancel → silence (VOICE §10).
+    pub const CANCEL_MS: f64 = 100.0;
+    /// Word error rate on clean commands.
+    pub const WORD_ERROR_RATE: f64 = 0.10;
+    /// Word error rate with background noise.
+    pub const NOISY_WORD_ERROR_RATE: f64 = 0.20;
 }
 
 /// One engine in the registry.
@@ -145,22 +175,35 @@ pub fn registry() -> Vec<RegistryEntry> {
         .collect();
 
     // Balanced: 25 European languages in one model (VOICE-10).
-    all.push(RegistryEntry::new(
-        parakeet::info(),
-        &[Profile::Multilingual],
-    ));
+    let mut parakeet = RegistryEntry::new(parakeet::info(), &[Profile::Multilingual]);
+    parakeet.bench_name = Some("parakeet");
+    all.push(parakeet);
+    // whisper.cpp on the graphics card (Vulkan), first in their profiles when speech may use the
+    // GPU (DECISIONS "Local models on the GPU first").
+    for v in crate::whisper_cpp::VARIANTS
+        .iter()
+        .filter(|_| crate::whisper_cpp::AVAILABLE)
+    {
+        let profiles: &[Profile] = match v.id {
+            "whisper-cpp-small" => &[Profile::Recommended, Profile::Multilingual],
+            "whisper-cpp-turbo" => &[Profile::HighAccuracy],
+            _ => &[Profile::Lightweight],
+        };
+        let mut entry = RegistryEntry::new(crate::whisper_cpp::info_for(v), profiles);
+        entry.bench_name = Some(v.id);
+        all.push(entry);
+    }
     // Accurate: Whisper large-v3-turbo (VOICE-10).
-    all.push(RegistryEntry::new(
-        whisper::info(),
-        &[Profile::HighAccuracy],
-    ));
+    let mut whisper = RegistryEntry::new(whisper::info(), &[Profile::HighAccuracy]);
+    whisper.bench_name = Some("whisper");
+    all.push(whisper);
 
-    all.push(RegistryEntry::new(
-        system_tts::info(),
-        &[Profile::Lightweight],
-    ));
+    let mut windows = RegistryEntry::new(system_tts::info(), &[Profile::Lightweight]);
+    windows.bench_name = Some("windows");
+    all.push(windows);
 
     let mut kokoro = RegistryEntry::new(kokoro::info(), &[Profile::Natural]);
+    kokoro.bench_name = Some("kokoro");
     kokoro.voices = kokoro::VOICES
         .iter()
         .map(|id| VoiceOption {
@@ -173,6 +216,7 @@ pub fn registry() -> Vec<RegistryEntry> {
     all.push(kokoro);
 
     let mut supertonic = RegistryEntry::new(supertonic::info(), &[Profile::Multilingual]);
+    supertonic.bench_name = Some("supertonic");
     supertonic.voices = supertonic::VOICES
         .iter()
         .map(|id| VoiceOption {
@@ -236,8 +280,20 @@ pub struct ProfileCard {
 }
 
 /// The profiles of `slot` for `language`, each mapped to its engine (VOICE-43).
-pub fn profiles(slot: EngineSlot, language: &str) -> Vec<ProfileCard> {
-    let all = registry();
+/// Runs on the graphics card first (whisper.cpp's Vulkan engines).
+pub fn gpu_first(e: &RegistryEntry) -> bool {
+    e.engine.accel.first() == Some(&crate::engine::Accel::Vulkan)
+}
+
+/// The profile cards of `slot` for `language`. With `gpu` (speech may use the graphics card) the
+/// engines that run there come first; without it they're left out.
+pub fn profiles(slot: EngineSlot, language: &str, gpu: bool) -> Vec<ProfileCard> {
+    let mut all: Vec<RegistryEntry> = registry()
+        .into_iter()
+        .filter(|e| gpu || !gpu_first(e))
+        .collect();
+    // A stable sort: the GPU engines first, the rest in the registry's order.
+    all.sort_by_key(|e| !gpu_first(e));
     let list: &[Profile] = match slot {
         EngineSlot::Stt => &Profile::STT,
         EngineSlot::Tts => &Profile::TTS,
@@ -374,8 +430,8 @@ pub fn apply_measurements(entries: &mut [RegistryEntry], metrics: &[(String, f64
             latency_ms: find("end of speech → final (median utterance)")
                 .or_else(|| find("first audio")),
             word_error_rate: find("WER").map(|percent| percent / 100.0),
-            voice_word_error_rate: None,
             measured_at: at,
+            ..Measured::default()
         };
         if measured.real_time_factor.is_some()
             || measured.latency_ms.is_some()
@@ -383,6 +439,34 @@ pub fn apply_measurements(entries: &mut [RegistryEntry], metrics: &[(String, f64
         {
             entry.measured = Some(measured);
         }
+    }
+}
+
+/// Puts "Benchmark this engine" results (BENCH-15) over the suite's, where they are newer. How
+/// well an engine heard the owner (VOICE-23) is kept.
+pub fn apply_engine_benchmarks(
+    entries: &mut [RegistryEntry],
+    runs: &std::collections::BTreeMap<String, Measured>,
+) {
+    for entry in entries {
+        let Some(run) = runs.get(&entry.engine.id) else {
+            continue;
+        };
+        if entry
+            .measured
+            .as_ref()
+            .is_some_and(|m| m.measured_at > run.measured_at)
+        {
+            continue;
+        }
+        let voice = entry
+            .measured
+            .as_ref()
+            .and_then(|m| m.voice_word_error_rate);
+        entry.measured = Some(Measured {
+            voice_word_error_rate: voice,
+            ..run.clone()
+        });
     }
 }
 
@@ -395,11 +479,8 @@ pub fn apply_voice_wer(
     for entry in entries {
         if let Some(wer) = wers.get(&entry.engine.id) {
             let measured = entry.measured.get_or_insert(Measured {
-                real_time_factor: None,
-                latency_ms: None,
-                word_error_rate: None,
-                voice_word_error_rate: None,
                 measured_at: at,
+                ..Measured::default()
             });
             measured.voice_word_error_rate = Some(*wer);
         }
@@ -431,7 +512,7 @@ mod tests {
 
     #[test]
     fn profiles_map_to_engines_and_say_when_there_is_none() {
-        let stt = profiles(EngineSlot::Stt, "en-US");
+        let stt = profiles(EngineSlot::Stt, "en-US", false);
         let engine = |cards: &[ProfileCard], p: Profile| {
             cards
                 .iter()
@@ -457,19 +538,19 @@ mod tests {
             Some("parakeet-tdt-v3"),
             "Parakeet speaks English among its 25 languages"
         );
-        let sw = profiles(EngineSlot::Stt, "sw");
+        let sw = profiles(EngineSlot::Stt, "sw", false);
         let multi = sw
             .iter()
             .find(|c| c.profile == Profile::Multilingual)
             .unwrap();
         assert!(multi.engine.is_none() && multi.other_languages_only);
-        let ja = profiles(EngineSlot::Stt, "ja");
+        let ja = profiles(EngineSlot::Stt, "ja", false);
         assert_eq!(
             engine(&ja, Profile::Multilingual).as_deref(),
             Some("moonshine-base-ja"),
             "Base before Tiny"
         );
-        let tts = profiles(EngineSlot::Tts, "en");
+        let tts = profiles(EngineSlot::Tts, "en", false);
         assert_eq!(
             engine(&tts, Profile::Natural).as_deref(),
             Some("kokoro-82m")
@@ -486,7 +567,7 @@ mod tests {
             engine(&tts, Profile::Expressive).as_deref(),
             Some("chatterbox-turbo")
         );
-        let hi = profiles(EngineSlot::Tts, "hi");
+        let hi = profiles(EngineSlot::Tts, "hi", false);
         assert_eq!(
             engine(&hi, Profile::Natural),
             None,
@@ -495,6 +576,37 @@ mod tests {
         assert_eq!(
             engine(&hi, Profile::Multilingual).as_deref(),
             Some("supertonic-3")
+        );
+    }
+
+    #[test]
+    fn with_the_graphics_card_the_cards_offer_whisper_cpp_first() {
+        if !crate::whisper_cpp::AVAILABLE {
+            return;
+        }
+        let engine = |cards: &[ProfileCard], p: Profile| {
+            cards
+                .iter()
+                .find(|c| c.profile == p)
+                .and_then(|c| c.engine.clone())
+        };
+        let gpu = profiles(EngineSlot::Stt, "en-US", true);
+        assert_eq!(
+            engine(&gpu, Profile::Recommended).as_deref(),
+            Some("whisper-cpp-small")
+        );
+        assert_eq!(
+            engine(&gpu, Profile::HighAccuracy).as_deref(),
+            Some("whisper-cpp-turbo")
+        );
+        let cpu = profiles(EngineSlot::Stt, "en-US", false);
+        assert!(
+            cpu.iter().all(|c| !c
+                .engine
+                .as_deref()
+                .unwrap_or_default()
+                .starts_with("whisper-cpp")),
+            "without the graphics card they're left out"
         );
     }
 
@@ -517,6 +629,8 @@ mod tests {
             [
                 "Moonshine Base (Spanish)",
                 "Parakeet TDT v3",
+                "Whisper small (graphics card)",
+                "Whisper large-v3-turbo (graphics card)",
                 "Whisper large-v3-turbo",
                 "OpenAI Transcribe"
             ]
@@ -526,6 +640,8 @@ mod tests {
             fr.alternatives,
             [
                 "Parakeet TDT v3",
+                "Whisper small (graphics card)",
+                "Whisper large-v3-turbo (graphics card)",
                 "Whisper large-v3-turbo",
                 "OpenAI Transcribe"
             ]
@@ -577,12 +693,55 @@ mod tests {
             ),
             (Some(0.05), Some(120.0), Some(0.042), 7)
         );
+        let parakeet = entries
+            .iter()
+            .find(|e| e.id() == "parakeet-tdt-v3")
+            .and_then(|e| e.measured.as_ref())
+            .unwrap();
+        assert_eq!(parakeet.real_time_factor, Some(0.1));
         assert!(
             entries
                 .iter()
-                .filter(|e| e.id() != "moonshine-base-en")
+                .filter(|e| e.id() != "moonshine-base-en" && e.id() != "parakeet-tdt-v3")
                 .all(|e| e.measured.is_none()),
             "the rest read Not benchmarked by KIVO"
+        );
+    }
+
+    #[test]
+    fn an_engine_benchmark_replaces_an_older_suite_run() {
+        let mut entries = registry();
+        apply_measurements(
+            &mut entries,
+            &[("moonshine: real-time factor".into(), 0.05)],
+            7,
+        );
+        let run = |at| Measured {
+            real_time_factor: Some(0.2),
+            cpu_percent: Some(3.0),
+            measured_at: at,
+            ..Measured::default()
+        };
+        let base = |entries: &[RegistryEntry]| {
+            entries
+                .iter()
+                .find(|e| e.id() == "moonshine-base-en")
+                .and_then(|e| e.measured.clone())
+                .unwrap()
+        };
+        apply_engine_benchmarks(
+            &mut entries,
+            &std::collections::BTreeMap::from([("moonshine-base-en".into(), run(5))]),
+        );
+        assert_eq!(base(&entries).real_time_factor, Some(0.05), "older: kept");
+        apply_engine_benchmarks(
+            &mut entries,
+            &std::collections::BTreeMap::from([("moonshine-base-en".into(), run(9))]),
+        );
+        let m = base(&entries);
+        assert_eq!(
+            (m.real_time_factor, m.cpu_percent, m.measured_at),
+            (Some(0.2), Some(3.0), 9)
         );
     }
 }

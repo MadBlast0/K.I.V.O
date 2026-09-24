@@ -1,0 +1,8 @@
+[env]
+# Building whisper.cpp for the speech worker (kivo-infer on Windows x64): `pnpm build-tools` puts
+# the Vulkan SDK's headers, glslc and loader import library, and LLVM's libclang (for whisper-rs's
+# bindings), in .tools/. Values already in the environment win (CI's LunarG SDK and LLVM).
+VULKAN_SDK = { value = ".tools/vulkan-sdk", relative = true, force = false }
+LIBCLANG_PATH = { value = ".tools/llvm/bin", relative = true, force = false }
+# Keeps whisper.cpp's nested shader-generator build out of Windows' 260-character path limit.
+CMAKE_PROJECT_INCLUDE = { value = "crates/kivo-voice/whisper-cpp-paths.cmake", relative = true }

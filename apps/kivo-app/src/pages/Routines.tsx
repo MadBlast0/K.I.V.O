@@ -135,6 +135,14 @@ export function Routines() {
       .catch(() => {});
   }, [connected, request]);
   useEffect(load, [load]);
+  // As in the mockup, the page opens with the first routine selected beside the list.
+  const firstShown = useRef(false);
+  useEffect(() => {
+    const first = routines[0];
+    if (firstShown.current || !first) return;
+    firstShown.current = true;
+    setEditing((current) => current ?? structuredClone(first.routine));
+  }, [routines]);
   // A routine drafted by voice, chat, "save what you just did" or an import opens for review
   // (ROUT-13, ROUT-14).
   const takeDraft = useCallback(() => {

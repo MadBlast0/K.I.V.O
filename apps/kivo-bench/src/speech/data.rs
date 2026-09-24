@@ -60,6 +60,7 @@ impl Utterance {
 }
 
 /// A LibriSpeech test-clean utterance on disk, decoded only when needed.
+#[derive(Clone)]
 pub struct Entry {
     pub path: PathBuf,
     pub text: String,
@@ -85,10 +86,23 @@ impl Entry {
 
 /// Every utterance of LibriSpeech test-clean, sorted by id, so every machine uses the same order.
 pub fn librispeech_index() -> Result<Vec<Entry>, String> {
-    let base = root()?.join("data").join("LibriSpeech").join("test-clean");
+    librispeech_set("test-clean")
+}
+
+/// test-clean, then test-other when `pnpm bench:data` has fetched it (10.7 h together).
+pub fn librispeech_all() -> Result<Vec<Entry>, String> {
+    let mut entries = librispeech_set("test-clean")?;
+    if let Ok(other) = librispeech_set("test-other") {
+        entries.extend(other);
+    }
+    Ok(entries)
+}
+
+fn librispeech_set(set: &str) -> Result<Vec<Entry>, String> {
+    let base = root()?.join("data").join("LibriSpeech").join(set);
     if !base.is_dir() {
         return Err(format!(
-            "LibriSpeech test-clean is missing: unpack test-clean.tar.gz into {}",
+            "LibriSpeech {set} is missing: run `pnpm bench:data` (it unpacks into {})",
             root()?.join("data").display()
         ));
     }

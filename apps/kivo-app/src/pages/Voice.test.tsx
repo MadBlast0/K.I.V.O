@@ -186,6 +186,17 @@ runtime.request = (method: string, params?: unknown) => {
       modelsFolder: "D:/models",
     });
   }
+  if (method === "voice.benchmark") {
+    return Promise.resolve({
+      realTimeFactor: 0.08,
+      latencyMs: 140,
+      wordErrorRate: 0.05,
+      noisyWordErrorRate: 0.25,
+      cpuPercent: 4.2,
+      memoryMb: 310,
+      measuredAt: 2,
+    });
+  }
   if (method === "voice.devices") {
     return Promise.resolve({ inputs: [{ id: "mic-1", name: "USB Headset", isDefault: true }], outputs: [] });
   }
@@ -242,6 +253,22 @@ describe("Voice page", () => {
     expect(tiny.textContent).toContain("Not benchmarked by KIVO");
     expect(screen.getAllByText("Not available yet").length).toBeGreaterThan(0);
     expect(screen.getByText("Recommended for your PC")).toBeTruthy();
+  });
+
+  it("benchmarks an installed engine on this PC against KIVO's budgets (BENCH-15)", async () => {
+    await mount();
+    const buttons = screen.getAllByRole("button", { name: "Benchmark this engine" });
+    // Moonshine Base and the Windows voices are here and local; nothing else is ready.
+    expect(buttons).toHaveLength(2);
+    fireEvent.click(buttons[0]);
+    await settle();
+    expect(calls).toContainEqual({ method: "voice.benchmark", params: { engine: "moonshine-base-en" } });
+    const result = screen.getByText("Measured on this PC").parentElement!;
+    expect(result.textContent).toContain("140 ms");
+    expect(result.textContent).toContain("KIVO’s budget 300 ms");
+    expect(within(result).getAllByText("Meets").length).toBe(3);
+    // 25% with noise is over the 20% budget.
+    expect(within(result).getByText("Over budget")).toBeTruthy();
   });
 
   it("shows the licence before a new engine downloads, then switches safely (VOICE-45)", async () => {

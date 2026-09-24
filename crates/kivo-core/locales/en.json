@@ -655,6 +655,7 @@
     "switched": "Now using {engine}",
     "noHardware": "KIVO couldn’t read this PC’s hardware, so it can’t recommend engines right now.",
     "notDownloaded": "Download it first; then you can try it.",
+    "benchmarkNeedsVoice": "KIVO needs a Windows voice to speak the test commands. Add one in Windows Settings → Time & language → Speech.",
     "notAnEngine": "That model isn’t a speech engine KIVO can use for this language.",
     "nothingToRetry": "There’s nothing to try again.",
     "misrouteNoted": "Noted. I’ll use that to route requests like it better.",

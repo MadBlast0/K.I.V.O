@@ -530,6 +530,22 @@ export type MeasuredItem = { realTimeFactor: number | null, latencyMs: number | 
  */
 voiceWordErrorRate?: number, 
 /**
+ * With background noise added (STT, BENCH-15).
+ */
+noisyWordErrorRate?: number, 
+/**
+ * Cancel → silence (TTS, BENCH-15).
+ */
+cancelMs?: number, 
+/**
+ * The engine's share of the PC's CPU while it worked, %.
+ */
+cpuPercent?: number, 
+/**
+ * The speech worker's memory with the engine loaded (and its GPU memory), MB.
+ */
+memoryMb?: number, 
+/**
  * Unix milliseconds.
  */
 measuredAt: number, };
@@ -1053,6 +1069,7 @@ export const Method = {
   capabilitiesPreset: "capabilities.preset",
   browserStatus: "browser.status",
   activityList: "activity.list",
+  activityExport: "activity.export",
   auditList: "audit.list",
   modelsList: "models.list",
   modelsInstall: "models.install",
@@ -1092,6 +1109,7 @@ export const Method = {
   voiceDevices: "voice.devices",
   voiceAdvanced: "voice.advanced",
   voiceTrySample: "voice.trySample",
+  voiceBenchmark: "voice.benchmark",
   voiceVocabulary: "voice.vocabulary",
   voiceAddWord: "voice.addWord",
   voiceRemoveWord: "voice.removeWord",

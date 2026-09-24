@@ -62,15 +62,33 @@ function message(e: unknown): string {
 export function Agents({ initialTab = "agents" }: { initialTab?: Tab }) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>(initialTab);
+  // "Start an agent" (the mockup's header action): the Agents tab opens its Start dialog with a
+  // choice of agent.
+  const [startAsked, setStartAsked] = useState(0);
   return (
     <>
-      <PageHeader title={t("nav.agents")} subtitle={t("agents.subtitle")} />
+      <PageHeader
+        title={t("nav.agents")}
+        subtitle={t("agents.subtitle")}
+        actions={
+          <Button
+            variant="primary"
+            icon="add"
+            onClick={() => {
+              setTab("agents");
+              setStartAsked((n) => n + 1);
+            }}
+          >
+            {t("agents.startAgent")}
+          </Button>
+        }
+      />
       <PageTabs<Tab>
         label={t("nav.agents")}
         value={tab}
         onChange={setTab}
         tabs={[
-          { value: "agents", label: t("agents.tabs.agents"), content: <AgentsTab /> },
+          { value: "agents", label: t("agents.tabs.agents"), content: <AgentsTab startAsked={startAsked} /> },
           { value: "workspaces", label: t("agents.tabs.workspaces"), content: <WorkspacesTab /> },
         ]}
       />
@@ -96,13 +114,15 @@ function useWorkspaces(): [WorkspaceItem[], string | null, () => void] {
   return [items, current, load];
 }
 
-function AgentsTab() {
+function AgentsTab({ startAsked }: { startAsked: number }) {
   const { t, i18n } = useTranslation();
   const { link, request } = useRuntime();
   const toast = useToast();
   const connected = link?.status === "connected";
   const [overview, setOverview] = useState<AgentsOverview | null>(null);
   const [starting, setStarting] = useState<AgentItem | null>(null);
+  // Started from the header: the dialog lets the user pick which agent.
+  const [choosing, setChoosing] = useState(false);
   const [workspaces] = useWorkspaces();
   // Which agents may use KIVO's MCP server, and so the user's memory (CONV-24).
   const [sharing, setSharing] = useState<{ agents: string[]; sensitive: boolean }>({ agents: [], sensitive: false });
@@ -131,6 +151,18 @@ function AgentsTab() {
       .catch(() => {});
   }, [connected, request]);
   useEffect(load, [load]);
+  useEffect(() => {
+    if (startAsked === 0) return;
+    const ready = overview?.cli.filter((a) => a.installed && a.terminal) ?? [];
+    if (ready.length === 0) {
+      toast(t("agents.noneToStart"));
+      return;
+    }
+    setChoosing(true);
+    setStarting(ready[0] ?? null);
+    // Only a new press of the button opens it; the overview refreshing doesn't.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startAsked]);
   // Node.js, Git and Ollama, with their versions (DIST-14).
   const [tools, setTools] = useState<{ id: string; name: string; version: string | null }[]>([]);
   const [installing, setInstalling] = useState<{ id: string; agent: boolean } | null>(null);
@@ -336,10 +368,16 @@ function AgentsTab() {
       {starting && (
         <StartDialog
           agent={starting}
+          choices={choosing ? installed.filter((a) => a.terminal) : undefined}
+          onChoose={setStarting}
           workspaces={workspaces}
-          onClose={() => setStarting(null)}
+          onClose={() => {
+            setStarting(null);
+            setChoosing(false);
+          }}
           onStarted={() => {
             setStarting(null);
+            setChoosing(false);
             load();
           }}
         />
@@ -350,11 +388,16 @@ function AgentsTab() {
 
 function StartDialog({
   agent,
+  choices,
+  onChoose,
   workspaces,
   onClose,
   onStarted,
 }: {
   agent: AgentItem;
+  /** Agents to choose from, when it was opened from the header. */
+  choices?: AgentItem[];
+  onChoose: (agent: AgentItem) => void;
   workspaces: WorkspaceItem[];
   onClose: () => void;
   onStarted: () => void;
@@ -375,14 +418,26 @@ function StartDialog({
     <Dialog
       open
       onOpenChange={(open) => !open && onClose()}
-      title={t("agents.startNamed", { name: agent.name })}
-      description={t("agents.startDetail")}
+      title={choices ? t("agents.startAgent") : t("agents.startNamed", { name: agent.name })}
+      description={choices ? t("agents.startByVoice") : t("agents.startDetail")}
       footer={
         <Button variant="primary" icon="play" disabled={folder === ""} onClick={start}>
           {t("agents.start")}
         </Button>
       }
     >
+      {choices && (
+        <Select<string>
+          label={t("agents.agent")}
+          icon="agent"
+          value={agent.id}
+          onChange={(id) => {
+            const next = choices.find((a) => a.id === id);
+            if (next) onChoose(next);
+          }}
+          items={choices.map((a) => ({ value: a.id, label: a.name }))}
+        />
+      )}
       {workspaces.length === 0 ? (
         <Note>{t("agents.noWorkspaces")}</Note>
       ) : (

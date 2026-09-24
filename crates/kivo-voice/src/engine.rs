@@ -33,6 +33,8 @@ pub enum EngineKind {
 pub enum Accel {
     Cpu,
     DirectMl,
+    /// whisper.cpp's GPU backend.
+    Vulkan,
     Cuda,
     Npu,
 }

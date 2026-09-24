@@ -314,6 +314,7 @@ function Shell({
   return (
     <>
       <AppWindow
+        title={page === "gallery" ? t("palette.gallery") : t(`nav.${page}`)}
         sidebar={
           <Sidebar
             current={page}

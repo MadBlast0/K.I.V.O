@@ -9,6 +9,12 @@ publish = false
 
 [dependencies]
 kivo-core.workspace = true
+kivo-intent = { path = "../../crates/kivo-intent" }
+kivo-brain = { path = "../../crates/kivo-brain" }
+kivo-runtime = { path = "../kivo-runtime" }
+kivo-voice = { path = "../../crates/kivo-voice" }
+async-trait.workspace = true
+tempfile.workspace = true
 kivo-ipc.workspace = true
 kivo-platform.workspace = true
 kivo-store.workspace = true
@@ -16,10 +22,14 @@ serde.workspace = true
 serde_json.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "time", "sync"] }
 tokio-util.workspace = true
+tracing-subscriber.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 # LibriSpeech is FLAC; pure Rust, Apache-2.0.
 claxon = "0.4"
+# EdAcc (accented English) ships as Parquet; the record reader alone, no Arrow (Apache-2.0).
+parquet = { version = "60", default-features = false, features = ["snap"] }
+kivo-audio = { path = "../../crates/kivo-audio" }
 # WebRTC echo cancellation, pure Rust port (BSD-3-Clause): the AEC side of the vad/aec suite.
 sonora = "0.2"
 # Speech engines for the M0 engine comparisons (static; bundles ONNX Runtime). Benchmark-only:
@@ -32,9 +42,6 @@ windows = { workspace = true, features = [
   "Win32_System_Threading", "Win32_UI_HiDpi", "Win32_UI_Input_KeyboardAndMouse",
   "Win32_UI_WindowsAndMessaging",
 ] }
-
-[dev-dependencies]
-tempfile.workspace = true
 
 [lints]
 workspace = true

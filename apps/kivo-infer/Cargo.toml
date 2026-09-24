@@ -21,5 +21,11 @@ tracing-subscriber.workspace = true
 [target.'cfg(windows)'.dependencies]
 kivo-platform-windows = { path = "../../crates/kivo-platform-windows" }
 
+# whisper.cpp on the graphics card through Vulkan (DECISIONS "Local models on the GPU first").
+# Building it needs CMake and the Vulkan SDK's headers, glslc and loader library: `pnpm build-tools`
+# (run by `pnpm dev` and `pnpm build`). Installed KIVO needs only the graphics driver.
+[target.'cfg(all(windows, target_arch = "x86_64"))'.dependencies]
+kivo-voice = { path = "../../crates/kivo-voice", features = ["whisper-cpp"] }
+
 [lints]
 workspace = true

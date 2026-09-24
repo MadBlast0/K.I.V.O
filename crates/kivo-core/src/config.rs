@@ -758,6 +758,9 @@ pub struct Performance {
     pub tts_warm_minutes: u16,
     /// Processor threads speech models may use; 0 lets KIVO choose (VOICE-49).
     pub speech_threads: u8,
+    /// Speech recognition runs on the graphics card first (owner, DECISIONS "Local models on the
+    /// GPU first"), on the processor when the card isn't available or this is off.
+    pub gpu_speech: bool,
 }
 
 impl Default for Performance {
@@ -767,6 +770,7 @@ impl Default for Performance {
             stt_warm_minutes: 10,
             tts_warm_minutes: 10,
             speech_threads: 0,
+            gpu_speech: true,
         }
     }
 }

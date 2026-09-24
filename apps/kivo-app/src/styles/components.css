@@ -257,7 +257,9 @@
   flex: none;
   transition: background var(--t-base);
 }
-.k-radio[data-checked] {
+.k-radio[data-checked],
+/* An option card marks the card itself as checked, not its radio. */
+[data-checked] > .k-radio {
   background: var(--acc);
 }
 .k-radio__dot {
@@ -2530,6 +2532,9 @@ button.k-island__chip {
   flex-direction: column;
   min-width: 0;
 }
+.k-sound-set__pick .k-meta {
+  white-space: normal;
+}
 .k-sound-set--later {
   opacity: 0.7;
 }
@@ -3050,4 +3055,16 @@ button.k-island__chip {
 }
 .k-island-character__face {
   cursor: grab;
+}
+
+/* Skills: descriptions are often whole paragraphs; two lines are enough in a list (the review
+   shows the rest). */
+.k-skill-list .k-row__subtitle {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.k-skill-list + .k-skill-list {
+  margin-block-start: var(--gap);
 }

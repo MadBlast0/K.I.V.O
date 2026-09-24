@@ -163,6 +163,22 @@ describe("Agents page (UX-25)", () => {
       params: { agent: "claude-code", folder: "D:\\kivo", mode: "bypass" },
     });
   });
+
+  it("starts an agent from the header, choosing which one (the mockup's Start an agent)", async () => {
+    page();
+    await settle();
+    fireEvent.click(screen.getByRole("button", { name: "Start an agent" }));
+    await settle();
+    const dialog = await screen.findByRole("dialog");
+    // Only installed agents that run in a terminal are offered: Claude Code, not Codex.
+    expect(within(dialog).getByText(/Hey Kivo, open Claude/)).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Start" }));
+    await settle();
+    expect(calls).toContainEqual({
+      method: "agents.start",
+      params: { agent: "claude-code", folder: "D:\\kivo", mode: "default" },
+    });
+  });
 });
 
 describe("Installing (DISC-07, DIST-14)", () => {

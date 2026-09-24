@@ -102,7 +102,7 @@ export function SoundsTab() {
               className="k-sound-set__pick"
               onClick={() => set("sounds", { set: s })}
             >
-              <span className="k-radio" aria-hidden>
+              <span className="k-radio" data-checked={chosen === s ? "" : undefined} aria-hidden>
                 {chosen === s && <span className="k-radio__dot" />}
               </span>
               <span>

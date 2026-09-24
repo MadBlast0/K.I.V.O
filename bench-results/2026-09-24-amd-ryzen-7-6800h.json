@@ -1,0 +1,1484 @@
+{
+  "date": "2026-09-24",
+  "machine": {
+    "id": "amd-ryzen-7-6800h",
+    "cpu": "AMD Ryzen 7 6800H with Radeon Graphics",
+    "logicalCpus": 16,
+    "ramMb": 15556,
+    "gpus": [
+      {
+        "name": "NVIDIA GeForce RTX 3060 Laptop GPU",
+        "vramMb": 5994
+      },
+      {
+        "name": "AMD Radeon(TM) Graphics",
+        "vramMb": 485
+      }
+    ],
+    "os": "Windows 11 25H2 (build 26200)",
+    "power": "AC"
+  },
+  "suites": [
+    {
+      "suite": "brain",
+      "startedAt": 1790247795367,
+      "runs": 5,
+      "warmup": 1,
+      "metrics": [
+        {
+          "name": "time to first token (short answer)",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            3262.1636,
+            1576.1194999999998,
+            1688.8822,
+            1824.4941,
+            2219.6683
+          ],
+          "p50": 1824.4941,
+          "p95": 3262.1636,
+          "min": 1576.1194999999998,
+          "max": 3262.1636,
+          "mean": 2114.26554
+        },
+        {
+          "name": "short answer complete",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            3960.2349,
+            2380.9128,
+            2456.5352,
+            2391.5915999999997,
+            2775.194
+          ],
+          "p50": 2456.5352,
+          "p95": 3960.2349,
+          "min": 2380.9128,
+          "max": 3960.2349,
+          "mean": 2792.8936999999996
+        },
+        {
+          "name": "cancel → stream ended",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            91.0675,
+            66.71820000000001,
+            83.047,
+            75.72080000000001,
+            64.6241
+          ],
+          "p50": 75.72080000000001,
+          "p95": 91.0675,
+          "min": 64.6241,
+          "max": 91.0675,
+          "mean": 76.23552
+        },
+        {
+          "name": "error rate",
+          "unit": "%",
+          "lowerIsBetter": true,
+          "samples": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "p50": 0.0,
+          "p95": 0.0,
+          "min": 0.0,
+          "max": 0.0,
+          "mean": 0.0
+        },
+        {
+          "name": "structured output valid",
+          "unit": "%",
+          "lowerIsBetter": false,
+          "samples": [
+            100.0,
+            100.0,
+            100.0,
+            100.0,
+            100.0
+          ],
+          "p50": 100.0,
+          "p95": 100.0,
+          "min": 100.0,
+          "max": 100.0,
+          "mean": 100.0
+        },
+        {
+          "name": "output speed (400-word story)",
+          "unit": "tokens/s",
+          "lowerIsBetter": false,
+          "samples": [
+            56.191955466002234,
+            70.90963562401912,
+            51.7615047834061,
+            52.16273628519539,
+            66.7281205271349
+          ],
+          "p50": 56.191955466002234,
+          "p95": 70.90963562401912,
+          "min": 51.7615047834061,
+          "max": 70.90963562401912,
+          "mean": 59.55079053715155
+        }
+      ],
+      "notes": [
+        "C:/Users/MadBlast/AppData/Roaming/npm/opencode.cmd over ACP. Fixed prompts: a two-sentence answer, a JSON-only answer, a 400-word story (also cancelled at its first token), and for API brains a weather question with one tool. ACP agents report no token counts, so their speed is estimated at four characters a token."
+      ]
+    },
+    {
+      "suite": "ipc",
+      "startedAt": 1790244857755,
+      "runs": 5,
+      "warmup": 1,
+      "metrics": [
+        {
+          "name": "connect + hello",
+          "unit": "µs",
+          "lowerIsBetter": true,
+          "samples": [
+            178.6,
+            161.7,
+            181.2,
+            230.4,
+            173.9
+          ],
+          "p50": 178.6,
+          "p95": 230.4,
+          "min": 161.7,
+          "max": 230.4,
+          "mean": 185.16000000000005
+        },
+        {
+          "name": "ping round trip (median of 200)",
+          "unit": "µs",
+          "lowerIsBetter": true,
+          "samples": [
+            30.6,
+            30.5,
+            32.199999999999996,
+            32.5,
+            31.5
+          ],
+          "p50": 31.5,
+          "p95": 32.5,
+          "min": 30.5,
+          "max": 32.5,
+          "mean": 31.459999999999997
+        },
+        {
+          "name": "ping round trip (p95 of 200)",
+          "unit": "µs",
+          "lowerIsBetter": true,
+          "samples": [
+            49.4,
+            49.3,
+            50.7,
+            54.7,
+            48.0
+          ],
+          "p50": 49.4,
+          "p95": 54.7,
+          "min": 48.0,
+          "max": 54.7,
+          "mean": 50.419999999999995
+        },
+        {
+          "name": "state.get round trip",
+          "unit": "µs",
+          "lowerIsBetter": true,
+          "samples": [
+            75.0,
+            50.0,
+            58.1,
+            54.7,
+            54.4
+          ],
+          "p50": 54.7,
+          "p95": 75.0,
+          "min": 50.0,
+          "max": 75.0,
+          "mean": 58.44000000000001
+        }
+      ],
+      "notes": [
+        "Real kivo-ipc server and client in one process over the real transport (named pipe with the user-only DACL, session token, JSON-RPC frames), on a private pipe name.",
+        "Each run opens a fresh connection, then sends 200 pings and one state.get."
+      ]
+    },
+    {
+      "suite": "open",
+      "startedAt": 1790276225813,
+      "runs": 5,
+      "warmup": 1,
+      "metrics": [
+        {
+          "name": "launch → window shown",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            20.1035,
+            19.1235,
+            17.133499999999998,
+            18.831799999999998,
+            18.9204
+          ],
+          "p50": 18.9204,
+          "p95": 20.1035,
+          "min": 17.133499999999998,
+          "max": 20.1035,
+          "mean": 18.822539999999996
+        },
+        {
+          "name": "launch → page drawn (warm open)",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            27.7162,
+            28.5352,
+            27.994999999999997,
+            27.6997,
+            28.0136
+          ],
+          "p50": 27.994999999999997,
+          "p95": 28.5352,
+          "min": 27.6997,
+          "max": 28.5352,
+          "mean": 27.99194
+        }
+      ],
+      "notes": [
+        "target/release/KIVO.exe launched again while KIVO runs with its Control Center closed to the tray (suspended) for 3 s; \"drawn\" is when a row of the page matches a capture taken while it was open. The time includes starting the second app process, which hands over to the running one and exits, as a Start-menu launch does."
+      ]
+    },
+    {
+      "suite": "router",
+      "startedAt": 1790244857196,
+      "runs": 5,
+      "warmup": 1,
+      "metrics": [
+        {
+          "name": "command → fast path (median)",
+          "unit": "µs",
+          "lowerIsBetter": true,
+          "samples": [
+            61.2,
+            61.3,
+            61.2,
+            61.4,
+            61.50000000000001
+          ],
+          "p50": 61.3,
+          "p95": 61.50000000000001,
+          "min": 61.2,
+          "max": 61.50000000000001,
+          "mean": 61.32000000000001
+        },
+        {
+          "name": "command → fast path (p95)",
+          "unit": "µs",
+          "lowerIsBetter": true,
+          "samples": [
+            321.7,
+            322.4,
+            322.20000000000005,
+            322.8,
+            323.8
+          ],
+          "p50": 322.4,
+          "p95": 323.8,
+          "min": 321.7,
+          "max": 323.8,
+          "mean": 322.58000000000004
+        },
+        {
+          "name": "request → on to a brain (median)",
+          "unit": "µs",
+          "lowerIsBetter": true,
+          "samples": [
+            4.0,
+            4.1,
+            4.0,
+            4.0,
+            4.0
+          ],
+          "p50": 4.0,
+          "p95": 4.1,
+          "min": 4.0,
+          "max": 4.1,
+          "mean": 4.0200000000000005
+        },
+        {
+          "name": "request → on to a brain (p95)",
+          "unit": "µs",
+          "lowerIsBetter": true,
+          "samples": [
+            4.6,
+            6.2,
+            4.7,
+            4.4,
+            4.4
+          ],
+          "p50": 4.6,
+          "p95": 6.2,
+          "min": 4.4,
+          "max": 6.2,
+          "mean": 4.86
+        }
+      ],
+      "notes": [
+        "The bundled English grammar alone (the semantic stage needs its optional model), 1000 routes per run over 12 commands and 4 requests for a brain, against 200 apps and 30 windows."
+      ]
+    },
+    {
+      "suite": "stt",
+      "startedAt": 1790268224491,
+      "runs": 5,
+      "warmup": 1,
+      "metrics": [
+        {
+          "name": "moonshine: cold load",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            801.0216999999999,
+            820.708,
+            793.0227,
+            791.6418,
+            826.8144
+          ],
+          "p50": 801.0216999999999,
+          "p95": 826.8144,
+          "min": 791.6418,
+          "max": 826.8144,
+          "mean": 806.64172
+        },
+        {
+          "name": "moonshine: end of speech → final (median utterance)",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            1136.6266,
+            1117.5881000000002,
+            1136.9194,
+            1120.2283,
+            1134.3717
+          ],
+          "p50": 1134.3717,
+          "p95": 1136.9194,
+          "min": 1117.5881000000002,
+          "max": 1136.9194,
+          "mean": 1129.1468200000002
+        },
+        {
+          "name": "moonshine: end of speech → final (p95 utterance)",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            5163.571400000001,
+            5166.7437,
+            5248.0863,
+            5171.867899999999,
+            5162.2197
+          ],
+          "p50": 5166.7437,
+          "p95": 5248.0863,
+          "min": 5162.2197,
+          "max": 5248.0863,
+          "mean": 5182.497799999999
+        },
+        {
+          "name": "moonshine: real-time factor",
+          "unit": "×",
+          "lowerIsBetter": true,
+          "samples": [
+            0.236589418466608,
+            0.2335565778531383,
+            0.23405959490774136,
+            0.23344330939971503,
+            0.2335237584320788
+          ],
+          "p50": 0.2335565778531383,
+          "p95": 0.236589418466608,
+          "min": 0.23344330939971503,
+          "max": 0.236589418466608,
+          "mean": 0.2342345318118563
+        },
+        {
+          "name": "moonshine: WER",
+          "unit": "%",
+          "lowerIsBetter": true,
+          "samples": [
+            2.4226110363391657,
+            2.4226110363391657,
+            2.4226110363391657,
+            2.4226110363391657,
+            2.4226110363391657
+          ],
+          "p50": 2.4226110363391657,
+          "p95": 2.4226110363391657,
+          "min": 2.4226110363391657,
+          "max": 2.4226110363391657,
+          "mean": 2.4226110363391657
+        },
+        {
+          "name": "moonshine: worker peak memory",
+          "unit": "MB",
+          "lowerIsBetter": true,
+          "samples": [
+            227.1484375,
+            233.08203125,
+            227.45703125,
+            221.8984375,
+            232.04296875
+          ],
+          "p50": 227.45703125,
+          "p95": 233.08203125,
+          "min": 221.8984375,
+          "max": 233.08203125,
+          "mean": 228.32578125
+        },
+        {
+          "name": "parakeet: cold load",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            1924.5167,
+            1991.3081,
+            1983.268,
+            1950.1175,
+            1925.8963
+          ],
+          "p50": 1950.1175,
+          "p95": 1991.3081,
+          "min": 1924.5167,
+          "max": 1991.3081,
+          "mean": 1955.02132
+        },
+        {
+          "name": "parakeet: end of speech → final (median utterance)",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            2592.3637,
+            2538.2689000000005,
+            2619.9009,
+            2579.9027,
+            2616.5931
+          ],
+          "p50": 2592.3637,
+          "p95": 2619.9009,
+          "min": 2538.2689000000005,
+          "max": 2619.9009,
+          "mean": 2589.4058600000003
+        },
+        {
+          "name": "parakeet: end of speech → final (p95 utterance)",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            13631.6659,
+            13212.5846,
+            13872.9009,
+            13716.1662,
+            13600.356
+          ],
+          "p50": 13631.6659,
+          "p95": 13872.9009,
+          "min": 13212.5846,
+          "max": 13872.9009,
+          "mean": 13606.73472
+        },
+        {
+          "name": "parakeet: real-time factor",
+          "unit": "×",
+          "lowerIsBetter": true,
+          "samples": [
+            0.5389503722660522,
+            0.5263692242145975,
+            0.5457895762861776,
+            0.538008013727042,
+            0.5435236129490473
+          ],
+          "p50": 0.5389503722660522,
+          "p95": 0.5457895762861776,
+          "min": 0.5263692242145975,
+          "max": 0.5457895762861776,
+          "mean": 0.5385281598885834
+        },
+        {
+          "name": "parakeet: WER",
+          "unit": "%",
+          "lowerIsBetter": true,
+          "samples": [
+            0.4037685060565276,
+            0.4037685060565276,
+            0.4037685060565276,
+            0.4037685060565276,
+            0.4037685060565276
+          ],
+          "p50": 0.4037685060565276,
+          "p95": 0.4037685060565276,
+          "min": 0.4037685060565276,
+          "max": 0.4037685060565276,
+          "mean": 0.4037685060565276
+        },
+        {
+          "name": "parakeet: worker peak memory",
+          "unit": "MB",
+          "lowerIsBetter": true,
+          "samples": [
+            929.37890625,
+            929.125,
+            931.07421875,
+            929.16796875,
+            928.70703125
+          ],
+          "p50": 929.16796875,
+          "p95": 931.07421875,
+          "min": 928.70703125,
+          "max": 931.07421875,
+          "mean": 929.490625
+        },
+        {
+          "name": "whisper: cold load",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            1727.2072,
+            1609.9301,
+            1616.3182,
+            1560.8919,
+            1788.4381999999998
+          ],
+          "p50": 1616.3182,
+          "p95": 1788.4381999999998,
+          "min": 1560.8919,
+          "max": 1788.4381999999998,
+          "mean": 1660.55712
+        },
+        {
+          "name": "whisper: end of speech → final (median utterance)",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            40422.6622,
+            40241.3391,
+            39840.1119,
+            40261.4364,
+            40118.7271
+          ],
+          "p50": 40241.3391,
+          "p95": 40422.6622,
+          "min": 39840.1119,
+          "max": 40422.6622,
+          "mean": 40176.855339999995
+        },
+        {
+          "name": "whisper: end of speech → final (p95 utterance)",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            69031.68410000001,
+            68540.1969,
+            67928.68269999999,
+            69558.9203,
+            68729.23760000001
+          ],
+          "p50": 68729.23760000001,
+          "p95": 69558.9203,
+          "min": 67928.68269999999,
+          "max": 69558.9203,
+          "mean": 68757.74432
+        },
+        {
+          "name": "whisper: real-time factor",
+          "unit": "×",
+          "lowerIsBetter": true,
+          "samples": [
+            6.272027138547198,
+            6.27131120204357,
+            6.249055924771496,
+            6.339691665275298,
+            6.26969673491363
+          ],
+          "p50": 6.27131120204357,
+          "p95": 6.339691665275298,
+          "min": 6.249055924771496,
+          "max": 6.339691665275298,
+          "mean": 6.280356533110239
+        },
+        {
+          "name": "whisper: WER",
+          "unit": "%",
+          "lowerIsBetter": true,
+          "samples": [
+            1.7857142857142856,
+            1.7857142857142856,
+            1.7857142857142856,
+            1.7857142857142856,
+            1.7857142857142856
+          ],
+          "p50": 1.7857142857142856,
+          "p95": 1.7857142857142856,
+          "min": 1.7857142857142856,
+          "max": 1.7857142857142856,
+          "mean": 1.7857142857142854
+        },
+        {
+          "name": "whisper: worker peak memory",
+          "unit": "MB",
+          "lowerIsBetter": true,
+          "samples": [
+            2072.87109375,
+            2071.71875,
+            2072.83203125,
+            2072.4375,
+            1902.1171875
+          ],
+          "p50": 2072.4375,
+          "p95": 2072.87109375,
+          "min": 1902.1171875,
+          "max": 2072.87109375,
+          "mean": 2038.3953125
+        }
+      ],
+      "notes": [
+        "LibriSpeech test-clean, first 40 utterances (284 s of speech), 16 kHz; WER after lower-casing and removing punctuation (engines that write numbers as digits lose a little against the spelled-out references).",
+        "moonshine: Moonshine v2 base EN, quantized (2026-02-27) in KIVO's own engine (`kivo-voice`), in the `kivo-infer` worker as KIVO runs it (ONNX Runtime, CPU, 4 threads); each run loads it cold in a fresh worker.",
+        "parakeet: Parakeet TDT 0.6B v3, int8 in KIVO's own engine (`kivo-voice`), in the `kivo-infer` worker as KIVO runs it (ONNX Runtime, CPU, 4 threads); each run loads it cold in a fresh worker.",
+        "whisper: Whisper large-v3-turbo in KIVO's own engine (`kivo-voice`), in the `kivo-infer` worker as KIVO runs it (ONNX Runtime, CPU, 4 threads); each run loads it cold in a fresh worker.",
+        "Whisper on the processor hears only the first 10 utterances: it runs far slower than real time there.",
+        "These engines decode whole utterances, so there is no first-partial time. Accented-English WER needs a licensed test set (L2-ARCTIC or Common Voice) and is not measured."
+      ]
+    },
+    {
+      "suite": "tts",
+      "startedAt": 1790273104571,
+      "runs": 5,
+      "warmup": 1,
+      "metrics": [
+        {
+          "name": "kokoro: cold load",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            7270.8321,
+            4062.4802,
+            2438.2538,
+            2507.3678,
+            2575.9593999999997
+          ],
+          "p50": 2575.9593999999997,
+          "p95": 7270.8321,
+          "min": 2438.2538,
+          "max": 7270.8321,
+          "mean": 3770.97866
+        },
+        {
+          "name": "kokoro: short: first audio",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            1135.0249,
+            703.914,
+            518.3541,
+            448.2041,
+            485.1225
+          ],
+          "p50": 518.3541,
+          "p95": 1135.0249,
+          "min": 448.2041,
+          "max": 1135.0249,
+          "mean": 658.1239199999999
+        },
+        {
+          "name": "kokoro: short: real-time factor",
+          "unit": "×",
+          "lowerIsBetter": true,
+          "samples": [
+            0.7213655726495726,
+            0.545520717948718,
+            0.42987661538461536,
+            0.3508719999999999,
+            0.37156191452991455
+          ],
+          "p50": 0.42987661538461536,
+          "p95": 0.7213655726495726,
+          "min": 0.3508719999999999,
+          "max": 0.7213655726495726,
+          "mean": 0.48383936410256406
+        },
+        {
+          "name": "kokoro: first audio",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            1135.0249,
+            703.914,
+            518.3541,
+            448.2041,
+            485.1225
+          ],
+          "p50": 518.3541,
+          "p95": 1135.0249,
+          "min": 448.2041,
+          "max": 1135.0249,
+          "mean": 658.1239199999999
+        },
+        {
+          "name": "kokoro: medium: first audio",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            1024.2833,
+            1171.9974,
+            924.503,
+            729.5327,
+            844.274
+          ],
+          "p50": 924.503,
+          "p95": 1171.9974,
+          "min": 729.5327,
+          "max": 1171.9974,
+          "mean": 938.91808
+        },
+        {
+          "name": "kokoro: medium: real-time factor",
+          "unit": "×",
+          "lowerIsBetter": true,
+          "samples": [
+            0.4545493787878787,
+            0.5146754696969698,
+            0.42686240909090906,
+            0.36242269696969703,
+            0.3920077727272728
+          ],
+          "p50": 0.42686240909090906,
+          "p95": 0.5146754696969698,
+          "min": 0.36242269696969703,
+          "max": 0.5146754696969698,
+          "mean": 0.43010354545454543
+        },
+        {
+          "name": "kokoro: long: first audio",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            837.9233,
+            900.5485,
+            780.1084000000001,
+            673.1886000000001,
+            659.2425
+          ],
+          "p50": 780.1084000000001,
+          "p95": 900.5485,
+          "min": 659.2425,
+          "max": 900.5485,
+          "mean": 770.2022599999999
+        },
+        {
+          "name": "kokoro: long: real-time factor",
+          "unit": "×",
+          "lowerIsBetter": true,
+          "samples": [
+            0.4368143303571429,
+            0.43634754464285713,
+            0.41745275892857137,
+            0.38906584375,
+            0.3765746071428572
+          ],
+          "p50": 0.41745275892857137,
+          "p95": 0.4368143303571429,
+          "min": 0.3765746071428572,
+          "max": 0.4368143303571429,
+          "mean": 0.4112510169642858
+        },
+        {
+          "name": "kokoro: real-time factor",
+          "unit": "×",
+          "lowerIsBetter": true,
+          "samples": [
+            0.4368143303571429,
+            0.43634754464285713,
+            0.41745275892857137,
+            0.38906584375,
+            0.3765746071428572
+          ],
+          "p50": 0.41745275892857137,
+          "p95": 0.4368143303571429,
+          "min": 0.3765746071428572,
+          "max": 0.4368143303571429,
+          "mean": 0.4112510169642858
+        },
+        {
+          "name": "kokoro: cancel → silence",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            5.156499999999999,
+            6.6315,
+            5.5659,
+            5.4763,
+            5.9274
+          ],
+          "p50": 5.5659,
+          "p95": 6.6315,
+          "min": 5.156499999999999,
+          "max": 6.6315,
+          "mean": 5.75152
+        },
+        {
+          "name": "kokoro: worker peak memory",
+          "unit": "MB",
+          "lowerIsBetter": true,
+          "samples": [
+            574.05078125,
+            574.11328125,
+            574.23046875,
+            573.85546875,
+            574.3125
+          ],
+          "p50": 574.11328125,
+          "p95": 574.3125,
+          "min": 573.85546875,
+          "max": 574.3125,
+          "mean": 574.1125
+        },
+        {
+          "name": "supertonic: cold load",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            1512.7809000000002,
+            2142.3709,
+            1500.8554,
+            1146.9305000000002,
+            1125.2435
+          ],
+          "p50": 1500.8554,
+          "p95": 2142.3709,
+          "min": 1125.2435,
+          "max": 2142.3709,
+          "mean": 1485.63624
+        },
+        {
+          "name": "supertonic: short: first audio",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            653.4678,
+            850.5509,
+            687.4637,
+            521.2804,
+            530.5837
+          ],
+          "p50": 653.4678,
+          "p95": 850.5509,
+          "min": 521.2804,
+          "max": 850.5509,
+          "mean": 648.6693000000001
+        },
+        {
+          "name": "supertonic: short: real-time factor",
+          "unit": "×",
+          "lowerIsBetter": true,
+          "samples": [
+            0.4402268757141897,
+            0.5126855474894132,
+            0.44465953619681386,
+            0.3593144605767291,
+            0.349865730994152
+          ],
+          "p50": 0.4402268757141897,
+          "p95": 0.5126855474894132,
+          "min": 0.349865730994152,
+          "max": 0.5126855474894132,
+          "mean": 0.4213504301942595
+        },
+        {
+          "name": "supertonic: first audio",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            653.4678,
+            850.5509,
+            687.4637,
+            521.2804,
+            530.5837
+          ],
+          "p50": 653.4678,
+          "p95": 850.5509,
+          "min": 521.2804,
+          "max": 850.5509,
+          "mean": 648.6693000000001
+        },
+        {
+          "name": "supertonic: medium: first audio",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            830.8567,
+            768.3987,
+            657.4403,
+            617.0139,
+            623.268
+          ],
+          "p50": 657.4403,
+          "p95": 830.8567,
+          "min": 617.0139,
+          "max": 830.8567,
+          "mean": 699.39552
+        },
+        {
+          "name": "supertonic: medium: real-time factor",
+          "unit": "×",
+          "lowerIsBetter": true,
+          "samples": [
+            0.34865274476390135,
+            0.3777029855890732,
+            0.33133812005247354,
+            0.2948121880687043,
+            0.29068733632569593
+          ],
+          "p50": 0.33133812005247354,
+          "p95": 0.3777029855890732,
+          "min": 0.29068733632569593,
+          "max": 0.3777029855890732,
+          "mean": 0.3286386749599697
+        },
+        {
+          "name": "supertonic: long: first audio",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            583.5484,
+            725.7958,
+            603.8694999999999,
+            555.3839,
+            547.0971
+          ],
+          "p50": 583.5484,
+          "p95": 725.7958,
+          "min": 547.0971,
+          "max": 725.7958,
+          "mean": 603.1389399999999
+        },
+        {
+          "name": "supertonic: long: real-time factor",
+          "unit": "×",
+          "lowerIsBetter": true,
+          "samples": [
+            0.30023617384686774,
+            0.3594717169000813,
+            0.36859172831540066,
+            0.2739477870886381,
+            0.29005145312365077
+          ],
+          "p50": 0.30023617384686774,
+          "p95": 0.36859172831540066,
+          "min": 0.2739477870886381,
+          "max": 0.36859172831540066,
+          "mean": 0.3184597718549277
+        },
+        {
+          "name": "supertonic: real-time factor",
+          "unit": "×",
+          "lowerIsBetter": true,
+          "samples": [
+            0.30023617384686774,
+            0.3594717169000813,
+            0.36859172831540066,
+            0.2739477870886381,
+            0.29005145312365077
+          ],
+          "p50": 0.30023617384686774,
+          "p95": 0.36859172831540066,
+          "min": 0.2739477870886381,
+          "max": 0.36859172831540066,
+          "mean": 0.3184597718549277
+        },
+        {
+          "name": "supertonic: cancel → silence",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            6107.3994,
+            5717.3435,
+            6565.9005,
+            5086.275299999999,
+            4804.5169000000005
+          ],
+          "p50": 5717.3435,
+          "p95": 6565.9005,
+          "min": 4804.5169000000005,
+          "max": 6565.9005,
+          "mean": 5656.28712
+        },
+        {
+          "name": "supertonic: worker peak memory",
+          "unit": "MB",
+          "lowerIsBetter": true,
+          "samples": [
+            497.68359375,
+            498.5625,
+            497.55078125,
+            497.33984375,
+            497.85546875
+          ],
+          "p50": 497.68359375,
+          "p95": 498.5625,
+          "min": 497.33984375,
+          "max": 498.5625,
+          "mean": 497.7984375
+        },
+        {
+          "name": "windows: cold load",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            53.4522,
+            33.2876,
+            37.9144,
+            26.4944,
+            26.0681
+          ],
+          "p50": 33.2876,
+          "p95": 53.4522,
+          "min": 26.0681,
+          "max": 53.4522,
+          "mean": 35.44334
+        },
+        {
+          "name": "windows: short: first audio",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            128.9948,
+            107.8488,
+            127.6865,
+            93.5552,
+            81.3681
+          ],
+          "p50": 107.8488,
+          "p95": 128.9948,
+          "min": 81.3681,
+          "max": 128.9948,
+          "mean": 107.89068
+        },
+        {
+          "name": "windows: short: real-time factor",
+          "unit": "×",
+          "lowerIsBetter": true,
+          "samples": [
+            0.06732586490939044,
+            0.053336606260296536,
+            0.07104869851729818,
+            0.04560527182866557,
+            0.03938711696869852
+          ],
+          "p50": 0.053336606260296536,
+          "p95": 0.07104869851729818,
+          "min": 0.03938711696869852,
+          "max": 0.07104869851729818,
+          "mean": 0.05534071169686985
+        },
+        {
+          "name": "windows: first audio",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            128.9948,
+            107.8488,
+            127.6865,
+            93.5552,
+            81.3681
+          ],
+          "p50": 107.8488,
+          "p95": 128.9948,
+          "min": 81.3681,
+          "max": 128.9948,
+          "mean": 107.89068
+        },
+        {
+          "name": "windows: medium: first audio",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            75.2936,
+            49.4204,
+            89.6654,
+            45.7884,
+            41.42959999999999
+          ],
+          "p50": 49.4204,
+          "p95": 89.6654,
+          "min": 41.42959999999999,
+          "max": 89.6654,
+          "mean": 60.31948
+        },
+        {
+          "name": "windows: medium: real-time factor",
+          "unit": "×",
+          "lowerIsBetter": true,
+          "samples": [
+            0.023474749470712777,
+            0.014988849682427663,
+            0.02749712067748765,
+            0.01423726182074806,
+            0.012698870853916725
+          ],
+          "p50": 0.014988849682427663,
+          "p95": 0.02749712067748765,
+          "min": 0.012698870853916725,
+          "max": 0.02749712067748765,
+          "mean": 0.018579370501058574
+        },
+        {
+          "name": "windows: long: first audio",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            69.48450000000001,
+            50.7932,
+            85.6079,
+            53.585800000000006,
+            40.2014
+          ],
+          "p50": 53.585800000000006,
+          "p95": 85.6079,
+          "min": 40.2014,
+          "max": 85.6079,
+          "mean": 59.93456000000001
+        },
+        {
+          "name": "windows: long: real-time factor",
+          "unit": "×",
+          "lowerIsBetter": true,
+          "samples": [
+            0.016122415512465373,
+            0.010239996306555864,
+            0.014983708217913203,
+            0.01046666297322253,
+            0.01015995567867036
+          ],
+          "p50": 0.01046666297322253,
+          "p95": 0.016122415512465373,
+          "min": 0.01015995567867036,
+          "max": 0.016122415512465373,
+          "mean": 0.012394547737765467
+        },
+        {
+          "name": "windows: real-time factor",
+          "unit": "×",
+          "lowerIsBetter": true,
+          "samples": [
+            0.016122415512465373,
+            0.010239996306555864,
+            0.014983708217913203,
+            0.01046666297322253,
+            0.01015995567867036
+          ],
+          "p50": 0.01046666297322253,
+          "p95": 0.016122415512465373,
+          "min": 0.01015995567867036,
+          "max": 0.016122415512465373,
+          "mean": 0.012394547737765467
+        },
+        {
+          "name": "windows: cancel → silence",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            118.1483,
+            64.99050000000001,
+            66.7201,
+            67.4433,
+            73.2683
+          ],
+          "p50": 67.4433,
+          "p95": 118.1483,
+          "min": 64.99050000000001,
+          "max": 118.1483,
+          "mean": 78.1141
+        },
+        {
+          "name": "windows: worker peak memory",
+          "unit": "MB",
+          "lowerIsBetter": true,
+          "samples": [
+            4.96484375,
+            4.953125,
+            5.1875,
+            5.31640625,
+            4.8671875
+          ],
+          "p50": 4.96484375,
+          "p95": 5.31640625,
+          "min": 4.8671875,
+          "max": 5.31640625,
+          "mean": 5.0578125
+        }
+      ],
+      "notes": [
+        "kokoro: Kokoro-82M v1.0, fp16 (the file KIVO downloads) in KIVO's own engine, in the `kivo-infer` worker as KIVO runs it (CPU, 4 threads, the default voice); each run loads it cold in a fresh worker.",
+        "supertonic: Supertonic 3 in KIVO's own engine, in the `kivo-infer` worker as KIVO runs it (CPU, 4 threads, the default voice); each run loads it cold in a fresh worker.",
+        "windows: the Windows voices (SAPI/OneCore) in KIVO's own engine, in the `kivo-infer` worker as KIVO runs it (CPU, 4 threads, the default voice); each run loads it cold in a fresh worker.",
+        "Speech streams sentence by sentence, so first audio arrives after the first sentence; nothing is played aloud."
+      ]
+    },
+    {
+      "suite": "vad",
+      "startedAt": 1790245174210,
+      "runs": 5,
+      "warmup": 1,
+      "metrics": [
+        {
+          "name": "VAD onset latency (median)",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            290.0,
+            290.0,
+            290.0,
+            290.0,
+            290.0
+          ],
+          "p50": 290.0,
+          "p95": 290.0,
+          "min": 290.0,
+          "max": 290.0,
+          "mean": 290.0
+        },
+        {
+          "name": "VAD end-of-speech latency (median, incl. 250 ms pause)",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            400.0,
+            400.0,
+            400.0,
+            400.0,
+            400.0
+          ],
+          "p50": 400.0,
+          "p95": 400.0,
+          "min": 400.0,
+          "max": 400.0,
+          "mean": 400.0
+        },
+        {
+          "name": "echo only, no AEC: false VAD triggers",
+          "unit": "/min",
+          "lowerIsBetter": true,
+          "samples": [
+            5.117802756683131,
+            5.117802756683131,
+            5.117802756683131,
+            5.117802756683131,
+            5.117802756683131
+          ],
+          "p50": 5.117802756683131,
+          "p95": 5.117802756683131,
+          "min": 5.117802756683131,
+          "max": 5.117802756683131,
+          "mean": 5.117802756683131
+        },
+        {
+          "name": "echo only, AEC3: false VAD triggers",
+          "unit": "/min",
+          "lowerIsBetter": true,
+          "samples": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "p50": 0.0,
+          "p95": 0.0,
+          "min": 0.0,
+          "max": 0.0,
+          "mean": 0.0
+        },
+        {
+          "name": "echo only, no AEC: words leaked into STT",
+          "unit": "/min",
+          "lowerIsBetter": true,
+          "samples": [
+            186.79980061893423,
+            186.79980061893423,
+            186.79980061893423,
+            186.79980061893423,
+            186.79980061893423
+          ],
+          "p50": 186.79980061893423,
+          "p95": 186.79980061893423,
+          "min": 186.79980061893423,
+          "max": 186.79980061893423,
+          "mean": 186.79980061893423
+        },
+        {
+          "name": "echo only, AEC3: words leaked into STT",
+          "unit": "/min",
+          "lowerIsBetter": true,
+          "samples": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "p50": 0.0,
+          "p95": 0.0,
+          "min": 0.0,
+          "max": 0.0,
+          "mean": 0.0
+        },
+        {
+          "name": "AEC3 echo removed (ERLE)",
+          "unit": "dB",
+          "lowerIsBetter": false,
+          "samples": [
+            36.11374065319944,
+            36.11374065319944,
+            36.11374065319944,
+            36.11374065319944,
+            36.11374065319944
+          ],
+          "p50": 36.11374065319944,
+          "p95": 36.11374065319944,
+          "min": 36.11374065319944,
+          "max": 36.11374065319944,
+          "mean": 36.11374065319944
+        },
+        {
+          "name": "user over KIVO, AEC3: onset latency (median)",
+          "unit": "ms",
+          "lowerIsBetter": true,
+          "samples": [
+            360.0,
+            360.0,
+            360.0,
+            360.0,
+            360.0
+          ],
+          "p50": 360.0,
+          "p95": 360.0,
+          "min": 360.0,
+          "max": 360.0,
+          "mean": 360.0
+        }
+      ],
+      "notes": [
+        "Digital loop, not speakers and a microphone: KIVO's speech (Kokoro, resampled to 16 kHz) passes through a simulated room (direct path 40 ms late at −6 dB, reflections at 60 ms/−12 dB and 110 ms/−18 dB, noise at about −60 dBFS).",
+        "KIVO speaks for 23 s per run; user speech is LibriSpeech test-clean.",
+        "Silero VAD v6 through sherpa-onnx (threshold 0.5, 250 ms pause, 512-sample window); AEC3 from sonora 0.2 (pure-Rust WebRTC); leaked words counted with Parakeet TDT v3. The OS echo canceller (VOICE §3) needs real devices and is measured with VOICE-30 (M2)."
+      ]
+    },
+    {
+      "suite": "wake",
+      "startedAt": 1790272285590,
+      "runs": 5,
+      "warmup": 1,
+      "metrics": [
+        {
+          "name": "false rejects (synthetic positives)",
+          "unit": "%",
+          "lowerIsBetter": true,
+          "samples": [
+            27.27272727272727,
+            27.27272727272727,
+            27.27272727272727,
+            27.27272727272727,
+            27.27272727272727
+          ],
+          "p50": 27.27272727272727,
+          "p95": 27.27272727272727,
+          "min": 27.27272727272727,
+          "max": 27.27272727272727,
+          "mean": 27.27272727272727
+        },
+        {
+          "name": "false rejects, clean",
+          "unit": "%",
+          "lowerIsBetter": true,
+          "samples": [
+            9.090909090909092,
+            9.090909090909092,
+            9.090909090909092,
+            9.090909090909092,
+            9.090909090909092
+          ],
+          "p50": 9.090909090909092,
+          "p95": 9.090909090909092,
+          "min": 9.090909090909092,
+          "max": 9.090909090909092,
+          "mean": 9.090909090909092
+        },
+        {
+          "name": "false rejects, over background speech",
+          "unit": "%",
+          "lowerIsBetter": true,
+          "samples": [
+            45.45454545454545,
+            45.45454545454545,
+            45.45454545454545,
+            45.45454545454545,
+            45.45454545454545
+          ],
+          "p50": 45.45454545454545,
+          "p95": 45.45454545454545,
+          "min": 45.45454545454545,
+          "max": 45.45454545454545,
+          "mean": 45.45454545454545
+        },
+        {
+          "name": "false accepts",
+          "unit": "/hour",
+          "lowerIsBetter": true,
+          "samples": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "p50": 0.0,
+          "p95": 0.0,
+          "min": 0.0,
+          "max": 0.0,
+          "mean": 0.0
+        },
+        {
+          "name": "spotter CPU (one thread, share of real time)",
+          "unit": "%",
+          "lowerIsBetter": true,
+          "samples": [
+            1.89882565941648,
+            1.884787769056209,
+            1.9093119324082024,
+            2.0343669764603423,
+            2.3655959824875614
+          ],
+          "p50": 1.9093119324082024,
+          "p95": 2.3655959824875614,
+          "min": 1.884787769056209,
+          "max": 2.3655959824875614,
+          "mean": 2.018577663965759
+        }
+      ],
+      "notes": [
+        "KIVO's own keyword spotter (`kivo_voice::kws`, zipformer GigaSpeech 3.3M, from C:\\Users\\MadBlast\\AppData\\Local\\KIVO\\models\\kws-zipformer-gigaspeech-en) with the runtime's \"Hey Kivo\" keywords (its four spellings) at sensitivity 0.8 (KIVO's default is 0.8).",
+        "Positives: 66 synthetic clips (every Kokoro EN voice × speeds 0.85/1.0/1.15, through a room echo, clean and over background speech at −10 dB). No owner recordings are needed.",
+        "Negatives: 5.4 h of LibriSpeech test-clean read speech in all, split into one slice per run (about 54 min each). The spec asks for ≥ 10 h of mixed speech, podcasts and TV; this read-speech corpus is what is freely available."
+      ]
+    }
+  ]
+}

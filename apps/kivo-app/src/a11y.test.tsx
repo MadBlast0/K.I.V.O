@@ -37,5 +37,6 @@ describe("Control Center accessibility", () => {
     fireEvent.keyDown(screen.getByRole("combobox"), { key: "Enter" });
     await screen.findByRole("heading", { name: i18n.t("nav.gallery") });
     expect(await violations()).toEqual([]);
-  });
+    // axe over every component takes several seconds while the other test files run alongside.
+  }, 30_000);
 });

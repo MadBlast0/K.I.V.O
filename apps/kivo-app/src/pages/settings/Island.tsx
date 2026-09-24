@@ -4,9 +4,10 @@
  * is KIVO's own drawn mascot (UX-38). With the Island hidden and every sound off, a
  * warning says KIVO would give no sign it's listening (UX-54).
  */
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import { Character } from "../../components/island/Character";
-import { Alert, Group, Orb, Row, Section, Segmented, Switch } from "../../components/ui";
+import { Alert, Button, Group, Orb, Row, Section, Segmented, Switch } from "../../components/ui";
 import { bool, field, num, oneOf, setting } from "../../lib/settings";
 import { useConfig } from "./useConfig";
 
@@ -215,11 +216,18 @@ export function IslandTab() {
           title={t("settings.island.glow")}
           subtitle={t("settings.island.glowHint")}
           end={
-            <Switch
-              label={t("settings.island.glow")}
-              checked={bool(get("overlay", "wake-glow"))}
-              onChange={(v) => set("overlay", { "wake-glow": v })}
-            />
+            <>
+              {isTauri() && (
+                <Button size="sm" variant="plain" icon="play" onClick={() => void invoke("preview_glow")}>
+                  {t("settings.island.glowPreview")}
+                </Button>
+              )}
+              <Switch
+                label={t("settings.island.glow")}
+                checked={bool(get("overlay", "wake-glow"))}
+                onChange={(v) => set("overlay", { "wake-glow": v })}
+              />
+            </>
           }
         />
         <Row

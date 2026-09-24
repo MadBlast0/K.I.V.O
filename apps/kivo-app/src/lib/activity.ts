@@ -21,6 +21,8 @@ export interface Entry {
   turn: string | null;
   /** KIVO answered (so its answer may have used memories). */
   answered: boolean;
+  /** A brain answered it (the "AI" filter). */
+  ai: boolean;
 }
 
 const OUTCOMES: ReadonlyArray<Outcome> = ["done", "failed", "cancelled", "denied", "unhandled"];
@@ -44,6 +46,7 @@ export function entries(items: ActivityItem[]): Entry[] {
         outcome: outcomeOf(item.status),
         turn: null,
         answered: false,
+        ai: false,
       });
       continue;
     }
@@ -61,6 +64,7 @@ export function entries(items: ActivityItem[]): Entry[] {
         outcome: "done",
         turn: item.turnId,
         answered: false,
+        ai: false,
       });
     }
   }
@@ -78,6 +82,7 @@ export function entries(items: ActivityItem[]): Entry[] {
       [tools.map((t) => t.detail ?? t.title).join(" · "), reply?.title].filter(Boolean).join(" — ") || null;
     entry.outcome = outcomeOf(failed?.status ?? reply?.status ?? tools[0]?.status ?? "done");
     entry.answered = reply !== undefined;
+    entry.ai = rows.some((r) => r.kind === "brain");
   }
   return out;
 }

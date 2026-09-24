@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 use std::time::Duration;
-use windows::Win32::Foundation::{CloseHandle, FILETIME, HWND, LPARAM, LRESULT, WPARAM};
+use windows::Win32::Foundation::{CloseHandle, FILETIME, HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows::Win32::Graphics::Gdi::{
     BI_RGB, BITMAPINFO, BITMAPINFOHEADER, BitBlt, CAPTUREBLT, CreateCompatibleBitmap,
     CreateCompatibleDC, CreateSolidBrush, DIB_RGB_COLORS, DeleteDC, DeleteObject, GetDC, GetDIBits,
@@ -29,9 +29,10 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, FindWindowW, GWL_EXSTYLE,
-    GetForegroundWindow, GetWindowLongPtrW, HWND_TOPMOST, IsWindowVisible, MSG, PM_REMOVE,
-    PeekMessageW, RegisterClassW, SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SetWindowPos, ShowWindow,
-    WNDCLASSW, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
+    GetForegroundWindow, GetWindowLongPtrW, GetWindowRect, HWND_TOPMOST, IsWindowVisible, MSG,
+    PM_REMOVE, PeekMessageW, PostMessageW, RegisterClassW, SW_SHOWNOACTIVATE, SWP_NOACTIVATE,
+    SetWindowPos, ShowWindow, WM_CLOSE, WNDCLASSW, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
+    WS_EX_TOPMOST, WS_POPUP,
 };
 use windows::core::{HSTRING, PCWSTR, w};
 
@@ -503,6 +504,32 @@ pub fn find_window(title: &str) -> Option<isize> {
     unsafe { FindWindowW(PCWSTR::null(), &HSTRING::from(title)) }
         .ok()
         .map(|h| h.0 as isize)
+}
+
+/// Whether the window is shown.
+pub fn is_visible(hwnd: isize) -> bool {
+    // SAFETY: a plain window query.
+    unsafe { IsWindowVisible(HWND(hwnd as *mut _)).as_bool() }
+}
+
+/// The window's screen rectangle: x, y, width, height.
+pub fn window_rect(hwnd: isize) -> Option<(i32, i32, i32, i32)> {
+    let mut rect = RECT::default();
+    // SAFETY: a plain window query into a local.
+    unsafe { GetWindowRect(HWND(hwnd as *mut _), &raw mut rect) }.ok()?;
+    Some((
+        rect.left,
+        rect.top,
+        rect.right - rect.left,
+        rect.bottom - rect.top,
+    ))
+}
+
+/// Asks a window to close, as its close button would (KIVO's Control Center hides to the tray).
+pub fn post_close(hwnd: isize) -> Result<(), String> {
+    // SAFETY: posting a message to a window; nothing is borrowed.
+    unsafe { PostMessageW(Some(HWND(hwnd as *mut _)), WM_CLOSE, WPARAM(0), LPARAM(0)) }
+        .map_err(|e| e.to_string())
 }
 
 pub fn foreground() -> isize {

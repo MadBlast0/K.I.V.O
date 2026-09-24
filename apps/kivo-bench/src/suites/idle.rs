@@ -23,6 +23,34 @@ pub struct Idle {
     counters: win::Counters,
     runtime_switches: win::RawCounts,
     app_switches: win::RawCounts,
+    /// Whether the runtime had the microphone open, checked at the start and end of each window.
+    listening: Vec<bool>,
+}
+
+/// Whether a `kivo-runtime.exe` has the microphone open now: Windows' privacy settings record
+/// each desktop app's microphone use, with no stop time while it is in use (the same data behind
+/// the microphone indicator in the taskbar).
+fn runtime_listening() -> bool {
+    const KEY: &str = r"HKCU\Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone\NonPackaged";
+    let Ok(out) = std::process::Command::new("reg")
+        .args(["query", KEY, "/s", "/v", "LastUsedTimeStop"])
+        .output()
+    else {
+        return false;
+    };
+    let text = String::from_utf8_lossy(&out.stdout);
+    let mut in_runtime = false;
+    for line in text.lines() {
+        if line.starts_with("HKEY_") {
+            in_runtime = line.to_ascii_lowercase().ends_with("#kivo-runtime.exe");
+        } else if in_runtime
+            && line.trim_start().starts_with("LastUsedTimeStop")
+            && line.split_whitespace().last() == Some("0x0")
+        {
+            return true;
+        }
+    }
+    false
 }
 
 impl Idle {
@@ -30,10 +58,11 @@ impl Idle {
         let runtime = *win::processes("kivo-runtime.exe").first().ok_or(
             "start KIVO first (`pnpm dev` or KIVO.exe); this suite measures the real runtime",
         )?;
-        let app = win::processes("kivo-app.exe")
-            .first()
-            .or(win::processes("KIVO.exe").first())
-            .copied();
+        // The dev app is kivo-app.exe; a release build is KIVO.exe.
+        let (app, app_name) = match win::processes("kivo-app.exe").first() {
+            Some(&pid) => (Some(pid), "kivo-app"),
+            None => (win::processes("KIVO.exe").first().copied(), "KIVO"),
+        };
         let total = std::env::var("KIVO_BENCH_IDLE_SECONDS")
             .ok()
             .and_then(|s| s.parse().ok())
@@ -42,9 +71,11 @@ impl Idle {
         let counters = win::Counters::open(&[r"\Energy Meter(*_pkg)\Power"])?;
         // Context switches are read raw: threads come and go, and a reused thread name would
         // make a computed rate negative.
+        // Thread instances are "<process>/<n>"; the slash keeps "KIVO" from matching "kivo-runtime".
         let runtime_switches =
-            win::RawCounts::open(r"\Thread(kivo-runtime*)\Context Switches/sec")?;
-        let app_switches = win::RawCounts::open(r"\Thread(kivo-app*)\Context Switches/sec")?;
+            win::RawCounts::open(r"\Thread(kivo-runtime/*)\Context Switches/sec")?;
+        let app_switches =
+            win::RawCounts::open(&format!(r"\Thread({app_name}/*)\Context Switches/sec"))?;
         let logical_cpus = std::thread::available_parallelism().map_or(1, |n| n.get());
         #[allow(clippy::cast_precision_loss, reason = "a CPU count")]
         Ok(Self {
@@ -56,6 +87,7 @@ impl Idle {
             counters,
             runtime_switches,
             app_switches,
+            listening: Vec::new(),
         })
     }
 
@@ -94,9 +126,11 @@ impl Suite for Idle {
         let (rt0, app0) = (Self::usage(&runtime), Self::usage(&app));
         self.counters.sample()?;
         let (rt_sw0, app_sw0) = (self.runtime_switches.read()?, self.app_switches.read()?);
+        self.listening.push(runtime_listening());
         let started = Instant::now();
         std::thread::sleep(self.window);
         let wall = started.elapsed();
+        self.listening.push(runtime_listening());
         let power = self.counters.sample()?[0];
         let seconds = wall.as_secs_f64();
         let runtime_wakeups = win::rate(&rt_sw0, &self.runtime_switches.read()?, seconds);
@@ -149,9 +183,19 @@ impl Suite for Idle {
                     "not running"
                 }
             ),
-            "Microphone capture is not part of the runtime yet (VOICE-01 adds it), so this is \
-             the idle cost without listening."
-                .into(),
+            if self.listening.iter().all(|l| *l) {
+                "Listening: the runtime had the microphone open throughout (\"Hey Kivo\" on; \
+                 checked in Windows' microphone privacy records at the start and end of every \
+                 window)."
+                    .into()
+            } else if self.listening.iter().any(|l| *l) {
+                "Listening for only part of the run: the microphone was closed at some checks."
+                    .into()
+            } else {
+                "Not listening: the runtime didn't have the microphone open (\"Hey Kivo\" off, \
+                 or no microphone)."
+                    .into()
+            },
             "Package power covers everything running on the machine; compare runs on a quiet \
              desktop."
                 .into(),

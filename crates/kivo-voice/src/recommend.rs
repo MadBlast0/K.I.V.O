@@ -2,10 +2,11 @@
 //! right now, the user's language, privacy choice and priority, what is installed and what KIVO
 //! measured, which speech engines to use (with fallbacks) and how many threads they may take.
 //! Onboarding shows it as the preselected choice (UX §4) and the runtime uses it until the user
-//! picks otherwise. It prefers CPU engines that meet the budgets, keeping the GPU for the user's
-//! own work, and it only ever proposes: nothing changes until the user chooses.
+//! picks otherwise. With "Speech recognition on the graphics card" on (the default) and a usable
+//! GPU it recommends the recognizer that runs there (DECISIONS "Local models on the GPU first");
+//! off, the processor's recognizers. It only ever proposes: nothing changes until the user chooses.
 
-use crate::engine::EngineSlot;
+use crate::engine::{Accel, EngineSlot};
 use crate::registry::{Privacy, Profile, RegistryEntry};
 use kivo_platform::SystemSnapshot;
 use serde::{Deserialize, Serialize};
@@ -38,6 +39,8 @@ pub enum Priority {
 /// Everything the recommendation weighs besides the hardware.
 #[derive(Clone, Copy, Debug)]
 pub struct Needs<'a> {
+    /// The user let speech recognition use the graphics card.
+    pub gpu_speech: bool,
     /// Primary language (BCP-47).
     pub language: &'a str,
     /// Only engines that keep audio on this PC (the privacy mode, or offline).
@@ -80,6 +83,14 @@ pub fn tier(s: &SystemSnapshot) -> Tier {
 
 /// A recognizer needing more memory than this is "heavy" (VOICE §3's Balanced and Accurate tiers).
 const HEAVY_RAM_MB: u32 = 600;
+/// A graphics card with this much memory of its own can hold KIVO's GPU recognizers.
+pub const GPU_MIN_MB: u64 = 3_000;
+
+/// Whether speech recognition should run on this PC's graphics card: it has one with room for the
+/// models, the PC isn't a small one, and it isn't on battery.
+pub fn gpu_ready(s: &SystemSnapshot) -> bool {
+    tier(s) != Tier::Low && !s.on_battery && s.gpus.iter().any(|g| g.vram_mb >= GPU_MIN_MB)
+}
 
 /// Recommends speech engines for this PC and these needs (VOICE-44).
 pub fn recommend(s: &SystemSnapshot, needs: &Needs<'_>) -> Recommendation {
@@ -93,10 +104,15 @@ pub fn recommend(s: &SystemSnapshot, needs: &Needs<'_>) -> Recommendation {
     let mut why = vec![match tier {
         Tier::Low => "a smaller PC, so KIVO keeps its speech models light",
         Tier::Mid => "a mid-range PC, and its processor handles speech well",
-        Tier::High => {
-            "a fast PC; speech runs on the processor so the graphics card stays free for your own work"
-        }
+        Tier::High => "a fast PC",
     }];
+    // Local models run on the graphics card first; the processor stands in when it can't.
+    let prefer_gpu = needs.gpu_speech && gpu_ready(s) && needs.priority != Priority::Resources;
+    if prefer_gpu {
+        why.push(
+            "speech recognition runs on its graphics card, and on the processor when the card is busy or a game is in front",
+        );
+    }
     if s.on_battery {
         threads = threads.min(2);
         why.push("on battery, so it uses fewer cores");
@@ -127,17 +143,39 @@ pub fn recommend(s: &SystemSnapshot, needs: &Needs<'_>) -> Recommendation {
         .registry
         .iter()
         .filter(|e| usable(e, EngineSlot::Stt) && fast_enough(e))
+        // The graphics card's engines only when speech may use it.
+        .filter(|e| prefer_gpu || !crate::registry::gpu_first(e))
         .collect();
-    // Heavy recognizers (Parakeet, Whisper) come first only when accuracy is what the user asked
-    // for on a PC that has room for them; otherwise they're for languages nothing lighter covers.
-    let wants_heavy = needs.priority == Priority::Accuracy && tier != Tier::Low;
+    // With a usable GPU, the recognizers that run on it (Parakeet, Whisper) come first. Without
+    // one, heavy recognizers come first only when accuracy is what the user asked for on a PC with
+    // room for them; otherwise they're for languages nothing lighter covers.
+    let on_gpu = |e: &RegistryEntry| {
+        e.engine.accel.contains(&Accel::DirectMl) || e.engine.accel.contains(&Accel::Vulkan)
+    };
+    // Asked for speed: the high-accuracy GPU model (Whisper) is the slow one, so it doesn't count.
+    let speed = needs.priority == Priority::Speed;
+    let gpu_pick = |e: &RegistryEntry| on_gpu(e) && !(speed && e.has(Profile::HighAccuracy));
+    let accurate = needs.priority == Priority::Accuracy && tier != Tier::Low;
+    let wants_heavy = accurate || (prefer_gpu && !speed);
     stt.sort_by_key(|e| {
         let tiny = e.engine.id.contains("-tiny-");
         let heavy = e.engine.resources.ram_mb > HEAVY_RAM_MB;
         (
+            prefer_gpu && !gpu_pick(e),
+            // whisper.cpp on Vulkan before ONNX on DirectML (measured slower there).
+            prefer_gpu && !crate::registry::gpu_first(e),
+            // Among the graphics card's engines, the one whose profile the priority asks for.
+            prefer_gpu
+                && !e.has(if accurate {
+                    Profile::HighAccuracy
+                } else if light {
+                    Profile::Lightweight
+                } else {
+                    Profile::Recommended
+                }),
             heavy != wants_heavy,
             // Asked for accuracy: the High-accuracy engine (Whisper) before the balanced one.
-            wants_heavy && !e.has(Profile::HighAccuracy),
+            accurate && !e.has(Profile::HighAccuracy),
             tiny != light,
             !installed(e),
             e.engine.resources.disk_mb,
@@ -162,7 +200,23 @@ pub fn recommend(s: &SystemSnapshot, needs: &Needs<'_>) -> Recommendation {
         }
     }
     let stt_engine = stt.first().map(|e| e.engine.id.clone());
-    let stt_fallback = stt.get(1).map(|e| e.engine.id.clone());
+    // A GPU recognizer's own fallback is the processor; if it can't load at all, a light
+    // processor one stands in rather than the other heavy model.
+    // A GPU recognizer's fallback is outside whisper.cpp (if it can't load, its siblings can't
+    // either): a light processor one, or for accuracy the best of the rest.
+    let stt_fallback = if prefer_gpu {
+        stt.iter()
+            .skip(1)
+            .find(|e| {
+                !on_gpu(e)
+                    && !crate::registry::gpu_first(e)
+                    && (accurate || e.engine.resources.ram_mb <= HEAVY_RAM_MB)
+            })
+            .or_else(|| stt.iter().skip(1).find(|e| !crate::registry::gpu_first(e)))
+            .map(|e| e.engine.id.clone())
+    } else {
+        stt.get(1).map(|e| e.engine.id.clone())
+    };
 
     // Text to speech: the Windows voices are always there. A natural local voice when the PC
     // has room and it speaks the language, else the multilingual one.
@@ -226,11 +280,27 @@ mod tests {
         priority: Priority,
         installed: &[&str],
     ) -> Recommendation {
+        advise_with(pc, language, priority, installed, false)
+    }
+
+    /// As `advise`, with "Speech recognition on the graphics card" on.
+    fn advise_gpu(pc: &SystemSnapshot, language: &str, priority: Priority) -> Recommendation {
+        advise_with(pc, language, priority, &[], true)
+    }
+
+    fn advise_with(
+        pc: &SystemSnapshot,
+        language: &str,
+        priority: Priority,
+        installed: &[&str],
+        gpu_speech: bool,
+    ) -> Recommendation {
         let registry = crate::registry::registry();
         let installed: Vec<String> = installed.iter().map(|s| (*s).to_owned()).collect();
         recommend(
             pc,
             &Needs {
+                gpu_speech,
                 language,
                 local_only: true,
                 priority,
@@ -267,6 +337,7 @@ mod tests {
 
     #[test]
     fn a_capable_pc_gets_the_larger_models_and_a_small_one_the_light_ones() {
+        // By default the processor's recognizers, graphics card or not.
         let fast = advise(&pc(16, 16, 6), "en-US", Priority::Balanced, &[]);
         assert_eq!(fast.stt_engine.as_deref(), Some("moonshine-base-en"));
         assert_eq!(fast.stt_fallback.as_deref(), Some("moonshine-tiny-en"));
@@ -274,11 +345,18 @@ mod tests {
             (fast.tts_engine.as_str(), fast.tts_fallback.as_deref()),
             ("kokoro-82m", Some("system"))
         );
-        assert!(
-            fast.reason.contains("graphics card stays free"),
-            "{}",
-            fast.reason
-        );
+        // With the graphics card allowed: the recognizer that runs on it, with a light processor
+        // one behind it; on battery, still the processor.
+        if crate::whisper_cpp::AVAILABLE {
+            let gpu = advise_gpu(&pc(16, 16, 6), "en-US", Priority::Balanced);
+            assert_eq!(gpu.stt_engine.as_deref(), Some("whisper-cpp-small"));
+            assert_eq!(gpu.stt_fallback.as_deref(), Some("moonshine-base-en"));
+            assert!(gpu.reason.contains("graphics card"), "{}", gpu.reason);
+        }
+        let mut unplugged = pc(16, 16, 6);
+        unplugged.on_battery = true;
+        let unplugged = advise_gpu(&unplugged, "en-US", Priority::Balanced);
+        assert_eq!(unplugged.stt_engine.as_deref(), Some("moonshine-base-en"));
 
         let small = advise(&pc(4, 8, 0), "en", Priority::Balanced, &[]);
         assert_eq!(small.stt_engine.as_deref(), Some("moonshine-tiny-en"));
@@ -287,8 +365,21 @@ mod tests {
             ("system", None)
         );
 
-        // Asking for accuracy on a capable PC brings the heavier recognizer first.
-        let accurate = advise(&pc(16, 16, 6), "en", Priority::Accuracy, &[]);
+        // Asking for accuracy with a graphics card: Whisper turbo on it, with the processor's
+        // Whisper behind it.
+        if crate::whisper_cpp::AVAILABLE {
+            let accurate_gpu = advise_gpu(&pc(16, 16, 6), "en", Priority::Accuracy);
+            assert_eq!(
+                accurate_gpu.stt_engine.as_deref(),
+                Some("whisper-cpp-turbo")
+            );
+            assert_eq!(
+                accurate_gpu.stt_fallback.as_deref(),
+                Some("whisper-large-v3-turbo")
+            );
+        }
+        // Without one, the heavier recognizer first.
+        let accurate = advise(&pc(16, 16, 0), "en", Priority::Accuracy, &[]);
         assert_eq!(
             accurate.stt_engine.as_deref(),
             Some("whisper-large-v3-turbo")
@@ -313,8 +404,12 @@ mod tests {
 
     #[test]
     fn other_languages_get_their_own_models_and_the_multilingual_voice() {
-        let es = advise(&pc(16, 16, 6), "es", Priority::Balanced, &[]);
+        let es = advise(&pc(16, 16, 0), "es", Priority::Balanced, &[]);
         assert_eq!(es.stt_engine.as_deref(), Some("moonshine-base-es"));
+        if crate::whisper_cpp::AVAILABLE {
+            let es_gpu = advise_gpu(&pc(16, 16, 6), "es", Priority::Balanced);
+            assert_eq!(es_gpu.stt_engine.as_deref(), Some("whisper-cpp-small"));
+        }
         assert_eq!(es.tts_engine, "supertonic-3");
         assert!(es.reason.contains("multilingual"));
         // French: only Parakeet has it, so it's the one, heavy or not.
@@ -346,8 +441,9 @@ mod tests {
             1,
         );
         let r = recommend(
-            &pc(16, 16, 6),
+            &pc(16, 16, 0),
             &Needs {
+                gpu_speech: false,
                 language: "en",
                 local_only: true,
                 priority: Priority::Balanced,
@@ -362,6 +458,7 @@ mod tests {
     fn the_recognizer_that_hears_the_owner_best_is_recommended() {
         fn needs(registry: &[RegistryEntry]) -> Needs<'_> {
             Needs {
+                gpu_speech: false,
                 language: "en",
                 local_only: true,
                 priority: Priority::Balanced,
@@ -370,7 +467,7 @@ mod tests {
             }
         }
         let mut registry = crate::registry::registry();
-        let base = recommend(&pc(16, 16, 6), &needs(&registry));
+        let base = recommend(&pc(16, 16, 0), &needs(&registry));
         assert_eq!(base.stt_engine.as_deref(), Some("moonshine-base-en"));
         // Tiny heard the enrollment clearly better than Base: it's recommended, with the reason.
         let wers = [
@@ -380,7 +477,7 @@ mod tests {
         .into_iter()
         .collect();
         crate::registry::apply_voice_wer(&mut registry, &wers, 1);
-        let r = recommend(&pc(16, 16, 6), &needs(&registry));
+        let r = recommend(&pc(16, 16, 0), &needs(&registry));
         assert_eq!(r.stt_engine.as_deref(), Some("moonshine-tiny-en"));
         assert!(r.reason.contains("heard your voice best"), "{}", r.reason);
         // A small difference doesn't override the hardware choice.
@@ -392,7 +489,7 @@ mod tests {
         .collect();
         let mut registry = crate::registry::registry();
         crate::registry::apply_voice_wer(&mut registry, &close, 1);
-        let r = recommend(&pc(16, 16, 6), &needs(&registry));
+        let r = recommend(&pc(16, 16, 0), &needs(&registry));
         assert_eq!(r.stt_engine.as_deref(), Some("moonshine-base-en"));
     }
 }

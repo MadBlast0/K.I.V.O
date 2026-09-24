@@ -4,19 +4,27 @@ use crate::harness::{Plan, Suite};
 
 #[cfg(windows)]
 mod audio;
+mod brain;
 #[cfg(windows)]
 mod e2e;
 #[cfg(windows)]
 mod idle;
 mod ipc;
 #[cfg(windows)]
+mod open;
+#[cfg(windows)]
 mod overlay;
+mod router;
 
 /// Every suite, with a one-line description for `kivo-bench list`.
 pub const ALL: &[(&str, &str)] = &[
     (
         "ipc",
         "runtime ↔ UI channel: connect, ping and state round trips",
+    ),
+    (
+        "router",
+        "intent router: a command to the fast path, a request on to a brain (bundled grammar)",
     ),
     (
         "audio",
@@ -28,11 +36,11 @@ pub const ALL: &[(&str, &str)] = &[
     ),
     (
         "stt",
-        "speech to text: Moonshine v2, Parakeet TDT v3, Whisper turbo (load, latency, RTF, WER, memory)",
+        "speech to text: KIVO's Moonshine, Parakeet and Whisper (load, latency, RTF, WER, memory)",
     ),
     (
         "tts",
-        "text to speech: Kokoro-82M (first audio, RTF, cancel, memory)",
+        "text to speech: KIVO's Kokoro, Supertonic and Windows voices (first audio, RTF, cancel, memory)",
     ),
     (
         "vad",
@@ -40,11 +48,19 @@ pub const ALL: &[(&str, &str)] = &[
     ),
     (
         "wake",
-        "\"Hey Kivo\" keyword spotting: false rejects, false accepts per hour, CPU",
+        "\"Hey Kivo\" on KIVO's keyword spotter: false rejects, false accepts per hour, CPU",
+    ),
+    (
+        "brain",
+        "one brain on fixed prompts: first token, speed, tool call, JSON, cancel, errors (KIVO_BENCH_BRAIN)",
     ),
     (
         "e2e",
         "the plan §102 journeys spoken end to end: T spans from the end of speech (needs kivo-e2e)",
+    ),
+    (
+        "open",
+        "the Control Center's warm open: KIVO launched again with its window closed to the tray (KIVO must be running)",
     ),
     (
         "overlay",
@@ -55,6 +71,8 @@ pub const ALL: &[(&str, &str)] = &[
 pub fn create(name: &str, plan: Plan) -> Result<Box<dyn Suite>, String> {
     match name {
         "ipc" => Ok(Box::new(ipc::Ipc::start()?)),
+        "router" => Ok(Box::new(router::Router::start()?)),
+        "brain" => Ok(Box::new(brain::Brain::start()?)),
         #[cfg(windows)]
         "audio" => Ok(Box::new(audio::Audio::start()?)),
         #[cfg(windows)]
@@ -66,7 +84,9 @@ pub fn create(name: &str, plan: Plan) -> Result<Box<dyn Suite>, String> {
         #[cfg(windows)]
         "vad" => Ok(Box::new(crate::speech::vad_aec::VadAec::start()?)),
         #[cfg(windows)]
-        "wake" => Ok(Box::new(crate::speech::wake::Wake::start()?)),
+        "wake" => Ok(Box::new(crate::speech::wake::Wake::start(plan)?)),
+        #[cfg(windows)]
+        "open" => Ok(Box::new(open::Open::start()?)),
         #[cfg(windows)]
         "overlay" => Ok(Box::new(overlay::Overlay::start()?)),
         #[cfg(windows)]

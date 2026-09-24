@@ -7,7 +7,7 @@
  */
 import { useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import type { ProfileItem, SpeechEngineItem, VoiceItem } from "../../ipc/generated";
+import type { MeasuredItem, ProfileItem, SpeechEngineItem, VoiceItem } from "../../ipc/generated";
 import {
   Alert,
   Button,
@@ -69,6 +69,69 @@ function useFacts() {
   };
 }
 
+/** KIVO's thresholds for a measured engine (`kivo_voice::registry::thresholds`, VOICE §10–11). */
+const BUDGET = { sttMs: 300, ttsMs: 300, rtf: 1, cancelMs: 100, wer: 0.1, noisyWer: 0.2 } as const;
+
+/** A real-time factor: "0.17×". */
+const x = (v: number) => `${v.toFixed(2)}×`;
+
+/** "Benchmark this engine" (BENCH-15): each measured number against KIVO's budget. */
+export function BenchmarkResult({ slot, measured }: { slot: Slot; measured: MeasuredItem }) {
+  const { t, i18n } = useTranslation();
+  const ms = new Intl.NumberFormat(i18n.language, { style: "unit", unit: "millisecond", maximumFractionDigits: 0 });
+  const pct = new Intl.NumberFormat(i18n.language, { style: "percent", maximumFractionDigits: 1 });
+  const mb = new Intl.NumberFormat(i18n.language, { style: "unit", unit: "megabyte", maximumFractionDigits: 0 });
+  type Line = [label: string, value: string, budget?: [limit: string, meets: boolean]];
+  const lines: Line[] = [];
+  const latency = measured.latencyMs;
+  const limit = slot === "stt" ? BUDGET.sttMs : BUDGET.ttsMs;
+  if (latency != null)
+    lines.push([
+      t(slot === "stt" ? "speech.bench.sttLatency" : "speech.bench.ttsLatency"),
+      ms.format(latency),
+      [ms.format(limit), latency <= limit],
+    ]);
+  const rtf = measured.realTimeFactor;
+  if (rtf != null) lines.push([t("speech.bench.rtf"), x(rtf), [x(BUDGET.rtf), rtf <= BUDGET.rtf]]);
+  const wer = measured.wordErrorRate;
+  if (wer != null) lines.push([t("speech.bench.wer"), pct.format(wer), [pct.format(BUDGET.wer), wer <= BUDGET.wer]]);
+  const noisy = measured.noisyWordErrorRate;
+  if (noisy != null)
+    lines.push([
+      t("speech.bench.noisyWer"),
+      pct.format(noisy),
+      [pct.format(BUDGET.noisyWer), noisy <= BUDGET.noisyWer],
+    ]);
+  const cancel = measured.cancelMs;
+  if (cancel != null)
+    lines.push([t("speech.bench.cancel"), ms.format(cancel), [ms.format(BUDGET.cancelMs), cancel <= BUDGET.cancelMs]]);
+  if (measured.cpuPercent != null) lines.push([t("speech.bench.cpu"), pct.format(measured.cpuPercent / 100)]);
+  if (measured.memoryMb != null) lines.push([t("speech.bench.memory"), mb.format(measured.memoryMb)]);
+  return (
+    <div className="k-speech__bench" role="status">
+      <b>{t("speech.benchmarkTitle")}</b>
+      <dl>
+        {lines.map(([label, value, budget]) => (
+          <div key={label} className="k-speech__bench-row">
+            <dt>{label}</dt>
+            <dd>
+              {value}
+              {budget && (
+                <>
+                  <span className="k-meta">{t("speech.benchmarkBudget", { budget: budget[0] })}</span>
+                  <Tag tone={budget[1] ? "success" : "warning"}>
+                    {t(budget[1] ? "speech.benchmarkMeets" : "speech.benchmarkOver")}
+                  </Tag>
+                </>
+              )}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
 /** A switch in progress, or why it failed, under the card it is about. */
 function Progress({ speech, slot, engine }: { speech: Speech; slot: Slot; engine: string }) {
   const { t } = useTranslation();
@@ -116,6 +179,7 @@ export function SpeechChooser({ slot, speech, children }: { slot: Slot; speech: 
   const facts = useFacts();
   const [offer, setOffer] = useState<SpeechEngineItem | null>(null);
   const [sample, setSample] = useState<{ engine: string; text: string | null } | null>(null);
+  const [bench, setBench] = useState<{ engine: string; measured: MeasuredItem | null } | null>(null);
   const { choices, recommendation } = speech;
   if (!choices) return null;
 
@@ -143,6 +207,17 @@ export function SpeechChooser({ slot, speech, children }: { slot: Slot; speech: 
         toast(message(e));
       });
   };
+  const runBenchmark = (engine: string) => {
+    setBench({ engine, measured: null });
+    speech
+      .benchmark(engine)
+      .then((measured) => setBench({ engine, measured }))
+      .catch((e: unknown) => {
+        setBench(null);
+        toast(message(e));
+      });
+  };
+  const benchmarking = bench !== null && bench.measured === null;
   const model = offer?.model ? speech.models.find((m) => m.id === offer.model) : undefined;
 
   return (
@@ -169,24 +244,47 @@ export function SpeechChooser({ slot, speech, children }: { slot: Slot; speech: 
                   </>
                 }
               />
-              {slot === "stt" && engine.ready && (
+              {engine.ready && (
                 <div className="k-speech__actions">
-                  <Button
-                    size="sm"
-                    variant="plain"
-                    icon="play"
-                    onClick={() => trySample(engine.id)}
-                    disabled={sample?.engine === engine.id && sample.text === null}
-                  >
-                    {t("speech.trySample")}
-                  </Button>
-                  {sample?.engine === engine.id && (
+                  {slot === "stt" && (
+                    <Button
+                      size="sm"
+                      variant="plain"
+                      icon="play"
+                      onClick={() => trySample(engine.id)}
+                      disabled={sample?.engine === engine.id && sample.text === null}
+                    >
+                      {t("speech.trySample")}
+                    </Button>
+                  )}
+                  {/* Measuring a cloud engine would spend the user's quota: KIVO measures local ones. */}
+                  {engine.privacy === "local" && (
+                    <Button
+                      size="sm"
+                      variant="plain"
+                      icon="performance"
+                      onClick={() => runBenchmark(engine.id)}
+                      disabled={benchmarking}
+                    >
+                      {t("speech.benchmark")}
+                    </Button>
+                  )}
+                  {slot === "stt" && sample?.engine === engine.id && (
                     <span className="k-speech__sample" role="status">
                       {sample.text === null ? t("speech.listening") : t("speech.heard", { text: sample.text })}
                     </span>
                   )}
                 </div>
               )}
+              {bench?.engine === engine.id &&
+                (bench.measured ? (
+                  <BenchmarkResult slot={slot} measured={bench.measured} />
+                ) : (
+                  <p className="k-speech__status" role="status">
+                    <Spinner label={t("speech.benchmarking")} />
+                    {t("speech.benchmarking")}
+                  </p>
+                ))}
               <Progress speech={speech} slot={slot} engine={engine.id} />
             </div>
           );

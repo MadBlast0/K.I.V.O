@@ -229,9 +229,14 @@ resource manager need no changes.
 
 **Recommendation.** An explicit function: hardware (CPU, RAM, GPU, VRAM, disk, battery),
 OS, languages, privacy/offline preference, stated priority (speed, accuracy, resources, voice),
-installed models and benchmark results → recommended STT and TTS, plus fallbacks. It prefers CPU
-engines when they meet the latency budgets, to keep the GPU for the user's main AI work, and
-explains itself ("Your PC has enough CPU; KIVO keeps the GPU free"). Never irreversible.
+installed models and benchmark results → recommended STT and TTS, plus fallbacks. Local models
+run on the GPU first (owner, 2026-09-24; DECISIONS "Local models on the GPU first"), switchable
+in Settings → Performance: on a PC with a usable graphics card (≥ 3 GB of its own, not on
+battery, not the low tier) it recommends whisper.cpp's Whisper on Vulkan (small for Recommended,
+large-v3-turbo for accuracy), with a light CPU recognizer as its fallback, and the GPU policy
+moves it to the processor while the card isn't available (a game in front, the Gaming or Battery
+profile, a busy GPU). ONNX engines DirectML runs badly or not at all (Moonshine, Whisper's ONNX
+files, Kokoro) and the always-on detectors (VAD, wake word, speaker check) stay on the processor. It explains itself. Never irreversible.
 
 **Safe switching.** Choosing an engine: check compatibility → download (with the licence shown
 first) → load → validate (microphone test, a transcription or synthesis test) → "Ready — Use it".

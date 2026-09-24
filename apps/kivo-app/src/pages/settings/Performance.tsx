@@ -7,7 +7,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Button, Group, Meta, Note, Row, Section, Select, Stat, Tag, type Tone } from "../../components/ui";
+import { Button, Group, Meta, Note, Row, Section, Select, Stat, Switch, Tag, type Tone } from "../../components/ui";
 import { Method } from "../../ipc/generated";
 import { useRuntime } from "../../ipc/runtime";
 import { oneOf } from "../../lib/settings";
@@ -112,6 +112,18 @@ export function PerformanceTab() {
               value={oneOf(get("performance", "profile"), PROFILES) ?? "auto"}
               onChange={(v) => set("performance", { profile: v })}
               items={PROFILES.map((value) => ({ value, label: t(`settings.performance.profiles.${value}`) }))}
+            />
+          }
+        />
+        <Row
+          icon="monitor"
+          title={t("settings.performance.gpuSpeech")}
+          subtitle={t("settings.performance.gpuSpeechHint")}
+          end={
+            <Switch
+              label={t("settings.performance.gpuSpeech")}
+              checked={get("performance", "gpu-speech") !== false}
+              onChange={(on) => set("performance", { "gpu-speech": on })}
             />
           }
         />

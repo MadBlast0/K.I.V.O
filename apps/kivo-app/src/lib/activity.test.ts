@@ -44,4 +44,18 @@ describe("entries", () => {
     ]);
     expect(list[0]?.outcome).toBe("denied");
   });
+
+  it("marks the requests a brain answered, for the AI filter", () => {
+    const list = entries([
+      row(5, "t2", "reply", "It's about 18 degrees."),
+      row(4, "t2", "brain", "Needs a brain: a question"),
+      row(3, "t2", "transcript", "how warm is it"),
+      row(2, "t1", "tool", "audio.mute"),
+      row(1, "t1", "transcript", "mute"),
+    ]);
+    expect(list.map((e) => [e.title, e.ai])).toEqual([
+      ["how warm is it", true],
+      ["mute", false],
+    ]);
+  });
 });

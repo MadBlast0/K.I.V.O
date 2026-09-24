@@ -12,7 +12,7 @@
  * The page reloads when the runtime says a section changed (DISCOVERY §3); Refresh re-runs a
  * section's detectors.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "../components/layout/Shell";
 import {
@@ -631,7 +631,24 @@ function SkillsTab() {
   const [path, setPath] = useState("");
   const [reviewing, setReviewing] = useState<{ skill: SkillView; text: string; files: string[] } | null>(null);
   const installed = skills.filter((s) => s.reviewed);
-  const waiting = skills.filter((s) => !s.reviewed);
+  // Skills found in other apps, grouped by where they came from and each shown once (the same
+  // skill is often in several agents' folders), as the mockup lists them.
+  const waiting = useMemo(() => {
+    const seen = new Set<string>();
+    const groups = new Map<string, SkillView[]>();
+    for (const s of skills) {
+      if (s.reviewed) continue;
+      const key = `${s.name}\n${s.description}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      groups.set(s.source, [...(groups.get(s.source) ?? []), s]);
+    }
+    return [...groups.entries()];
+  }, [skills]);
+  const waitingCount = waiting.reduce((n, [, list]) => n + list.length, 0);
+  // Small groups start open; big ones (an agent's whole skills folder) start folded.
+  const [unfolded, setUnfolded] = useState<Record<string, boolean>>({});
+  const isOpen = (group: string, size: number) => unfolded[group] ?? size <= 5;
   const review = (skill: SkillView) => {
     request<{ text: string; files: string[] }>(Method.skillsRead, { id: skill.id })
       .then((r) => setReviewing({ skill, ...r }))
@@ -641,6 +658,11 @@ function SkillsTab() {
     t(`extensions.skillSource.${s.source.split(":")[0] ?? ""}`, {
       defaultValue: s.source,
       name: s.source.split(":")[1] ?? "",
+    });
+  const groupName = (group: string) =>
+    t(`extensions.skillFrom.${group.split(":")[0] ?? ""}`, {
+      defaultValue: group,
+      name: group.split(":")[1] ?? "",
     });
   return (
     <>
@@ -669,7 +691,7 @@ function SkillsTab() {
       {installed.length === 0 ? (
         <Note>{t("extensions.noSkills")}</Note>
       ) : (
-        <Group>
+        <Group className="k-skill-list">
           {installed.map((s) => (
             <Row
               key={s.id}
@@ -698,27 +720,48 @@ function SkillsTab() {
           ))}
         </Group>
       )}
-      {waiting.length > 0 && (
+      {waitingCount > 0 && (
         <>
-          <Section title={t("extensions.waitingReview")} aside={<Meta>{waiting.length}</Meta>} />
-          <Group>
-            {waiting.map((s) => (
-              <Row
-                key={s.id}
-                icon="skill"
-                title={s.name}
-                subtitle={`${s.description} · ${source(s)}`}
-                end={
-                  <>
-                    {s.source === "import" && <Pill tone="warning">{t("extensions.untrusted")}</Pill>}
-                    <Button size="sm" onClick={() => review(s)}>
-                      {t("extensions.review")}
+          <Section title={t("extensions.waitingReview")} aside={<Meta>{waitingCount}</Meta>} />
+          {waiting.map(([group, list]) => {
+            const shown = isOpen(group, list.length);
+            return (
+              <Group key={group} className="k-skill-list">
+                <Row
+                  icon="folder"
+                  title={groupName(group)}
+                  subtitle={t("extensions.skillCount", { count: list.length })}
+                  end={
+                    <Button
+                      size="sm"
+                      variant="plain"
+                      aria-expanded={shown}
+                      onClick={() => setUnfolded((o) => ({ ...o, [group]: !shown }))}
+                    >
+                      {t(shown ? "extensions.hideSkills" : "extensions.showSkills")}
                     </Button>
-                  </>
-                }
-              />
-            ))}
-          </Group>
+                  }
+                />
+                {shown &&
+                  list.map((s) => (
+                    <Row
+                      key={s.id}
+                      icon="skill"
+                      title={s.name}
+                      subtitle={s.description}
+                      end={
+                        <>
+                          {s.source === "import" && <Pill tone="warning">{t("extensions.untrusted")}</Pill>}
+                          <Button size="sm" onClick={() => review(s)}>
+                            {t("extensions.review")}
+                          </Button>
+                        </>
+                      }
+                    />
+                  ))}
+              </Group>
+            );
+          })}
         </>
       )}
       <Note>{t("extensions.skillsNote")}</Note>

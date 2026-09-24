@@ -14,6 +14,7 @@ fn main() {
         "island_request",
         "announce",
         "window_effects",
+        "preview_glow",
     ]);
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(manifest))
         .expect("failed to run the Tauri build script");

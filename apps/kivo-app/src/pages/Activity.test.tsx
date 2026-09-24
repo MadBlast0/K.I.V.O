@@ -70,6 +70,8 @@ runtime.request = (method: string, params?: unknown) => {
       return Promise.resolve(activity);
     case "audit.list":
       return Promise.resolve(audit);
+    case "activity.export":
+      return Promise.resolve({ file: "C:/Users/me/Downloads/KIVO activity 2026-09-24.csv" });
     default:
       return Promise.resolve(null);
   }
@@ -105,5 +107,24 @@ describe("Activity (UX-20, SEC-24)", () => {
       rules: { "color-contrast": { enabled: false }, region: { enabled: false } },
     });
     expect(result.violations.map((v) => v.id)).toEqual([]);
+  });
+
+  it("filters to what a brain answered and exports the timeline", async () => {
+    render(
+      <TooltipProvider>
+        <ToastProvider>
+          <Activity />
+        </ToastProvider>
+      </TooltipProvider>,
+    );
+    await settle();
+    fireEvent.click(screen.getByRole("button", { name: "AI" }));
+    await settle();
+    // The fixtures are a command and a tool: nothing a brain answered.
+    expect(screen.getByText("Nothing here yet.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Export" }));
+    await settle();
+    expect(calls.some((c) => c.method === "activity.export")).toBe(true);
+    expect(screen.getByText(/Saved to .*KIVO activity 2026-09-24\.csv/)).toBeTruthy();
   });
 });

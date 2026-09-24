@@ -116,6 +116,8 @@ export function Usage() {
     new Intl.NumberFormat(i18n.language, {
       style: "currency",
       currency: "USD",
+      // A total can come back as -0: never show "-$0.00".
+      signDisplay: "negative",
       minimumFractionDigits: 2,
       maximumFractionDigits: v !== 0 && Math.abs(v) < 0.01 ? 4 : 2,
     }).format(v);

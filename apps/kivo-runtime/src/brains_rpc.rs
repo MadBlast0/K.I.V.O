@@ -540,6 +540,39 @@ impl BrainsRpc {
         })
     }
 
+    /// The whole Activity timeline, newest first, as CSV (UX-20's Export).
+    fn activity_csv(&self) -> String {
+        let cell = |s: &str| {
+            if s.contains([',', '"', '\n']) {
+                format!("\"{}\"", s.replace('"', "\"\""))
+            } else {
+                s.to_owned()
+            }
+        };
+        let mut out = String::from("time,kind,title,detail,status,turn\n");
+        let mut before = None;
+        // At most 20 000 rows: the timeline is kept for a while, not for ever.
+        for _ in 0..100 {
+            let page = self.recorder.recent(before, 200);
+            let Some(last) = page.last() else {
+                break;
+            };
+            before = Some(last.id);
+            for a in &page {
+                out.push_str(&format!(
+                    "{},{},{},{},{},{}\n",
+                    a.ts,
+                    cell(&a.kind),
+                    cell(&a.title),
+                    cell(a.detail.as_deref().unwrap_or_default()),
+                    cell(&a.status),
+                    cell(a.turn_id.as_deref().unwrap_or_default()),
+                ));
+            }
+        }
+        out
+    }
+
     fn usage_csv(&self, days: u32) -> String {
         let since = now_ms() - i64::from(days) * 24 * 3_600 * 1_000;
         let rows = lock(&self.brains().database())
@@ -768,6 +801,13 @@ impl BrainsRpc {
                 }
                 let p: P = parse(params).unwrap_or(P { days: 30 });
                 Ok(self.usage(p.days.clamp(1, 366)))
+            }
+            method::ACTIVITY_EXPORT => {
+                let csv = self.activity_csv();
+                let date = self.today();
+                self.save_download(&format!("KIVO activity {date}"), "csv", &csv)
+                    .map(|file| json!({ "file": file }))
+                    .map_err(refuse)
             }
             method::USAGE_EXPORT => {
                 let days = params["days"]

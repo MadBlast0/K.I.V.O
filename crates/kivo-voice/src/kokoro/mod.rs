@@ -140,19 +140,32 @@ impl Kokoro {
     }
 
     /// One pass of the model: phoneme ids (at most `MAX_PHONEMES`) → 24 kHz audio.
-    fn synthesize(&mut self, ids: &[i64], voice: Option<&str>) -> VoiceResult<Vec<f32>> {
+    /// A run stops as soon as `cancel` fires (a long sentence takes seconds).
+    fn synthesize(
+        &mut self,
+        ids: &[i64],
+        voice: Option<&str>,
+        cancel: &CancellationToken,
+    ) -> VoiceResult<Vec<f32>> {
         let mut input = Vec::with_capacity(ids.len() + 2);
         input.push(0);
         input.extend_from_slice(ids);
         input.push(0);
         let style = self.style(voice, ids.len()).to_vec();
-        let outputs = self.session.run(ort::inputs![
-            "input_ids" => Tensor::from_array(([1usize, input.len()], input))?,
-            "style" => Tensor::from_array(([1usize, STYLE_WIDTH], style))?,
-            "speed" => Tensor::from_array(([1usize], vec![self.speed]))?,
-        ])?;
-        let (_, audio) = outputs[0].try_extract_tensor::<f32>()?;
-        Ok(audio.to_vec())
+        let speed = self.speed;
+        let session = &mut self.session;
+        crate::interrupt::interruptible(cancel, |options| {
+            let outputs = session.run_with_options(
+                ort::inputs![
+                    "input_ids" => Tensor::from_array(([1usize, input.len()], input))?,
+                    "style" => Tensor::from_array(([1usize, STYLE_WIDTH], style))?,
+                    "speed" => Tensor::from_array(([1usize], vec![speed]))?,
+                ],
+                options,
+            )?;
+            let (_, audio) = outputs[0].try_extract_tensor::<f32>()?;
+            Ok(audio.to_vec())
+        })
     }
 
     /// The phonemes KIVO would give Kokoro for `text` (diagnostics and tests).
@@ -224,7 +237,7 @@ impl TtsEngine for Kokoro {
                 if cancel.is_cancelled() {
                     return Err(VoiceError::Cancelled);
                 }
-                let audio = self.synthesize(piece, voice)?;
+                let audio = self.synthesize(piece, voice, cancel)?;
                 if cancel.is_cancelled() {
                     return Err(VoiceError::Cancelled);
                 }

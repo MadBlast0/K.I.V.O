@@ -18,6 +18,8 @@ use tokio_util::sync::CancellationToken;
 
 /// Where the enrollment word error rates are kept.
 pub const VOICE_WER_KEY: &str = "voice.enrollmentWer";
+/// Where "Benchmark this engine" results are kept (BENCH-15): engine id → measurement.
+pub const ENGINE_BENCH_KEY: &str = "voice.engineBenchmarks";
 
 pub struct Models {
     store: ModelStore,
@@ -32,6 +34,8 @@ pub struct Models {
     measurements: Mutex<(Vec<(String, f64)>, i64)>,
     /// How well each recognizer heard the owner's enrollment (VOICE-23), and when.
     voice_wers: Mutex<(std::collections::BTreeMap<String, f64>, i64)>,
+    /// "Benchmark this engine" runs (BENCH-15).
+    engine_benchmarks: Mutex<std::collections::BTreeMap<String, kivo_voice::registry::Measured>>,
     /// The last download failure per model, until it is tried again (UX-61 "Error").
     errors: Mutex<HashMap<String, String>>,
     /// Where the cloud speech services' keys are (Credential Manager; VOICE-10/11).
@@ -51,6 +55,7 @@ impl Models {
             system: Mutex::default(),
             measurements: Mutex::default(),
             voice_wers: Mutex::default(),
+            engine_benchmarks: Mutex::default(),
             errors: Mutex::default(),
             secrets: Mutex::new(None),
             applied: Mutex::new(None),
@@ -64,6 +69,22 @@ impl Models {
 
     pub fn voice_wers(&self) -> std::collections::BTreeMap<String, f64> {
         lock(&self.voice_wers).0.clone()
+    }
+
+    /// Keeps a "Benchmark this engine" result (BENCH-15); the caller saves them.
+    pub fn set_engine_benchmark(
+        &self,
+        id: &str,
+        measured: kivo_voice::registry::Measured,
+    ) -> std::collections::BTreeMap<String, kivo_voice::registry::Measured> {
+        let mut runs = lock(&self.engine_benchmarks);
+        runs.insert(id.to_owned(), measured);
+        runs.clone()
+    }
+
+    /// What the PC can report about processes and load, once the runtime has set it.
+    pub fn system_info(&self) -> Option<Arc<dyn kivo_platform::SystemInfo>> {
+        lock(&self.system).clone()
     }
 
     pub fn set_system(&self, system: Arc<dyn kivo_platform::SystemInfo>) {
@@ -94,12 +115,31 @@ impl Models {
         let resolved = crate::profiles::resolve(config, machine);
         let on_gpu_now = self.infer.configured().gpu.is_some();
         let gpu = match (stt, machine) {
-            (Some(id), Some(m)) if resolved.gpu && crate::gpu::can_use_gpu(id) => {
+            (Some(id), Some(m))
+                if resolved.gpu && config.performance.gpu_speech && crate::gpu::can_use_gpu(id) =>
+            {
                 crate::gpu::choose(resolved.profile, m, gpu_load, on_gpu_now)
             }
             _ => None,
         };
         (resolved, gpu)
+    }
+
+    /// Where engine `id` would run now: the graphics card the GPU policy gives it, or `None`
+    /// for the processor (test workers and benchmarks run it there too).
+    pub fn gpu_for(&self, id: &str, config: &KivoConfig) -> Option<u32> {
+        if !crate::gpu::can_use_gpu(id) {
+            return None;
+        }
+        let (machine, load) = self.sample(Some(id));
+        self.decide(config, Some(id), machine.as_ref(), load).1
+    }
+
+    /// The threads speech models may use now (the hardware recommendation, PLAN-01).
+    pub fn speech_threads(&self) -> usize {
+        self.recommended_threads
+            .load(std::sync::atomic::Ordering::Relaxed)
+            .max(1)
     }
 
     /// The profile in effect right now (the Performance page).
@@ -232,9 +272,15 @@ impl Models {
         {
             self.set_voice_wers(wers, at);
         }
+        if let Ok(Some(raw)) = db.meta(ENGINE_BENCH_KEY)
+            && let Ok(runs) = serde_json::from_str(&raw)
+        {
+            *lock(&self.engine_benchmarks) = runs;
+        }
         let mut metrics = Vec::new();
         let mut at = 0;
-        for suite in ["stt", "tts"] {
+        // GPU runs first: an engine that runs on the graphics card shows those numbers.
+        for suite in ["stt-gpu", "stt", "tts"] {
             let Ok(Some((started, json))) = db.latest_benchmark(suite) else {
                 continue;
             };
@@ -254,6 +300,7 @@ impl Models {
         let mut entries = kivo_voice::registry::registry();
         let (metrics, at) = lock(&self.measurements).clone();
         kivo_voice::registry::apply_measurements(&mut entries, &metrics, at);
+        kivo_voice::registry::apply_engine_benchmarks(&mut entries, &lock(&self.engine_benchmarks));
         let (wers, wers_at) = lock(&self.voice_wers).clone();
         kivo_voice::registry::apply_voice_wer(&mut entries, &wers, wers_at);
         entries
@@ -288,6 +335,7 @@ impl Models {
         kivo_voice::recommend::recommend(
             machine,
             &Needs {
+                gpu_speech: config.performance.gpu_speech,
                 language: &config.general.language,
                 local_only: !speech_may_leave(config),
                 priority,
@@ -765,7 +813,8 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 
 /// The language's default recognizer: its Recommended profile, else its Multilingual one.
 fn default_stt(language: &str) -> String {
-    let cards = kivo_voice::registry::profiles(EngineSlot::Stt, language);
+    // An engine KIVO can start with before anything is downloaded for the GPU.
+    let cards = kivo_voice::registry::profiles(EngineSlot::Stt, language, false);
     [
         kivo_voice::registry::Profile::Recommended,
         kivo_voice::registry::Profile::Multilingual,

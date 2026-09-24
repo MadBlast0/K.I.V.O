@@ -92,7 +92,74 @@ pub fn catalog() -> Vec<ModelManifest> {
         whisper(),
         chatterbox(),
     ]);
+    // Only where the speech worker has whisper.cpp (`kivo_voice::whisper_cpp::AVAILABLE`).
+    if cfg!(all(windows, target_arch = "x86_64")) {
+        all.extend(WHISPER_CPP.iter().map(whisper_cpp));
+    }
     all
+}
+
+/// whisper.cpp's GGML models (MIT), each one file, from the whisper.cpp project's own repository
+/// at a pinned revision: id, name, file, size, SHA-256, English only.
+const WHISPER_CPP: [(&str, &str, &str, u64, &str, bool); 3] = [
+    (
+        "whisper-cpp-small",
+        "Whisper small (graphics card)",
+        "ggml-small-q8_0.bin",
+        264_464_607,
+        "49c8fb02b65e6049d5fa6c04f81f53b867b5ec9540406812c643f177317f779f",
+        false,
+    ),
+    (
+        "whisper-cpp-turbo",
+        "Whisper large-v3-turbo (graphics card)",
+        "ggml-large-v3-turbo-q5_0.bin",
+        574_041_195,
+        "394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2",
+        false,
+    ),
+    (
+        "whisper-cpp-base-en",
+        "Whisper base, English (graphics card)",
+        "ggml-base.en.bin",
+        147_964_211,
+        "a03779c86df3323075f5e796cb2ce5029f00ec8869eee3fdfb897afe36c6d002",
+        true,
+    ),
+];
+
+fn whisper_cpp(
+    &(id, name, file, size, sha256, english_only): &(&str, &str, &str, u64, &str, bool),
+) -> ModelManifest {
+    const BASE: &str = "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1";
+    ModelManifest {
+        id: id.into(),
+        name: name.into(),
+        kind: ModelKind::Stt,
+        license: "MIT".into(),
+        attribution: "Whisper by OpenAI, MIT License; GGML conversion by the whisper.cpp project, MIT License.".into(),
+        source: "https://huggingface.co/ggerganov/whisper.cpp".into(),
+        languages: if english_only {
+            vec!["en".into()]
+        } else {
+            [
+                "en", "ar", "bg", "cs", "da", "de", "el", "es", "et", "fi", "fr", "hi", "hr", "hu",
+                "id", "it", "ja", "ko", "lt", "lv", "nl", "pa", "pl", "pt", "ro", "ru", "sk", "sl",
+                "sv", "tr", "uk", "vi", "zh",
+            ]
+            .into_iter()
+            .map(str::to_owned)
+            .collect()
+        },
+        requires: vec![SILERO_VAD.into(), SMART_TURN.into()],
+        files: vec![ModelFile {
+            name: file.into(),
+            url: format!("{BASE}/{file}"),
+            size,
+            sha256: sha256.into(),
+            unpack: Vec::new(),
+        }],
+    }
 }
 
 /// Parakeet TDT 0.6B v3's id: the Balanced recognizer for 25 European languages (VOICE-10).

@@ -4,7 +4,13 @@
  * switch, which the runtime reports as `engineSwitch` events. Everything refreshes on events.
  */
 import { useCallback, useEffect, useState } from "react";
-import { Method, type ModelItem, type RecommendationItem, type SpeechChoices } from "../../ipc/generated";
+import {
+  Method,
+  type MeasuredItem,
+  type ModelItem,
+  type RecommendationItem,
+  type SpeechChoices,
+} from "../../ipc/generated";
 import { useRuntime, useRuntimeEvents } from "../../ipc/runtime";
 
 export type Slot = "stt" | "tts";
@@ -118,7 +124,29 @@ export function useSpeech() {
     [request],
   );
 
-  return { connected, choices, models, recommendation, progress, choose, pickVoice, preview, trySample, reload: load };
+  /** "Benchmark this engine" (BENCH-15): measured on this PC, then the cards show it. */
+  const benchmark = useCallback(
+    async (engine: string) => {
+      const measured = await request<MeasuredItem>(Method.voiceBenchmark, { engine });
+      load();
+      return measured;
+    },
+    [request, load],
+  );
+
+  return {
+    connected,
+    choices,
+    models,
+    recommendation,
+    progress,
+    choose,
+    pickVoice,
+    preview,
+    trySample,
+    benchmark,
+    reload: load,
+  };
 }
 
 export type Speech = ReturnType<typeof useSpeech>;
