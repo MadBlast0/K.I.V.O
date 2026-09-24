@@ -340,6 +340,11 @@ impl Transcriber for InLanguage<'_> {
     fn transcribe(&mut self, audio: &[f32], cancel: &CancellationToken) -> VoiceResult<String> {
         self.engine.transcribe_in(audio, &self.language, cancel)
     }
+
+    /// Whisper hears 30 s at a time; longer speech comes in segments instead of being cut off.
+    fn max_samples(&self) -> Option<usize> {
+        Some(CHUNK_SAMPLES - SAMPLE_RATE as usize)
+    }
 }
 
 impl SttEngine for Whisper {

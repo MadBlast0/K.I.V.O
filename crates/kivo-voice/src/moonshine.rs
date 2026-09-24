@@ -424,9 +424,16 @@ impl SttEngine for Moonshine {
     }
 }
 
+/// The longest input the model takes: its decoder fails from about 9.5 s (384 encoder frames).
+pub const MAX_SAMPLES: usize = SAMPLE_RATE as usize * 9;
+
 impl Transcriber for Moonshine {
     fn transcribe(&mut self, audio: &[f32], cancel: &CancellationToken) -> VoiceResult<String> {
         Moonshine::transcribe(self, audio, cancel)
+    }
+
+    fn max_samples(&self) -> Option<usize> {
+        Some(MAX_SAMPLES)
     }
 }
 
@@ -543,5 +550,39 @@ mod tests {
             .unwrap();
         eprintln!("{text}");
         assert!(!text.is_empty());
+    }
+
+    /// Speech past the model's 9.5 s limit is heard in segments (the model alone fails on it).
+    #[test]
+    fn hears_speech_longer_than_the_model_takes_when_it_is_installed() {
+        let Some(dir) = std::env::var_os("KIVO_MOONSHINE_DIR").map(std::path::PathBuf::from) else {
+            eprintln!("KIVO_MOONSHINE_DIR not set; skipping");
+            return;
+        };
+        let Ok(wav) = std::fs::read(dir.join("test_wavs/0.wav")) else {
+            eprintln!("no sample recording in KIVO_MOONSHINE_DIR; skipping");
+            return;
+        };
+        let mut engine = Moonshine::load(&dir, 4).unwrap();
+        let one = crate::utterance::wav_samples(&wav);
+        // The sample three times with a short pause between: about 18 s.
+        let mut audio = Vec::new();
+        for _ in 0..3 {
+            audio.extend_from_slice(&one);
+            audio.extend(std::iter::repeat_n(0.0, SAMPLE_RATE as usize / 2));
+        }
+        assert!(
+            engine
+                .transcribe(&audio, &CancellationToken::new())
+                .is_err(),
+            "the model alone can't take it"
+        );
+        let once = engine.transcribe(&one, &CancellationToken::new()).unwrap();
+        let text =
+            crate::utterance::transcribe_long(&mut engine, &audio, &CancellationToken::new())
+                .unwrap();
+        eprintln!("{text}");
+        let words = |t: &str| t.split_whitespace().count();
+        assert!(words(&text) >= words(&once) * 2, "{once} / {text}");
     }
 }
