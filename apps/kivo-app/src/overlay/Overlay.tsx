@@ -350,7 +350,11 @@ export function Overlay() {
         <Island
           model={model}
           level={readLevel}
-          companion={snapshot?.island?.companion === "orb" ? "orb" : "pill"}
+          companion={
+            snapshot?.island?.companion === "orb" || snapshot?.island?.companion === "character"
+              ? snapshot.island.companion
+              : "pill"
+          }
           onDrag={() => {
             if (isTauri()) void invoke("overlay_drag").catch(() => {});
           }}

@@ -110,7 +110,7 @@ system surfaces. Those earlier mockup files are in the git history; decisions ar
 
 ## 8. Open items
 
-1. The companion **Character** design (Rive) and the **Orb** shader (M8).
+1. The companion **Character** design (KIVO's SVG drawing today; a Rive design can replace it) and the **Orb** shader (M8).
 2. The custom **earcon motif**, designed with the brand before beta (VOICE-29).
 3. High-contrast pass (M7).
 4. A trademark registry check for "KIVO" before the first public release.

@@ -10,6 +10,7 @@ import { Icon } from "../../icons";
 import { Keys, Orb } from "../ui/Status";
 import { useTranslation } from "react-i18next";
 import { withNodes } from "../../i18n/nodes";
+import { Character, moodOf } from "./Character";
 import { OrbGl, orbColor } from "./OrbGl";
 
 /** States in which the Orb moves (UX-38); everything else is at rest. */
@@ -33,6 +34,8 @@ export interface IslandModel {
   body?: ReactNode;
   /** Waveform colour: listening is white, KIVO speaking is light blue. */
   voice?: "user" | "kivo";
+  /** KIVO is showing the user a control (UX-39): the Character looks toward it. */
+  pointing?: boolean;
 }
 
 export function Island({
@@ -44,8 +47,8 @@ export function Island({
   "aria-label": ariaLabel,
 }: {
   model: IslandModel | null;
-  /** The pill (default), or the Orb floating above the card (UX-38). */
-  companion?: "pill" | "orb";
+  /** The pill (default), or the Orb or the Character floating above the card (UX-38). */
+  companion?: "pill" | "orb" | "character";
   /** Pressing on the Island's row (not a button) starts dragging it (UX-13). */
   onDrag?: () => void;
   /** The live audio level (0–1) for the waveform; without it the waveform shows a sample envelope
@@ -72,8 +75,10 @@ export function Island({
   const tall = height > 40;
   const spring = reduce ? { duration: 0 } : { type: "spring" as const, stiffness: 420, damping: 34, mass: 0.9 };
 
-  // The Orb replaces the pill, not the card: it floats above, the words stay in the card under it.
-  if (companion === "orb") {
+  // The Orb or the Character replaces the pill, not the card: it floats above, the words stay in
+  // the card under it.
+  if (companion === "orb" || companion === "character") {
+    const label = typeof model?.label === "string" ? model.label : "";
     return (
       <AnimatePresence>
         {model && (
@@ -82,20 +87,31 @@ export function Island({
             role="status"
             aria-live="polite"
             aria-label={ariaLabel}
-            className={["k-island-orb", className].filter(Boolean).join(" ")}
+            className={[companion === "orb" ? "k-island-orb" : "k-island-character", className]
+              .filter(Boolean)
+              .join(" ")}
             initial={reduce ? false : { opacity: 0, scale: 0.7 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.7 }}
             transition={spring}
           >
-            <div className="k-island-orb__orb" onPointerDown={onDrag ? (e) => e.button === 0 && onDrag() : undefined}>
-              <OrbGl
-                color={orbColor(model.state, model.voice)}
-                active={MOVING.test(model.state)}
-                level={level}
-                label={typeof model.label === "string" ? model.label : ""}
-              />
-            </div>
+            {companion === "orb" ? (
+              <div className="k-island-orb__orb" onPointerDown={onDrag ? (e) => e.button === 0 && onDrag() : undefined}>
+                <OrbGl
+                  color={orbColor(model.state, model.voice)}
+                  active={MOVING.test(model.state)}
+                  level={level}
+                  label={label}
+                />
+              </div>
+            ) : (
+              <div
+                className="k-island-character__face"
+                onPointerDown={onDrag ? (e) => e.button === 0 && onDrag() : undefined}
+              >
+                <Character mood={moodOf(model.state, model.pointing)} level={level} label={label} />
+              </div>
+            )}
             <div className="k-island k-island--card" style={{ width: model.width, maxWidth: "100%" }}>
               <div className="k-island__row">
                 {model.lead}

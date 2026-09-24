@@ -1241,15 +1241,21 @@ impl Engine {
                         _ => Message::user(&m.text),
                     });
                 }
-                // Older messages of this thread that match the request (CONV-05 item 7).
+                // Older messages of this thread that relate to the request (CONV-05 item 7), by
+                // words and, with the local model, by meaning (CONV-06).
                 if summarized > 0 {
-                    let found = self
-                        .recorder_db(|db| db.search_messages(text, 20))
-                        .unwrap_or_default();
+                    let found = match self.memory() {
+                        Some(memory) => memory.find_messages(text, id, summarized, 3),
+                        None => self
+                            .recorder_db(|db| db.search_messages(text, 20))
+                            .unwrap_or_default()
+                            .into_iter()
+                            .filter(|m| m.conversation_id == id && m.id <= summarized)
+                            .take(3)
+                            .collect(),
+                    };
                     layers.recalled = found
                         .into_iter()
-                        .filter(|m| m.conversation_id == id && m.id <= summarized)
-                        .take(3)
                         .map(|m| {
                             ContextItem::new(m.text, format!("earlier {}", m.role), Trust::User)
                         })

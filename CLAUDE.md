@@ -79,8 +79,7 @@ conversation threads with compaction, usage, cost estimates and limits; no-key s
 (OpenRouter OAuth, the CLIs' own logins, local servers found on this PC), write-only keys in
 Credential Manager, discovery with Refresh, and the Chat, Brains (with Context) and Voice pages,
 onboarding step 6 and the Island's brain chip. Still open in M3: a live run with Claude Code and
-Codex (their ACP adapters aren't installed here), semantic recall of old messages (full-text
-today), and the brain benchmark (M3-X1, deferred). **M4 — tools and computer control** is built:
+Codex (their ACP adapters aren't installed here) and the brain benchmark (M3-X1, deferred). **M4 — tools and computer control** is built:
 UI Automation on its own COM thread (find, tree, invoke, set value, toggle, select, expand,
 events), the capability-ladder router `control.act` and the app registry (`apps/*.toml`), files,
 clipboard, shell in Job Objects with a risk parser, OCR, screen reading and vision on request,
@@ -124,8 +123,8 @@ notes, the tidy job, hybrid memory search (sqlite-vec) and the graph view, skill
 desktop AI apps, GitHub, KIVO's OAuth connectors, in-app CLI installs and the dependency manager,
 signed catalogs, the Orb and the wake glow, pointing, product modes, performance profiles, the GPU
 policy, crash recovery and the diagnostics bundle. Still open in M8: the owner's catalog signing
-key and OAuth client ids, checking the desktop AI apps' hints against the installed apps, the Rive
-Character, the wake glow's power measurement and the benchmark runs (deferred), live runs of
+key and OAuth client ids, checking the desktop AI apps' hints against the installed apps, the wake
+glow's power measurement and the benchmark runs (deferred), live runs of
 realtime and cloud speech with real keys, and a week of daily use (M8-X2). **M9 — release** is
 built as far as it can be before the owner's keys and a tag: the runtime is the updater (channels,
 minisign + Authenticode verification, install at idle, rollback after two failed starts, What's

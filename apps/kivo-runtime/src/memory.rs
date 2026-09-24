@@ -240,7 +240,8 @@ impl Memory {
     }
 
     /// Embeds, on a background thread, every note whose vector is missing or from another model
-    /// (new, changed, or the model changed). One job at a time; a no-op without the model.
+    /// (new, changed, or the model changed), then the kept conversation messages (CONV-06). One
+    /// job at a time; a no-op without the model.
     pub fn reembed(self: &Arc<Self>) {
         use std::sync::atomic::Ordering;
         let Some((embed, model)) = lock(&self.embedder).clone() else {
@@ -272,6 +273,26 @@ impl Memory {
                     break;
                 }
             }
+            // Conversation messages, for recall by meaning (CONV-06).
+            loop {
+                let batch = lock(&me.db)
+                    .messages_to_embed(&model, EMBED_BATCH)
+                    .unwrap_or_default();
+                if batch.is_empty() {
+                    break;
+                }
+                let mut stored = 0;
+                for (id, text) in batch {
+                    let Some(vector) = embed(&text) else { continue };
+                    if lock(&me.db).set_message_vector(id, &model, &vector).is_ok() {
+                        stored += 1;
+                    }
+                }
+                done += stored;
+                if stored == 0 {
+                    break;
+                }
+            }
             me.embedding.store(false, Ordering::Release);
             if done > 0 {
                 tracing::debug!(done, "memory notes embedded");
@@ -284,10 +305,48 @@ impl Memory {
         let Some((_, model)) = lock(&self.embedder).clone() else {
             return false;
         };
+        let db = lock(&self.db);
         !self.embedding.load(std::sync::atomic::Ordering::Acquire)
-            && lock(&self.db)
-                .memories_to_embed(&model, 1)
-                .is_ok_and(|t| t.is_empty())
+            && db.memories_to_embed(&model, 1).is_ok_and(|t| t.is_empty())
+            && db.messages_to_embed(&model, 1).is_ok_and(|t| t.is_empty())
+    }
+
+    /// Earlier messages of `conversation` (ids up to `through`) that relate to `text`, best first:
+    /// word matches (FTS5) and, with the model, meaning matches (sqlite-vec), fused by rank
+    /// (CONV-06). Messages not embedded yet are embedded in the background for next time.
+    pub fn find_messages(
+        self: &Arc<Self>,
+        text: &str,
+        conversation: &str,
+        through: i64,
+        limit: usize,
+    ) -> Vec<kivo_store::brains::StoredMessage> {
+        let mine = |m: &kivo_store::brains::StoredMessage| {
+            m.conversation_id == conversation && m.id <= through
+        };
+        let by_words: Vec<_> = lock(&self.db)
+            .search_messages(text, 20)
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|m| mine(m))
+            .collect();
+        let embedder = lock(&self.embedder).clone();
+        let by_meaning: Vec<_> = embedder
+            .and_then(|(embed, model)| embed(text).map(|v| (v, model)))
+            .map(|(vector, model)| {
+                lock(&self.db)
+                    .nearest_messages(&vector, &model, 20)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter(|(m, distance)| mine(m) && *distance <= MAX_DISTANCE)
+                    .map(|(m, _)| m)
+                    .collect()
+            })
+            .unwrap_or_default();
+        self.reembed();
+        let mut fused = query::fuse(&[by_words, by_meaning], |m| m.id.to_string());
+        fused.truncate(limit);
+        fused
     }
 
     /// Notes for `text`, best first: keyword matches (FTS5) and, with the model, meaning matches
@@ -1451,6 +1510,81 @@ mod tests {
     /// MEM-09 / CONV-23 with the real MiniLM (where a test machine has it, `KIVO_MINILM_DIR`):
     /// notes are embedded in the background; a request that shares no keyword with a note still
     /// recalls it by meaning; an edited note is embedded again.
+    #[test]
+    fn earlier_messages_are_recalled_by_meaning_within_their_thread() {
+        let Some(model_dir) = std::env::var_os("KIVO_MINILM_DIR") else {
+            eprintln!("KIVO_MINILM_DIR isn't set; skipping");
+            return;
+        };
+        let model = std::sync::Arc::new(
+            kivo_voice::embed::MiniLm::load(Path::new(&model_dir)).expect("the model loads"),
+        );
+        let (memory, _core, _dir) = setup();
+        let (flight, unrelated, elsewhere, later) = {
+            let db = lock(&memory.db);
+            db.create_conversation("trip", "voice", "Trip").unwrap();
+            db.create_conversation("other", "chat", "Other").unwrap();
+            let flight = db
+                .add_message(
+                    "trip",
+                    "user",
+                    "Our flight to Lisbon leaves on the third",
+                    None,
+                    None,
+                )
+                .unwrap();
+            let unrelated = db
+                .add_message(
+                    "trip",
+                    "assistant",
+                    "Fix the flaky voice test first",
+                    None,
+                    None,
+                )
+                .unwrap();
+            let elsewhere = db
+                .add_message(
+                    "other",
+                    "user",
+                    "The flight to Rome was cancelled",
+                    None,
+                    None,
+                )
+                .unwrap();
+            let later = db
+                .add_message(
+                    "trip",
+                    "user",
+                    "Pack the charger for the flight",
+                    None,
+                    None,
+                )
+                .unwrap();
+            (flight, unrelated, elsewhere, later)
+        };
+        // Not a word in common with the flight message: words alone find nothing.
+        // (MiniLM cosine 0.52, well inside the 0.35 cut-off.)
+        let question = "when does my plane depart";
+        assert!(
+            memory
+                .find_messages(question, "trip", unrelated, 3)
+                .is_empty()
+        );
+
+        memory.set_embedder(crate::semantic::embedder(model), "all-minilm-l6-v2");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        while !memory.embedded() {
+            assert!(std::time::Instant::now() < deadline, "embedding finished");
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        let found = memory.find_messages(question, "trip", unrelated, 3);
+        let ids: Vec<i64> = found.iter().map(|m| m.id).collect();
+        assert_eq!(ids, [flight], "{found:?}");
+        // Only this thread's summarized messages: not another thread's, not the ones still in
+        // the request.
+        assert!(!ids.contains(&elsewhere) && !ids.contains(&later));
+    }
+
     #[test]
     fn notes_are_recalled_by_meaning_with_the_local_model() {
         let Some(model_dir) = std::env::var_os("KIVO_MINILM_DIR") else {

@@ -367,6 +367,67 @@ impl Database {
         Ok(rows)
     }
 
+    /// Kept messages without a vector from `model` (CONV-06), oldest first.
+    pub fn messages_to_embed(
+        &self,
+        model: &str,
+        limit: u32,
+    ) -> Result<Vec<(i64, String)>, DbError> {
+        let owner = self.owner()?;
+        let mut stmt = self.connection().prepare(
+            "SELECT m.id, m.text FROM messages m
+             LEFT JOIN message_vector_models v ON v.message_id = m.id
+             WHERE m.profile_id = ?1 AND (v.model IS NULL OR v.model != ?2)
+             ORDER BY m.id LIMIT ?3",
+        )?;
+        let rows = stmt.query_map(params![owner, model, limit], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    /// Stores a message's vector and the model that made it (CONV-06).
+    pub fn set_message_vector(&self, id: i64, model: &str, vector: &[f32]) -> Result<(), DbError> {
+        let blob: Vec<u8> = vector.iter().flat_map(|v| v.to_le_bytes()).collect();
+        let c = self.connection();
+        c.execute("DELETE FROM message_vectors WHERE rowid = ?1", [id])?;
+        c.execute(
+            "INSERT INTO message_vectors (rowid, embedding) VALUES (?1, ?2)",
+            params![id, blob],
+        )?;
+        c.execute(
+            "INSERT INTO message_vector_models (profile_id, message_id, model)
+             SELECT profile_id, id, ?2 FROM messages WHERE id = ?1
+             ON CONFLICT (message_id) DO UPDATE SET model = excluded.model",
+            params![id, model],
+        )?;
+        Ok(())
+    }
+
+    /// The `k` messages nearest to `vector` among those embedded by `model`, nearest first, with
+    /// their cosine distance (CONV-06).
+    pub fn nearest_messages(
+        &self,
+        vector: &[f32],
+        model: &str,
+        k: u32,
+    ) -> Result<Vec<(StoredMessage, f32)>, DbError> {
+        let owner = self.owner()?;
+        let blob: Vec<u8> = vector.iter().flat_map(|v| v.to_le_bytes()).collect();
+        let mut stmt = self.connection().prepare(
+            "SELECT m.id, m.conversation_id, m.ts, m.role, m.text, m.brain, m.turn_id, n.distance
+             FROM (SELECT rowid, distance FROM message_vectors WHERE embedding MATCH ?1 AND k = ?2) n
+             JOIN messages m ON m.id = n.rowid
+             JOIN message_vector_models v ON v.message_id = m.id
+             WHERE m.profile_id = ?3 AND v.model = ?4
+             ORDER BY n.distance",
+        )?;
+        let rows = stmt.query_map(params![blob, k, owner, model], |r| {
+            let distance: f64 = r.get(7)?;
+            #[allow(clippy::cast_possible_truncation, reason = "a distance in 0..=2")]
+            Ok((Self::message_from(r)?, distance as f32))
+        })?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
     /// Removes conversations not updated for `days` (the retention setting; pinned ones stay).
     /// `days == 0` means "never keep": everything unpinned goes.
     pub fn prune_conversations(&self, days: u32, now: i64) -> Result<usize, DbError> {
@@ -696,6 +757,49 @@ impl Database {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    /// CONV-06: kept messages get vectors in sqlite-vec; the nearest come first, another
+    /// model's don't count, and a deleted conversation's go with it.
+    #[test]
+    fn message_vectors_are_searched_and_go_with_their_conversation() {
+        let db = Database::in_memory().unwrap();
+        let axis = |i: usize| {
+            let mut v = vec![0.0_f32; 384];
+            v[i] = 1.0;
+            v
+        };
+        db.create_conversation("c1", "voice", "Trip").unwrap();
+        db.create_conversation("c2", "chat", "Code").unwrap();
+        let trip = db
+            .add_message("c1", "user", "We fly to Lisbon on the 3rd", None, None)
+            .unwrap();
+        let code = db
+            .add_message("c2", "user", "Fix the flaky test", None, None)
+            .unwrap();
+        let todo = db.messages_to_embed("minilm", 10).unwrap();
+        assert_eq!(
+            todo.iter().map(|(id, _)| *id).collect::<Vec<_>>(),
+            [trip, code]
+        );
+        db.set_message_vector(trip, "minilm", &axis(0)).unwrap();
+        db.set_message_vector(code, "minilm", &axis(1)).unwrap();
+        assert!(db.messages_to_embed("minilm", 10).unwrap().is_empty());
+
+        let mut query = axis(0);
+        query[1] = 0.3;
+        let near = db.nearest_messages(&query, "minilm", 5).unwrap();
+        assert_eq!(near[0].0.id, trip);
+        assert!(near[0].1 < near[1].1);
+        assert!(
+            db.nearest_messages(&query, "other-model", 5)
+                .unwrap()
+                .is_empty()
+        );
+
+        db.delete_conversation("c1").unwrap();
+        let left = db.nearest_messages(&axis(0), "minilm", 5).unwrap();
+        assert_eq!(left.iter().map(|(m, _)| m.id).collect::<Vec<_>>(), [code]);
+    }
 
     #[test]
     fn conversations_keep_messages_and_find_them_again() {

@@ -791,6 +791,7 @@ function islandModel(snapshot: StateSnapshot, t: TFunction, on: IslandHandlers):
         ),
         wave: true,
         voice: "kivo",
+        pointing: !!turn?.point,
         body: turn ? (
           <>
             <Heard turn={turn} t={t} on={on} />
@@ -815,6 +816,7 @@ function islandModel(snapshot: StateSnapshot, t: TFunction, on: IslandHandlers):
         return {
           state: `done-${turn.id}`,
           width: CARD,
+          pointing: !!turn.point,
           label: t("island.kivo"),
           lead: turn.point ? (
             <PointArrow point={turn.point} t={t} />

@@ -241,7 +241,7 @@ describe("Settings → Appearance (DS-03)", () => {
 });
 
 describe("Settings → Island", () => {
-  it("moves, sizes and hides the Island; picks the Orb; Character waits for its mascot", async () => {
+  it("moves, sizes and hides the Island; picks the Orb or the Character", async () => {
     page("island");
     await settle();
     fireEvent.click(screen.getByRole("button", { name: "Where I dragged it" }));
@@ -253,7 +253,9 @@ describe("Settings → Island", () => {
     fireEvent.click(screen.getByRole("button", { name: "Never" }));
     await settle();
     expect(set({ overlay: { "hide-after-seconds": 0 } })).toBe(true);
-    expect(screen.getByRole("radio", { name: /Character/ })).toHaveProperty("disabled", true);
+    fireEvent.click(screen.getByRole("radio", { name: /Character/ }));
+    await settle();
+    expect(set({ companion: { style: "character" } })).toBe(true);
     fireEvent.click(screen.getByRole("radio", { name: /Orb/ }));
     await settle();
     expect(set({ companion: { style: "orb" } })).toBe(true);

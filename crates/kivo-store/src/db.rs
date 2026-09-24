@@ -421,6 +421,16 @@ const SCHEMA: &[&str] = &[
          WHEN old.title IS NOT new.title OR old.text IS NOT new.text BEGIN
          DELETE FROM memory_vector_models WHERE memory_id = new.id;
      END;",
+    // Conversation recall by meaning (CONV-06): one vector per kept message, like the notes'.
+    "CREATE VIRTUAL TABLE message_vectors USING vec0 (embedding float[384] distance_metric=cosine);
+     CREATE TABLE message_vector_models (
+             profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+             message_id INTEGER PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+             model      TEXT NOT NULL
+         ) STRICT;
+     CREATE TRIGGER message_vectors_delete AFTER DELETE ON messages BEGIN
+         DELETE FROM message_vectors WHERE rowid = old.id;
+     END;",
 ];
 
 static MIGRATIONS: LazyLock<Migrations<'static>> =

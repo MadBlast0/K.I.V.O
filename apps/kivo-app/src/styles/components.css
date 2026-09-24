@@ -2474,10 +2474,13 @@ button.k-island__chip {
   opacity: 0.8;
 }
 .k-style-preview--character {
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
-  background: var(--fill);
+  display: grid;
+  place-items: center;
+}
+.k-style-preview--character .k-character {
+  width: 40px;
+  height: 40px;
+  filter: none;
 }
 .k-style-preview--hidden {
   width: 36px;
@@ -2838,4 +2841,213 @@ button.k-island__chip {
   font-size: 13.5px;
   line-height: 1.45;
   color: var(--text);
+}
+
+/* The Character companion (UX-38): expressions are feature sets per mood; only active moods
+   animate (blink, glance, dots), and `--level` (set per frame only while listening or speaking)
+   drives the mouth and the listening ring. */
+.k-character {
+  --level: 0;
+  width: 56px;
+  height: 56px;
+  overflow: visible;
+  filter: drop-shadow(0 6px 14px rgb(0 0 0 / 0.35));
+}
+.k-character * {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition:
+    transform 180ms ease,
+    opacity 180ms ease;
+}
+.k-character__white {
+  fill: #fff;
+}
+.k-character__pupil {
+  fill: #111113;
+}
+.k-character__closed,
+.k-character__smile,
+.k-character__frown,
+.k-character__brow {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+.k-character__closed,
+.k-character__frown,
+.k-character__open,
+.k-character__dots,
+.k-character__brows {
+  opacity: 0;
+}
+.k-character__open {
+  fill: #fff;
+  transform: scaleY(calc(0.25 + var(--level) * 1.1));
+}
+.k-character__ring {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2;
+  opacity: 0;
+}
+.k-character__dots circle {
+  fill: #b69cff;
+}
+
+/* Listening: wide-eyed, the ring breathing with the voice. */
+.k-character--listening .k-character__ring {
+  opacity: calc(0.3 + var(--level) * 0.6);
+  transform: scale(calc(1 + var(--level) * 0.12));
+  transition: none;
+}
+.k-character--listening .k-character__eye {
+  transform: scale(1.1);
+}
+/* Thinking: a glance up and aside, the dots filling in turn. */
+.k-character--thinking .k-character__pupil {
+  transform: translate(1.5px, -2px);
+}
+.k-character--thinking .k-character__dots {
+  opacity: 1;
+}
+.k-character--thinking .k-character__smile {
+  transform: scaleY(0.3);
+}
+/* Acting: a focused squint. */
+.k-character--acting .k-character__white {
+  transform: scaleY(0.65);
+}
+.k-character--acting .k-character__brows {
+  opacity: 0.8;
+  transform: translateY(2px);
+}
+.k-character--acting .k-character__smile {
+  transform: scaleY(0.2);
+}
+/* Speaking: the mouth opens with the voice. */
+.k-character--speaking .k-character__smile {
+  opacity: 0;
+}
+.k-character--speaking .k-character__open {
+  opacity: 1;
+  transition: none;
+}
+/* Asking: one eyebrow up, a small "o", the ring amber. */
+.k-character--asking .k-character__brows {
+  opacity: 0.85;
+}
+.k-character--asking .k-character__brow--right {
+  transform: translateY(-3px) rotate(-8deg);
+}
+.k-character--asking .k-character__smile {
+  opacity: 0;
+}
+.k-character--asking .k-character__open {
+  opacity: 1;
+  transform: scale(0.7);
+}
+.k-character--asking .k-character__ring {
+  stroke: #ffc857;
+  opacity: 0.7;
+}
+/* Pointing: looking toward what it shows. */
+.k-character--pointing .k-character__pupil {
+  transform: translate(-2.2px, 0.5px);
+}
+/* Done: eyes closed in a smile. */
+.k-character--done .k-character__white,
+.k-character--done .k-character__pupil {
+  opacity: 0;
+}
+.k-character--done .k-character__closed {
+  opacity: 1;
+}
+.k-character--done .k-character__smile {
+  transform: scale(1.15);
+}
+/* Error: worried brows and a frown, the ring red. */
+.k-character--error .k-character__smile {
+  opacity: 0;
+}
+.k-character--error .k-character__frown {
+  opacity: 1;
+}
+.k-character--error .k-character__brows {
+  opacity: 0.85;
+}
+.k-character--error .k-character__brow--left {
+  transform: rotate(-22deg) translateY(1px);
+}
+.k-character--error .k-character__brow--right {
+  transform: rotate(22deg) translateY(1px);
+}
+.k-character--error .k-character__ring {
+  stroke: #ff5147;
+  opacity: 0.6;
+}
+
+/* Only while active: blinks, the thinking glance and dots. Nothing runs at rest. */
+.k-character--active .k-character__eye {
+  animation: k-character-blink 4.2s infinite;
+}
+.k-character--thinking .k-character__pupil {
+  animation: k-character-glance 2.4s ease-in-out infinite;
+}
+.k-character--thinking .k-character__dots circle {
+  animation: k-character-dot 1.2s ease-in-out infinite;
+}
+.k-character--thinking .k-character__dots circle:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.k-character--thinking .k-character__dots circle:nth-child(3) {
+  animation-delay: 0.4s;
+}
+@keyframes k-character-blink {
+  0%,
+  94%,
+  100% {
+    transform: scaleY(1);
+  }
+  97% {
+    transform: scaleY(0.1);
+  }
+}
+@keyframes k-character-glance {
+  0%,
+  100% {
+    transform: translate(1.5px, -2px);
+  }
+  50% {
+    transform: translate(-1px, -2px);
+  }
+}
+@keyframes k-character-dot {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .k-character *,
+  .k-character--active .k-character__eye,
+  .k-character--thinking .k-character__pupil,
+  .k-character--thinking .k-character__dots circle {
+    animation: none;
+    transition: none;
+  }
+}
+
+.k-island-character {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.k-island-character__face {
+  cursor: grab;
 }

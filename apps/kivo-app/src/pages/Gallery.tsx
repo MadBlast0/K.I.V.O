@@ -106,6 +106,7 @@ export function Gallery() {
   const { theme, setTheme, accent, setAccent, motion, setMotion } = useTheme();
   const toast = useToast();
   const [island, setIsland] = useState<IslandState>("listening");
+  const [companion, setCompanion] = useState<"pill" | "orb" | "character">("pill");
   const [shortcut, setShortcut] = useState(["Ctrl", "Space"]);
   const [dialog, setDialog] = useState(false);
   const moreMenu = useMemo(() => menu(t), [t]);
@@ -449,9 +450,22 @@ export function Gallery() {
       <Note>{t("gallery.notesExplainASettingIn")}</Note>
       <Meta>{t("gallery.updated2MinutesAgo")}</Meta>
 
-      <Section title={t("gallery.island")} aside={t("gallery.statesAndLiveActivities")} />
+      <Section
+        title={t("gallery.island")}
+        aside={
+          <Segmented<"pill" | "orb" | "character">
+            label={t("settings.island.style")}
+            value={companion}
+            onChange={setCompanion}
+            options={(["pill", "orb", "character"] as const).map((c) => ({
+              value: c,
+              label: t(`settings.island.styles.${c}`),
+            }))}
+          />
+        }
+      />
       <div className="k-gallery-stage">
-        <Island model={islandPreset(island, { partial: t("gallery.partial") })} />
+        <Island companion={companion} model={islandPreset(island, { partial: t("gallery.partial") })} />
       </div>
       <div className="k-gallery-chips">
         {[...ISLAND_STATES, ...ISLAND_NOTICES, ...ISLAND_LIVE].map((id) => (

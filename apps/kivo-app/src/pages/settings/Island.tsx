@@ -1,18 +1,17 @@
 /**
  * Settings → Island (UX-31, UX-13, UX-10, UX-15): its style, where and how big it is, what it
  * shows (the overlay style, UX-17) and how it behaves, with the wake glow (UX-16). The Character
- * style waits for its designed mascot and says so. With the Island hidden and every sound off, a
+ * is KIVO's own drawn mascot (UX-38). With the Island hidden and every sound off, a
  * warning says KIVO would give no sign it's listening (UX-54).
  */
 import { useTranslation } from "react-i18next";
-import { Alert, Group, Orb, Pill, Row, Section, Segmented, Switch } from "../../components/ui";
+import { Character } from "../../components/island/Character";
+import { Alert, Group, Orb, Row, Section, Segmented, Switch } from "../../components/ui";
 import { bool, field, num, oneOf, setting } from "../../lib/settings";
 import { useConfig } from "./useConfig";
 
 type Style = "pill" | "orb" | "character" | "hidden";
 const STYLES: ReadonlyArray<Style> = ["pill", "orb", "character", "hidden"];
-/** Styles that exist today; the Character waits for its designed mascot (UX-38). */
-const READY: ReadonlySet<Style> = new Set(["pill", "orb", "hidden"]);
 type OverlayStyle = "pill-and-card" | "pill-only" | "card-only" | "off";
 const OVERLAY_STYLES: ReadonlyArray<OverlayStyle> = ["pill-and-card", "pill-only", "card-only", "off"];
 
@@ -26,7 +25,13 @@ function StylePreview({ style }: { style: Style }) {
     );
   }
   if (style === "orb") return <Orb size={30} />;
-  if (style === "character") return <span className="k-style-preview k-style-preview--character" aria-hidden />;
+  if (style === "character") {
+    return (
+      <span className="k-style-preview k-style-preview--character" aria-hidden>
+        <Character mood="idle" label="" />
+      </span>
+    );
+  }
   return <span className="k-style-preview k-style-preview--hidden" aria-hidden />;
 }
 
@@ -50,28 +55,22 @@ export function IslandTab() {
       )}
       <Section title={t("settings.island.style")} />
       <div className="k-style-cards" role="radiogroup" aria-label={t("settings.island.style")}>
-        {STYLES.map((s) => {
-          const ready = READY.has(s);
-          return (
-            <button
-              key={s}
-              type="button"
-              role="radio"
-              aria-checked={style === s}
-              aria-disabled={!ready}
-              disabled={!ready}
-              className="k-style-card"
-              onClick={() => ready && set("companion", { style: s })}
-            >
-              <span className="k-style-card__preview">
-                <StylePreview style={s} />
-              </span>
-              <b>{t(`settings.island.styles.${s}`)}</b>
-              <span className="k-meta">{t(`settings.island.styles.${s}Hint`)}</span>
-              {!ready && <Pill>{t("settings.general.later")}</Pill>}
-            </button>
-          );
-        })}
+        {STYLES.map((s) => (
+          <button
+            key={s}
+            type="button"
+            role="radio"
+            aria-checked={style === s}
+            className="k-style-card"
+            onClick={() => set("companion", { style: s })}
+          >
+            <span className="k-style-card__preview">
+              <StylePreview style={s} />
+            </span>
+            <b>{t(`settings.island.styles.${s}`)}</b>
+            <span className="k-meta">{t(`settings.island.styles.${s}Hint`)}</span>
+          </button>
+        ))}
       </div>
 
       <Section title={t("settings.island.placement")} />

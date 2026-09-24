@@ -148,7 +148,7 @@ same `SessionState` and audio levels.
 |---|---|---|---|
 | **Pill** | The overlay pill and card (§2) | CSS + Canvas waveform | **Yes** |
 | **Orb** | An abstract reactive orb that floats near the pill. It can glide to point at UI targets (plan §141) | Raw WebGL shader (adapted LiveKit aura) or Rive | No |
-| **Character** | A small animated mascot with expressions (idle, listening, thinking, speaking, pointing, error). Draggable, with click-through on transparent pixels | **Rive** state machine; the character is designed in the design phase | No |
+| **Character** | A small animated mascot with expressions (idle, listening, thinking, speaking, pointing, error). Draggable, with click-through on transparent pixels | SVG drawn by KIVO (`Character.tsx`, DECISIONS "Character drawn in SVG"); a designed **Rive** state machine can replace the drawing later, the character is designed in the design phase | No |
 | **Hidden** | No visual companion; sounds only | — | No |
 
 - **Card:** Orb and Character still use the card for text. The companion replaces the pill, not
@@ -298,7 +298,7 @@ real runtime data over IPC, not mockup data.
 
 **Companion styles (§6)**
 
-- [~] **UX-38** · M8 · Companion style setting Pill (default) / Orb (WebGL or Rive) / Character (Rive) / Hidden; all render the same `SessionState`, zero frames at idle (§6) → partial: Pill (default), Orb (a WebGL shader, `OrbGl.tsx`, drawing at 30 fps only while KIVO is active and not at all at idle, with a static fallback) and Hidden, all from the same `SessionState` · verified: OrbGl test, Island tests · missing: Character (needs a Rive character asset; none is bundled)
+- [x] **UX-38** · M8 · Companion style setting Pill (default) / Orb (WebGL or Rive) / Character (Rive) / Hidden; all render the same `SessionState`, zero frames at idle (§6) → done: Pill (default), Orb (a WebGL shader, `OrbGl.tsx`, 30 fps only while KIVO is active, none at idle, with a static fallback), Character (KIVO's own SVG mascot, `Character.tsx`: idle, listening with a ring that follows the voice, thinking, acting, speaking with the mouth following the voice, asking, pointing toward what it shows, done and error; blinks and glances only while active, one frame loop only while listening or speaking, draggable) and Hidden, all from the same `SessionState`; chosen in Settings → Island and previewed in the component gallery · verified: `Character.test.tsx` (moods, no animation or frame loop at rest, in the Island), OrbGl test, the Settings test picks each style, every expression checked in the browser (2026-09-24) · note: drawn in SVG instead of a Rive asset (DECISIONS "Character drawn in SVG")
 - [x] **UX-39** · M8 · Pointing: the companion moves to UIA bounds on the target monitor without covering the target (§6, plan §141) → done: `uia.point_at` finds the control by name or text on the target app's UI Automation tree; the Island moves beside its bounds on that monitor without covering it (`overlay::beside`), shows an arrow toward it, and KIVO says where it is · verified: `kivo_points_at_a_control_and_says_where_it_is`, the UIA journey's real Export bounds on the dummy app, overlay placement test, Island tests
 
 **Proactive speech (§7)**
