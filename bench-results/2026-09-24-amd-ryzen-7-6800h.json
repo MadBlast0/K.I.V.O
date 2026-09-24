@@ -133,6 +133,173 @@
       ]
     },
     {
+      "suite": "idle",
+      "startedAt": 1790276258528,
+      "runs": 5,
+      "warmup": 1,
+      "metrics": [
+        {
+          "name": "runtime CPU (share of the whole machine)",
+          "unit": "%",
+          "lowerIsBetter": true,
+          "samples": [
+            0.05826819476900903,
+            0.08658844405262742,
+            0.01888019351238143,
+            0.0016276036680774098,
+            0.00227864401193722
+          ],
+          "p50": 0.01888019351238143,
+          "p95": 0.08658844405262742,
+          "min": 0.0016276036680774098,
+          "max": 0.08658844405262742,
+          "mean": 0.0335286160028065
+        },
+        {
+          "name": "runtime RAM (private working set)",
+          "unit": "MB",
+          "lowerIsBetter": true,
+          "samples": [
+            56.12890625,
+            56.13671875,
+            36.734375,
+            36.515625,
+            36.5546875
+          ],
+          "p50": 36.734375,
+          "p95": 56.13671875,
+          "min": 36.515625,
+          "max": 56.13671875,
+          "mean": 44.4140625
+        },
+        {
+          "name": "runtime committed memory",
+          "unit": "MB",
+          "lowerIsBetter": true,
+          "samples": [
+            61.68359375,
+            61.68359375,
+            43.89453125,
+            43.89453125,
+            43.89453125
+          ],
+          "p50": 43.89453125,
+          "p95": 61.68359375,
+          "min": 43.89453125,
+          "max": 61.68359375,
+          "mean": 51.01015625
+        },
+        {
+          "name": "runtime wakeups",
+          "unit": "/s",
+          "lowerIsBetter": true,
+          "samples": [
+            33047.66382419579,
+            37811.590707066745,
+            38403.036520283,
+            41001.52743986543,
+            28115.764192799157
+          ],
+          "p50": 37811.590707066745,
+          "p95": 41001.52743986543,
+          "min": 28115.764192799157,
+          "max": 41001.52743986543,
+          "mean": 35675.91653684202
+        },
+        {
+          "name": "CPU package power (whole machine)",
+          "unit": "W",
+          "lowerIsBetter": true,
+          "samples": [
+            19.134523898427478,
+            18.573743607085504,
+            24.07179957022213,
+            14.067213135960456,
+            12.589704798262186
+          ],
+          "p50": 18.573743607085504,
+          "p95": 24.07179957022213,
+          "min": 12.589704798262186,
+          "max": 24.07179957022213,
+          "mean": 17.68739700199155
+        },
+        {
+          "name": "app + WebView2 CPU (share of the whole machine)",
+          "unit": "%",
+          "lowerIsBetter": true,
+          "samples": [
+            0.07421870618622378,
+            0.08951812824989676,
+            0.12076813436368121,
+            0.004557290270616747,
+            0.003906246877606663
+          ],
+          "p50": 0.07421870618622378,
+          "p95": 0.12076813436368121,
+          "min": 0.003906246877606663,
+          "max": 0.12076813436368121,
+          "mean": 0.05859370118960503
+        },
+        {
+          "name": "app + WebView2 RAM (private working set)",
+          "unit": "MB",
+          "lowerIsBetter": true,
+          "samples": [
+            180.15625,
+            179.5625,
+            188.4453125,
+            173.91015625,
+            173.9921875
+          ],
+          "p50": 179.5625,
+          "p95": 188.4453125,
+          "min": 173.91015625,
+          "max": 188.4453125,
+          "mean": 179.21328125
+        },
+        {
+          "name": "app + WebView2 committed memory",
+          "unit": "MB",
+          "lowerIsBetter": true,
+          "samples": [
+            359.6796875,
+            359.6640625,
+            377.19140625,
+            375.36328125,
+            375.41015625
+          ],
+          "p50": 375.36328125,
+          "p95": 377.19140625,
+          "min": 359.6640625,
+          "max": 377.19140625,
+          "mean": 369.46171875
+        },
+        {
+          "name": "app wakeups (its own threads)",
+          "unit": "/s",
+          "lowerIsBetter": true,
+          "samples": [
+            33037.49716353085,
+            37811.350707337304,
+            38404.77318558639,
+            40937.03412628855,
+            28114.10752745672
+          ],
+          "p50": 37811.350707337304,
+          "p95": 40937.03412628855,
+          "min": 28114.10752745672,
+          "max": 40937.03412628855,
+          "mean": 35660.95254203996
+        }
+      ],
+      "notes": [
+        "Watched for 1800 s in total (300 s per window; the full suite is 1800 s).",
+        "The app was running. Its WebView2 processes are counted with it for CPU and memory, but not for wakeups (their thread counters can't be told apart from other apps').",
+        "Listening for only part of the run: the microphone was closed at some checks.",
+        "Package power covers everything running on the machine; compare runs on a quiet desktop."
+      ]
+    },
+    {
       "suite": "ipc",
       "startedAt": 1790244857755,
       "runs": 5,
@@ -226,7 +393,7 @@
             20.1035,
             19.1235,
             17.133499999999998,
-            18.831799999999998,
+            18.8318,
             18.9204
           ],
           "p50": 18.9204,
