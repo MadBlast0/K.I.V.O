@@ -61,16 +61,13 @@ everything), the app (Home, overlay Island), WASAPI audio and the `kivo-bench` h
 suites. The speech-engine benchmark runs are deferred by the owner (DECISIONS "Benchmarks
 deferred"). **M1 — first useful voice loop** is built: speak or type → grammar → permission
 engine → action → spoken answer (Moonshine STT, Kokoro or Windows voices), the Island's states,
-Activity and audit, cancel ≤ 100 ms, undo, and the installer/release pipeline. Still open in M1:
-the first installer build and smoke test (they run on the first `v*` tag, DECISIONS "Installer
-and release at M1"), and the reference-tier and release-build budget runs (deferred). **M2 —
+Activity and audit, cancel ≤ 100 ms, undo, and the installer/release pipeline. **M2 —
 wake word, enrollment, conversation audio** is built: "Hey Kivo" and custom wake words on KIVO's
 own keyword spotter, echo cancellation with echo-path detection, barge-in, "stop" by voice,
 owner-voice enrollment and speaker modes, decisions answered by voice, sound sets, the speech
 engine registry with profiles, recommendation, safe switching and fallbacks (Moonshine sizes and
 languages, Supertonic 3), onboarding steps 1–5, the Island's M2 states and screen-reader
-announcements. Still open in M2: the wake corpus benchmark (deferred with the other bench runs)
-and a live barge-in check on the laptop's speakers. **M3 — brains** is built: requests the
+announcements. **M3 — brains** is built: requests the
 grammar (and, with its optional model, the semantic stage) can't handle go to a brain — Anthropic,
 OpenAI, Gemini, OpenRouter and other OpenAI-compatible services, local servers, and CLI agents over
 ACP — routed with a reason, answered as a stream that is spoken phrase by phrase, with tool calls
@@ -78,8 +75,7 @@ and agents' permission requests through the permission engine, same-privacy fail
 conversation threads with compaction, usage, cost estimates and limits; no-key sign-in
 (OpenRouter OAuth, the CLIs' own logins, local servers found on this PC), write-only keys in
 Credential Manager, discovery with Refresh, and the Chat, Brains (with Context) and Voice pages,
-onboarding step 6 and the Island's brain chip. Still open in M3: a live run with Claude Code and
-Codex (their ACP adapters aren't installed here) and the brain benchmark (M3-X1, deferred). **M4 — tools and computer control** is built:
+onboarding step 6 and the Island's brain chip. **M4 — tools and computer control** is built:
 UI Automation on its own COM thread (find, tree, invoke, set value, toggle, select, expand,
 events), the capability-ladder router `control.act` and the app registry (`apps/*.toml`), files,
 clipboard, shell in Job Objects with a risk parser, OCR, screen reading and vision on request,
@@ -87,9 +83,7 @@ input under Computer use, display, brightness and audio tools, the browser exten
 native messaging host and KIVO's own CDP browser; taint, fencing, destination binding, the reduced
 tool set after taint, Plan first, Windows Hello, scoped and timed grants, per-app lists, capability
 presets, in-use indicators, Undo in the Island, Island placement, the Permissions page, the
-`testenv/` dummy app and fixtures, and the security suite v1. Still open in M4: the UIA journey's
-first CI run (M4-X1, on the first `v*` tag), a live `SendInput` run (Windows Sandbox or a VM
-only). **M5 — agents, background tasks and routines** is built: persisted task graphs with
+`testenv/` dummy app and fixtures, and the security suite v1. **M5 — agents, background tasks and routines** is built: persisted task graphs with
 their own grants, error policies, timeouts and success checks (interrupted, never resumed, after
 a crash); event-driven watchers (process and build exit, folders, downloads, windows, time) that
 make no brain calls while waiting; proactive speech rules and "what did I miss?"; the planner
@@ -99,15 +93,13 @@ collision checks, grants shown on save, AI steps, starters) with the builder; wo
 instructions mirrored to Markdown; terminal agents in Windows Terminal with Draft cards before any
 prompt is sent; Bypass permissions; the Tasks, Routines and Agents pages, live activities, the
 selection shortcut, "What can I say?", every Island button by voice, toast replies and the jump
-list. Still open in M5: nothing beyond the M3 note that a live Claude Code run needs its ACP
-adapter. **M6 — MCP, connectors, skills** is built: the `kivo-mcp` crate on `rmcp` (stdio and
+list. **M6 — MCP, connectors, skills** is built: the `kivo-mcp` crate on `rmcp` (stdio and
 Streamable HTTP), MCP tools as `mcp.<server>.<tool>` reviewed by description hash before use and
 switched off when they change, imports from Claude Desktop, Claude Code, Cursor, VS Code, Codex and
 Gemini CLI that never touch the originals, KIVO's own MCP server (`--mcp-server --agent <id>`)
 sharing memory tools with the agents the user allows, connectors with OAuth (PKCE + dynamic
 registration) and local detection, Agent Skills, file watchers, the hostile-server fixture
-(`testenv/mcp`) and the Extensions page. Still open in M6: a sign-in against a live publisher
-(needs the owner's accounts). **M7 — Control Center and memory (MVP)** is built: the Markdown
+(`testenv/mcp`) and the Extensions page. **M7 — Control Center and memory (MVP)** is built: the Markdown
 memory vault (`kivo-memory`, Obsidian-compatible, SQLite as its index) with recall, suggestions,
 workspace notes and tidying; the Memory, Usage and Settings (ten tabs) pages; Chat's continue,
 branch and export; Brains → Context (layer switches, compaction, preview); onboarding steps 7–11
@@ -122,10 +114,7 @@ schedule and event triggers, routines drafted by voice and moved as files, autom
 notes, the tidy job, hybrid memory search (sqlite-vec) and the graph view, skills from routines,
 desktop AI apps, GitHub, KIVO's OAuth connectors, in-app CLI installs and the dependency manager,
 signed catalogs, the Orb and the wake glow, pointing, product modes, performance profiles, the GPU
-policy, crash recovery and the diagnostics bundle. Still open in M8: the owner's catalog signing
-key and OAuth client ids, checking the desktop AI apps' hints against the installed apps, the wake
-glow's power measurement and the benchmark runs (deferred), live runs of
-realtime and cloud speech with real keys, and a week of daily use (M8-X2). **M9 — release** is
+policy, crash recovery and the diagnostics bundle. **M9 — release** is
 built as far as it can be before the owner's keys and a tag: the runtime is the updater (channels,
 minisign + Authenticode verification, install at idle, rollback after two failed starts, What's
 new), third-party notices in the installer and About, the release workflow (x64 and ARM64 with
