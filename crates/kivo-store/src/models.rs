@@ -683,10 +683,10 @@ fn kokoro() -> ModelManifest {
         requires: Vec::new(),
         files: vec![
             ModelFile {
-                name: "model_quantized.onnx".into(),
-                url: format!("{MODEL}/onnx/model_quantized.onnx"),
-                size: 92_361_116,
-                sha256: "fbae9257e1e05ffc727e951ef9b9c98418e6d79f1c9b6b13bd59f5c9028a1478".into(),
+                name: "model_fp16.onnx".into(),
+                url: format!("{MODEL}/onnx/model_fp16.onnx"),
+                size: 163_234_740,
+                sha256: "ba4527a874b42b21e35f468c10d326fdff3c7fc8cac1f85e9eb6c0dfc35c334a".into(),
                 unpack: Vec::new(),
             },
             voice("af_heart", "d583ccff3cdca2f7fae535cb998ac07e9fcb90f09737b9a41fa2734ec44a8f0b"),

@@ -2,7 +2,8 @@
 //! fed phonemes from KIVO's own English phonemizer (`g2p`, no espeak). Speech streams sentence by
 //! sentence at 24 kHz, like the system voices.
 //!
-//! The model folder (downloaded by the model manager) holds `model_quantized.onnx`, the voices as
+//! The model folder (downloaded by the model manager) holds `model_fp16.onnx` (or the older
+//! `model_quantized.onnx`), the voices as
 //! `voices/<id>.bin` (510 × 256 style vectors each, one per phoneme count) and misaki's US
 //! dictionaries `us_gold.json` and `us_silver.json`.
 
@@ -44,7 +45,7 @@ pub fn info() -> EngineInfo {
         resources: ResourceEstimate {
             ram_mb: 400,
             vram_mb: 0,
-            disk_mb: 100,
+            disk_mb: 175,
         },
         model: Some(ENGINE_ID.into()),
     }
@@ -81,11 +82,16 @@ pub struct Kokoro {
 }
 
 impl Kokoro {
+    /// Loads on the processor: DirectML can't run Kokoro (its `ConvTranspose` layers fail there,
+    /// in fp16 and fp32; DECISIONS "Local models on the GPU first").
     pub fn load(dir: &Path, threads: usize) -> VoiceResult<Self> {
-        let model = dir.join("model_quantized.onnx");
-        if !model.is_file() {
-            return Err(VoiceError::ModelMissing(ENGINE_ID.into()));
-        }
+        // fp16 is about three times faster on a CPU than the 8-bit file (0.28 vs 0.87 × real
+        // time, DECISIONS "Kokoro in fp16"); downloads from before the switch keep working.
+        let model = ["model_fp16.onnx", "model_quantized.onnx"]
+            .iter()
+            .map(|name| dir.join(name))
+            .find(|p| p.is_file())
+            .ok_or_else(|| VoiceError::ModelMissing(ENGINE_ID.into()))?;
         let session = Session::builder()?
             .with_intra_threads(threads.max(1))?
             .commit_from_file(&model)?;
@@ -422,10 +428,9 @@ mod tests {
                     .join(ENGINE_ID)
             }),
         ];
-        candidates
-            .into_iter()
-            .flatten()
-            .find(|dir| dir.join("model_quantized.onnx").is_file())
+        candidates.into_iter().flatten().find(|dir| {
+            dir.join("model_fp16.onnx").is_file() || dir.join("model_quantized.onnx").is_file()
+        })
     }
 }
 
