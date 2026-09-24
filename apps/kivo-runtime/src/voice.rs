@@ -127,9 +127,11 @@ enum Command {
     },
     /// The user let go of push-to-talk: finish the utterance.
     Stop,
-    /// The speech worker has started this utterance: send it the audio (buffered until now).
+    /// The speech worker has started this utterance: send it the audio (buffered until now), then
+    /// say so on `sent`, so the engine can't ask for the result before the worker has the audio.
     Ready {
         utterance: u64,
+        sent: tokio::sync::oneshot::Sender<()>,
     },
     /// Drop the utterance without a result.
     Cancel,
@@ -226,9 +228,12 @@ impl Listener {
         });
     }
 
-    /// The speech worker is ready for this utterance: the audio heard so far is sent at once.
-    pub fn stt_ready(&self, utterance: u64) {
-        let _ = self.commands.send(Command::Ready { utterance });
+    /// The speech worker is ready for this utterance: the audio heard so far is sent at once. The
+    /// returned receiver resolves once it has been handed to the worker (or there was none).
+    pub fn stt_ready(&self, utterance: u64) -> tokio::sync::oneshot::Receiver<()> {
+        let (sent, done) = tokio::sync::oneshot::channel();
+        let _ = self.commands.send(Command::Ready { utterance, sent });
+        done
     }
 
     /// Ends the utterance (push-to-talk released).
@@ -577,6 +582,9 @@ fn run(pipeline: Pipeline, commands: &Receiver<Command>, flags: &Flags) {
     let mut output_changes = speaker.device_changes();
     let mut voice_until: Option<Instant> = None;
     let mut barge: Option<Barge> = None;
+    // An utterance that ended before the speech worker had started it, with its audio: sent when
+    // the worker is ready, so a short request isn't lost to a slow worker start.
+    let mut unstarted: Option<(u64, Vec<f32>)> = None;
     let mut follow_until: Option<Instant> = None;
     let mut last_level = Instant::now();
     // A command received while waiting idle, handled at the top of the next pass.
@@ -633,16 +641,24 @@ fn run(pipeline: Pipeline, commands: &Receiver<Command>, flags: &Flags) {
                         current = Some(u);
                     }
                 }
-                Ok(Command::Ready { utterance }) => {
-                    if let Some(u) = current.as_mut().filter(|u| u.id == utterance) {
+                Ok(Command::Ready { utterance, sent }) => {
+                    let pending = if let Some(u) = current.as_mut().filter(|u| u.id == utterance) {
                         u.ready = true;
-                        let pending = std::mem::take(&mut u.pending);
-                        if !pending.is_empty()
-                            && let Err(e) = infer.send_audio(u.id, &pending)
-                        {
-                            tracing::debug!(%e, "buffered audio dropped");
-                        }
+                        std::mem::take(&mut u.pending)
+                    } else {
+                        // The utterance already ended on silence before the worker had started
+                        // it (a slow or cold start): its audio was kept for this moment.
+                        unstarted
+                            .take_if(|(id, _)| *id == utterance)
+                            .map(|(_, audio)| audio)
+                            .unwrap_or_default()
+                    };
+                    if !pending.is_empty()
+                        && let Err(e) = infer.send_audio(utterance, &pending)
+                    {
+                        tracing::debug!(%e, "buffered audio dropped");
                     }
+                    let _ = sent.send(());
                 }
                 Ok(Command::Stop) => {
                     if let Some(u) = current.as_mut() {
@@ -653,6 +669,7 @@ fn run(pipeline: Pipeline, commands: &Receiver<Command>, flags: &Flags) {
                     if let Some(u) = current.take() {
                         let _ = infer.cancel_stt(u.id);
                     }
+                    unstarted = None;
                     if hands.is_none() {
                         mic = None;
                     }
@@ -1075,6 +1092,12 @@ fn run(pipeline: Pipeline, commands: &Receiver<Command>, flags: &Flags) {
             if let Some(u) = current.as_mut().filter(|u| u.ready) {
                 send_batch(&infer, u);
             }
+            // Not started by the worker yet: keep what was heard until it is.
+            if matches!(signal, VoiceSignal::EndOfSpeech { .. })
+                && let Some(u) = current.as_mut().filter(|u| !u.ready && !u.recording)
+            {
+                unstarted = Some((u.id, std::mem::take(&mut u.pending)));
+            }
             finish(&mut current, &mut mic, hands.is_some(), listening, &levels);
             let _ = signals.send(recorded.unwrap_or(signal));
         }
@@ -1245,7 +1268,7 @@ mod tests {
         until_switched(1).await;
         assert_eq!(*qos.switches.lock().unwrap(), [true]);
         listener.listen(7, true);
-        listener.stt_ready(7);
+        let _sent = listener.stt_ready(7);
         let signal = tokio::time::timeout(Duration::from_secs(10), async {
             loop {
                 match rx.recv().await {

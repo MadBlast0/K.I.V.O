@@ -1138,8 +1138,11 @@ impl Engine {
             };
             match result {
                 Ok(()) => {
+                    // The audio heard so far reaches the worker before the result can be asked
+                    // for (an utterance can end before a slow worker has started it).
                     if let Some(listener) = engine.listener() {
-                        listener.stt_ready(utterance);
+                        let sent = listener.stt_ready(utterance);
+                        let _ = tokio::time::timeout(Duration::from_secs(2), sent).await;
                     }
                     let _ = started.send(true);
                 }

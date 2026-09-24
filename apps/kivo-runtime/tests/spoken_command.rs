@@ -1235,6 +1235,10 @@ async fn talking_over_kivo_works_with_speakers_echoing_its_voice() {
         eprintln!("kivo-infer isn't built beside the tests; skipping");
         return;
     }
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(std::env::var("KIVO_TEST_LOG").unwrap_or_else(|_| "warn".into()))
+        .with_test_writer()
+        .try_init();
     let (rig, worker_task, pump) = rig(Vec::new(), model.dir);
     rig.core.update_config(|c| c.voice.follow_up_seconds = 0);
     rig.audio.set_room(40, 0.3);
@@ -1245,6 +1249,7 @@ async fn talking_over_kivo_works_with_speakers_echoing_its_voice() {
     // The user says nothing for 3 s, then talks over the reply.
     let mut mic = vec![0.0; 16_000 * 3];
     // A short, distinct command: "Chrome" was sometimes heard as "crew" under the echo residue.
+    // (A single word is too short: barge-in needs 300 ms of speech, so a cough can't interrupt.)
     mic.extend(spoken("Mute the sound."));
     mic.extend(vec![0.0; 16_000 * 6]);
     rig.audio.say_next(mic);
@@ -1263,11 +1268,20 @@ async fn talking_over_kivo_works_with_speakers_echoing_its_voice() {
                 .collect(),
             stop: kivo_runtime::wake::stop_words(),
         }));
+    // The mic script starts when the microphone opens (`hands_free_on` turns true only then),
+    // and the reply starts right after: the user's words, 3 s into the script, fall inside the
+    // ~10 s reply, after the canceller has had over a second of KIVO's voice to settle on.
     until("the microphone to open", Duration::from_secs(10), || {
         rig.listener.hands_free_on()
     })
     .await;
+    let opened = Instant::now();
     rig.engine.speaker.speak(&reply, 16_000);
+    assert!(
+        rig.engine.speaker.speaking() && opened.elapsed() < Duration::from_millis(1_500),
+        "the reply must be playing well before the user talks over it ({:?} after the mic opened)",
+        opened.elapsed()
+    );
     let deadline = Instant::now() + Duration::from_secs(40);
     while !rig.control.volume.lock().unwrap().muted {
         assert!(
