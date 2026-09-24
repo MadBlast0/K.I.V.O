@@ -431,6 +431,9 @@ const SCHEMA: &[&str] = &[
      CREATE TRIGGER message_vectors_delete AFTER DELETE ON messages BEGIN
          DELETE FROM message_vectors WHERE rowid = old.id;
      END;",
+    // "Hey Kivo" hears more easily by default (DECISIONS "Wake sensitivity 0.8"): a built-in word
+    // still on the old default moves; one the user changed keeps its setting.
+    "UPDATE wake_words SET sensitivity = 0.8 WHERE built_in = 1 AND sensitivity = 0.5;",
 ];
 
 static MIGRATIONS: LazyLock<Migrations<'static>> =

@@ -9,6 +9,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 /// The built-in word's id.
 pub const HEY_KIVO: &str = "hey-kivo";
+/// "Hey Kivo"'s default sensitivity: measured on KIVO's spotter (`kivo-bench wake`, 2026-09-24),
+/// 0.8 missed a quarter fewer synthetic "Hey Kivo"s than 0.5 with no false alarm in 5.4 h of
+/// speech at either (DECISIONS "Wake sensitivity 0.8").
+pub const HEY_KIVO_SENSITIVITY: f32 = 0.8;
 /// VOICE-18: enabled words at once (a CPU budget).
 pub const MAX_ENABLED: usize = 5;
 
@@ -147,8 +151,8 @@ impl Database {
         self.connection().execute(
             "INSERT OR IGNORE INTO wake_words
                  (id, profile_id, phrase, engine, enabled, built_in, sensitivity, quality, created_at)
-             VALUES (?1, ?2, 'Hey Kivo', 'kws', 1, 1, 0.5, 'good', ?3)",
-            params![HEY_KIVO, owner, now()],
+             VALUES (?1, ?2, 'Hey Kivo', 'kws', 1, 1, ?4, 'good', ?3)",
+            params![HEY_KIVO, owner, now(), HEY_KIVO_SENSITIVITY],
         )?;
         Ok(())
     }
