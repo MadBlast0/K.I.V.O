@@ -43,7 +43,6 @@ Engineering specs (read the relevant one before implementing a subsystem):
 | [docs/architecture/ROUTINES.md](docs/architecture/ROUTINES.md) | Custom commands and routines |
 | [docs/architecture/INTEGRATIONS_AND_PLUGINS.md](docs/architecture/INTEGRATIONS_AND_PLUGINS.md) | App integrations, WASM plugins, phone remote |
 | [docs/design/DESIGN_SYSTEM.md](docs/design/DESIGN_SYSTEM.md) | Design reference, icon rules, motion spec ([app mockup](docs/design/mockups/kivo-app.html)) |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | Milestones M0–M9, feature placement, exit criteria |
 
 ## Platform
 
@@ -105,7 +104,7 @@ branch and export; Brains → Context (layer switches, compaction, preview); onb
 with setup recommendations; privacy by source and labels with Custom mode and a tool-result egress
 check; Mica, text-safe contrast tokens and Windows contrast themes; the Ctrl+K palette; and
 Playwright tests against the dev app over CDP (`pnpm dev:e2e`, then `pnpm --filter kivo-app e2e`).
- **M8 — beta hardening** is built: more STT/TTS tiers (Parakeet, Whisper, Chatterbox,
+**M8 — beta hardening** is built: more STT/TTS tiers (Parakeet, Whisper, Chatterbox,
 cloud speech), more API providers, realtime conversation mode (OpenAI Realtime, Gemini Live) with
 its own echo-cancelled microphone, computer use with watch mode, limits and its options page,
 schedule and event triggers, routines drafted by voice and moved as files, automatic workspace
@@ -120,7 +119,6 @@ size and signature checks, unpublished macOS/Linux builds, SBOMs, channel manife
 approved), the benchmark regression gate and the invariants checklist (all twelve green). Still
 open in M9, all the owner's: the licence decision, the minisign key (`updater.pub`), a code-signing
 route, the `release`/`production` environments, the first tagged release, and the benchmark runs.
-Progress per milestone is in the table at the top of [docs/ROADMAP.md](docs/ROADMAP.md).
 Update this section as milestones land.
 
 ## Build, run, check
@@ -138,7 +136,6 @@ Update this section as milestones land.
 | Check UI | `pnpm typecheck` · `pnpm lint` (Oxlint, type-aware) · `pnpm format:check` · `pnpm test` (Vitest) |
 | Installer build (release sidecars + NSIS/MSI; ask the owner first) | `pnpm build` |
 | Is the running runtime healthy? (exit code 0/1) | `kivo-runtime --health` |
-| Sync ROADMAP from the spec checklists | `pnpm docs:sync` |
 | Real CLI agents' ACP handshake (no prompt, no quota) | `KIVO_TEST_REAL_AGENTS=1 cargo test -p kivo-brain speaks_acp` |
 | MCP fixture server (normal, `--hostile`, `--http [--no-auth]`) | `cargo run -p kivo-testenv-mcp -- --hostile` |
 | UIA journey on the dummy app (`testenv/app`, acts only on its own window) | `cargo test -p kivo-platform-windows --test uia_testenv` |
@@ -203,10 +200,8 @@ The docs are the build plan, and progress is recorded in them. Full rules:
 - Every spec ends with a `## Build checklist`. Each line has an ID (`VOICE-12`), a milestone
   tag (`M2`) and a status mark: `[ ]` not started, `[~]` partial, `[x]` done and verified,
   `[-]` dropped. `[~]`/`[x]`/`[-]` need a `→` note (what exists and how it was verified).
-- To build a milestone: read its *Read first* documents in [docs/ROADMAP.md](docs/ROADMAP.md)
-  **in full**, build **every** item tagged with it (search the specs for `· M1 ·`), verify, mark
-  each item in its spec, tick the exit criteria, then run `pnpm docs:sync` (it regenerates the
-  ROADMAP lists and progress, and fails on duplicate IDs or missing notes).
+- To build a milestone: read the specs it touches **in full**, build **every** item tagged with it
+  (search the specs for `· M1 ·`), verify, and mark each item in its spec.
 - Never mark `[x]` for stubbed or mocked behaviour. If the implementation must differ from a spec,
   update the spec in the same commit and log it in DECISIONS.md.
 - Precedence when documents disagree: DECISIONS.md → the topic's spec → DESIGN_SYSTEM/mockup (UI)

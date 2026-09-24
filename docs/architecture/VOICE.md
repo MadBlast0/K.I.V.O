@@ -2,7 +2,7 @@
 
 Status: Draft v1, 2026-09-21. Research: [voice-pipeline-engines/REPORT.md](../research/voice-pipeline-engines/REPORT.md),
 [voice-ui-and-app-presence/REPORT.md](../research/voice-ui-and-app-presence/REPORT.md) (earcons).
-Engine defaults are **provisional until M0 benchmarks** ([ROADMAP.md](../ROADMAP.md)).
+Engine defaults are **provisional until M0 benchmarks** ([BENCHMARKS.md](BENCHMARKS.md)).
 
 ## 1. Pipeline
 

@@ -14,7 +14,6 @@ Companion specs:
 - [CAPABILITIES.md](CAPABILITIES.md), [ROUTINES.md](ROUTINES.md), [DISCOVERY.md](DISCOVERY.md), [INTEGRATIONS_AND_PLUGINS.md](INTEGRATIONS_AND_PLUGINS.md)
 - [RELEASE.md](RELEASE.md), [BENCHMARKS.md](BENCHMARKS.md), [../design/DESIGN_SYSTEM.md](../design/DESIGN_SYSTEM.md)
 - [DISTRIBUTION.md](DISTRIBUTION.md): packaging, updates, models, signing
-- [../ROADMAP.md](../ROADMAP.md): milestones
 
 Decisions are recorded in [../DECISIONS.md](../DECISIONS.md).
 

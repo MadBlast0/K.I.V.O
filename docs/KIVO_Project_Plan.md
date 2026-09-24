@@ -10,7 +10,7 @@
 >
 > **Implementation rule:** This document intentionally contains architecture and implementation instructions, but no production source code. The document defines *what to build, why to build it, how the parts interact, and how the finished system should behave.*
 >
-> **Companion documents (added 2026-09-21):** engineering specs in [architecture/](architecture/ARCHITECTURE.md), milestones in [ROADMAP.md](ROADMAP.md), decisions in [DECISIONS.md](DECISIONS.md), research in [research/](research/). Where they refine or change this blueprint, §167 lists the amendments. §168 maps every section to the build-checklist items that implement it; how items are tracked is in [README.md](README.md).
+> **Companion documents (added 2026-09-21):** engineering specs in [architecture/](architecture/ARCHITECTURE.md), decisions in [DECISIONS.md](DECISIONS.md), research in [research/](research/). Where they refine or change this blueprint, §167 lists the amendments. §168 maps every section to the build-checklist items that implement it; how items are tracked is in [README.md](README.md).
 
 ---
 
@@ -3744,7 +3744,7 @@ Phase 0 research changed or refined these parts of the blueprint. The detailed s
 | §49 | **Browser:** a KIVO browser extension + native messaging for the user's real browser (Chrome 136+ blocks CDP on default profiles); CDP only on a KIVO-managed profile | [TOOLS_AND_CONTROL.md](architecture/TOOLS_AND_CONTROL.md) |
 | §60 | **Prompt-injection defense:** provenance/taint tracking + destination binding at the tool boundary ("CaMeL-lite") in v1; full plan-interpreter later | [SECURITY.md](architecture/SECURITY.md) |
 | §21, §110 | **Installer:** NSIS per-user is primary; MSI for IT; MSIX/package identity is a later spike (it unlocks the Windows AI Speech API) | [DISTRIBUTION.md](architecture/DISTRIBUTION.md) |
-| §155 | Phases are refined into vertical milestones M0–M9 with exit criteria | [ROADMAP.md](ROADMAP.md) |
+| §155 | Phases are refined into vertical milestones M0–M9 | The milestone tags in each spec's build checklist |
 | §58, new | **Capabilities center:** every capability can be toggled, and disabled means removed. Includes opt-in **computer use** and **screen awareness** | [CAPABILITIES.md](architecture/CAPABILITIES.md) |
 | §148, new | **Routines and custom commands** (no AI required), built on the Task engine | [ROUTINES.md](architecture/ROUTINES.md) |
 | §12, new | **Realtime speech-to-speech** conversation mode; **usage/cost tracking with optional user limits**; **personas** | [BRAINS.md §8–10](architecture/BRAINS.md) |
@@ -3830,7 +3830,7 @@ that state philosophy or examples are covered by the rules and acceptance items 
 | 142–143 | Product modes, user preferences | PLAN-06, UX-37 | M7, M8 |
 | 144–146 | Conversational style, explainability, error UX | BRAIN-29, PLAN-17, PLAN-18, TOOL-03 | M1, M3 |
 | 147–153 | Future: multi-agent, workflow builder, marketplaces, cross-device, IoT, distributed | ROUT-*, INT-10–14, PLAN-24–26 | M5, M8, Post |
-| 154–155 | Methodology, development order | ROADMAP.md, docs/README.md | — |
+| 154–155 | Methodology, development order | docs/README.md | — |
 | 156–159 | MVP, beta, production definitions, quality gates | PLAN-27–30 | M7, M8, M9 |
 | 160 | Architecture invariants | ARCH §8, PLAN-31 | M9 |
 | 161–166 | Final diagrams and definitions | Reference only | — |

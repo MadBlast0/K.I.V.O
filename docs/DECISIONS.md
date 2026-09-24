@@ -5,6 +5,12 @@ decision changes, update the entry and note the date. Do not silently rewrite it
 
 ---
 
+## 2026-09-25 — Docs cleanup
+
+| Topic | Decision |
+|---|---|
+| **ROADMAP.md removed** | The milestone tags on each spec's checklist items are the build order; `ROADMAP.md`, its generator (`scripts/sync-roadmap.mjs`, `pnpm docs:sync`) and its CI check are gone. Owner-only and open partial items were removed from the checklists rather than marked `[-]` (owner) |
+
 ## 2026-09-23 — M5 build
 
 | Topic | Decision |
@@ -100,7 +106,7 @@ decision changes, update the entry and note the date. Do not silently rewrite it
 | **Model sources and catalog (owner)** | KIVO downloads each model straight from its publisher (Hugging Face or GitHub releases) at a pinned revision with sha256 checks. There is **no KIVO mirror**. The catalog is built into the app, so new models arrive with app updates. The UI follows the Handy pattern (MIT, handy.computer): recommended profile cards, then an "All models" list with Download / Use / Remove. Scores come only from KIVO's measurements or are labelled as the publisher's |
 | **No training (owner)** | KIVO trains no models: it downloads published models and runs them. "Hey Kivo" uses the Apache-2.0 open-vocabulary keyword spotter (sherpa-onnx's GigaSpeech Zipformer, run by KIVO's own `ort` code because sherpa's library contains GPL espeak-ng); VOICE-13 (trained model) and VOICE-17 (Enhance training) are dropped. Wake detection is two-stage without a trained verifier: the spotter per word, then the speaker check on the whole request (VOICE-14) |
 | **No models in the installer (owner)** | KIVO ships **no models**, not even small ones: Silero VAD moved from the bundle to the model manager (pinned upstream commit, same sha256), and the "Hey Kivo", keyword-spotting and speaker models will be downloads too. Nothing downloads unasked: the runtime no longer fetches the default speech model at startup; Home says speech isn't set up and opens the Voice page, and onboarding (UX-60) will offer the choice. A manifest's `requires` installs what a model needs with it (speech recognition brings Silero). Supersedes the bundling in DIST-02 and the "first run downloads" wording of DIST-15 |
-| **Installer and release at M1** | Packaging is configured, and verified on the first `v*` tag, not by local release builds (owner: no release builds unless asked). `release.yml` builds, runs `scripts/smoke-install.ps1` (install with `/STARTUP`, IPC health via `kivo-runtime --health`, upgrade while running, uninstall), and only then creates a **draft** release with checksums. Startup stays off by default (asked in onboarding); `/STARTUP` registers it for deployments. `latest.json` moves to the updater (DIST-07, M9), since there is nothing to sign it with before then |
+| **Installer and release at M1** | Packaging is configured, and verified on the first `v*` tag, not by local release builds (owner: no release builds unless asked). `release.yml` builds, runs `scripts/smoke-install.ps1` (install with `/STARTUP`, IPC health via `kivo-runtime --health`, upgrade while running, uninstall), and only then creates a **draft** release with checksums. Startup stays off by default (asked in onboarding); `/STARTUP` registers it for deployments. `latest.json` moves to the updater (M9), since there is nothing to sign it with before then |
 | **Resource rules at M1 exit** | Plan §128 reviewed (PLAN-16): (1) nothing loaded at idle, 0 ms CPU over 20 s, 67 MB; (2) screenshots only on request; (3) deterministic commands never reach a model (the grammar); (4) no polling where events exist: the detection thread now sleeps until a command, the worker's recognition loop waits for messages, downloads stop through the shutdown token; *exceptions*: a held push-to-talk key is checked every 15 ms because Windows sends no release event, the speaker checks once a second (only while open) whether to close, and `apps.restart` checks every 250 ms (at most 15 s) that the app has closed; (5) no MCP; (6) engines load only when their id changes; (7) the waveform draws at 30 fps only while sound plays; (8) *exception*: the microphone opens per request instead of staying open, for privacy (KIVO never holds the mic while not listening; opening costs a few ms, measured in the end-to-end tests); (9) cancellation reaches every layer in ≤ 35 ms; (10) recognition and speech both stream |
 | **M1 scope moves** | Parts of M1 items that need later features moved to the items that build them: the first launch on onboarding (UX-01 → UX-33, M2), Home's "Listening for Hey Kivo" (the wake word, VOICE-13, M2), the running-task count and Home's Running list (UX-56/UX-19 → UX-24, M5), the Chat page's mode picker (SEC-04 → UX-21, M3), the About licence list (DIST-13 → UX-31, M7), the diagnostics bundle (DIST-15 → ARCH-40, M8), the rest of the Voice page beyond models and the voice choice (UX-23, M3) |
 | **Hotkeys: keyboard-hook fallback** | When another app owns a combination, KIVO catches it first with a low-level keyboard hook and takes those keys (so the other app doesn't act too), and Home says so with a rebind prompt (VOICE-41) |
@@ -117,7 +123,7 @@ decision changes, update the entry and note the date. Do not silently rewrite it
 | **IPC transport** | tokio's named pipes (Windows) and Unix sockets instead of the `interprocess` crate: tokio exposes the security settings SECURITY §9 needs directly (reject remote clients, first-instance creation, a raw security descriptor), and it is already a dependency. The pipe and token file get a protected DACL granting only the user's SID (verified by reading it back in tests) |
 | **TypeScript types** | `ts-rs` (not specta): stable, supports every serde attribute the IPC types use; behind a `ts` cargo feature so shipped binaries never compile it |
 | **Toolchain pin** | `rust-toolchain.toml` pins Rust 1.97.0 so CI and local builds match; the MSRV stays `rust-version` 1.90 |
-| **Build tracking** | Every buildable requirement has an ID and a status mark in its spec's `## Build checklist`; the plan's §168 maps every plan section to those IDs; ROADMAP lists each milestone's docs and items, regenerated with `pnpm docs:sync`. Rules in [README.md](README.md) (owner request) |
+| **Build tracking** | Every buildable requirement has an ID and a status mark in its spec's `## Build checklist`; the plan's §168 maps every plan section to those IDs. Rules in [README.md](README.md) (owner request) |
 | **Onboarding by milestone** | Steps 1–5 (voice) in M2, step 6 (brain) in M3, steps 7–11 in M7 |
 | **Audio backend** | WASAPI directly (windows-rs), shared mode, event-driven, float with AUTOCONVERTPCM. The cpal fallback in VOICE-01 is dropped: cpal uses WASAPI on Windows, so it can't cover a WASAPI failure, and AUTOCONVERTPCM already makes float work on every device. Measured: 0.05% CPU to hold the mic open |
 | **Benchmark counters** | GPU load and power come from Windows performance counters (`GPU Engine` utilization, `Energy Meter` RAPL package power) instead of PresentMon: no extra tool to install, and they work on the machines KIVO targets. PresentMon stays an option for per-frame timing |
@@ -229,7 +235,7 @@ baseline. Key points:
 - **Distribution:** NSIS per-user primary, MSI for IT, MSIX later; minisign-signed updates with
   rollback; models downloaded on demand with sha256 manifests; no GPL in the default dependency
   graph.
-- **Roadmap:** vertical milestones M0–M9 ([ROADMAP.md](ROADMAP.md)).
+- **Roadmap:** vertical milestones M0–M9 (the milestone tags in each spec's build checklist).
 
 Research: [architecture-and-platform/REPORT.md](research/architecture-and-platform/REPORT.md)
 

@@ -117,7 +117,3 @@ jobs:
         run: pnpm --filter kivo-app build
       - name: Audit dependencies
         run: pnpm audit --audit-level high
-      - name: Roadmap in sync with the specs
-        run: |
-          pnpm docs:sync
-          git diff --exit-code -- docs/ROADMAP.md

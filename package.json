@@ -10,7 +10,6 @@
     "sidecars": "node scripts/sidecars.mjs",
     "build": "node scripts/build-tools.mjs --quiet && node scripts/licenses.mjs && node scripts/sidecars.mjs && pnpm --filter kivo-app tauri build --config src-tauri/tauri.bundle.conf.json",
     "typecheck": "pnpm --filter kivo-app typecheck",
-    "docs:sync": "node scripts/sync-roadmap.mjs",
     "licenses:gen": "node scripts/licenses.mjs",
     "release:version": "node scripts/set-version.mjs",
     "bench:data": "node scripts/bench-data.mjs",

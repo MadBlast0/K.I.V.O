@@ -12,7 +12,6 @@ docs themselves**, next to the requirement it satisfies.
 | [architecture/*.md](architecture/ARCHITECTURE.md) | Engineering specs, one per subsystem | **The *how*. Authoritative for their topic** |
 | [design/DESIGN_SYSTEM.md](design/DESIGN_SYSTEM.md) + [design/mockups/kivo-app.html](design/mockups/kivo-app.html) | Look, components, motion, and every screen | **Authoritative for UI** (the mockup is the visual reference; the spec holds the rules) |
 | [DECISIONS.md](DECISIONS.md) | The owner's decisions, dated, newest first | Settled. Not reopened without the owner |
-| [ROADMAP.md](ROADMAP.md) | Build order: milestones, which docs to read, which items to build, exit criteria | Decides *what is built next* |
 | [research/](research/) | The research behind the decisions | Background only |
 | `benchmarks/` (created in M0) | Measured results | Evidence for engine defaults |
 
@@ -52,9 +51,8 @@ requirement:
 | `DS` | [design/DESIGN_SYSTEM.md](design/DESIGN_SYSTEM.md) |
 | `PLAN` | [KIVO_Project_Plan.md §168](KIVO_Project_Plan.md) (requirements that exist only in the plan) |
 
-New requirements get the next free number in their spec and must also be named in their
-milestone's **Build order** in ROADMAP.md (`pnpm docs:sync` enforces this). A requirement that is dropped keeps its
-ID and is marked `[-]`.
+New requirements get the next free number in their spec; numbers are never reused. A requirement
+that is dropped is either marked `[-]` with its note or removed from the checklist outright.
 
 ## 3. Status marks
 
@@ -71,25 +69,18 @@ otherwise by a described manual check. Mocked or stubbed behaviour is `[~]`, nev
 
 ## 4. Build protocol
 
-To build a milestone (the prompt can be as short as *"Build M1 per docs/ROADMAP.md"*):
+To build a milestone (the prompt can be as short as *"Build M1"*):
 
-1. **Read** the milestone in [ROADMAP.md](ROADMAP.md). Then read **in full** every document in
-   its *Read first* list, plus DECISIONS.md.
-2. **Collect** the milestone's items: every checklist line tagged with that milestone, in every
-   spec (search for `· M1 ·`). The ROADMAP lists them too; if the two disagree, the spec tag wins
-   and the ROADMAP is corrected.
+1. **Collect** the milestone's items: every checklist line tagged with that milestone, in every
+   spec (search for `· M1 ·`).
+2. **Read** in full every spec those items come from, plus DECISIONS.md.
 3. **Report conflicts before building.** If a spec contradicts a decision or another spec, stop
    and resolve it (ask the owner if it is a product question).
 4. **Build vertically:** backend, IPC and UI together, so each feature works end to end.
-5. **Verify** each item, then **mark it** in its spec with the note from §3, and run
-   `pnpm docs:sync`. That copies every item and its mark into ROADMAP.md and refreshes the progress
-   table. It stops without writing if a box was ticked only in the ROADMAP copy, if an ID is
-   duplicated, if a mark lacks its note, or if a milestone's **Build order** doesn't name exactly
-   that milestone's items. Tick the ROADMAP exit criteria by hand as they pass.
+5. **Verify** each item, then **mark it** in its spec with the note from §3.
 6. **Keep docs true:** when the implementation has to differ from the spec, change the spec in
    the same commit and log the decision.
-7. The milestone is complete only when every item tagged with it is `[x]` or `[-]` and every exit
-   criterion is checked. Then update the Status section in the root `CLAUDE.md`.
+7. The milestone is complete only when every item tagged with it is `[x]` or `[-]`. Then update the Status section in the root `CLAUDE.md`.
 
 Items tagged with a later milestone are not built early unless the owner asks, but code is
 shaped so they fit (for example, `profile_id` scoping from M0).

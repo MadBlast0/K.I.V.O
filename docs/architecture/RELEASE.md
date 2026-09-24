@@ -75,7 +75,7 @@ draft release and generates the updater JSON:
 ## 3. Platform readiness
 
 - **Owner decision (2026-09-21):** macOS and Linux artifacts are **built in CI but not
-  published** until their ports land (ROADMAP post-M9).
+  published** until their ports land (after M9).
   - They are kept as workflow artifacts (14-day retention) for testing only.
   - Releases contain Windows installers only until then.
 - **Their CI jobs run from M0**, so portability regressions are caught early.
