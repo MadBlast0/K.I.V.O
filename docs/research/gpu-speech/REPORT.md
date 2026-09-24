@@ -49,3 +49,30 @@ repository's licence and backend support is checked when VOICE-50 is built.
 2. The backend setting and detection above; the CUDA worker and its on-demand runtime download.
 3. Remove Parakeet's DirectML encoder path; give Supertonic interruptible runs (its cancel takes 3.6 s).
 4. Look at transcribe-rs and Handy's model manager for patterns worth reusing.
+
+## Clean-up when VOICE-50 lands (nothing left behind)
+
+Removing DirectML and moving voices to GGML must leave no dead code, files, settings or docs. Found
+by searching the tree on 2026-09-25 (`directml`, `Accel::DirectMl`, `load_on`, `device(`):
+
+| Where | Remove or change |
+|---|---|
+| `crates/kivo-voice/src/accel.rs` | The DirectML execution-provider setup; delete the file if nothing else is left in it |
+| `crates/kivo-voice/src/engine.rs` | `Accel::DirectMl` (keep `Cpu`, `Vulkan`; add `Cuda`, `Metal`) |
+| `crates/kivo-voice/src/parakeet.rs` | `load_on` / the encoder-on-DirectML path; CPU only (or a GGML port) |
+| `crates/kivo-voice/src/whisper.rs` | Whisper ONNX's leftover accel handling; drop the ONNX Whisper engine entirely if whisper.cpp covers it on CPU too |
+| `crates/kivo-voice/src/kokoro/mod.rs` | ONNX Kokoro once GGML Kokoro replaces it (with its phonemizer only if the GGML engine brings its own); keep `interrupt.rs` only if something still uses ONNX |
+| `crates/kivo-voice/src/supertonic.rs` | Keep (ONNX, CPU) unless a GGML voice covers its 31 languages; give it interruptible runs |
+| `crates/kivo-voice/src/recommend.rs`, `registry.rs` | `on_gpu`'s DirectML test, `Accel::DirectMl` checks; GPU = any GGML backend |
+| `apps/kivo-infer/src/stt.rs` (and `tts.rs`) | `device(&load)` and DirectML branches; backend chosen by the worker build (Vulkan / CUDA / Metal) |
+| `apps/kivo-runtime/src/gpu.rs`, `infer.rs` | `can_use_gpu`'s Parakeet case; pass the chosen backend instead of a DirectML adapter index |
+| `crates/kivo-ipc/src/protocol.rs`, `infer.rs` (+ regenerated `generated.ts`) | DirectML-specific fields; add the backend choice |
+| `crates/kivo-testkit/src/audio.rs`, `apps/kivo-bench/src/speech/stt.rs` | DirectML mentions and the Parakeet-on-GPU run |
+| `crates/kivo-store/src/models.rs` | Manifests of models no engine uses any more (ONNX Kokoro/Whisper if replaced); `kivo-store` migration to forget them on users' PCs |
+| Cargo features | `ort`'s `directml` feature wherever it is enabled; check `cargo deny` / `cargo tree` for crates only DirectML pulled in |
+| Tests | Delete tests of removed paths; don't leave `#[ignore]`d ones behind |
+| Docs | VOICE §11 and DECISIONS "GPU through DirectML" (mark superseded), BENCHMARKS notes, the Voice page's help text, `en.json` strings no longer shown |
+
+Finish with `cargo clippy --workspace --all-targets` (dead-code warnings must be zero), `pnpm lint`
+(unused exports), `cargo machete` or `cargo udeps` for unused dependencies, and a search for each
+removed name returning nothing.
