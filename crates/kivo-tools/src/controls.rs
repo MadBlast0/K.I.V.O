@@ -42,6 +42,8 @@ pub struct Controls {
     /// KIVO's own browser profile over CDP, when available (TOOL-25).
     pub managed: Option<Arc<dyn ManagedBrowser>>,
     pub apps: Arc<AppRegistry>,
+    /// Opens an app (a desktop AI app that isn't running, CONV-16).
+    pub launcher: Arc<dyn kivo_platform::Apps>,
     /// Where commands run when no folder is given (the Brains workspace).
     pub shell_home: PathBuf,
     /// The OCR language (the UI language, e.g. "en-US").
@@ -200,6 +202,8 @@ impl ControlBuilder {
 pub fn controls(c: &Arc<Controls>) -> Vec<Arc<dyn Tool>> {
     let mut out = Vec::new();
     out.extend(crate::uia_tools::tools(c));
+    out.extend(crate::ai_apps::tools(c));
+    out.extend(crate::github::tools(c));
     out.extend(crate::files::tools(c));
     out.extend(crate::shell::tools(c));
     out.extend(crate::screen_tools::tools(c));

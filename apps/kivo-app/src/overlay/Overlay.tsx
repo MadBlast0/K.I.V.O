@@ -146,6 +146,7 @@ export function Overlay() {
       },
       talk: () => request(Method.sessionTalk),
       misroute: (turnId) => request(Method.chatMisroute, { turnId, note: "" }),
+      live: () => request(Method.sessionLive),
       remember: (turnId) => invoke("island_request", { method: Method.memoryRememberTurn, params: { turnId } }),
       editDraft: (callId, text) => {
         setEditingDraft(callId);
@@ -154,6 +155,7 @@ export function Overlay() {
         void invoke("overlay_focus");
       },
       offer: (id, accept) => request(Method.offerAnswer, { id, accept }),
+      computerPause: () => request(Method.sessionComputerPause),
       openTask: (id) => request("island.openTask", { id }),
     }),
     [],
@@ -348,6 +350,7 @@ export function Overlay() {
         <Island
           model={model}
           level={readLevel}
+          companion={snapshot?.island?.companion === "orb" ? "orb" : "pill"}
           onDrag={() => {
             if (isTauri()) void invoke("overlay_drag").catch(() => {});
           }}

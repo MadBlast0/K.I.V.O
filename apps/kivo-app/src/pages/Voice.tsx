@@ -25,6 +25,7 @@ import {
 } from "../components/ui";
 import { AdvancedVoice, Personality, SpeechSummary, Vocabulary } from "../components/voice/Details";
 import { Enrollment, SpeakerMode } from "../components/voice/Enrollment";
+import { CloudEngines } from "../components/voice/CloudEngines";
 import { Recommended, SpeechChooser, VoiceList } from "../components/voice/SpeechChooser";
 import { useSpeech } from "../components/voice/useSpeech";
 import { WakeWords } from "../components/voice/WakeWords";
@@ -320,8 +321,10 @@ export function Voice() {
           <Recommended speech={speech} />
           <Section title={t("speech.sttTitle")} aside={t("speech.sttHint")} />
           <SpeechChooser slot="stt" speech={speech} />
+          <CloudEngines slot="stt" speech={speech} />
           <Section title={t("speech.ttsTitle")} aside={t("speech.ttsHint")} />
           <SpeechChooser slot="tts" speech={speech} />
+          <CloudEngines slot="tts" speech={speech} />
         </>
       )}
       <VoiceList speech={speech} />

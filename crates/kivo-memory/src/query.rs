@@ -43,6 +43,54 @@ pub fn fts_query(text: &str) -> Option<String> {
     )
 }
 
+/// What pins a fact down: its names (capitalized words, not sentence openers), numbers, times and
+/// paths. Two facts that say the same thing in other words have the same specifics; "the standup
+/// is at 10am" and "… at 11am" don't, however alike they read.
+pub fn specifics(text: &str) -> std::collections::BTreeSet<String> {
+    // Capitalized words that open sentences rather than name something.
+    const OPENERS: &[&str] = &[
+        "i", "my", "the", "a", "an", "our", "we", "it", "this", "that", "his", "her", "their",
+        "your", "he", "she", "they", "there",
+    ];
+    text.split_whitespace()
+        .filter_map(|w| {
+            let w = w
+                .trim_matches(|c: char| matches!(c, '.' | ',' | ';' | '!' | '?' | '"' | '(' | ')'));
+            let w = w
+                .strip_suffix("'s")
+                .or_else(|| w.strip_suffix("’s"))
+                .unwrap_or(w);
+            let pinned = w.chars().any(|c| c.is_ascii_digit())
+                || w.contains(['/', '\\', ':', '@'])
+                || (w.chars().next().is_some_and(char::is_uppercase)
+                    && !OPENERS.contains(&w.to_lowercase().as_str()));
+            (pinned && !w.is_empty()).then(|| w.to_lowercase())
+        })
+        .collect()
+}
+
+/// Hybrid search (CONV-23): merges ranked lists (keyword matches, meaning matches) by reciprocal
+/// rank fusion, so an item high in either list, or present in both, comes first. `key` names an
+/// item across lists; each item is kept once, from the first list that has it.
+pub fn fuse<T: Clone>(lists: &[Vec<T>], key: impl Fn(&T) -> String) -> Vec<T> {
+    // The usual constant: dampens the difference between the very top ranks.
+    const K: f64 = 60.0;
+    let mut scores: Vec<(String, f64, T)> = Vec::new();
+    for list in lists {
+        for (rank, item) in list.iter().enumerate() {
+            #[allow(clippy::cast_precision_loss, reason = "ranks are small")]
+            let score = 1.0 / (K + rank as f64 + 1.0);
+            let k = key(item);
+            match scores.iter_mut().find(|(id, _, _)| *id == k) {
+                Some(entry) => entry.1 += score,
+                None => scores.push((k, score, item.clone())),
+            }
+        }
+    }
+    scores.sort_by(|a, b| b.1.total_cmp(&a.1));
+    scores.into_iter().map(|(_, _, item)| item).collect()
+}
+
 /// About 4 characters per token, as the context budgets count (CONVERSATION §8).
 pub fn tokens(text: &str) -> usize {
     text.chars().count().div_ceil(4)
@@ -141,5 +189,32 @@ mod tests {
         );
         assert!(similarity("Tests run with cargo nextest", "Maya prefers dark mode") < 0.1);
         assert_eq!(tokens("12345678"), 2);
+    }
+
+    #[test]
+    fn fusion_puts_items_in_both_lists_first() {
+        let words = vec!["a", "b", "c"];
+        let meaning = vec!["d", "c", "a"];
+        let fused = fuse(&[words, meaning], |s| (*s).to_owned());
+        assert_eq!(fused[..2], ["a", "c"]);
+        assert_eq!(fused.len(), 4);
+        assert_eq!(fuse::<&str>(&[], |s| (*s).to_owned()), Vec::<&str>::new());
+    }
+
+    #[test]
+    fn specifics_pin_a_fact_down() {
+        assert_eq!(
+            specifics("My sister's name is Priya"),
+            specifics("My sister is called Priya.")
+        );
+        assert_ne!(
+            specifics("The standup is at 10am"),
+            specifics("The standup is at 11am")
+        );
+        assert_ne!(
+            specifics("My project is in D:/work"),
+            specifics("My project is in C:/code")
+        );
+        assert!(specifics("I prefer dark mode").is_empty());
     }
 }

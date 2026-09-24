@@ -56,7 +56,57 @@ pub struct Routines {
     tasks: Arc<Tasks>,
     registry: Arc<kivo_tools::Registry>,
     hotkeys: watch::Sender<Vec<(String, String)>>,
+    /// A routine drafted by voice, chat, "save what you just did" or an import, waiting for the
+    /// user to review it in the builder (ROUT-13, ROUT-14). Nothing is saved until they do.
+    draft: Mutex<Option<Routine>>,
 }
+
+/// What a `.kivo-routine.json` file says it is (ROUT-14).
+pub const FILE_KIND: &str = "kivo-routine";
+pub const FILE_VERSION: u64 = 1;
+/// A routine file bigger than this isn't one.
+const MAX_FILE_BYTES: usize = 256 * 1024;
+/// Tools a routine can't hold: KIVO's own session commands and drafting itself.
+fn routine_tool(tool: &str) -> bool {
+    !tool.starts_with("session.") && tool != DRAFT_TOOL
+}
+/// Writes an exported routine to `dir` as "<name>.kivo-routine.json", never over another file.
+pub fn save_file(dir: &std::path::Path, doc: &Value) -> Result<std::path::PathBuf, String> {
+    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    let name: String = doc["routine"]["name"]
+        .as_str()
+        .unwrap_or("Routine")
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() || c == ' ' || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let name = if name.trim().is_empty() {
+        "Routine".to_owned()
+    } else {
+        name.trim().to_owned()
+    };
+    let file = (1..)
+        .map(|n: u32| {
+            dir.join(if n < 2 {
+                format!("{name}.kivo-routine.json")
+            } else {
+                format!("{name} ({n}).kivo-routine.json")
+            })
+        })
+        .find(|f| !f.exists())
+        .unwrap_or_else(|| dir.join("routine.kivo-routine.json"));
+    let body = serde_json::to_string_pretty(doc).map_err(|e| e.to_string())?;
+    std::fs::write(&file, body).map_err(|e| e.to_string())?;
+    Ok(file)
+}
+
+/// The tool a brain calls to draft a routine for review (ROUT-13).
+pub const DRAFT_TOOL: &str = "routines.draft";
 
 impl Routines {
     pub fn new(
@@ -71,6 +121,7 @@ impl Routines {
             tasks,
             registry,
             hotkeys: watch::Sender::new(Vec::new()),
+            draft: Mutex::new(None),
         });
         routines.publish_hotkeys();
         routines
@@ -334,6 +385,7 @@ impl Routines {
     /// granted exactly those steps (ROUT-03); without it, an edited routine keeps only the grants
     /// that still match its steps.
     pub fn save(&self, mut draft: Routine, grant: bool) -> Result<RoutineView, String> {
+        draft.check_triggers()?;
         if draft.id.trim().is_empty() {
             draft.id = kivo_core::TaskId::new().to_string();
         }
@@ -413,6 +465,168 @@ impl Routines {
             return Err(text::tf("routine.notGranted", &[("name", &routine.name)]));
         }
         self.tasks.create(routine.compile(vars))
+    }
+
+    /// Runs a routine that a schedule or an event started (ROUT-11), with no one at the keyboard
+    /// having asked: its High-risk steps ask on screen first even though the routine is granted
+    /// (ROUT-12). `cause` says what started it, for Activity.
+    pub fn run_unattended(&self, id: &str, cause: &str) -> Result<String, String> {
+        let routine = self.get(id).ok_or_else(|| text::t("routine.notFound"))?;
+        if !routine.enabled {
+            return Err(text::tf("routine.off", &[("name", &routine.name)]));
+        }
+        if !routine.is_granted() {
+            return Err(text::tf("routine.notGranted", &[("name", &routine.name)]));
+        }
+        let config = self.core.config();
+        let mut spec = routine.compile(&Map::new());
+        for step in &mut spec.steps {
+            if let kivo_core::task::StepAction::Tool { tool, args } = &step.action {
+                let risk = self.registry.get(tool, &config.capabilities).map_or_else(
+                    || {
+                        self.registry
+                            .known(tool)
+                            .map_or(kivo_core::tool::Risk::High, |s| s.risk)
+                    },
+                    |t| t.assess(args, Initiator::Task),
+                );
+                if risk >= kivo_core::tool::Risk::High {
+                    step.confirm = true;
+                }
+            }
+        }
+        tracing::info!(routine = %routine.name, cause, "a routine started on its own");
+        self.tasks.create(spec)
+    }
+
+    /// Offers a draft for review: it's kept until the Routines page takes it, and the Control
+    /// Center opens there (ROUT-13). Whatever it came with, it starts off, granted nothing, new.
+    pub fn offer_draft(&self, mut draft: Routine) {
+        draft.id = String::new();
+        draft.enabled = false;
+        draft.grants = Vec::new();
+        draft.starter = None;
+        draft.steps.retain(|s| match &s.action {
+            StepAction::Tool { tool, .. } => routine_tool(tool),
+            _ => true,
+        });
+        *lock(&self.draft) = Some(draft);
+        self.core.open_control_center(Some("routines"));
+        // An open Routines page takes it at once.
+        self.core
+            .bus
+            .publish(kivo_core::Event::new(kivo_core::EventKind::System(
+                kivo_core::event::SystemEvent::DiscoveryChanged {
+                    section: "routines".into(),
+                },
+            )));
+    }
+
+    /// Whether a routine step can use `tool` (it exists in KIVO).
+    pub fn knows_tool(&self, tool: &str) -> bool {
+        self.registry.known(tool).is_some()
+    }
+
+    /// The draft waiting for review, if any; taking it clears it.
+    pub fn take_draft(&self) -> Option<Routine> {
+        lock(&self.draft).take()
+    }
+
+    /// A draft from what the last request did (ROUT-13 "Save what you just did as a routine"):
+    /// its tool calls in order, named after what was said. `None` when it did nothing to repeat.
+    pub fn draft_from_calls(said: &str, calls: &[(String, Value)]) -> Option<Routine> {
+        let steps: Vec<RoutineStep> = calls
+            .iter()
+            .filter(|(tool, _)| routine_tool(tool))
+            .enumerate()
+            .map(|(i, (tool, args))| RoutineStep {
+                id: format!("s{}", i + 1),
+                action: StepAction::Tool {
+                    tool: tool.clone(),
+                    args: args.clone(),
+                },
+                on_error: OnError::Stop,
+                delay_ms: None,
+                parallel_group: None,
+                confirm: false,
+            })
+            .collect();
+        if steps.is_empty() {
+            return None;
+        }
+        let mut name: String = said.trim().chars().take(40).collect();
+        if let Some(first) = name.chars().next() {
+            name = first.to_uppercase().chain(name.chars().skip(1)).collect();
+        }
+        Some(Routine {
+            id: String::new(),
+            name,
+            description: String::new(),
+            enabled: false,
+            triggers: vec![Trigger::Manual],
+            steps,
+            variables: Vec::new(),
+            grants: Vec::new(),
+            starter: None,
+        })
+    }
+
+    /// A routine as a `.kivo-routine.json` file (ROUT-14): what it does and what starts it,
+    /// never its grants, id or whether it's on.
+    pub fn export(&self, id: &str) -> Result<Value, String> {
+        let r = self.get(id).ok_or_else(|| text::t("routine.notFound"))?;
+        Ok(json!({
+            "kind": FILE_KIND,
+            "version": FILE_VERSION,
+            "routine": {
+                "name": r.name,
+                "description": r.description,
+                "triggers": r.triggers,
+                "steps": r.steps,
+                "variables": r.variables,
+            },
+        }))
+    }
+
+    /// Reads a `.kivo-routine.json` someone else may have written (ROUT-14): untrusted, so it
+    /// must be the right kind and version, its steps must use tools KIVO has, and it arrives as a
+    /// draft (off, granted nothing) whose permissions the builder shows before it's saved.
+    pub fn parse_file(&self, content: &str) -> Result<Routine, String> {
+        if content.len() > MAX_FILE_BYTES {
+            return Err(text::t("routine.importBad"));
+        }
+        let doc: Value = serde_json::from_str(content).map_err(|_| text::t("routine.importBad"))?;
+        if doc["kind"] != FILE_KIND || doc["version"].as_u64().is_none_or(|v| v > FILE_VERSION) {
+            return Err(text::t("routine.importBad"));
+        }
+        let mut body = doc["routine"].clone();
+        let Some(map) = body.as_object_mut() else {
+            return Err(text::t("routine.importBad"));
+        };
+        map.insert("id".into(), json!(""));
+        map.insert("enabled".into(), json!(false));
+        map.insert("grants".into(), json!([]));
+        map.remove("starter");
+        let routine: Routine =
+            serde_json::from_value(body).map_err(|_| text::t("routine.importBad"))?;
+        for s in &routine.steps {
+            if let StepAction::Tool { tool, .. } = &s.action
+                && (!routine_tool(tool) || self.registry.known(tool).is_none())
+            {
+                return Err(text::tf("routine.importUnknownTool", &[("tool", tool)]));
+            }
+        }
+        routine.check_triggers()?;
+        Ok(routine)
+    }
+
+    /// The enabled routines, for the trigger runner.
+    pub fn enabled(&self) -> Vec<Routine> {
+        self.all()
+            .into_iter()
+            .map(|(r, _)| r)
+            .filter(|r| r.enabled)
+            .collect()
     }
 
     /// The enabled routine a request names, with its variables (the grammar stage, ROUT-05).

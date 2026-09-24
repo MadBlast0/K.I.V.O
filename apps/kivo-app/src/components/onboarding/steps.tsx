@@ -319,7 +319,7 @@ export function LookStep() {
   );
 }
 
-const PROFILES = ["auto", "battery", "balanced", "performance"] as const;
+const PROFILES = ["auto", "low-resource", "battery", "balanced", "performance"] as const;
 const PRIVACY = ["cloud", "local", "strict-private"] as const;
 
 /** Step 10: open with Windows, keep running, and what this PC is suited to (UX-36). */

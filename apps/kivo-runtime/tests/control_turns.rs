@@ -461,3 +461,155 @@ async fn undo_takes_back_the_last_change() {
     );
     r.stop().await;
 }
+
+/// PLAN-23, UX-39 (plan §141): "Where is the Export button?" — found through UI Automation in
+/// the window in front (the dummy app's shape), the Island is sent beside its bounds, and KIVO says
+/// where it is. Nothing is clicked. A control that isn't there says so.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn kivo_points_at_a_control_and_says_where_it_is() {
+    let _one = ONE_AT_A_TIME.lock().await;
+    let r = start();
+    r.rig
+        .engine
+        .say("where is the export button")
+        .await
+        .unwrap();
+    let t = answered(&r.rig).await;
+    let point = t.point.clone().expect("the Island points at it");
+    assert_eq!(point.label, "Export…");
+    assert!(point.width > 0 && point.height > 0);
+    let answer = t.answer.unwrap_or_default();
+    assert!(answer.starts_with("Export… is "), "{answer}");
+    assert!(
+        r.rig.uia.invoked.lock().unwrap().is_empty(),
+        "nothing clicked"
+    );
+
+    r.rig
+        .engine
+        .say("where is the frobnicate button")
+        .await
+        .unwrap();
+    let t = answered(&r.rig).await;
+    assert!(t.point.is_none());
+    assert!(t.error.unwrap_or_default().contains("frobnicate"));
+    r.stop().await;
+}
+
+/// DISC-07, DIST-14: installing a CLI agent. The plan names every command before anything runs;
+/// a start that doesn't carry exactly those commands is refused; the install runs Node.js (via
+/// winget), the CLI and its adapter (via npm) in order, with the just-installed Node.js on the
+/// PATH for the next steps, then verifies the CLI answers. Nothing touches this PC: the command
+/// runner is the rig's fake.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn installing_a_cli_agent_explains_asks_runs_and_verifies() {
+    let _one = ONE_AT_A_TIME.lock().await;
+    let r = start();
+    let rpc = Arc::clone(&r.rig.rpc);
+    let call = |method: &'static str, params: serde_json::Value| {
+        let rpc = Arc::clone(&rpc);
+        async move { rpc.call(method, params).await.expect("handled") }
+    };
+    let out = |code: i32, text: &str| kivo_platform::CommandOutput {
+        exit_code: Some(code),
+        stdout: text.into(),
+        ..Default::default()
+    };
+    {
+        let mut replies = r.rig.commands.replies.lock().unwrap();
+        replies.push_back(out(1, "'node' is not recognized")); // plan: node --version
+        replies.push_back(out(1, "'node' is not recognized")); // start: plan again
+        replies.push_back(out(0, "Successfully installed")); // winget Node.js
+        replies.push_back(out(0, "added 1 package")); // npm claude-code
+        replies.push_back(out(0, "added 1 package")); // npm adapter
+        replies.push_back(out(0, "2.1.4 (Claude Code)")); // verify
+    }
+    let plan = call("installs.plan", json!({ "id": "claude-code" }))
+        .await
+        .unwrap();
+    let commands: Vec<String> = plan["steps"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["command"].as_str().unwrap().to_owned())
+        .collect();
+    assert_eq!(commands.len(), 3, "{plan}");
+    assert!(commands[0].starts_with("winget install --id OpenJS.NodeJS.LTS"));
+    assert!(
+        r.rig
+            .commands
+            .ran
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|c| c.command.ends_with("--version")),
+        "nothing installed yet"
+    );
+    // Consent is to exactly what was shown.
+    assert!(
+        call(
+            "installs.start",
+            json!({ "id": "claude-code", "commands": ["npm install -g evil"] })
+        )
+        .await
+        .is_err()
+    );
+    // The refused start looked (one `--version`); the real one looks again.
+    r.rig
+        .commands
+        .replies
+        .lock()
+        .unwrap()
+        .push_front(out(1, "no node"));
+    call(
+        "installs.start",
+        json!({ "id": "claude-code", "commands": commands }),
+    )
+    .await
+    .unwrap();
+    until("the install to finish", Duration::from_secs(10), || {
+        r.rig
+            .rpc
+            .installer
+            .status("claude-code")
+            .is_some_and(|v| v.status != "running")
+    })
+    .await;
+    let view = call("installs.status", json!({ "id": "claude-code" }))
+        .await
+        .unwrap();
+    assert_eq!(view["status"], "done", "{view}");
+    assert_eq!(view["version"], "2.1.4");
+    let ran: Vec<String> = r
+        .rig
+        .commands
+        .ran
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|c| c.command.clone())
+        .collect();
+    let installs: Vec<&String> = ran.iter().filter(|c| !c.ends_with("--version")).collect();
+    assert_eq!(installs.len(), 3, "{ran:?}");
+    let npm = r
+        .rig
+        .commands
+        .ran
+        .lock()
+        .unwrap()
+        .iter()
+        .find(|c| c.command.starts_with("npm"))
+        .cloned()
+        .unwrap();
+    let path = npm
+        .env
+        .iter()
+        .find(|(k, _)| k == "PATH")
+        .map(|(_, v)| v.clone())
+        .unwrap();
+    assert!(
+        path.to_lowercase().contains("nodejs"),
+        "Node.js on the PATH for npm: {path}"
+    );
+    r.stop().await;
+}

@@ -152,7 +152,38 @@ pub struct Memory {
     /// One writer at a time (writes, sync and tidy).
     writing: Mutex<()>,
     watcher: Mutex<Option<notify::RecommendedWatcher>>,
+    /// The local embedding model and its id, once it's on this PC (MEM-09).
+    embedder: Mutex<Option<(Embedder, String)>>,
+    /// A background re-embed is running.
+    embedding: std::sync::atomic::AtomicBool,
+    /// This memory itself, so a change can start the background re-embed.
+    me: std::sync::OnceLock<std::sync::Weak<Memory>>,
+    /// Session-log entries for workspaces KIVO is asking about (CONV-22), by folder name: written
+    /// if the user says yes, dropped if not.
+    held: Mutex<BTreeMap<String, Vec<HeldEntry>>>,
 }
+
+/// A session-log entry waiting for the user's answer: what was done and its bullets.
+type HeldEntry = (String, Vec<String>);
+
+/// A suggestion's source when it asks to start notes for a workspace.
+const NEW_WORKSPACE: &str = "workspace-notes";
+
+/// Cosine similarity of two vectors.
+fn cosine(a: &[f32], b: &[f32]) -> f32 {
+    let dot: f32 = a.iter().zip(b).map(|(x, y)| x * y).sum();
+    let norm = |v: &[f32]| v.iter().map(|x| x * x).sum::<f32>().sqrt();
+    let n = norm(a) * norm(b);
+    if n == 0.0 { 0.0 } else { dot / n }
+}
+
+/// Turns text into a 384-dimension vector (the router's MiniLM, shared; MEM-09).
+pub type Embedder = Arc<dyn Fn(&str) -> Option<Vec<f32>> + Send + Sync>;
+
+/// Meaning matches farther than this (cosine distance) aren't related enough to recall.
+const MAX_DISTANCE: f32 = 0.65;
+/// Notes embedded per database visit in the background job.
+const EMBED_BATCH: u32 = 16;
 
 impl Memory {
     pub fn new(
@@ -169,7 +200,12 @@ impl Memory {
             utc_offset,
             writing: Mutex::new(()),
             watcher: Mutex::new(None),
+            embedder: Mutex::new(None),
+            embedding: std::sync::atomic::AtomicBool::new(false),
+            me: std::sync::OnceLock::new(),
+            held: Mutex::new(BTreeMap::new()),
         });
+        let _ = me.me.set(Arc::downgrade(&me));
         me.sync();
         me
     }
@@ -183,11 +219,103 @@ impl Memory {
     }
 
     fn changed(&self) {
+        // New or changed notes get their vectors (MEM-09).
+        if let Some(me) = self.me.get().and_then(std::sync::Weak::upgrade) {
+            me.reembed();
+        }
         self.core.bus.publish(Event::new(EventKind::System(
             SystemEvent::DiscoveryChanged {
                 section: "memory".into(),
             },
         )));
+    }
+
+    // ---- Meaning search (MEM-09, CONV-23) ----------------------------------------------------
+
+    /// The embedding model is on this PC (or changed): notes get vectors for it in the
+    /// background, and recall matches by meaning as well as by words.
+    pub fn set_embedder(self: &Arc<Self>, embed: Embedder, model: &str) {
+        *lock(&self.embedder) = Some((embed, model.to_owned()));
+        self.reembed();
+    }
+
+    /// Embeds, on a background thread, every note whose vector is missing or from another model
+    /// (new, changed, or the model changed). One job at a time; a no-op without the model.
+    pub fn reembed(self: &Arc<Self>) {
+        use std::sync::atomic::Ordering;
+        let Some((embed, model)) = lock(&self.embedder).clone() else {
+            return;
+        };
+        if self.embedding.swap(true, Ordering::AcqRel) {
+            return;
+        }
+        let me = Arc::clone(self);
+        std::thread::spawn(move || {
+            let mut done = 0_usize;
+            loop {
+                let batch = lock(&me.db)
+                    .memories_to_embed(&model, EMBED_BATCH)
+                    .unwrap_or_default();
+                if batch.is_empty() {
+                    break;
+                }
+                let mut stored = 0;
+                for (id, text) in batch {
+                    // The model runs without the database lock held.
+                    let Some(vector) = embed(&text) else { continue };
+                    if lock(&me.db).set_memory_vector(id, &model, &vector).is_ok() {
+                        stored += 1;
+                    }
+                }
+                done += stored;
+                if stored == 0 {
+                    break;
+                }
+            }
+            me.embedding.store(false, Ordering::Release);
+            if done > 0 {
+                tracing::debug!(done, "memory notes embedded");
+            }
+        });
+    }
+
+    /// Whether every note has a vector for the current model (tests and diagnostics).
+    pub fn embedded(&self) -> bool {
+        let Some((_, model)) = lock(&self.embedder).clone() else {
+            return false;
+        };
+        !self.embedding.load(std::sync::atomic::Ordering::Acquire)
+            && lock(&self.db)
+                .memories_to_embed(&model, 1)
+                .is_ok_and(|t| t.is_empty())
+    }
+
+    /// Notes for `text`, best first: keyword matches (FTS5) and, with the model, meaning matches
+    /// (sqlite-vec), fused by rank (CONV-23).
+    pub fn find(&self, text: &str, limit: u32) -> Vec<MemoryRow> {
+        let by_words = query::fts_query(text)
+            .map(|fts| {
+                lock(&self.db)
+                    .search_memories(&fts, limit)
+                    .unwrap_or_default()
+            })
+            .unwrap_or_default();
+        let embedder = lock(&self.embedder).clone();
+        let by_meaning: Vec<MemoryRow> = embedder
+            .and_then(|(embed, model)| embed(text).map(|v| (v, model)))
+            .map(|(vector, model)| {
+                lock(&self.db)
+                    .nearest_memories(&vector, &model, limit)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter(|(_, distance)| *distance <= MAX_DISTANCE)
+                    .map(|(m, _)| m)
+                    .collect()
+            })
+            .unwrap_or_default();
+        let mut fused = query::fuse(&[by_words, by_meaning], |m| m.path.clone());
+        fused.truncate(limit as usize);
+        fused
     }
 
     // ---- The index follows the files -------------------------------------------------------
@@ -610,6 +738,29 @@ impl Memory {
         {
             self.core.set_offer(None);
         }
+        // "Keep notes for this workspace?" (CONV-22): yes writes what was held, no remembers it.
+        if s.source.as_deref() == Some(NEW_WORKSPACE) {
+            let workspace = s.workspace.clone().unwrap_or_default();
+            let held = lock(&self.held)
+                .remove(&vault::slug(&workspace))
+                .unwrap_or_default();
+            if accept {
+                for (what, bullets) in held {
+                    self.write_workspace_log(&workspace, &what, &bullets);
+                }
+            } else {
+                let slug = vault::slug(&workspace);
+                self.core.update_config(|c| {
+                    if !c.memory.no_notes_for.contains(&slug) {
+                        c.memory.no_notes_for.push(slug.clone());
+                    }
+                });
+            }
+            let _ = lock(&self.db)
+                .set_memory_suggestion(id, if accept { "accepted" } else { "dismissed" });
+            self.changed();
+            return Ok(None);
+        }
         let result = if accept {
             let text = edited
                 .map(str::trim)
@@ -643,6 +794,57 @@ impl Memory {
         if bullets.is_empty() {
             return None;
         }
+        let slug = vault::slug(workspace);
+        if config.memory.no_notes_for.contains(&slug) {
+            return None;
+        }
+        // A workspace without notes yet: ask first (CONV-22), holding what would be written.
+        let overview = format!("workspaces/{slug}/overview.md");
+        if config.memory.ask_new_notes && !self.vault.exists(&overview) {
+            let asking = lock(&self.held).contains_key(&slug);
+            lock(&self.held)
+                .entry(slug.clone())
+                .or_default()
+                .push((what.to_owned(), bullets));
+            if !asking {
+                self.ask_new_workspace(workspace);
+            }
+            return None;
+        }
+        self.write_workspace_log(workspace, what, &bullets)
+    }
+
+    /// "Keep notes for “K.I.V.O”?" as a suggestion the Island offers.
+    fn ask_new_workspace(&self, workspace: &str) {
+        let text = text::tf("memory.newWorkspace", &[("workspace", &workspace)]);
+        let Ok(id) = lock(&self.db).add_memory_suggestion(
+            &text,
+            Some(&text::t("memory.newWorkspaceWhy")),
+            Some(NEW_WORKSPACE),
+            Some(workspace),
+        ) else {
+            return;
+        };
+        if self.core.offer().is_none() {
+            self.core.set_offer(Some(Offer {
+                id: format!("memory:{id}"),
+                kind: "memory".into(),
+                text,
+                accept: text::t("memory.newWorkspaceYes"),
+                decline: text::t("memory.offerNo"),
+            }));
+        }
+        self.changed();
+    }
+
+    /// Writes a session-log entry (the workspace's notes exist or were agreed to).
+    fn write_workspace_log(
+        &self,
+        workspace: &str,
+        what: &str,
+        bullets: &[String],
+    ) -> Option<String> {
+        let config = self.core.config();
         let _one = lock(&self.writing);
         let folder = format!("workspaces/{}", vault::slug(workspace));
         let today = self.today();
@@ -672,7 +874,7 @@ impl Memory {
             NoteDetail::Detailed => Detail::Detailed,
         };
         note.body
-            .push_str(&tidy::log_entry(&time, what, &bullets, detail));
+            .push_str(&tidy::log_entry(&time, what, bullets, detail));
         note.front.updated = Some(today);
         self.put(&path, &note).ok()?;
         self.changed();
@@ -687,12 +889,9 @@ impl Memory {
         if ask.guest {
             return Vec::new();
         }
-        let Some(fts) = query::fts_query(ask.text) else {
-            return Vec::new();
-        };
         let config = self.core.config();
         let now = now_ms();
-        let found = lock(&self.db).search_memories(&fts, 30).unwrap_or_default();
+        let found = self.find(ask.text, 30);
         let mut out = Vec::new();
         let mut used = 0;
         for m in found {
@@ -809,7 +1008,24 @@ impl Memory {
             })
             .collect();
         if config.memory.merge_duplicates {
-            for (keep, gone) in tidy::duplicates(&facts) {
+            // With the local model, near-duplicates in other words merge too (CONV-22).
+            let vectors: BTreeMap<String, Vec<f32>> = lock(&self.embedder)
+                .clone()
+                .map(|(embed, _)| {
+                    facts
+                        .iter()
+                        .filter_map(|f| embed(&f.text).map(|v| (f.path.clone(), v)))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let alike = |a: &Fact, b: &Fact| {
+                let cosine = vectors
+                    .get(&a.path)
+                    .zip(vectors.get(&b.path))
+                    .map(|(x, y)| cosine(x, y));
+                tidy::same_fact(&a.text, &b.text, cosine)
+            };
+            for (keep, gone) in tidy::duplicates_by(&facts, alike) {
                 let (Ok(a), Ok(b)) = (self.vault.read(&keep), self.vault.read(&gone)) else {
                     continue;
                 };
@@ -1003,7 +1219,41 @@ impl Memory {
                 .map(|(path, count)| MemoryFolderView { path, count })
                 .collect(),
             suggestions,
+            links: self.links(&rows),
         }
+    }
+
+    /// The `[[links]]` between notes, each target resolved to a note by its path, its path
+    /// without `.md`, its file name or its title (as Obsidian does); links to nothing are left out.
+    fn links(&self, rows: &[MemoryRow]) -> Vec<kivo_ipc::protocol::MemoryLinkView> {
+        let find = |target: &str| {
+            let t = target.trim().to_lowercase();
+            let t = t
+                .split(['|', '#'])
+                .next()
+                .unwrap_or_default()
+                .trim()
+                .to_owned();
+            rows.iter().find(|r| {
+                let path = r.path.to_lowercase();
+                let stem = path.trim_end_matches(".md");
+                let file = stem.rsplit('/').next().unwrap_or(stem);
+                path == t || stem == t || file == t || r.title.to_lowercase() == t
+            })
+        };
+        let mut out: Vec<kivo_ipc::protocol::MemoryLinkView> = Vec::new();
+        for (from, target) in lock(&self.db).memory_link_pairs().unwrap_or_default() {
+            if let Some(to) = find(&target).filter(|r| r.path != from) {
+                let link = kivo_ipc::protocol::MemoryLinkView {
+                    from: from.clone(),
+                    to: to.path.clone(),
+                };
+                if !out.contains(&link) {
+                    out.push(link);
+                }
+            }
+        }
+        out
     }
 
     /// One note with its Markdown, links, backlinks and the facts it replaced or was replaced by.
@@ -1198,6 +1448,74 @@ mod tests {
 
     /// MEM-07/08: guests get nothing; sensitive notes stay off cloud brains unless both the
     /// setting and the note allow it; scope and the token budget hold.
+    /// MEM-09 / CONV-23 with the real MiniLM (where a test machine has it, `KIVO_MINILM_DIR`):
+    /// notes are embedded in the background; a request that shares no keyword with a note still
+    /// recalls it by meaning; an edited note is embedded again.
+    #[test]
+    fn notes_are_recalled_by_meaning_with_the_local_model() {
+        let Some(model_dir) = std::env::var_os("KIVO_MINILM_DIR") else {
+            eprintln!("KIVO_MINILM_DIR isn't set; skipping");
+            return;
+        };
+        let model = std::sync::Arc::new(
+            kivo_voice::embed::MiniLm::load(Path::new(&model_dir)).expect("the model loads"),
+        );
+        let (memory, _core, _dir) = setup();
+        memory
+            .remember(
+                "I parked the car on level 3 of the garage",
+                &[],
+                None,
+                false,
+            )
+            .unwrap();
+        memory
+            .remember("Maya likes jasmine tea", &[], None, false)
+            .unwrap();
+        // Without the model, words only: nothing in common with the question.
+        assert!(
+            memory
+                .recall(&ask("where is my vehicle"), MEMORY_TOKENS)
+                .is_empty()
+        );
+
+        memory.set_embedder(crate::semantic::embedder(model), "all-minilm-l6-v2");
+        let wait = || {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+            while !memory.embedded() {
+                assert!(std::time::Instant::now() < deadline, "embedding finished");
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+        };
+        wait();
+        let found = memory.recall(&ask("where is my vehicle"), MEMORY_TOKENS);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!(found[0].text.contains("level 3"));
+        // An unrelated question recalls nothing by meaning.
+        assert!(
+            memory
+                .recall(&ask("what's the capital of Peru"), MEMORY_TOKENS)
+                .is_empty()
+        );
+
+        // An edited note is embedded again before it's found by meaning.
+        let path = memory.find("parked car", 5)[0].path.clone();
+        memory
+            .save(
+                &path,
+                "# Parking
+The bicycle is locked by the station.
+",
+            )
+            .unwrap();
+        wait();
+        let found = memory.recall(&ask("where did I leave my bike"), MEMORY_TOKENS);
+        assert!(
+            found.iter().any(|r| r.text.contains("bicycle")),
+            "{found:?}"
+        );
+    }
+
     #[test]
     fn recall_follows_scope_privacy_guests_and_budget() {
         let (memory, core, dir) = setup();
@@ -1323,9 +1641,113 @@ mod tests {
 
     /// CONV-19/20: workspace notes follow the detail level; suggestions wait, dedupe, and are
     /// remembered only when accepted.
+    /// CONV-25: the graph's links, resolved by path, file name or title; dangling links and links
+    /// to itself are left out.
+    #[test]
+    fn the_graph_links_notes_by_path_file_or_title() {
+        let (memory, _core, dir) = setup();
+        let root = dir.path().join("memory");
+        std::fs::create_dir_all(root.join("people")).unwrap();
+        std::fs::create_dir_all(root.join("topics")).unwrap();
+        std::fs::write(
+            root.join("people/maya.md"),
+            "# Maya
+Works on [[Rust testing]] with me.
+",
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("topics/rust-testing.md"),
+            "# Rust testing
+Ask [[maya]]. See [[people/maya|her note]], [[Nowhere]], [[Rust testing]].
+",
+        )
+        .unwrap();
+        memory.sync();
+        let mut links: Vec<(String, String)> = memory
+            .overview()
+            .links
+            .into_iter()
+            .map(|l| (l.from, l.to))
+            .collect();
+        links.sort();
+        assert_eq!(
+            links,
+            [
+                (
+                    "people/maya.md".to_owned(),
+                    "topics/rust-testing.md".to_owned()
+                ),
+                (
+                    "topics/rust-testing.md".to_owned(),
+                    "people/maya.md".to_owned()
+                ),
+            ]
+        );
+    }
+
+    /// CONV-22: KIVO asks before starting notes for a new workspace; what happened meanwhile is
+    /// written on yes, and on no the workspace gets no notes from then on.
+    #[test]
+    fn a_new_workspace_is_asked_about_first() {
+        let (memory, core, dir) = setup();
+        let bullets = vec!["Ran the tests".to_owned()];
+        assert!(
+            memory
+                .workspace_log("K.I.V.O", "Codex: fix CI", &bullets)
+                .is_none()
+        );
+        assert!(
+            memory
+                .workspace_log("K.I.V.O", "Codex: bump deps", &bullets)
+                .is_none()
+        );
+        assert!(
+            !dir.path().join("memory/workspaces/k-i-v-o").exists(),
+            "nothing written yet"
+        );
+        let offer = core.offer().expect("the Island asks");
+        assert!(offer.text.contains("K.I.V.O"), "{}", offer.text);
+        let id: i64 = offer.id.trim_start_matches("memory:").parse().unwrap();
+        assert!(memory.answer(id, true, None).unwrap().is_none());
+        let today = std::fs::read_dir(dir.path().join("memory/workspaces/k-i-v-o/log"))
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
+        let log = std::fs::read_to_string(today).unwrap();
+        assert!(log.contains("fix CI") && log.contains("bump deps"), "{log}");
+        // Now it has notes: no more asking.
+        assert!(
+            memory
+                .workspace_log("K.I.V.O", "Codex: lint", &bullets)
+                .is_some()
+        );
+
+        // Another workspace, and the user says no.
+        assert!(
+            memory
+                .workspace_log("Scratch", "Claude: try", &bullets)
+                .is_none()
+        );
+        let offer = core.offer().expect("asks about Scratch");
+        let id: i64 = offer.id.trim_start_matches("memory:").parse().unwrap();
+        memory.answer(id, false, None).unwrap();
+        assert_eq!(core.config().memory.no_notes_for, ["scratch"]);
+        assert!(
+            memory
+                .workspace_log("Scratch", "Claude: again", &bullets)
+                .is_none()
+        );
+        assert!(core.offer().is_none(), "not asked again");
+        assert!(!dir.path().join("memory/workspaces/scratch").exists());
+    }
+
     #[test]
     fn workspace_notes_and_suggestions() {
         let (memory, core, dir) = setup();
+        core.update_config(|c| c.memory.ask_new_notes = false);
         let bullets: Vec<String> = (1..=12).map(|i| format!("Step {i}")).collect();
         let path = memory
             .workspace_log("K.I.V.O", "Claude Code: fix the tests", &bullets)

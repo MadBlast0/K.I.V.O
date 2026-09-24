@@ -11,4 +11,5 @@ pub use kivo_core::tool::{ConfirmSpec, ConfirmedBy, Strength};
 pub use policy::{
     Answer, Context, Decision, Denial, DenyCode, Grant, HardLimits, Permit, SessionKind, Taint,
     app_matches, app_scope, approve_plan, authorize, bind, confirmed, glob, render_title,
+    watch_card,
 };

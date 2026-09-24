@@ -17,7 +17,7 @@ function defaults(): Record<string, Record<string, unknown>> {
       languages: [],
       format: "windows",
     },
-    sounds: { enabled: true, set: "soft", volume: 70, "thinking-cue": false, off: ["hangup"] },
+    sounds: { enabled: true, set: "soft", volume: 70, "thinking-cue": false, off: ["hangup"], custom: ["error"] },
     overlay: {
       position: "top-center",
       size: "standard",
@@ -87,8 +87,22 @@ runtime.request = (method: string, params?: unknown) => {
         cpuPercent: 1.3,
         memoryMb: 132,
         processes: 5,
-        gpu: false,
-        latency: { wakeToChime: 142, speechToText: 260, commandDone: 180, firstWord: 1100 },
+        gpu: true,
+        gpuPercent: 12,
+        gpuMemoryMb: 640,
+        vramMb: 6144,
+        ramMb: 16384,
+        ramFreeMb: 8192,
+        npu: false,
+        profile: "auto",
+        effectiveProfile: "gaming",
+        latency: {
+          wakeToChime: 142,
+          speechToText: 260,
+          commandDone: 180,
+          firstWord: 1100,
+          stages: { stt: 260, brain: 540, tool: 85, tts: 310, total: 2400 },
+        },
         models: [{ id: "moonshine-base", name: "Moonshine", kind: "stt", residency: "warm", diskBytes: 199229440 }],
       });
     case "diagnostics.run":
@@ -102,6 +116,10 @@ runtime.request = (method: string, params?: unknown) => {
           fix: "permissions",
         },
       ]);
+    case "diagnostics.bundle":
+      return Promise.resolve({ kind: "kivo-diagnostics", kivo: "0.4.2", os: { build: 26200 } });
+    case "diagnostics.save":
+      return Promise.resolve({ file: "C:/Users/Sam/Downloads/KIVO diagnostics 2026-09-24.json" });
     case "models.list":
       return Promise.resolve([
         { id: "kokoro", name: "Kokoro", license: "Apache-2.0", attribution: "hexgrad", source: "Hugging Face" },
@@ -190,6 +208,26 @@ describe("Settings → General", () => {
   });
 });
 
+describe("Settings → General: product modes (PLAN-06)", () => {
+  it("shows the mode in effect and switches through the runtime", async () => {
+    config.general = { ...config.general, "product-mode": "gaming" };
+    page("general");
+    await settle();
+    expect(screen.getByText("Stays off the GPU and out of the way over fullscreen games")).toBeTruthy();
+    fireEvent.click(screen.getByRole("combobox", { name: "How KIVO behaves right now" }));
+    await settle();
+    const option = await screen.findByRole("option", { name: "Presentation" });
+    // Base UI ignores a release right after opening (a press-drag-release pick).
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 450));
+    });
+    fireEvent.keyDown(option, { key: "Enter" });
+    await settle();
+    expect(calls).toContainEqual({ method: "mode.set", params: { mode: "presentation" } });
+    expect(await screen.findByText("Presentation mode is on")).toBeTruthy();
+  });
+});
+
 describe("Settings → Appearance (DS-03)", () => {
   it("picks the theme and a custom accent, and turns transparency off", async () => {
     page("appearance");
@@ -203,7 +241,7 @@ describe("Settings → Appearance (DS-03)", () => {
 });
 
 describe("Settings → Island", () => {
-  it("moves, sizes and hides the Island; Orb waits for a later update", async () => {
+  it("moves, sizes and hides the Island; picks the Orb; Character waits for its mascot", async () => {
     page("island");
     await settle();
     fireEvent.click(screen.getByRole("button", { name: "Where I dragged it" }));
@@ -215,7 +253,17 @@ describe("Settings → Island", () => {
     fireEvent.click(screen.getByRole("button", { name: "Never" }));
     await settle();
     expect(set({ overlay: { "hide-after-seconds": 0 } })).toBe(true);
-    expect(screen.getByRole("radio", { name: /Orb/ })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("radio", { name: /Character/ })).toHaveProperty("disabled", true);
+    fireEvent.click(screen.getByRole("radio", { name: /Orb/ }));
+    await settle();
+    expect(set({ companion: { style: "orb" } })).toBe(true);
+    // What it shows (UX-17) and the wake glow (UX-16).
+    fireEvent.click(screen.getByRole("button", { name: "Card" }));
+    await settle();
+    expect(set({ overlay: { style: "card-only" } })).toBe(true);
+    fireEvent.click(screen.getByRole("switch", { name: "Wake glow" }));
+    await settle();
+    expect(set({ overlay: { "wake-glow": true } })).toBe(true);
     fireEvent.click(screen.getByRole("radio", { name: /Hidden/ }));
     await settle();
     expect(set({ companion: { style: "hidden" } })).toBe(true);
@@ -255,6 +303,29 @@ describe("Settings → Sounds (VOICE-27)", () => {
     fireEvent.click(screen.getByRole("radio", { name: /Glass/ }));
     await settle();
     expect(set({ sounds: { set: "glass" } })).toBe(true);
+  });
+});
+
+describe("Settings → Sounds: your own sounds (VOICE-28)", () => {
+  it("imports a file for a cue, goes back to the set's, and picks the notification sound", async () => {
+    page("sounds");
+    await settle();
+    // Error already has the user's sound.
+    expect(screen.getAllByText("Your sound").length).toBe(1);
+    fireEvent.click(screen.getByRole("button", { name: "Use the set’s" }));
+    await settle();
+    expect(calls).toContainEqual({ method: "sounds.clear", params: { cue: "error" } });
+    const input = screen.getByLabelText("Your sound for Done");
+    const file = new File([new Uint8Array([82, 73, 70, 70])], "ding.wav", { type: "audio/wav" });
+    fireEvent.change(input, { target: { files: [file] } });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(calls).toContainEqual({
+      method: "sounds.import",
+      params: { cue: "done", name: "ding.wav", data: "UklGRg==" },
+    });
+    expect(screen.getByRole("radio", { name: /Custom/ })).toBeTruthy();
   });
 });
 
@@ -301,9 +372,23 @@ describe("Settings → Performance and Diagnostics", () => {
     page("performance");
     await settle();
     expect(screen.getByText("132 MB")).toBeTruthy();
-    expect(screen.getByText("Not used")).toBeTruthy();
+    expect(screen.getByText("In use · 640 MB")).toBeTruthy();
+    expect(screen.getByText("12%")).toBeTruthy();
+    expect(screen.getByText("8 GB free of 16 GB")).toBeTruthy();
+    // Auto says what it chose (PLAN-08).
+    expect(screen.getByText("Auto is using Gaming right now")).toBeTruthy();
     expect(screen.getByText("1.1 s")).toBeTruthy();
+    // Each stage on its own (PLAN-07).
+    expect(screen.getByText("Brain, to its first word")).toBeTruthy();
+    expect(screen.getByText("540 ms")).toBeTruthy();
+    expect(screen.getByText("2.4 s")).toBeTruthy();
     expect(screen.getByText("Warm")).toBeTruthy();
+    // Sampled again every 2 s while open (DISC-18).
+    const before = calls.filter((c) => c.method === "performance.status").length;
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 2_100));
+    });
+    expect(calls.filter((c) => c.method === "performance.status").length).toBeGreaterThan(before);
   });
 
   it("runs the checks and sends a problem to the page that fixes it", async () => {
@@ -313,6 +398,21 @@ describe("Settings → Performance and Diagnostics", () => {
     expect(screen.getByText("USB Headset")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Fix" }));
     expect(navigate).toHaveBeenCalledWith("permissions");
+  });
+});
+
+describe("Settings → Diagnostics: the report (ARCH-40)", () => {
+  it("shows the whole report before saving it", async () => {
+    page("diagnostics");
+    await settle();
+    fireEvent.click(screen.getByRole("button", { name: "Create report" }));
+    const dialog = await screen.findByRole("dialog", { name: "Diagnostics report" });
+    expect(within(dialog).getByText(/"kind": "kivo-diagnostics"/)).toBeTruthy();
+    expect(calls.some((c) => c.method === "diagnostics.save")).toBe(false);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save to Downloads" }));
+    await settle();
+    expect(calls.some((c) => c.method === "diagnostics.save")).toBe(true);
+    expect(await screen.findByText(/Saved to .*KIVO diagnostics 2026-09-24\.json/)).toBeTruthy();
   });
 });
 

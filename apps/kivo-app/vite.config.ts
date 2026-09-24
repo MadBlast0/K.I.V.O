@@ -25,8 +25,8 @@ export default defineConfig({
   build: {
     target: "es2022",
     rolldownOptions: {
-      // Two windows: the Control Center and the transparent Island overlay.
-      input: { main: "index.html", overlay: "overlay.html" },
+      // Three windows: the Control Center, the transparent Island overlay and the wake glow.
+      input: { main: "index.html", overlay: "overlay.html", glow: "glow.html" },
       output: {
         // Vendor code changes rarely; separate chunks keep rebuilds and cache hits cheap.
         codeSplitting: {

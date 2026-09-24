@@ -77,6 +77,7 @@ describe("Island while KIVO acts", () => {
       allowAlways: true,
       plan: false,
       hello: false,
+      watch: false,
     };
     const on = handlers();
     const model = islandForTurn(snapshot, i18n.t.bind(i18n), on);
@@ -124,6 +125,7 @@ describe("Island M2 states (UX-08, UX-45, CONV-26)", () => {
       allowAlways: false,
       plan: false,
       hello: false,
+      watch: false,
     };
     return snapshot;
   };
@@ -227,6 +229,57 @@ describe("Island for a brain's answer (PLAN-17, BRAIN-06)", () => {
   });
 });
 
+describe("Island for a live conversation (BRAIN-33)", () => {
+  it("offers Talk live on a brain's answer", () => {
+    const on = { ...handlers(), live: vi.fn<NonNullable<IslandHandlers["live"]>>() };
+    const t = i18n.t.bind(i18n);
+    const snapshot = acting("auto");
+    snapshot.session = "idle";
+    if (!snapshot.turn) throw new Error("turn");
+    snapshot.turn.steps = [];
+    snapshot.turn.answer = "Rome was founded, the story goes, in 753 BC.";
+    snapshot.turn.brain = {
+      name: "OpenAI",
+      profile: "Default",
+      reason: "Default · OpenAI",
+      local: false,
+      contextUsed: 900,
+      contextBudget: 8000,
+    };
+    snapshot.turn.liveOffer = true;
+    render(<>{islandForTurn(snapshot, t, on)?.body}</>);
+    fireEvent.click(screen.getByRole("button", { name: "Talk live" }));
+    expect(on.live).toHaveBeenCalledOnce();
+  });
+
+  it("shows LIVE with its clock while listening, with the model's line and Stop", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 8, 24, 10, 0, 0));
+    const on = handlers();
+    const t = i18n.t.bind(i18n);
+    const snapshot = acting("auto");
+    snapshot.session = "listening";
+    if (!snapshot.turn) throw new Error("turn");
+    snapshot.turn.steps = [];
+    snapshot.turn.transcript = "tell me about the Colosseum";
+    snapshot.turn.answer = "It opened in 80 AD.";
+    snapshot.turn.live = { provider: "Gemini Live", started: Date.now() - 65_000, maxMinutes: 30 };
+    const model = islandForTurn(snapshot, t, on);
+    render(
+      <>
+        {model?.trail}
+        {model?.body}
+      </>,
+    );
+    const chip = screen.getByLabelText("Live conversation, 1:05 of 30 minutes");
+    expect(chip.textContent).toBe("LIVE · 1:05");
+    expect(screen.getByText("It opened in 80 AD.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+    expect(on.stop).toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+});
+
 describe("Island M4 (SEC-02, SEC-11, UX-43, UX-46, CAP-06, CAP-08)", () => {
   const t = i18n.t.bind(i18n);
 
@@ -245,6 +298,7 @@ describe("Island M4 (SEC-02, SEC-11, UX-43, UX-46, CAP-06, CAP-08)", () => {
       allowAlways: false,
       plan: true,
       hello: false,
+      watch: false,
     };
     const on = handlers();
     render(<>{islandForTurn(snapshot, t, on)?.body}</>);
@@ -270,6 +324,7 @@ describe("Island M4 (SEC-02, SEC-11, UX-43, UX-46, CAP-06, CAP-08)", () => {
       allowAlways: false,
       plan: false,
       hello: true,
+      watch: false,
     };
     const on = handlers();
     render(<>{islandForTurn(snapshot, t, on)?.body}</>);
@@ -331,6 +386,7 @@ describe("Island M5 parts", () => {
       allowAlways: false,
       plan: false,
       hello: false,
+      watch: false,
     };
     const on = handlers();
     const model = islandForTurn(snapshot, t, on);
@@ -439,6 +495,8 @@ describe("Island preferences (Settings → Island, Accessibility)", () => {
       announcements: true,
       motion: "system",
       companion: "pill",
+      style: "pill-and-card",
+      wakeGlow: false,
       ...prefs,
     };
     return s;
@@ -471,6 +529,7 @@ describe("Island preferences (Settings → Island, Accessibility)", () => {
       allowAlways: false,
       plan: false,
       hello: false,
+      watch: false,
     };
     expect(islandForTurn(hidden, t, handlers())).not.toBeNull();
   });
@@ -488,5 +547,36 @@ describe("Island preferences (Settings → Island, Accessibility)", () => {
     shown.turn!.transcriptFinal = false;
     render(<>{islandForTurn(shown, t, handlers())?.body}</>);
     expect(screen.getByText("open chr")).toBeTruthy();
+  });
+});
+
+/** A control at (x, y), for the pointing tests. */
+function at(x: number, y: number) {
+  return { x, y, width: 80, height: 24, label: "Export…" };
+}
+
+describe("pointing (UX-39)", () => {
+  it("turns the arrow toward the control", async () => {
+    const { pointDirection } = await import("./turn");
+    const win = { x: 400, y: 300, width: 560, height: 120 };
+    expect(pointDirection(at(600, 250), win)).toBe("up");
+    expect(pointDirection(at(600, 440), win)).toBe("down");
+    expect(pointDirection(at(200, 330), win)).toBe("left");
+    expect(pointDirection(at(1000, 330), win)).toBe("right");
+  });
+});
+
+describe("overlay style (UX-17)", () => {
+  it("pill only drops the card, card only needs text, off shows only decisions", async () => {
+    const { withStyle } = await import("./turn");
+    const pill = { state: "listening", width: 300, label: "Listening" };
+    const card = { state: "speaking", width: 460, label: "KIVO", body: "text" };
+    const decision = { state: "confirm-1", width: 460, label: "Close Chrome?", body: "buttons" };
+    expect(withStyle(card, "pill-and-card")).toBe(card);
+    expect(withStyle(card, "pill-only")).toEqual({ ...card, body: undefined, width: 300 });
+    expect(withStyle(pill, "card-only")).toBeNull();
+    expect(withStyle(card, "card-only")).toBe(card);
+    expect(withStyle(card, "off")).toBeNull();
+    for (const style of ["pill-only", "card-only", "off"] as const) expect(withStyle(decision, style)).toBe(decision);
   });
 });

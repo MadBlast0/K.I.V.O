@@ -33,6 +33,9 @@ vi.mock("../ipc/runtime", () => ({
   useRuntimeEvents: () => {},
 }));
 
+/** A routine waiting for review (ROUT-13), taken once. */
+let draft: Routine | null = null;
+
 interface Saved {
   routine: Routine;
   grant?: boolean;
@@ -61,6 +64,15 @@ runtime.request = (method: string, params?: unknown) => {
       routines = [...routines.filter((r) => r.routine.id !== saved.routine.id), saved];
       return Promise.resolve(saved);
     }
+    case "routines.draft": {
+      const d = draft;
+      draft = null;
+      return Promise.resolve(d);
+    }
+    case "routines.import":
+      return Promise.resolve({ ...blankRoutine(), name: "Imported" });
+    case "routines.export":
+      return Promise.resolve({ file: "C:/Users/Sam/Downloads/Work mode.kivo-routine.json" });
     default:
       return Promise.resolve(null);
   }
@@ -200,6 +212,69 @@ describe("Routines page (UX-26)", () => {
   });
 });
 
+describe("Drafts, import and export (ROUT-13, ROUT-14)", () => {
+  it("opens a waiting draft, imports a file into the builder and exports a saved routine", async () => {
+    check = { collisions: [], grants: [], problems: [] };
+    routines = [view(workMode)];
+    draft = { ...blankRoutine(), name: "Set the volume to 30" };
+    page();
+    await settle();
+    let builder = await screen.findByRole("region", { name: "Routine builder" });
+    expect(within(builder).getByRole("textbox", { name: "Name" })).toHaveProperty("value", "Set the volume to 30");
+    expect(calls.some((c) => c.method === "routines.save")).toBe(false);
+    fireEvent.click(within(builder).getByRole("button", { name: "Close" }));
+
+    const file = new File(['{"kind":"kivo-routine","version":1,"routine":{}}'], "Work.kivo-routine.json");
+    fireEvent.change(screen.getByLabelText("Import a routine file"), { target: { files: [file] } });
+    await settle();
+    await settle();
+    expect(calls).toContainEqual({
+      method: "routines.import",
+      params: { content: '{"kind":"kivo-routine","version":1,"routine":{}}' },
+    });
+    builder = await screen.findByRole("region", { name: "Routine builder" });
+    expect(within(builder).getByRole("textbox", { name: "Name" })).toHaveProperty("value", "Imported");
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit “Work mode”" }));
+    await settle();
+    builder = screen.getByRole("region", { name: "Routine builder" });
+    fireEvent.click(within(builder).getByRole("button", { name: "Export" }));
+    await settle();
+    expect(calls).toContainEqual({ method: "routines.export", params: { id: workMode.id } });
+  });
+});
+
+describe("Schedules and events (ROUT-11)", () => {
+  it("adds a time of day, says it runs unattended, and keeps the phrases when saving", async () => {
+    check = { collisions: [], grants: [], problems: [] };
+    routines = [view(workMode)];
+    page();
+    await settle();
+    fireEvent.click(screen.getByRole("button", { name: "Edit “Work mode”" }));
+    await settle();
+    const builder = screen.getByRole("region", { name: "Routine builder" });
+    fireEvent.click(within(builder).getByRole("button", { name: "Add a trigger" }));
+    const dialog = await screen.findByRole("dialog", { name: "Add a trigger" });
+    fireEvent.change(within(dialog).getByLabelText("Time"), { target: { value: "08:15" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Fri" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add" }));
+    await settle();
+    expect(within(builder).getByText("Mon, Tue, Wed, Thu at 08:15")).toBeTruthy();
+    expect(within(builder).getByText(/ask on screen first/)).toBeTruthy();
+    fireEvent.click(within(builder).getByRole("button", { name: "Save" }));
+    const confirm = await screen.findByRole("dialog");
+    fireEvent.click(within(confirm).getByRole("button", { name: "Allow and save" }));
+    await settle();
+    const sent = calls.findLast((c) => c.method === "routines.save")?.params;
+    if (!isSaved(sent)) throw new Error("routines.save wasn't sent");
+    expect(phrasesOf(sent.routine)).toEqual(phrasesOf(workMode));
+    expect(sent.routine.triggers).toContainEqual({
+      type: "event",
+      event: { kind: "timeOfDay", time: "08:15", days: [1, 2, 3, 4] },
+    });
+  });
+});
+
 describe("routine helpers", () => {
   it("moves steps and sets triggers", () => {
     const steps = workMode.steps;
@@ -208,6 +283,12 @@ describe("routine helpers", () => {
     const r = withTriggers(blankRoutine(), [], "Ctrl+Alt+F");
     expect(hotkeyOf(r)).toBe("Ctrl+Alt+F");
     expect(withTriggers(blankRoutine(), [], undefined).triggers).toEqual([{ type: "manual" }]);
+    // Schedules and events stay when the phrases or hotkey change.
+    const scheduled = { ...blankRoutine(), triggers: [{ type: "schedule" as const, cron: "@daily", tz: null }] };
+    expect(withTriggers(scheduled, ["go"], undefined).triggers).toEqual([
+      { type: "phrase", phrases: ["go"], lang: "en" },
+      { type: "schedule", cron: "@daily", tz: null },
+    ]);
   });
 });
 

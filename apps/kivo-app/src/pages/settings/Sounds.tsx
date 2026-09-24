@@ -1,18 +1,41 @@
 /**
- * Settings → Sounds (VOICE-27, UX-31): the master switch, the sound set (each with a preview),
- * every cue on its own with its own preview, and the volume relative to Windows. Custom sounds
- * (your own files) arrive with VOICE-28.
+ * Settings → Sounds (VOICE-27/28, UX-31): the master switch, the sound set (each with a preview),
+ * every cue on its own with its own preview and your own sound for it (a `.wav` or `.ogg`, in any
+ * set; the Custom set is your sounds with Soft for the rest), a notification sound of its own,
+ * and the volume relative to Windows.
  */
+import { useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { Group, IconButton, Note, Pill, Row, Section, Slider, Switch, useToast } from "../../components/ui";
-import { Icon } from "../../icons";
+import {
+  Button,
+  Group,
+  IconButton,
+  Note,
+  Row,
+  Section,
+  Select,
+  Slider,
+  Switch,
+  Tag,
+  useToast,
+} from "../../components/ui";
 import { Method, type SoundCue, type SoundSet } from "../../ipc/generated";
 import { useRuntime } from "../../ipc/runtime";
 import { bool, num, oneOf, strings } from "../../lib/settings";
 import { message, useConfig } from "./useConfig";
 
-/** The sets KIVO makes now; Custom (your own files) is VOICE-28. */
-const SETS: ReadonlyArray<SoundSet> = ["soft", "glass", "pulse", "wood", "minimal"];
+const SETS: ReadonlyArray<SoundSet> = ["soft", "glass", "pulse", "wood", "minimal", "custom"];
+
+/** A file as base64, for the runtime. */
+async function base64(file: File): Promise<string> {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const chunks: string[] = [];
+  // In slices, so a 2 MB file doesn't overflow the argument list.
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    chunks.push(String.fromCodePoint(...bytes.subarray(i, i + 0x8000)));
+  }
+  return btoa(chunks.join(""));
+}
 const CUES: ReadonlyArray<SoundCue> = [
   "listen-start",
   "listen-stop",
@@ -36,6 +59,8 @@ export function SoundsTab() {
   const enabled = bool(get("sounds", "enabled"), true);
   const chosen = oneOf(get("sounds", "set"), SETS) ?? "soft";
   const off = strings(get("sounds", "off"));
+  const custom = strings(get("sounds", "custom"));
+  const notificationSet = oneOf(get("sounds", "notification-set"), SETS) ?? "same";
   const thinking = bool(get("sounds", "thinking-cue"));
   const on = (cue: SoundCue) => (cue === "thinking" ? thinking : !off.includes(cue));
   const toggle = (cue: SoundCue, value: boolean) =>
@@ -44,6 +69,17 @@ export function SoundsTab() {
       : set("sounds", { off: value ? off.filter((c) => c !== cue) : [...off, cue] });
   const preview = (setName: SoundSet, cue?: SoundCue) =>
     request(Method.soundsPreview, { set: setName, cue: cue ?? null }).catch((e: unknown) => toast(message(e)));
+  const importFor = (cue: SoundCue, file: File) => {
+    if (file.size > 2 * 1024 * 1024) {
+      toast(t("sounds.tooBig"));
+      return;
+    }
+    void base64(file)
+      .then((data) => request(Method.soundsImport, { cue, name: file.name, data }))
+      .then(() => toast(t("sounds.imported", { cue: t(`sounds.cue.${cue}`) })))
+      .catch((e: unknown) => toast(message(e)));
+  };
+  const clear = (cue: SoundCue) => void request(Method.soundsClear, { cue }).catch((e: unknown) => toast(message(e)));
 
   return (
     <>
@@ -81,16 +117,6 @@ export function SoundsTab() {
             />
           </div>
         ))}
-        <div className="k-sound-set k-sound-set--later">
-          <span className="k-sound-set__pick">
-            <Icon name="upload" />
-            <span>
-              <b>{t("sounds.sets.custom")}</b>
-              <span className="k-meta">{t("sounds.sets.customHint")}</span>
-            </span>
-          </span>
-          <Pill>{t("settings.general.later")}</Pill>
-        </div>
       </div>
 
       <Section title={t("sounds.cues")} aside={t("sounds.cuesHint")} />
@@ -108,16 +134,49 @@ export function SoundsTab() {
             title={t(`sounds.cue.${cue}`)}
             subtitle={t(`sounds.cueHint.${cue}`)}
             end={
-              <Switch
-                label={t(`sounds.cue.${cue}`)}
-                checked={enabled && on(cue)}
-                disabled={!enabled}
-                onChange={(v) => toggle(cue, v)}
-              />
+              <>
+                {custom.includes(cue) ? (
+                  <>
+                    <Tag tone="accent">{t("sounds.yours")}</Tag>
+                    <Button size="sm" variant="plain" onClick={() => clear(cue)}>
+                      {t("sounds.useSets")}
+                    </Button>
+                  </>
+                ) : (
+                  <ImportButton
+                    cue={cue}
+                    label={t("sounds.importFor", { cue: t(`sounds.cue.${cue}`) })}
+                    onFile={importFor}
+                  />
+                )}
+                <Switch
+                  label={t(`sounds.cue.${cue}`)}
+                  checked={enabled && on(cue)}
+                  disabled={!enabled}
+                  onChange={(v) => toggle(cue, v)}
+                />
+              </>
             }
           />
         ))}
+        <Row
+          icon="bell"
+          title={t("sounds.notificationSound")}
+          subtitle={t("sounds.notificationSoundHint")}
+          end={
+            <Select
+              label={t("sounds.notificationSound")}
+              value={notificationSet}
+              onChange={(v) => set("sounds", { "notification-set": v === "same" ? null : v })}
+              items={[
+                { value: "same", label: t("sounds.sameAsSet") },
+                ...SETS.filter((s) => s !== "custom").map((s) => ({ value: s, label: t(`sounds.sets.${s}`) })),
+              ]}
+            />
+          }
+        />
       </Group>
+      <Note>{t("sounds.importNote")}</Note>
 
       <Section title={t("sounds.volume")} />
       <Group>
@@ -136,6 +195,39 @@ export function SoundsTab() {
           }
         />
       </Group>
+    </>
+  );
+}
+
+/** "Import…" for one cue: a hidden file picker for `.wav` and `.ogg`. */
+function ImportButton({
+  cue,
+  label,
+  onFile,
+}: {
+  cue: SoundCue;
+  label: string;
+  onFile: (cue: SoundCue, file: File) => void;
+}) {
+  const { t } = useTranslation();
+  const input = useRef<HTMLInputElement>(null);
+  return (
+    <>
+      <input
+        ref={input}
+        type="file"
+        hidden
+        accept=".wav,.ogg,audio/wav,audio/ogg"
+        aria-label={label}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) onFile(cue, file);
+          e.target.value = "";
+        }}
+      />
+      <Button size="sm" variant="plain" icon="upload" onClick={() => input.current?.click()}>
+        {t("sounds.import")}
+      </Button>
     </>
   );
 }

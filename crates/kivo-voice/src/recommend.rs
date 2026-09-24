@@ -78,6 +78,9 @@ pub fn tier(s: &SystemSnapshot) -> Tier {
     }
 }
 
+/// A recognizer needing more memory than this is "heavy" (VOICE §3's Balanced and Accurate tiers).
+const HEAVY_RAM_MB: u32 = 600;
+
 /// Recommends speech engines for this PC and these needs (VOICE-44).
 pub fn recommend(s: &SystemSnapshot, needs: &Needs<'_>) -> Recommendation {
     let tier = tier(s);
@@ -125,9 +128,20 @@ pub fn recommend(s: &SystemSnapshot, needs: &Needs<'_>) -> Recommendation {
         .iter()
         .filter(|e| usable(e, EngineSlot::Stt) && fast_enough(e))
         .collect();
+    // Heavy recognizers (Parakeet, Whisper) come first only when accuracy is what the user asked
+    // for on a PC that has room for them; otherwise they're for languages nothing lighter covers.
+    let wants_heavy = needs.priority == Priority::Accuracy && tier != Tier::Low;
     stt.sort_by_key(|e| {
         let tiny = e.engine.id.contains("-tiny-");
-        (tiny != light, !installed(e), e.engine.resources.disk_mb)
+        let heavy = e.engine.resources.ram_mb > HEAVY_RAM_MB;
+        (
+            heavy != wants_heavy,
+            // Asked for accuracy: the High-accuracy engine (Whisper) before the balanced one.
+            wants_heavy && !e.has(Profile::HighAccuracy),
+            tiny != light,
+            !installed(e),
+            e.engine.resources.disk_mb,
+        )
     });
     // How well each recognizer heard the owner's enrollment (VOICE-23): one clearly better on
     // this voice (5 points of WER or more) goes first.
@@ -273,6 +287,21 @@ mod tests {
             ("system", None)
         );
 
+        // Asking for accuracy on a capable PC brings the heavier recognizer first.
+        let accurate = advise(&pc(16, 16, 6), "en", Priority::Accuracy, &[]);
+        assert_eq!(
+            accurate.stt_engine.as_deref(),
+            Some("whisper-large-v3-turbo")
+        );
+        assert_eq!(accurate.stt_fallback.as_deref(), Some("parakeet-tdt-v3"));
+        let small_accurate = advise(&pc(4, 8, 0), "en", Priority::Accuracy, &[]);
+        assert!(
+            !small_accurate
+                .stt_engine
+                .as_deref()
+                .is_some_and(|e| e.starts_with("parakeet") || e.starts_with("whisper")),
+            "a small PC keeps the light ones"
+        );
         let frugal = advise(&pc(16, 16, 6), "en", Priority::Resources, &[]);
         assert_eq!(frugal.stt_engine.as_deref(), Some("moonshine-tiny-en"));
         let voice = advise(&pc(4, 8, 0), "en", Priority::Voice, &[]);
@@ -288,8 +317,14 @@ mod tests {
         assert_eq!(es.stt_engine.as_deref(), Some("moonshine-base-es"));
         assert_eq!(es.tts_engine, "supertonic-3");
         assert!(es.reason.contains("multilingual"));
+        // French: only Parakeet has it, so it's the one, heavy or not.
         let fr = advise(&pc(16, 16, 6), "fr", Priority::Balanced, &[]);
-        assert_eq!(fr.stt_engine, None, "no recognizer for French yet");
+        assert_eq!(fr.stt_engine.as_deref(), Some("parakeet-tdt-v3"));
+        // Hindi: Whisper hears it; Swahili nothing on this PC does yet.
+        let hi = advise(&pc(16, 16, 6), "hi", Priority::Balanced, &[]);
+        assert_eq!(hi.stt_engine.as_deref(), Some("whisper-large-v3-turbo"));
+        let sw = advise(&pc(16, 16, 6), "sw", Priority::Balanced, &[]);
+        assert_eq!(sw.stt_engine, None, "no recognizer for Swahili yet");
         let ja = advise(
             &pc(16, 16, 6),
             "ja",
@@ -298,8 +333,8 @@ mod tests {
         );
         assert_eq!(ja.stt_engine.as_deref(), Some("moonshine-tiny-ja"));
         assert_eq!(ja.stt_fallback.as_deref(), Some("moonshine-base-ja"));
-        let hi = advise(&pc(8, 16, 0), "hi", Priority::Balanced, &[]);
-        assert_eq!(hi.stt_engine, None, "no recognizer for Hindi yet");
+        let sw = advise(&pc(8, 16, 0), "sw", Priority::Balanced, &[]);
+        assert_eq!(sw.stt_engine, None, "no recognizer for Swahili yet");
     }
 
     #[test]

@@ -229,7 +229,7 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 **Audit (§7)**
 
 - [x] **SEC-22** · M1 · Append-only `audit` table with the §7 fields and `hash = sha256(prev_hash || row)` (§7) → done: the append-only `audit` table (migration 3, triggers refuse UPDATE/DELETE) with the §7 fields and `hash = sha256(prev_hash || row)`; `verify_audit` finds the first broken row · verified: `audit_rows_chain_and_the_chain_verifies`, `the_audit_log_refuses_edits_and_detects_tampering`, the end-to-end test verifies the chain (2026-09-23)
-- [ ] **SEC-23** · M8 · Chain verification in diagnostics (§7)
+- [x] **SEC-23** · M8 · Chain verification in diagnostics (§7) → done: Diagnostics re-computes the audit hash chain (`Database::verify_audit`) and shows the row count, or the first broken row with a link to Activity · verified: `records::the_audit_log_refuses_edits_and_detects_tampering`, `m7_settings` (a row edited behind KIVO's back turns the check red with Fix → Activity) (2026-09-24)
 - [x] **SEC-24** · M7 · Activity → Audit view in the Control Center (§7) → done: Activity → Audit lists every permission decision (tool, arguments, risk, allow/deny, who confirmed, error) from the audit log · verified: `Activity.test.tsx` (2026-09-24)
 
 **Emergency stop (§8)**

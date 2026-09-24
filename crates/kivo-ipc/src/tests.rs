@@ -67,6 +67,7 @@ fn start_on(endpoint: String, hello_timeout: Duration) -> Running {
         bypass_until: None,
         offer: None,
         has_selection: false,
+        controlling: None,
         revision: 1,
     });
     let task = tokio::spawn(server.run(
@@ -120,7 +121,7 @@ async fn a_client_gets_the_snapshot_answers_and_events() {
     );
     assert_eq!(
         c.request(method::STATE, Value::Null).await.unwrap(),
-        json!({"session":"idle","mode":"auto","islandHidden":false,"turn":null,"speech":{"state":"missing"},"island":{"position":"top-center","spots":[],"size":"standard","showTranscript":true,"showUndo":true,"voiceHints":true,"largeText":false,"captions":true,"announcements":true,"motion":"system","companion":"pill"},"revision":1})
+        json!({"session":"idle","mode":"auto","islandHidden":false,"turn":null,"speech":{"state":"missing"},"island":{"position":"top-center","spots":[],"size":"standard","showTranscript":true,"showUndo":true,"voiceHints":true,"largeText":false,"captions":true,"announcements":true,"motion":"system","companion":"pill","style":"pill-and-card","wakeGlow":false},"revision":1})
     );
     assert_eq!(
         c.request("echo", json!({"a": [1, 2]})).await.unwrap(),
@@ -286,6 +287,7 @@ async fn a_client_that_falls_behind_gets_a_snapshot() {
             bypass_until: None,
             offer: None,
             has_selection: false,
+            controlling: None,
             revision: 42,
         };
         false
@@ -417,6 +419,7 @@ async fn state_changes_are_pushed_to_every_client() {
         bypass_until: None,
         offer: None,
         has_selection: false,
+        controlling: None,
         revision: 2,
     });
     for conn in [&mut a, &mut b] {
@@ -430,7 +433,7 @@ async fn state_changes_are_pushed_to_every_client() {
     }
     assert_eq!(
         a.client.request(method::STATE, Value::Null).await.unwrap(),
-        json!({"session":"paused","mode":"auto","islandHidden":false,"turn":null,"speech":{"state":"missing"},"island":{"position":"top-center","spots":[],"size":"standard","showTranscript":true,"showUndo":true,"voiceHints":true,"largeText":false,"captions":true,"announcements":true,"motion":"system","companion":"pill"},"revision":2})
+        json!({"session":"paused","mode":"auto","islandHidden":false,"turn":null,"speech":{"state":"missing"},"island":{"position":"top-center","spots":[],"size":"standard","showTranscript":true,"showUndo":true,"voiceHints":true,"largeText":false,"captions":true,"announcements":true,"motion":"system","companion":"pill","style":"pill-and-card","wakeGlow":false},"revision":2})
     );
     rt.shutdown.cancel();
 }
@@ -493,6 +496,7 @@ async fn microphone_levels_stream_while_they_change() {
         bypass_until: None,
         offer: None,
         has_selection: false,
+        controlling: None,
         revision: 0,
     });
     let shutdown = CancellationToken::new();

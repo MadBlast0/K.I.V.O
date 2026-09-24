@@ -4,6 +4,7 @@
 
 mod announce;
 mod effects;
+mod glow;
 mod jumplist;
 mod memory;
 mod overlay;
@@ -205,6 +206,7 @@ pub fn run() {
         .setup(move |app| {
             // Preloaded hidden, so the Island appears without loading anything (ARCHITECTURE §1).
             overlay::create(app.handle())?;
+            glow::create(app.handle())?;
             if launch.background {
                 // Started at sign-in: the Control Center stays hidden until opened.
                 if let Some(window) = app.get_webview_window(MAIN) {

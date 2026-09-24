@@ -43,6 +43,8 @@ pub struct Connectors {
     found: Mutex<Found>,
     /// Sign-ins in progress.
     connecting: Mutex<Vec<String>>,
+    /// Where native connectors' tools go once connected (INT-05).
+    registry: Mutex<Option<Arc<kivo_tools::Registry>>>,
 }
 
 impl Connectors {
@@ -66,7 +68,93 @@ impl Connectors {
             open,
             found: Mutex::default(),
             connecting: Mutex::default(),
+            registry: Mutex::default(),
         })
+    }
+
+    /// Native connectors' tools go into `registry`; the ones already signed in are added now.
+    pub fn set_registry(self: &Arc<Self>, registry: Arc<kivo_tools::Registry>) {
+        *lock(&self.registry) = Some(registry);
+        for c in catalog().into_iter().filter(|c| c.kind == Kind::Native) {
+            if self.native_granted(&c) {
+                self.publish_native(&c, true);
+            }
+        }
+    }
+
+    /// Where a provider's tokens are kept (Credential Manager), shared by its connectors so a
+    /// second one only adds its scope (INT-07).
+    fn native_store(&self, provider: &str) -> Arc<dyn kivo_mcp::auth::TokenStore> {
+        self.mcp.tokens(&format!("connector.{provider}.oauth"))
+    }
+
+    fn native_account(&self, provider: &str) -> Option<Arc<kivo_mcp::native::Account>> {
+        let p = kivo_mcp::native::provider(provider)?;
+        let open = Arc::clone(&self.open);
+        Some(Arc::new(kivo_mcp::native::Account {
+            provider: p,
+            api: kivo_mcp::native::api_of(provider).to_owned(),
+            store: self.native_store(provider),
+            open: Arc::new(move |u: &str| open(u)),
+            http: reqwest::Client::new(),
+            handle: tokio::runtime::Handle::current(),
+        }))
+    }
+
+    /// Whether the account granted this connector's scope.
+    fn native_granted(&self, c: &Connector) -> bool {
+        let (Some(provider), Some(scope)) = (&c.provider, &c.scope) else {
+            return false;
+        };
+        self.native_store(provider)
+            .load()
+            .and_then(|j| serde_json::from_str::<kivo_mcp::oauth::Tokens>(&j).ok())
+            .is_some_and(|t| t.scopes.iter().any(|s| s == scope))
+    }
+
+    fn publish_native(&self, c: &Connector, on: bool) {
+        let (Some(provider), Some(prefix)) = (&c.provider, &c.tools) else {
+            return;
+        };
+        let Some(registry) = lock(&self.registry).clone() else {
+            return;
+        };
+        let tools = if on {
+            self.native_account(provider)
+                .map(|a| kivo_mcp::native::tools_for(prefix, a))
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        registry.set_live(prefix, tools);
+    }
+
+    /// Connects a native connector (INT-05): the browser sign-in for its one scope, added to
+    /// what the account already granted; then its tools are there.
+    async fn connect_native(self: &Arc<Self>, c: &Connector) -> Result<(), String> {
+        let (Some(provider), Some(scope)) = (&c.provider, &c.scope) else {
+            return Err(text::t("connectors.unknown"));
+        };
+        let p =
+            kivo_mcp::native::provider(provider).ok_or_else(|| text::t("connectors.unknown"))?;
+        let open = Arc::clone(&self.open);
+        kivo_mcp::oauth::sign_in(
+            &reqwest::Client::new(),
+            &p,
+            std::slice::from_ref(scope),
+            self.native_store(provider),
+            |u| open(u),
+            &self.core.shutdown(),
+        )
+        .await
+        .map_err(|e| match e {
+            kivo_mcp::oauth::OAuthError::NotRegistered(name) => {
+                text::tf("connectors.notSetUp", &[("name", &name)])
+            }
+            other => text::tf("connectors.signInFailed", &[("reason", &other.to_string())]),
+        })?;
+        self.publish_native(c, true);
+        Ok(())
     }
 
     fn changed(&self) {
@@ -165,6 +253,9 @@ impl Connectors {
                         _ => ("available".into(), None),
                     },
                     Kind::BuiltIn => ("ready".into(), None),
+                    Kind::Native if connecting.contains(&c.id) => ("connecting".into(), None),
+                    Kind::Native if self.native_granted(&c) => ("connected".into(), None),
+                    Kind::Native => ("available".into(), None),
                 };
                 view(&c, state, detail, server)
             })
@@ -204,6 +295,24 @@ impl Connectors {
         id: Option<&str>,
         custom: Option<(&str, &str)>,
     ) -> Result<ConnectorView, String> {
+        // Native: KIVO's own sign-in (INT-05).
+        if let Some(c) = id.and_then(|id| {
+            catalog()
+                .into_iter()
+                .find(|c| c.id == id && c.kind == Kind::Native)
+        }) {
+            lock(&self.connecting).push(c.id.clone());
+            self.changed();
+            let result = self.connect_native(&c).await;
+            lock(&self.connecting).retain(|k| k != &c.id);
+            self.changed();
+            result?;
+            return self
+                .list()
+                .into_iter()
+                .find(|v| v.id == c.id)
+                .ok_or_else(|| text::t("connectors.unknown"));
+        }
         let (key, name, url, source) = match (id, custom) {
             (Some(id), _) => {
                 let c = catalog()
@@ -303,6 +412,23 @@ impl Connectors {
     /// Disconnects a remote connector (its tools go, its sign-in is forgotten) or switches a
     /// local one off.
     pub async fn disconnect(&self, id: &str) -> Result<(), String> {
+        // Native: its tools go; the account's sign-in is forgotten when none of its connectors
+        // is left (INT-07).
+        if let Some(c) = catalog()
+            .into_iter()
+            .find(|c| c.id == id && c.kind == Kind::Native)
+        {
+            self.publish_native(&c, false);
+            let provider = c.provider.clone().unwrap_or_default();
+            let others = catalog().into_iter().any(|o| {
+                o.id != c.id && o.provider.as_deref() == Some(&provider) && self.native_granted(&o)
+            });
+            if !others {
+                self.native_store(&provider).clear();
+            }
+            self.changed();
+            return Ok(());
+        }
         let is_local = catalog()
             .iter()
             .any(|c| c.id == id && c.kind == Kind::Local);
@@ -349,6 +475,7 @@ fn view(
             Kind::Remote => "remote",
             Kind::Local => "local",
             Kind::BuiltIn => "builtIn",
+            Kind::Native => "native",
         }
         .into(),
         state,

@@ -29,6 +29,10 @@ struct Open {
     last_used: Instant,
 }
 
+/// What the cues were last rendered from: the set, the cues with the user's own sounds, and the
+/// notification set.
+type RenderedFrom = (SoundSet, Vec<Cue>, Option<SoundSet>);
+
 pub struct Speaker {
     audio: Arc<dyn AudioIo>,
     device: Mutex<Option<DeviceId>>,
@@ -42,6 +46,10 @@ pub struct Speaker {
     /// Cues switched off in Settings → Sounds.
     off: Mutex<Vec<Cue>>,
     set: Mutex<SoundSet>,
+    /// The folder with the user's imported cues (VOICE-28), and which cues use them, and the
+    /// notification sound's own set: with the set, what `cues` was rendered from.
+    custom_dir: Mutex<Option<std::path::PathBuf>>,
+    rendered_from: Mutex<Option<RenderedFrom>>,
     /// Called when sound starts, so a sleeping level loop wakes to pulse the Island.
     on_sound: Mutex<Option<Box<dyn Fn() + Send>>>,
     /// Every cue of the current set, rendered once at full level (VOICE-24: pre-decoded, so a
@@ -71,6 +79,8 @@ impl Speaker {
             volume: Mutex::new(0.7),
             off: Mutex::new(Vec::new()),
             set: Mutex::new(SoundSet::Soft),
+            custom_dir: Mutex::new(None),
+            rendered_from: Mutex::new(None),
             on_sound: Mutex::new(None),
             cues: Mutex::new(render(SoundSet::Soft)),
             reference: kivo_audio::echo::Reference::default(),
@@ -100,11 +110,44 @@ impl Speaker {
     pub fn configure(&self, sounds: &Sounds) {
         self.set_sounds(sounds.enabled, sounds.volume);
         lock(&self.off).clone_from(&sounds.off);
-        let mut set = lock(&self.set);
-        if *set != sounds.set {
-            *set = sounds.set;
-            *lock(&self.cues) = render(sounds.set);
+        *lock(&self.set) = sounds.set;
+        let wanted = (sounds.set, sounds.custom.clone(), sounds.notification_set);
+        let mut rendered = lock(&self.rendered_from);
+        if rendered.as_ref() != Some(&wanted) {
+            let dir = lock(&self.custom_dir).clone();
+            *lock(&self.cues) = render_with(sounds, dir.as_deref());
+            *rendered = Some(wanted);
         }
+    }
+
+    /// Where imported cues are kept, once set.
+    pub fn custom_dir(&self) -> Option<std::path::PathBuf> {
+        lock(&self.custom_dir).clone()
+    }
+
+    /// Where imported cues are kept (`%APPDATA%\KIVO\sounds`).
+    pub fn set_custom_dir(&self, dir: std::path::PathBuf) {
+        *lock(&self.custom_dir) = Some(dir);
+        // Rendered again on the next `configure`.
+        *lock(&self.rendered_from) = None;
+    }
+
+    /// Plays an imported sound as it would play for a cue (Settings → Sounds' Preview).
+    pub fn preview_custom(&self, samples: &[f32], rate: u32) {
+        let volume = *lock(&self.volume);
+        self.play(&crate::sounds::prepare(samples, rate, volume));
+    }
+
+    /// Plays a cue as the current settings have it, imported sound included (Settings → Sounds'
+    /// per-cue Preview). It plays even when sounds are off.
+    pub fn preview_current(&self, cue: Cue) {
+        let volume = *lock(&self.volume);
+        let samples: Vec<f32> = lock(&self.cues)
+            .iter()
+            .find(|(c, _)| *c == cue)
+            .map(|(_, pcm)| pcm.iter().map(|s| s * volume).collect())
+            .unwrap_or_default();
+        self.play(&samples);
     }
 
     /// Plays a cue from any set without changing the settings (the set picker's preview). It
@@ -294,9 +337,64 @@ fn render(set: SoundSet) -> Vec<(Cue, Vec<f32>)> {
     Cue::ALL.iter().map(|&c| (c, earcon(set, c, 1.0))).collect()
 }
 
+/// The cues as Settings → Sounds has them (VOICE-28): the set's, the user's imported sound where
+/// there is one, and the notification from its own set. An imported file that can't be read falls
+/// back to the set's cue.
+fn render_with(sounds: &Sounds, dir: Option<&std::path::Path>) -> Vec<(Cue, Vec<f32>)> {
+    Cue::ALL
+        .iter()
+        .map(|&c| {
+            let imported = (sounds.custom.contains(&c))
+                .then_some(dir)
+                .flatten()
+                .and_then(|d| crate::sounds::custom_file(d, c))
+                .and_then(|file| std::fs::read(file).ok())
+                .and_then(|bytes| crate::sounds::decode(&bytes).ok())
+                .map(|(pcm, rate)| crate::sounds::prepare(&pcm, rate, 1.0));
+            let set = match (c, sounds.notification_set) {
+                (Cue::Notification, Some(own)) => own,
+                _ => sounds.set,
+            };
+            (c, imported.unwrap_or_else(|| earcon(set, c, 1.0)))
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_imported_cue_and_a_separate_notification_sound_are_used() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::copy(
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/chime.ogg"),
+            dir.path().join("listen-start.ogg"),
+        )
+        .unwrap();
+        let sounds = Sounds {
+            set: SoundSet::Wood,
+            custom: vec![Cue::ListenStart, Cue::Done],
+            notification_set: Some(SoundSet::Glass),
+            ..Sounds::default()
+        };
+        let cues = render_with(&sounds, Some(dir.path()));
+        let get = |cue: Cue| cues.iter().find(|(c, _)| *c == cue).unwrap().1.clone();
+        let (pcm, rate) =
+            crate::sounds::decode(&std::fs::read(dir.path().join("listen-start.ogg")).unwrap())
+                .unwrap();
+        assert_eq!(
+            get(Cue::ListenStart),
+            crate::sounds::prepare(&pcm, rate, 1.0)
+        );
+        // "Done" is marked custom but has no file: the set's own sound.
+        assert_eq!(get(Cue::Done), earcon(SoundSet::Wood, Cue::Done, 1.0));
+        assert_eq!(
+            get(Cue::Notification),
+            earcon(SoundSet::Glass, Cue::Notification, 1.0)
+        );
+        assert_eq!(get(Cue::Error), earcon(SoundSet::Wood, Cue::Error, 1.0));
+    }
 
     #[test]
     fn switched_off_cues_are_silent_and_the_set_can_change() {

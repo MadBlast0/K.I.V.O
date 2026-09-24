@@ -22,6 +22,75 @@ use tokio_util::sync::CancellationToken;
 /// Backoff between restarts after a crash.
 const FIRST_RETRY: Duration = Duration::from_millis(500);
 const MAX_RETRY: Duration = Duration::from_secs(30);
+/// A worker that stops sooner than this after starting crashed quickly (PLAN-12).
+const STABLE_AFTER: Duration = Duration::from_secs(60);
+/// Quick crashes in a row before an engine is suspected and its stand-in used.
+const SUSPECT_AFTER: u32 = 3;
+/// Quick crashes in a row before KIVO stops restarting the worker until the engines change.
+const STOP_AFTER: u32 = 6;
+
+/// What KIVO does after the speech worker crashed (plan §114, PLAN-12): restart it where that's
+/// safe, and change what's likely to crash it again first.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Recovery {
+    /// Start it again as it was.
+    Restart,
+    /// It crashed on the graphics card: the recognizer runs on the processor from now on this
+    /// session (a driver problem is the likeliest cause).
+    Cpu,
+    /// It keeps crashing: this engine is set aside for the session and its stand-in used.
+    Fallback(String),
+    /// It keeps crashing with nothing left to change: no more restarts until the speech settings
+    /// change.
+    Stopped,
+}
+
+impl Recovery {
+    pub fn key(&self) -> &'static str {
+        match self {
+            Self::Restart => "restart",
+            Self::Cpu => "cpu",
+            Self::Fallback(_) => "fallback",
+            Self::Stopped => "stopped",
+        }
+    }
+}
+
+/// The recovery after the `quick`-th quick crash in a row (0 when the worker had run a while).
+pub fn recovery(
+    quick: u32,
+    engines: &Engines,
+    failed: &std::collections::HashSet<String>,
+) -> Recovery {
+    if engines.gpu.is_some() {
+        return Recovery::Cpu;
+    }
+    if quick >= STOP_AFTER {
+        return Recovery::Stopped;
+    }
+    if quick >= SUSPECT_AFTER {
+        // The recognizer first (it has a stand-in when another is installed), then the voice
+        // (Windows voices stand in).
+        let stt = engines
+            .stt
+            .as_ref()
+            .filter(|_| engines.stt_fallback.is_some())
+            .map(|(id, _)| id.clone());
+        let tts = engines
+            .tts
+            .as_ref()
+            .map(|(id, _)| id.clone())
+            .filter(|id| id != kivo_voice::system_tts::ENGINE_ID);
+        if let Some(id) = [stt, tts]
+            .into_iter()
+            .flatten()
+            .find(|id| !failed.contains(id))
+        {
+            return Recovery::Fallback(id);
+        }
+    }
+    Recovery::Restart
+}
 
 /// What the worker sends back while it works.
 #[derive(Clone, Debug, PartialEq)]
@@ -36,6 +105,12 @@ pub enum InferEvent {
         id: u64,
         rate: u32,
         pcm: Vec<f32>,
+    },
+    /// The worker crashed and what KIVO does about it (PLAN-12). `crashes` counts quick crashes
+    /// in a row.
+    Crashed {
+        crashes: u32,
+        recovery: Recovery,
     },
     SpeakDone {
         id: u64,
@@ -71,6 +146,10 @@ pub struct Engines {
     pub threads: usize,
     /// The language KIVO speaks and hears.
     pub language: String,
+    /// Keys and addresses for the cloud engines among these, by engine id (VOICE-10/11).
+    pub cloud: std::collections::BTreeMap<String, kivo_ipc::infer::CloudLoad>,
+    /// The graphics card the speech recognizer may run on (PLAN-09); `None` for the processor.
+    pub gpu: Option<u32>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -104,6 +183,9 @@ pub struct Infer {
     failed: Arc<Mutex<std::collections::HashSet<String>>>,
     /// Speaking speed in percent (UX-61).
     speed: Arc<Mutex<u16>>,
+    /// The worker crashed on the graphics card: the recognizer stays on the processor this session
+    /// (PLAN-12).
+    gpu_off: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl Infer {
@@ -129,6 +211,7 @@ impl Infer {
                 program,
                 failed: Arc::default(),
                 speed: Arc::new(Mutex::new(100)),
+                gpu_off: Arc::default(),
             },
             rx,
             tx,
@@ -138,6 +221,19 @@ impl Infer {
     /// The worker program, for a second worker that tries an engine out (VOICE-45).
     pub fn program(&self) -> &std::path::Path {
         &self.program
+    }
+
+    /// Whether the recognizer was taken off the graphics card after a crash there (PLAN-12).
+    pub fn gpu_off(&self) -> bool {
+        self.gpu_off.load(Ordering::Relaxed)
+    }
+
+    /// The engines as they may run now: off the graphics card after a crash there.
+    fn safe(&self, mut engines: Engines) -> Engines {
+        if self.gpu_off() {
+            engines.gpu = None;
+        }
+        engines
     }
 
     /// Lets an engine that failed earlier in the session be tried again (it was reinstalled, or
@@ -175,6 +271,11 @@ impl Infer {
     }
 
     /// The engines the settings choose. If they are loaded, they are reloaded as configured.
+    /// The engines configured now (diagnostics and tests).
+    pub fn configured(&self) -> Engines {
+        lock(&self.configured).clone()
+    }
+
     pub fn configure(&self, engines: Engines, warm_for: Duration) {
         *lock(&self.warm_for) = warm_for;
         *lock(&self.configured) = engines.clone();
@@ -342,6 +443,7 @@ pub async fn supervise(
     shutdown: CancellationToken,
 ) {
     let mut backoff = FIRST_RETRY;
+    let mut quick = 0_u32;
     let mut engines_rx = infer.engines.subscribe();
     loop {
         if shutdown.is_cancelled() {
@@ -357,12 +459,51 @@ pub async fn supervise(
                 () = shutdown.cancelled() => return,
             }
         }
+        let started = tokio::time::Instant::now();
+        let running = infer.safe(engines_rx.borrow().clone());
         match run_worker(&infer, &events, &shutdown, &mut engines_rx).await {
-            Ok(()) => backoff = FIRST_RETRY,
+            Ok(()) => {
+                backoff = FIRST_RETRY;
+                quick = 0;
+            }
             Err(e) => {
                 tracing::error!(%e, "the speech worker stopped");
                 infer.ready.send_replace(false);
                 let _ = events.send(InferEvent::Lost);
+                // Restart where it's safe (PLAN-12): change what likely crashed it first.
+                quick = if started.elapsed() < STABLE_AFTER {
+                    quick + 1
+                } else {
+                    1
+                };
+                let then = recovery(quick, &running, &lock(&infer.failed));
+                tracing::warn!(
+                    crashes = quick,
+                    recovery = then.key(),
+                    "speech worker recovery"
+                );
+                let _ = events.send(InferEvent::Crashed {
+                    crashes: quick,
+                    recovery: then.clone(),
+                });
+                match &then {
+                    Recovery::Cpu => infer.gpu_off.store(true, Ordering::Relaxed),
+                    Recovery::Fallback(id) => {
+                        lock(&infer.failed).insert(id.clone());
+                    }
+                    Recovery::Stopped => {
+                        // Wait until the speech settings change (or KIVO quits), then try again.
+                        engines_rx.borrow_and_update();
+                        tokio::select! {
+                            changed = engines_rx.changed() => if changed.is_err() { return },
+                            () = shutdown.cancelled() => return,
+                        }
+                        quick = 0;
+                        backoff = FIRST_RETRY;
+                        continue;
+                    }
+                    Recovery::Restart => {}
+                }
                 tokio::select! {
                     () = tokio::time::sleep(backoff) => {}
                     () = shutdown.cancelled() => return,
@@ -417,7 +558,7 @@ async fn run_worker(
         .peer
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(peer.clone());
-    let wanted = engines_rx.borrow_and_update().clone();
+    let wanted = infer.safe(engines_rx.borrow_and_update().clone());
     load_engines(&peer, &wanted, &infer.failed, events).await?;
     infer.ready.send_replace(true);
 
@@ -432,7 +573,7 @@ async fn run_worker(
                 if changed.is_err() {
                     break Ok(());
                 }
-                let engines = engines_rx.borrow_and_update().clone();
+                let engines = infer.safe(engines_rx.borrow_and_update().clone());
                 if engines.stt.is_none() && engines.tts.is_none() {
                     // Nothing to hold: the worker process goes away until it is needed again.
                     let _ = peer.request(method::SHUTDOWN, Value::Null).await;
@@ -493,6 +634,8 @@ async fn load_engines(
             dir: dir.map(|d| d.to_string_lossy().into_owned()),
             threads,
             language: Some(language.clone()),
+            cloud: engines.cloud.get(engine).cloned(),
+            gpu: (slot == InferSlot::Stt).then_some(engines.gpu).flatten(),
         });
         async move { peer.request(method::MODEL_LOAD, params).await }
     };
@@ -611,6 +754,47 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 mod tests {
     use super::*;
 
+    /// PLAN-12: a crash on the graphics card moves the recognizer to the processor; repeated
+    /// quick crashes set the recognizer, then the voice, aside for their stand-ins; then restarts
+    /// stop until the settings change.
+    #[test]
+    fn crashes_are_recovered_where_it_is_safe() {
+        let mut engines = Engines {
+            stt: Some(("parakeet-tdt-0.6b-v3".into(), PathBuf::from("p"))),
+            stt_fallback: Some(("moonshine-base".into(), PathBuf::from("m"))),
+            tts: Some(("kokoro-82m".into(), None)),
+            gpu: Some(0),
+            ..Engines::default()
+        };
+        let mut failed = std::collections::HashSet::new();
+        assert_eq!(recovery(1, &engines, &failed), Recovery::Cpu);
+        engines.gpu = None;
+        assert_eq!(recovery(1, &engines, &failed), Recovery::Restart);
+        assert_eq!(recovery(2, &engines, &failed), Recovery::Restart);
+        assert_eq!(
+            recovery(3, &engines, &failed),
+            Recovery::Fallback("parakeet-tdt-0.6b-v3".into())
+        );
+        failed.insert("parakeet-tdt-0.6b-v3".to_owned());
+        assert_eq!(
+            recovery(4, &engines, &failed),
+            Recovery::Fallback("kokoro-82m".into())
+        );
+        failed.insert("kokoro-82m".to_owned());
+        assert_eq!(recovery(5, &engines, &failed), Recovery::Restart);
+        assert_eq!(recovery(6, &engines, &failed), Recovery::Stopped);
+        // No other recognizer installed: only the voice can be set aside.
+        let alone = Engines {
+            stt: Some(("moonshine-base".into(), PathBuf::from("m"))),
+            tts: Some((kivo_voice::system_tts::ENGINE_ID.into(), None)),
+            ..Engines::default()
+        };
+        assert_eq!(
+            recovery(3, &alone, &std::collections::HashSet::new()),
+            Recovery::Restart
+        );
+    }
+
     #[tokio::test]
     async fn calls_fail_clearly_while_the_worker_is_down() {
         let (infer, _events, _tx) = Infer::new(PathBuf::from("kivo-infer"));
@@ -637,6 +821,8 @@ mod tests {
             tts: Some(("system".into(), None)),
             threads: 1,
             language: "en-US".into(),
+            cloud: Default::default(),
+            gpu: None,
         };
         infer.configure(engines.clone(), Duration::from_secs(600));
         assert!(!infer.loaded(), "configuring loads nothing");

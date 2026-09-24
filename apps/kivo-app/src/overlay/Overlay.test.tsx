@@ -58,6 +58,7 @@ function snapshot(confirm: boolean): StateSnapshot {
             allowAlways: true,
             plan: false,
             hello: false,
+            watch: false,
           }
         : null,
     },

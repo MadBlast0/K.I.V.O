@@ -8,7 +8,7 @@ use serde_json::Value;
 /// The routine body's schema version; bumped (with a migration of the JSON) when it changes.
 pub const ROUTINE_VERSION: u32 = 1;
 
-/// What starts a routine (ROUTINES §1). Schedules and events arrive in M8.
+/// What starts a routine (ROUTINES §1).
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(
@@ -23,6 +23,74 @@ pub enum Trigger {
     Hotkey { chord: String },
     /// Only from the Routines page, the palette or another routine.
     Manual,
+    /// A cron-like schedule (`30 7 * * mon-fri`, `@daily`), in a time zone (the PC's own when
+    /// none is named; ROUT-11).
+    Schedule {
+        cron: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tz: Option<String>,
+    },
+    /// Something happening on the PC (ROUT-11). Runs unattended, so High-risk steps ask on screen
+    /// first (ROUT-12).
+    Event { event: RoutineEvent },
+}
+
+/// The events a routine can start on (ROUTINES §1).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "kind"
+)]
+pub enum RoutineEvent {
+    /// An app starts (its program or its name: "Spotify", "code").
+    AppLaunched { app: String },
+    /// A USB device is plugged in: any, or one whose name contains `name`.
+    UsbDevice {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        name: Option<String>,
+    },
+    /// The PC joins a network (a Wi-Fi network's name).
+    Network { name: String },
+    /// A time of day (`07:30`), on some weekdays (0 = Sunday; none = every day).
+    TimeOfDay {
+        time: String,
+        #[serde(default)]
+        days: Vec<u8>,
+    },
+    /// No keyboard or mouse input for this long.
+    Idle { minutes: u32 },
+    /// The user is back after being away at least this long.
+    Return { away_minutes: u32 },
+    /// Running on battery, it drops to this percentage.
+    BatteryLow { percent: u8 },
+    /// Another routine finished.
+    AfterRoutine { routine: String },
+}
+
+impl RoutineEvent {
+    /// A time of day as a schedule (`30 7 * * 1,2,3`), or why it isn't one.
+    pub fn schedule(&self) -> Option<Result<String, String>> {
+        let Self::TimeOfDay { time, days } = self else {
+            return None;
+        };
+        let parsed = time.split_once(':').and_then(|(h, m)| {
+            let (h, m) = (h.trim().parse::<u8>().ok()?, m.trim().parse::<u8>().ok()?);
+            (h < 24 && m < 60).then_some((h, m))
+        });
+        Some(match parsed {
+            Some((h, m)) => {
+                let days = if days.is_empty() {
+                    "*".to_owned()
+                } else {
+                    days.iter().map(u8::to_string).collect::<Vec<_>>().join(",")
+                };
+                Ok(format!("{m} {h} * * {days}"))
+            }
+            None => Err(format!("“{time}” isn't a time of day (like 07:30)")),
+        })
+    }
 }
 
 /// The type of a phrase variable.
@@ -107,6 +175,32 @@ impl Routine {
             Trigger::Phrase { phrases, .. } => phrases.iter().map(String::as_str).collect(),
             _ => Vec::new(),
         })
+    }
+
+    /// Whether something other than the user starts it (a schedule or an event): such runs are
+    /// unattended (ROUT-12).
+    pub fn is_unattended(&self) -> bool {
+        self.triggers
+            .iter()
+            .any(|t| matches!(t, Trigger::Schedule { .. } | Trigger::Event { .. }))
+    }
+
+    /// Checks the schedules and times of day; the error says which is wrong.
+    pub fn check_triggers(&self) -> Result<(), String> {
+        for t in &self.triggers {
+            match t {
+                Trigger::Schedule { cron, tz } => {
+                    crate::cron::next_fire(cron, tz.as_deref(), 0)?;
+                }
+                Trigger::Event { event } => {
+                    if let Some(Err(e)) = event.schedule() {
+                        return Err(e);
+                    }
+                }
+                _ => {}
+            }
+        }
+        Ok(())
     }
 
     pub fn hotkeys(&self) -> impl Iterator<Item = &str> {

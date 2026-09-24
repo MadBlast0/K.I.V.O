@@ -9,7 +9,8 @@
 
 use crate::engine::{Accel, EngineInfo, EngineKind, EngineSlot, ResourceEstimate};
 use crate::error::{VoiceError, VoiceResult};
-use crate::traits::{SAMPLE_RATE, SttEngine, SttEvent, SttOptions, SttStream};
+use crate::traits::{SAMPLE_RATE, SttEngine, SttOptions, SttStream};
+use crate::utterance::{Transcriber, Utterance};
 use base64::Engine as _;
 use ort::session::Session;
 use ort::value::Tensor;
@@ -122,10 +123,8 @@ const START: i64 = 1;
 const END: i64 = 2;
 /// Moonshine produces at most about 6.5 tokens per second of speech.
 const TOKENS_PER_SECOND: f32 = 6.5;
-/// Re-transcribe for a partial after this much new audio.
-const PARTIAL_EVERY: usize = SAMPLE_RATE as usize * PARTIAL_EVERY_MS as usize / 1000;
 /// How often a partial transcript comes, in milliseconds of new audio.
-pub const PARTIAL_EVERY_MS: u64 = 500;
+pub use crate::utterance::PARTIAL_EVERY_MS;
 /// Too little audio to be a word.
 const MIN_AUDIO: usize = SAMPLE_RATE as usize * 3 / 10;
 
@@ -421,73 +420,14 @@ impl SttEngine for Moonshine {
         _options: &SttOptions,
         cancel: CancellationToken,
     ) -> Box<dyn SttStream + '_> {
-        Box::new(Utterance {
-            engine: self,
-            cancel,
-            audio: Vec::with_capacity(SAMPLE_RATE as usize * 10),
-            transcribed_at: 0,
-            stable: String::new(),
-            last: String::new(),
-        })
+        Box::new(Utterance::new(self, cancel))
     }
 }
 
-/// One utterance: audio so far and what has been shown.
-struct Utterance<'a> {
-    engine: &'a mut Moonshine,
-    cancel: CancellationToken,
-    audio: Vec<f32>,
-    transcribed_at: usize,
-    stable: String,
-    last: String,
-}
-
-impl SttStream for Utterance<'_> {
-    fn accept(&mut self, audio: &[f32]) -> VoiceResult<Vec<SttEvent>> {
-        self.audio.extend_from_slice(audio);
-        if self.audio.len() < MIN_AUDIO || self.audio.len() - self.transcribed_at < PARTIAL_EVERY {
-            return Ok(Vec::new());
-        }
-        self.transcribed_at = self.audio.len();
-        let text = self.engine.transcribe(&self.audio, &self.cancel)?;
-        let mut events = Vec::new();
-        // Words two partials agree on (all but the last) won't change any more.
-        let stable = common_words(&self.last, &text);
-        if stable.len() > self.stable.len() {
-            self.stable.clone_from(&stable);
-            events.push(SttEvent::Stable(stable));
-        }
-        if !text.is_empty() && text != self.last {
-            events.push(SttEvent::Partial(text.clone()));
-        }
-        self.last = text;
-        Ok(events)
+impl Transcriber for Moonshine {
+    fn transcribe(&mut self, audio: &[f32], cancel: &CancellationToken) -> VoiceResult<String> {
+        Moonshine::transcribe(self, audio, cancel)
     }
-
-    fn finish(&mut self) -> VoiceResult<String> {
-        self.engine.transcribe(&self.audio, &self.cancel)
-    }
-}
-
-/// The leading words `a` and `b` share, leaving out the last word of the shorter one (it may still
-/// be growing).
-fn common_words(a: &str, b: &str) -> String {
-    let shared: Vec<&str> = a
-        .split_whitespace()
-        .zip(b.split_whitespace())
-        .take_while(|(x, y)| x == y)
-        .map(|(x, _)| x)
-        .collect();
-    let shorter = a
-        .split_whitespace()
-        .count()
-        .min(b.split_whitespace().count());
-    let keep = if shared.len() == shorter {
-        shared.len().saturating_sub(1)
-    } else {
-        shared.len()
-    };
-    shared[..keep].join(" ")
 }
 
 #[cfg(test)]
@@ -506,14 +446,20 @@ mod tests {
 
     #[test]
     fn stable_words_leave_the_growing_last_word_out() {
-        assert_eq!(common_words("open chr", "open chrome"), "open");
-        assert_eq!(common_words("open chrome", "open chrome please"), "open");
         assert_eq!(
-            common_words("open chrome and", "open chrome now"),
+            crate::utterance::common_words("open chr", "open chrome"),
+            "open"
+        );
+        assert_eq!(
+            crate::utterance::common_words("open chrome", "open chrome please"),
+            "open"
+        );
+        assert_eq!(
+            crate::utterance::common_words("open chrome and", "open chrome now"),
             "open chrome"
         );
-        assert_eq!(common_words("", "open"), "");
-        assert_eq!(common_words("mute", "unmute"), "");
+        assert_eq!(crate::utterance::common_words("", "open"), "");
+        assert_eq!(crate::utterance::common_words("mute", "unmute"), "");
     }
 
     #[test]

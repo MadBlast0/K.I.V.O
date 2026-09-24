@@ -219,6 +219,90 @@ tool = "session.open"
 patterns = ["open the control center", "open control center", "show the control center", "open kivo", "show kivo"]
 args = { page = "home" }
 
+# Product modes (PLAN-06): how KIVO behaves right now; Normal puts the user's own settings back.
+[[command]]
+tool = "session.mode"
+patterns = [
+  "normal mode", "switch to normal mode", "back to normal", "go back to normal", "normal mode on",
+  "turn off the mode", "leave this mode", "exit this mode", "turn off private mode",
+  "private mode off", "exit private mode", "leave private mode", "stop private mode",
+  "turn off offline mode", "offline mode off", "exit offline mode", "leave offline mode",
+  "stop offline mode", "turn off battery mode", "battery mode off", "exit battery mode",
+  "leave battery mode", "stop battery mode", "turn off performance mode", "performance mode off",
+  "exit performance mode", "leave performance mode", "stop performance mode",
+  "turn off gaming mode", "gaming mode off", "exit gaming mode", "leave gaming mode",
+  "stop gaming mode", "turn off presentation mode", "presentation mode off",
+  "exit presentation mode", "leave presentation mode", "stop presentation mode",
+]
+args = { mode = "normal" }
+
+[[command]]
+tool = "session.mode"
+patterns = [
+  "private mode", "switch to private mode", "turn on private mode", "private mode on",
+  "go into private mode", "enter private mode", "use private mode", "start private mode",
+]
+args = { mode = "private" }
+
+[[command]]
+tool = "session.mode"
+patterns = [
+  "offline mode", "switch to offline mode", "turn on offline mode", "offline mode on",
+  "go into offline mode", "enter offline mode", "use offline mode", "start offline mode",
+]
+args = { mode = "offline" }
+
+[[command]]
+tool = "session.mode"
+patterns = [
+  "battery mode", "switch to battery mode", "turn on battery mode", "battery mode on",
+  "go into battery mode", "enter battery mode", "use battery mode", "start battery mode",
+]
+args = { mode = "battery" }
+
+[[command]]
+tool = "session.mode"
+patterns = [
+  "performance mode", "switch to performance mode", "turn on performance mode",
+  "performance mode on", "go into performance mode", "enter performance mode",
+  "use performance mode", "start performance mode",
+]
+args = { mode = "performance" }
+
+[[command]]
+tool = "session.mode"
+patterns = [
+  "gaming mode", "switch to gaming mode", "turn on gaming mode", "gaming mode on",
+  "go into gaming mode", "enter gaming mode", "use gaming mode", "start gaming mode",
+]
+args = { mode = "gaming" }
+
+[[command]]
+tool = "session.mode"
+patterns = [
+  "presentation mode", "switch to presentation mode", "turn on presentation mode",
+  "presentation mode on", "go into presentation mode", "enter presentation mode",
+  "use presentation mode", "start presentation mode",
+]
+args = { mode = "presentation" }
+
+# "Where is the Export button?" (UX-39, plan §141): KIVO points at it and says where it is.
+[[command]]
+tool = "uia.point_at"
+patterns = [
+  "where is the {text} button", "where's the {text} button", "where is the {text} menu",
+  "where's the {text} menu", "show me the {text} button", "point to the {text} button",
+  "point at the {text} button", "where do i click {text}", "find the {text} button",
+]
+
+# "Save what you just did as a routine" (ROUT-13): the last request's actions become a draft.
+[[command]]
+tool = "session.saveRoutine"
+patterns = [
+  "save that as a routine", "save what you just did as a routine", "make that a routine",
+  "turn that into a routine", "save this as a routine", "make a routine from that",
+]
+
 [[command]]
 tool = "session.help"
 patterns = ["what can i say", "what can i say here", "help", "what can you do here", "what can i ask", "show me what i can say"]

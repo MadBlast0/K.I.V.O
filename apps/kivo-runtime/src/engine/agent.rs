@@ -137,7 +137,7 @@ impl Engine {
 
     /// A decision for an agent: unlike a KIVO action, "deny" doesn't end the turn; the agent is
     /// told no and carries on.
-    async fn decide_for_agent(
+    pub(super) async fn decide_for_agent(
         self: &Arc<Self>,
         spec: kivo_core::tool::ConfirmSpec,
         call: ToolCall,

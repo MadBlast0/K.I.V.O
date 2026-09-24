@@ -7,6 +7,7 @@
 pub mod bus;
 pub mod capability;
 pub mod config;
+pub mod cron;
 pub mod event;
 pub mod ids;
 pub mod routine;

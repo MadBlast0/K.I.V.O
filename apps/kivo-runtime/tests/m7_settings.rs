@@ -161,6 +161,26 @@ async fn performance_and_diagnostics_report_real_state() {
         spans.insert("t8ToolDone".into(), json!(1080));
         db.record_turn_metrics("t1", &Value::Object(spans)).unwrap();
     }
+    // KIVO's log, with a warning that names a key and the user's folder (ARCH-40).
+    let logs = r.rig.screenshots.join("logs");
+    let exports = r.rig.screenshots.join("exports");
+    std::fs::create_dir_all(&logs).unwrap();
+    let home = dirs::home_dir()
+        .unwrap()
+        .display()
+        .to_string()
+        .replace('\\', "\\\\");
+    std::fs::write(
+        logs.join("kivo.2026-09-24.log"),
+        format!(
+            concat!(
+                r#"{{"timestamp":"2026-09-24T10:00:00Z","level":"WARN","fields":{{"message":"couldn't read {home}\\notes.txt with sk-or-v1abcdefghijklmnopqrstuvwxyz"}},"target":"kivo_tools::files"}}"#,
+                "\n"
+            ),
+            home = home
+        ),
+    )
+    .unwrap();
     let models = Arc::new(kivo_runtime::models::Models::new(
         r.rig.screenshots.join("models"),
         Arc::clone(&r.rig.core),
@@ -173,6 +193,18 @@ async fn performance_and_diagnostics_report_real_state() {
         processes: r.rig.processes.clone(),
         browser: None,
         discovery: None,
+        platform: kivo_platform::Capabilities {
+            os: kivo_platform::OsFamily::Windows,
+            os_version: "Windows 11 24H2 (build 26200)".into(),
+            os_build: 26200,
+            os_echo_cancellation: true,
+            mica: true,
+            package_identity: false,
+            npu: false,
+        },
+        logs: Some(logs.clone()),
+        exports: Some(exports.clone()),
+        bundle: std::sync::Mutex::new(None),
         open_url: {
             let opened = Arc::clone(&r.rig.opened);
             Arc::new(move |url: &str| {
@@ -243,6 +275,81 @@ async fn performance_and_diagnostics_report_real_state() {
     let extension = &checks[5];
     assert_eq!(extension["ok"], false);
     assert_eq!(extension["fix"], "permissions");
+
+    // The diagnostics bundle (ARCH-40): Save before making one is refused; the bundle has the
+    // facts, the log's warning without the key or the user's folder; Save writes what was shown.
+    assert!(
+        system
+            .call("diagnostics.save", Value::Null)
+            .await
+            .unwrap()
+            .is_err()
+    );
+    let bundle = system
+        .call("diagnostics.bundle", Value::Null)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(bundle["kind"], "kivo-diagnostics");
+    assert_eq!(bundle["os"]["build"], 26200);
+    assert_eq!(bundle["performance"]["memoryMb"], 120);
+    assert_eq!(bundle["checks"].as_array().unwrap().len(), 7);
+    let warning = &bundle["recentErrors"][0];
+    assert_eq!(warning["source"], "kivo_tools::files");
+    let text = bundle.to_string();
+    assert!(!text.contains("sk-or-v1"), "no keys: {warning}");
+    let user_dir = dirs::home_dir().unwrap().display().to_string();
+    assert!(
+        !text.contains(&user_dir.replace('\\', "\\\\")),
+        "no user folder: {warning}"
+    );
+    assert!(
+        warning["message"]
+            .as_str()
+            .unwrap()
+            .contains("%USERPROFILE%")
+    );
+    let saved = system
+        .call("diagnostics.save", Value::Null)
+        .await
+        .unwrap()
+        .unwrap();
+    let file = std::path::PathBuf::from(saved["file"].as_str().unwrap());
+    assert!(file.starts_with(&exports));
+    let back: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    assert_eq!(back, bundle, "what was shown is what's saved");
+
+    // SEC-23: someone edits the audit log behind KIVO's back; the check says so and links to it.
+    {
+        let mut db = r.rig.db.lock().unwrap();
+        db.append_audit(&kivo_store::records::AuditRecord {
+            ts: 1,
+            turn_id: None,
+            task_id: None,
+            tool: "apps.launch".into(),
+            args_summary: "{}".into(),
+            risk: "low".into(),
+            decision: "allow".into(),
+            confirmed_by: None,
+            result: Some("ok".into()),
+            error: None,
+        })
+        .unwrap();
+        db.connection()
+            .execute_batch(
+                "DROP TRIGGER audit_is_append_only_update;
+                 UPDATE audit SET decision = 'deny';",
+            )
+            .unwrap();
+    }
+    let checks = system
+        .call("diagnostics.run", Value::Null)
+        .await
+        .unwrap()
+        .unwrap();
+    let audit = &checks[6];
+    assert_eq!(audit["ok"], false, "{audit}");
+    assert_eq!(audit["fix"], "activity");
     r.stop().await;
 }
 

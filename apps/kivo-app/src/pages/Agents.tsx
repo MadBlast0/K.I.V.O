@@ -11,6 +11,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { InstallSheet } from "../components/agents/InstallSheet";
 import { PageHeader } from "../components/layout/Shell";
 import {
   Button,
@@ -130,6 +131,16 @@ function AgentsTab() {
       .catch(() => {});
   }, [connected, request]);
   useEffect(load, [load]);
+  // Node.js, Git and Ollama, with their versions (DIST-14).
+  const [tools, setTools] = useState<{ id: string; name: string; version: string | null }[]>([]);
+  const [installing, setInstalling] = useState<{ id: string; agent: boolean } | null>(null);
+  const loadTools = useCallback(() => {
+    if (!connected) return;
+    void request<{ id: string; name: string; version: string | null }[] | null>(Method.installsTools)
+      .then((list) => setTools(list ?? []))
+      .catch(() => {});
+  }, [connected, request]);
+  useEffect(loadTools, [loadTools]);
   // A turn or a task may have started or ended a session.
   useRuntimeEvents((event) => {
     if (event.group === "task" || (event.group === "turn" && event.event.type === "completed")) load();
@@ -209,7 +220,58 @@ function AgentsTab() {
           ))}
         </Group>
       )}
-      {missing.length > 0 && <Note>{t("agents.notInstalled", { list: missing.map((a) => a.name).join(", ") })}</Note>}
+      {missing.length > 0 && (
+        <>
+          <Section title={t("agents.notInstalledTitle")} />
+          <Group>
+            {missing.map((a) => (
+              <Row
+                key={a.id}
+                lead={<Monogram text={initials(a.name)} color={COLORS[a.id] ?? "#555"} />}
+                title={a.name}
+                subtitle={t("agents.notInstalledHint")}
+                end={
+                  <Button size="sm" icon="download" onClick={() => setInstalling({ id: a.id, agent: true })}>
+                    {t("install.install")}
+                  </Button>
+                }
+              />
+            ))}
+          </Group>
+        </>
+      )}
+
+      <Section title={t("agents.tools")} />
+      <Group>
+        {tools.map((d) => (
+          <Row
+            key={d.id}
+            icon="terminal"
+            title={d.name}
+            subtitle={d.version ? t("agents.toolVersion", { version: d.version }) : t("agents.toolMissing")}
+            end={
+              d.version ? (
+                <Tag tone="success">{t("agents.found")}</Tag>
+              ) : (
+                <Button size="sm" icon="download" onClick={() => setInstalling({ id: d.id, agent: false })}>
+                  {t("install.install")}
+                </Button>
+              )
+            }
+          />
+        ))}
+      </Group>
+      {installing && (
+        <InstallSheet
+          id={installing.id}
+          agent={installing.agent}
+          onClose={() => setInstalling(null)}
+          onDone={() => {
+            load();
+            loadTools();
+          }}
+        />
+      )}
 
       <Section title={t("agents.desktop")} />
       {overview.desktop.length === 0 ? (

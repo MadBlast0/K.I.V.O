@@ -10,6 +10,10 @@ import { Icon } from "../../icons";
 import { Keys, Orb } from "../ui/Status";
 import { useTranslation } from "react-i18next";
 import { withNodes } from "../../i18n/nodes";
+import { OrbGl, orbColor } from "./OrbGl";
+
+/** States in which the Orb moves (UX-38); everything else is at rest. */
+const MOVING = /^(listening|followUp|thinking|acting|speaking)/;
 
 export interface IslandModel {
   /** Identifies the state; content cross-fades when it changes (e.g. "listening", "acting"). */
@@ -36,9 +40,12 @@ export function Island({
   level,
   className,
   onDrag,
+  companion = "pill",
   "aria-label": ariaLabel,
 }: {
   model: IslandModel | null;
+  /** The pill (default), or the Orb floating above the card (UX-38). */
+  companion?: "pill" | "orb";
   /** Pressing on the Island's row (not a button) starts dragging it (UX-13). */
   onDrag?: () => void;
   /** The live audio level (0–1) for the waveform; without it the waveform shows a sample envelope
@@ -64,6 +71,47 @@ export function Island({
 
   const tall = height > 40;
   const spring = reduce ? { duration: 0 } : { type: "spring" as const, stiffness: 420, damping: 34, mass: 0.9 };
+
+  // The Orb replaces the pill, not the card: it floats above, the words stay in the card under it.
+  if (companion === "orb") {
+    return (
+      <AnimatePresence>
+        {model && (
+          <motion.div
+            key="orb"
+            role="status"
+            aria-live="polite"
+            aria-label={ariaLabel}
+            className={["k-island-orb", className].filter(Boolean).join(" ")}
+            initial={reduce ? false : { opacity: 0, scale: 0.7 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.7 }}
+            transition={spring}
+          >
+            <div className="k-island-orb__orb" onPointerDown={onDrag ? (e) => e.button === 0 && onDrag() : undefined}>
+              <OrbGl
+                color={orbColor(model.state, model.voice)}
+                active={MOVING.test(model.state)}
+                level={level}
+                label={typeof model.label === "string" ? model.label : ""}
+              />
+            </div>
+            <div className="k-island k-island--card" style={{ width: model.width, maxWidth: "100%" }}>
+              <div className="k-island__row">
+                {model.lead}
+                <span className="k-island__label">
+                  {model.label}
+                  {model.sub && <small>{model.sub}</small>}
+                </span>
+                {model.trail}
+              </div>
+              {model.body && <div className="k-island__body">{model.body}</div>}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    );
+  }
 
   return (
     <AnimatePresence>

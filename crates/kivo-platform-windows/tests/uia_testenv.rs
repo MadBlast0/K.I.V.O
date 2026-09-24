@@ -78,6 +78,35 @@ fn uia_journey_on_the_dummy_app() {
         .expect("find by name");
     assert_eq!(greet[0].automation_id, "103");
     assert_eq!(greet[0].role, "Button");
+
+    // PLAN-23 / UX-39: "where is the Export button" finds it by name with real bounds inside the
+    // window, which is what the Island is placed beside.
+    let export = uia
+        .find(
+            &ElementQuery {
+                window: Some(window),
+                name: Some("export".into()),
+                ..ElementQuery::default()
+            },
+            3,
+        )
+        .expect("find Export");
+    let bounds = export[0].bounds.expect("Export has bounds");
+    let frame = WindowsWindows
+        .list()
+        .unwrap()
+        .into_iter()
+        .find(|w| w.id == window)
+        .unwrap()
+        .bounds;
+    assert!(bounds.width > 0 && bounds.height > 0, "{bounds:?}");
+    assert!(
+        bounds.x >= frame.x
+            && bounds.y >= frame.y
+            && bounds.x + bounds.width as i32 <= frame.x + frame.width as i32
+            && bounds.y + bounds.height as i32 <= frame.y + frame.height as i32,
+        "{bounds:?} inside {frame:?}"
+    );
     assert!(greet[0].actions.contains(&UiAction::Invoke));
     let buttons = uia
         .find(

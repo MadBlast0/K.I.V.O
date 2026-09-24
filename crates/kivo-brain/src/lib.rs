@@ -6,6 +6,7 @@
 pub mod acp;
 pub mod anthropic;
 pub mod catalog;
+pub mod computer;
 pub mod context;
 pub mod cost;
 pub mod gemini;
@@ -13,6 +14,7 @@ pub mod http;
 pub mod openai;
 pub mod persona;
 pub mod provider;
+pub mod realtime;
 pub mod routing;
 pub mod speech;
 pub mod sse;

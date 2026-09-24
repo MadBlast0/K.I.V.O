@@ -67,6 +67,8 @@ export interface Profile {
   allowedTools: { kind: "all" } | { kind: "none" } | { kind: "only"; tools: string[] };
   systemPromptAddendum: string;
   persona: string | null;
+  /** Voice requests on this profile open a realtime conversation (BRAIN-33). */
+  realtime?: boolean;
   builtIn: boolean;
 }
 

@@ -116,8 +116,18 @@ with setup recommendations; privacy by source and labels with Custom mode and a 
 check; Mica, text-safe contrast tokens and Windows contrast themes; the Ctrl+K palette; and
 Playwright tests against the dev app over CDP (`pnpm dev:e2e`, then `pnpm --filter kivo-app e2e`).
 Still open in M7: the owner's side-by-side review of every screen against the mockup (DS-15,
-M7-X3). **Next: M8.** Progress per milestone is in the
-table at the top of [docs/ROADMAP.md](docs/ROADMAP.md).
+M7-X3). **M8 — beta hardening** is built: more STT/TTS tiers (Parakeet, Whisper, Chatterbox,
+cloud speech), more API providers, realtime conversation mode (OpenAI Realtime, Gemini Live) with
+its own echo-cancelled microphone, computer use with watch mode, limits and its options page,
+schedule and event triggers, routines drafted by voice and moved as files, automatic workspace
+notes, the tidy job, hybrid memory search (sqlite-vec) and the graph view, skills from routines,
+desktop AI apps, GitHub, KIVO's OAuth connectors, in-app CLI installs and the dependency manager,
+signed catalogs, the Orb and the wake glow, pointing, product modes, performance profiles, the GPU
+policy, crash recovery and the diagnostics bundle. Still open in M8: the owner's catalog signing
+key and OAuth client ids, checking the desktop AI apps' hints against the installed apps, the Rive
+Character, the wake glow's power measurement and the benchmark runs (deferred), live runs of
+realtime and cloud speech with real keys, and a week of daily use (M8-X2). **Next: M9.** Progress
+per milestone is in the table at the top of [docs/ROADMAP.md](docs/ROADMAP.md).
 Update this section as milestones land.
 
 ## Build, run, check
@@ -141,6 +151,8 @@ Update this section as milestones land.
 | Security suite v1 (injection, shell strings, traversal, bypass attempts) | `cargo test -p kivo-tools --lib security_suite` · `cargo test -p kivo-runtime --test security_suite` |
 | Playwright UI tests on the dev app (start it with `pnpm dev:e2e`) | `pnpm --filter kivo-app e2e` |
 | Regenerate the UI's IPC types | `KIVO_WRITE_TS=1 cargo test -p kivo-ipc --features ts --test ts_bindings` |
+| Sign the catalogs (owner only; `keygen` once makes the key outside the repo) | `pnpm catalog:sign` · `pnpm catalog:sign keygen` |
+| Realtime voice and computer use on the test rig (scripted providers, fake input) | `cargo test -p kivo-runtime --test m8_realtime` · `cargo test -p kivo-runtime --test m8_computer` |
 
 The tree must stay free of warnings from tsc, Vite, rustc and clippy. The native title
 bar is off (`decorations: false`); the app draws its own (`components/layout/TitleBar.tsx`).

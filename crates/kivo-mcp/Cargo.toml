@@ -22,6 +22,9 @@ tokio = { workspace = true, features = ["rt", "sync", "time", "process", "macros
 tokio-util.workspace = true
 tracing.workspace = true
 url = "2"
+base64.workspace = true
+uuid.workspace = true
+jiff.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

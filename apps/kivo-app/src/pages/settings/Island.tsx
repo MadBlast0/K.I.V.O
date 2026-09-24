@@ -1,8 +1,8 @@
 /**
  * Settings → Island (UX-31, UX-13, UX-10, UX-15): its style, where and how big it is, what it
- * shows and how it behaves. The Orb and Character styles and the wake glow arrive in M8 (UX-38,
- * UX-16) and say so. With the Island hidden and every sound off, a warning says KIVO would give
- * no sign it's listening (UX-54).
+ * shows (the overlay style, UX-17) and how it behaves, with the wake glow (UX-16). The Character
+ * style waits for its designed mascot and says so. With the Island hidden and every sound off, a
+ * warning says KIVO would give no sign it's listening (UX-54).
  */
 import { useTranslation } from "react-i18next";
 import { Alert, Group, Orb, Pill, Row, Section, Segmented, Switch } from "../../components/ui";
@@ -11,8 +11,10 @@ import { useConfig } from "./useConfig";
 
 type Style = "pill" | "orb" | "character" | "hidden";
 const STYLES: ReadonlyArray<Style> = ["pill", "orb", "character", "hidden"];
-/** Styles that exist today; the others arrive with UX-38. */
-const READY: ReadonlySet<Style> = new Set(["pill", "hidden"]);
+/** Styles that exist today; the Character waits for its designed mascot (UX-38). */
+const READY: ReadonlySet<Style> = new Set(["pill", "orb", "hidden"]);
+type OverlayStyle = "pill-and-card" | "pill-only" | "card-only" | "off";
+const OVERLAY_STYLES: ReadonlyArray<OverlayStyle> = ["pill-and-card", "pill-only", "card-only", "off"];
 
 function StylePreview({ style }: { style: Style }) {
   if (style === "pill") {
@@ -127,6 +129,21 @@ export function IslandTab() {
       <Section title={t("settings.island.shows")} />
       <Group>
         <Row
+          icon="island"
+          title={t("settings.island.overlayStyle")}
+          subtitle={t(
+            `settings.island.overlayStyles.${oneOf(get("overlay", "style"), OVERLAY_STYLES) ?? "pill-and-card"}Hint`,
+          )}
+          end={
+            <Segmented<OverlayStyle>
+              label={t("settings.island.overlayStyle")}
+              value={oneOf(get("overlay", "style"), OVERLAY_STYLES) ?? "pill-and-card"}
+              onChange={(v) => set("overlay", { style: v })}
+              options={OVERLAY_STYLES.map((v) => ({ value: v, label: t(`settings.island.overlayStyles.${v}`) }))}
+            />
+          }
+        />
+        <Row
           icon="chat"
           title={t("settings.island.transcript")}
           end={
@@ -198,7 +215,13 @@ export function IslandTab() {
           icon="glow"
           title={t("settings.island.glow")}
           subtitle={t("settings.island.glowHint")}
-          end={<Pill>{t("settings.general.later")}</Pill>}
+          end={
+            <Switch
+              label={t("settings.island.glow")}
+              checked={bool(get("overlay", "wake-glow"))}
+              onChange={(v) => set("overlay", { "wake-glow": v })}
+            />
+          }
         />
         <Row
           icon="window"

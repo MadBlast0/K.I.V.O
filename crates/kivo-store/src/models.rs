@@ -88,8 +88,152 @@ pub fn catalog() -> Vec<ModelManifest> {
         keyword_spotter(),
         campplus(),
         minilm(),
+        parakeet(),
+        whisper(),
+        chatterbox(),
     ]);
     all
+}
+
+/// Parakeet TDT 0.6B v3's id: the Balanced recognizer for 25 European languages (VOICE-10).
+pub const PARAKEET: &str = "parakeet-tdt-v3";
+
+/// Parakeet TDT 0.6B v3 (NVIDIA, CC-BY-4.0), the int8 ONNX export of its transducer branch by
+/// sherpa-onnx, pinned.
+fn parakeet() -> ModelManifest {
+    const BASE: &str = "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/2bda32ec70b097a55adaa07d9a7173915b43cc78";
+    let file = |name: &str, size: u64, sha256: &str| ModelFile {
+        name: name.into(),
+        url: format!("{BASE}/{name}"),
+        size,
+        sha256: sha256.into(),
+        unpack: Vec::new(),
+    };
+    ModelManifest {
+        id: PARAKEET.into(),
+        name: "Parakeet TDT v3 (25 languages)".into(),
+        kind: ModelKind::Stt,
+        license: "CC-BY-4.0".into(),
+        attribution:
+            "Parakeet TDT 0.6B v3 by NVIDIA, licensed CC-BY-4.0; ONNX export by sherpa-onnx.".into(),
+        source: "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3".into(),
+        languages: [
+            "bg", "hr", "cs", "da", "nl", "en", "et", "fi", "fr", "de", "el", "hu", "it", "lv",
+            "lt", "mt", "pl", "pt", "ro", "sk", "sl", "es", "sv", "ru", "uk",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect(),
+        requires: vec![SILERO_VAD.into(), SMART_TURN.into()],
+        files: vec![
+            file(
+                "encoder.int8.onnx",
+                652_184_281,
+                "acfc2b4456377e15d04f0243af540b7fe7c992f8d898d751cf134c3a55fd2247",
+            ),
+            file(
+                "decoder.int8.onnx",
+                11_845_275,
+                "179e50c43d1a9de79c8a24149a2f9bac6eb5981823f2a2ed88d655b24248db4e",
+            ),
+            file(
+                "joiner.int8.onnx",
+                6_355_277,
+                "3164c13fc2821009440d20fcb5fdc78bff28b4db2f8d0f0b329101719c0948b3",
+            ),
+            file(
+                "tokens.txt",
+                93_939,
+                "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d",
+            ),
+        ],
+    }
+}
+
+/// Whisper large-v3-turbo's id: the Accurate recognizer (VOICE-10).
+pub const WHISPER: &str = "whisper-large-v3-turbo";
+
+/// Whisper large-v3-turbo (OpenAI, MIT), the int8 ONNX export by sherpa-onnx, pinned.
+fn whisper() -> ModelManifest {
+    const BASE: &str = "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-turbo/resolve/2ca6ff69fc878651b770880507669577ac41c2ff";
+    let file = |name: &str, size: u64, sha256: &str| ModelFile {
+        name: name.into(),
+        url: format!("{BASE}/{name}"),
+        size,
+        sha256: sha256.into(),
+        unpack: Vec::new(),
+    };
+    ModelManifest {
+        id: WHISPER.into(),
+        name: "Whisper large-v3-turbo".into(),
+        kind: ModelKind::Stt,
+        license: "MIT".into(),
+        attribution: "Whisper large-v3-turbo by OpenAI, MIT License; ONNX export by sherpa-onnx."
+            .into(),
+        source: "https://huggingface.co/openai/whisper-large-v3-turbo".into(),
+        languages: [
+            "en", "ar", "bg", "cs", "da", "de", "el", "es", "et", "fi", "fr", "hi", "hr", "hu",
+            "id", "it", "ja", "ko", "lt", "lv", "nl", "pa", "pl", "pt", "ro", "ru", "sk", "sl",
+            "sv", "tr", "uk", "vi", "zh",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect(),
+        requires: vec![SILERO_VAD.into(), SMART_TURN.into()],
+        files: vec![
+            file(
+                "turbo-encoder.int8.onnx",
+                674_716_297,
+                "b02dcdf54f348741e93fe732b67d933c8dcb6735655f710640143081db38878b",
+            ),
+            file(
+                "turbo-decoder.int8.onnx",
+                361_080_764,
+                "20accd02388482eb3a46bd615631adfdc85e1eb2c7db9ea3f02a40ffe6b81547",
+            ),
+            file(
+                "turbo-tokens.txt",
+                816_730,
+                "b34b360dbb493e781e479794586d661700670d65564001f23024971d1f2fa126",
+            ),
+        ],
+    }
+}
+
+/// Chatterbox Turbo's id: the Expressive voice (VOICE-11).
+pub const CHATTERBOX: &str = "chatterbox-turbo";
+
+/// Chatterbox Turbo (Resemble AI, MIT): the publisher's own ONNX export, q4 weights, pinned.
+fn chatterbox() -> ModelManifest {
+    const BASE: &str = "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf";
+    let file = |name: &str, size: u64, sha256: &str| ModelFile {
+        name: name.into(),
+        url: format!("{BASE}/{name}"),
+        size,
+        sha256: sha256.into(),
+        unpack: Vec::new(),
+    };
+    ModelManifest {
+        id: CHATTERBOX.into(),
+        name: "Chatterbox Turbo".into(),
+        kind: ModelKind::Tts,
+        license: "MIT".into(),
+        attribution: "Chatterbox Turbo by Resemble AI, MIT License. KIVO gives it one of your Windows voices to copy; no one's recording is used.".into(),
+        source: "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX".into(),
+        languages: vec!["en".into()],
+        requires: Vec::new(),
+        files: vec![
+            file("tokenizer.json", 3_562_272, "3f04e34bea22f9144d1a19151154095bc9ce0430bf421304f5797e716288a906"),
+            file("onnx/speech_encoder_q4.onnx", 1_200_346, "37956c20b67bed85a0da4bc83509d67b5969a1b257d1c546516a5236a17ad71e"),
+            file("onnx/speech_encoder_q4.onnx_data", 229_560_112, "58956db217c6443e49c91bdd54d7cf76b4a243f225c748b7bf746459fc27bc7d"),
+            file("onnx/embed_tokens_q4.onnx", 2_844, "fd6ba1d22902e8f539d3dd6d7c1c44b98ebb4c84ebbb5e47fcb826ddcf667561"),
+            file("onnx/embed_tokens_q4.onnx_data", 37_286_384, "f54a51e234b509b64c3a03bb79e1149fba7e2eba6c2d9c222f18883379e1f5d8"),
+            file("onnx/language_model_q4.onnx", 274_572, "b39d03d3f8b943b9e60c6fce3fb41191dbc1df4589f913291db1e214eef669b1"),
+            file("onnx/language_model_q4.onnx_data", 204_456_572, "2c029dc0acf48752473d8c74c72b5ceaaad76b9886fe106eaf2022142d5b5d5e"),
+            file("onnx/conditional_decoder_q4.onnx", 2_179_022, "dccb7a6cea3472dc7f7d070eeb70ade18e6327fb4ec61a3d62cf211bfed90ea2"),
+            file("onnx/conditional_decoder_q4.onnx_data", 246_397_384, "b5c5317e0b79a1a19dd3d5e2b2091ea06b15716716ab801a54eaeb906c6971ec"),
+        ],
+    }
 }
 
 /// The sentence-embedding model's id: the intent router's semantic stage (BRAIN-03).

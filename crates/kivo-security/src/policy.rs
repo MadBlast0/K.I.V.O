@@ -654,6 +654,30 @@ fn confirm_spec(
         allow_always: spec.risk < Risk::High && cx.session == SessionKind::Owner,
         plan,
         hello: false,
+        watch: false,
+    }
+}
+
+/// The watch-mode card for one computer-use step (CAP-11): approved by a click or Enter; by
+/// voice only when the step is Low risk. No "always".
+pub fn watch_card(spec: &ToolSpec, call: &ToolCall) -> ConfirmSpec {
+    ConfirmSpec {
+        call_id: call.id.clone(),
+        tool: call.tool.clone(),
+        action: render_title(&spec.title, &call.args),
+        target: call.targets.first().map(target_name),
+        why: text::t("policy.watchMode"),
+        provenance: text::t("policy.provenance.task"),
+        risk: spec.risk,
+        strength: if spec.risk <= Risk::Low {
+            Strength::Normal
+        } else {
+            Strength::Strong
+        },
+        allow_always: false,
+        plan: false,
+        hello: false,
+        watch: true,
     }
 }
 

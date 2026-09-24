@@ -14,6 +14,23 @@ use crate::query::{similarity, subject};
 
 /// Facts this alike are the same fact.
 pub const DUPLICATE: f64 = 0.8;
+/// Facts this close in meaning (cosine, the local embedding model) with the same specifics are
+/// the same fact said differently (CONV-22: "embedding similarity + same entity"). Measured with
+/// MiniLM: paraphrases score 0.91–0.96, while different values about the same thing still reach
+/// 0.91, which the specifics tell apart.
+pub const NEAR_DUPLICATE: f32 = 0.9;
+
+/// Whether two facts are the same: alike in words, or (given their cosine similarity) alike in
+/// meaning with the same names, numbers and paths.
+pub fn same_fact(a: &str, b: &str, cosine: Option<f32>) -> bool {
+    if similarity(a, b) >= DUPLICATE {
+        return true;
+    }
+    cosine.is_some_and(|c| c >= NEAR_DUPLICATE) && {
+        let (x, y) = (crate::query::specifics(a), crate::query::specifics(b));
+        !x.is_empty() && x == y
+    }
+}
 /// Logs older than this many days are condensed.
 pub const CONDENSE_AFTER_DAYS: i64 = 14;
 /// …or older than this when the workspace is over its size cap.
@@ -64,6 +81,14 @@ pub struct Fact {
 
 /// (keep, merge_away) pairs: each newer near-duplicate of an older current fact.
 pub fn duplicates(facts: &[Fact]) -> Vec<(String, String)> {
+    duplicates_by(facts, |a, b| same_fact(&a.text, &b.text, None))
+}
+
+/// `duplicates` with the caller's test of sameness (the runtime adds meaning, CONV-22).
+pub fn duplicates_by(
+    facts: &[Fact],
+    alike: impl Fn(&Fact, &Fact) -> bool,
+) -> Vec<(String, String)> {
     let mut sorted: Vec<&Fact> = facts.iter().filter(|f| f.current).collect();
     sorted.sort_by_key(|f| (f.created, f.path.clone()));
     let mut gone: Vec<&str> = Vec::new();
@@ -73,9 +98,7 @@ pub fn duplicates(facts: &[Fact]) -> Vec<(String, String)> {
             continue;
         }
         for newer in &sorted[i + 1..] {
-            if !gone.contains(&newer.path.as_str())
-                && similarity(&older.text, &newer.text) >= DUPLICATE
-            {
+            if !gone.contains(&newer.path.as_str()) && alike(older, newer) {
                 gone.push(&newer.path);
                 out.push((older.path.clone(), newer.path.clone()));
             }
@@ -388,5 +411,41 @@ mod tests {
                 .count(),
             12
         );
+    }
+
+    /// CONV-22 with the cosines MiniLM gives these pairs: paraphrases merge, different values
+    /// don't, and nothing merges on meaning alone without the same specifics.
+    #[test]
+    fn meaning_merges_paraphrases_but_not_different_values() {
+        assert!(same_fact(
+            "My sister's name is Priya",
+            "My sister is called Priya",
+            Some(0.928)
+        ));
+        assert!(same_fact(
+            "Maya likes jasmine tea",
+            "Maya enjoys jasmine tea",
+            Some(0.961)
+        ));
+        assert!(!same_fact(
+            "The standup is at 10am",
+            "The standup is at 11am",
+            Some(0.914)
+        ));
+        assert!(!same_fact(
+            "Maya likes jasmine tea",
+            "Maya likes coffee",
+            Some(0.743)
+        ));
+        assert!(!same_fact(
+            "My sister's name is Priya",
+            "My sister is called Priya",
+            None
+        ));
+        assert!(!same_fact(
+            "I prefer dark mode",
+            "I like the dark theme",
+            Some(0.95)
+        ));
     }
 }

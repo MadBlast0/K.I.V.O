@@ -7,7 +7,9 @@
 
 mod agent;
 mod brain;
+mod computer;
 mod control;
+mod realtime;
 mod shared;
 
 pub use agent::{EnginePermissions, agent_spec};
@@ -89,6 +91,8 @@ struct Running {
     wake_phrase: Option<String>,
     /// What KIVO is saying, so its own "stop" isn't taken for the user's (VOICE-19).
     reply: String,
+    /// The tool calls that succeeded, in order: "save what you just did as a routine" (ROUT-13).
+    calls: Vec<(String, serde_json::Value)>,
     /// Someone other than the enrolled owner (VOICE-22 "Prefer owner"): a guest session with no
     /// memory or preferences, and medium-risk actions confirmed (SECURITY §1).
     guest: bool,
@@ -122,6 +126,8 @@ struct Running {
     cloud_brain: Option<String>,
     /// The Draft's text after the user changed it (CONV-15), for the call that sends it.
     draft_text: Option<String>,
+    /// A realtime conversation is open in this turn (BRAIN-33).
+    live: bool,
 }
 
 impl Running {
@@ -140,6 +146,7 @@ impl Running {
             outcome: "done",
             wake_phrase: None,
             reply: String::new(),
+            calls: Vec::new(),
             guest: false,
             answering: false,
             answer_audio: None,
@@ -155,9 +162,16 @@ impl Running {
             offered: Vec::new(),
             cloud_brain: None,
             draft_text: None,
+            live: false,
         }
     }
 }
+
+/// What the last request said and the tool calls it made (ROUT-13).
+type LastCalls = (String, Vec<(String, serde_json::Value)>);
+
+/// Applies the speech engines for new settings.
+pub type EnginesHook = Arc<dyn Fn(&kivo_core::KivoConfig) + Send + Sync>;
 
 /// What the engine is built from.
 pub struct Parts {
@@ -232,6 +246,14 @@ pub struct Engine {
     routines: RwLock<Option<Arc<crate::routines::Routines>>>,
     /// Instructions and workspaces (CONVERSATION §4).
     workspaces: RwLock<Option<Arc<crate::workspaces::Workspaces>>>,
+    /// The last request that did something: what was said and the calls it made (ROUT-13).
+    last_calls: Mutex<Option<LastCalls>>,
+    /// The screen, for computer use's screenshots (CAP-10).
+    screen: RwLock<Option<Arc<dyn kivo_platform::Screen>>>,
+    /// Computer use is paused (the Island's Pause).
+    cu_pause: std::sync::atomic::AtomicBool,
+    /// Applies the speech engines for new settings (the model manager; PLAN-06 by voice).
+    engines_hook: RwLock<Option<EnginesHook>>,
     /// Agent Skills (CONV-32): their names and descriptions go into each brain request.
     skills: RwLock<Option<Arc<crate::skills::Skills>>>,
     /// The memory vault (CONVERSATION §6): memories for each brain request, "remember …".
@@ -279,12 +301,60 @@ impl Engine {
             app_registry: RwLock::new(None),
             routines: RwLock::new(None),
             workspaces: RwLock::new(None),
+            last_calls: Mutex::new(None),
+            screen: RwLock::new(None),
+            cu_pause: std::sync::atomic::AtomicBool::new(false),
+            engines_hook: RwLock::new(None),
             media_shown: Arc::new(AtomicU64::new(0)),
             skills: RwLock::new(None),
             memory: RwLock::new(None),
             previous: Mutex::new(None),
             uia: RwLock::new(None),
         }
+    }
+
+    pub fn set_screen(&self, screen: Arc<dyn kivo_platform::Screen>) {
+        *write(&self.screen) = Some(screen);
+    }
+
+    pub(crate) fn screen(&self) -> Option<Arc<dyn kivo_platform::Screen>> {
+        read(&self.screen).clone()
+    }
+
+    /// Pauses or resumes computer use (the Island's Pause, CAP-12). Returns whether it's paused.
+    pub fn computer_pause(&self) -> bool {
+        let paused = !self.cu_pause.load(std::sync::atomic::Ordering::SeqCst);
+        self.cu_pause
+            .store(paused, std::sync::atomic::Ordering::SeqCst);
+        paused
+    }
+
+    pub(crate) fn cu_paused(&self) -> bool {
+        self.cu_pause.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// What applies the speech engines when settings change outside the settings RPC (a product
+    /// mode switched by voice).
+    pub fn set_engines_hook(&self, hook: EnginesHook) {
+        *write(&self.engines_hook) = Some(hook);
+    }
+
+    /// Switches the product mode (PLAN-06): the settings it maps to, the engine's own and the
+    /// speech engines. Performance loads the models ahead. Returns the new settings.
+    pub fn switch_mode(
+        self: &Arc<Self>,
+        mode: kivo_core::config::ProductMode,
+    ) -> kivo_core::KivoConfig {
+        let saved = crate::modes::apply(&self.core, self, mode);
+        self.settings_changed(&saved);
+        if let Some(hook) = read(&self.engines_hook).clone() {
+            hook(&saved);
+        }
+        // Performance: models loaded ahead (plan §142, "aggressive prewarming").
+        if mode == kivo_core::config::ProductMode::Performance {
+            self.infer.warm();
+        }
+        saved
     }
 
     pub fn set_workspaces(&self, workspaces: Arc<crate::workspaces::Workspaces>) {
@@ -369,6 +439,11 @@ impl Engine {
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone()
+    }
+
+    /// The skills, once they exist.
+    pub fn skills(&self) -> Option<Arc<crate::skills::Skills>> {
+        read(&self.skills).clone()
     }
 
     pub fn set_skills(&self, skills: Arc<crate::skills::Skills>) {
@@ -1407,6 +1482,39 @@ impl Engine {
                     Box::pin(self.island_by_voice(page, page_arg.as_deref())).await;
                     return;
                 }
+                // "Save what you just did as a routine" (ROUT-13): a draft to review.
+                if matched.tool == "session.saveRoutine" {
+                    let last = lock(&self.last_calls).clone();
+                    let draft = last.and_then(|(said, calls)| {
+                        crate::routines::Routines::draft_from_calls(&said, &calls)
+                    });
+                    let reply = match (draft, self.routines()) {
+                        (Some(draft), Some(routines)) => {
+                            routines.offer_draft(draft);
+                            text::t("routine.fromLastTurn")
+                        }
+                        _ => text::t("routine.nothingToSave"),
+                    };
+                    self.speak_and_finish(&reply).await;
+                    return;
+                }
+                // "Presentation mode", "back to normal" (PLAN-06).
+                if matched.tool == "session.mode" {
+                    let mode = matched
+                        .args
+                        .get("mode")
+                        .and_then(|v| serde_json::from_value(v.clone()).ok());
+                    let Some(mode) = mode else {
+                        self.speak_and_finish(&text::t("turn.gone")).await;
+                        return;
+                    };
+                    let engine = Arc::clone(self);
+                    let _ = tokio::task::spawn_blocking(move || engine.switch_mode(mode)).await;
+                    let name = text::t(&format!("modes.{}", text::key_of(&mode)));
+                    let reply = text::tf("modes.switched", &[("mode", &name)]);
+                    self.speak_and_finish(&reply).await;
+                    return;
+                }
                 // "What can I say?" (UX-44).
                 if matched.tool == "session.help" {
                     let examples = self.help_examples();
@@ -1895,6 +2003,19 @@ impl Engine {
             self.taint_with(source);
         }
         self.recorder.tool_result(&self.turn_key(), call, &result);
+        if result.status.is_ok()
+            && !undoing
+            && let Some(running) = lock(&self.turn).as_mut()
+        {
+            running.calls.push((call.tool.clone(), call.args.clone()));
+        }
+        // "Where is the Export button?": the Island goes beside it (UX-39).
+        if let Some(point) = output.as_ref().and_then(|o| {
+            serde_json::from_value::<kivo_ipc::protocol::PointTarget>(o.data["point"].clone()).ok()
+        }) {
+            self.core
+                .update_turn(|view| view.point = Some(point.clone()));
+        }
         match (&result.status, &output) {
             (Ok(_), Some(output)) => {
                 self.core.set_step(StepView {
@@ -2118,6 +2239,9 @@ impl Engine {
             return;
         };
         *lock(&self.previous) = self.core.turn_view();
+        if !running.calls.is_empty() {
+            *lock(&self.last_calls) = Some((running.transcript.clone(), running.calls.clone()));
+        }
         self.infer.touch();
         let state = self.core.state().borrow().session;
         let follow_up_seconds = self.core.config().voice.follow_up_seconds;
@@ -2426,6 +2550,41 @@ impl Engine {
             )));
     }
 
+    /// The speech worker crashed (PLAN-12): it's in Activity with what KIVO did about it; when
+    /// KIVO stops restarting it, speech shows as failed with a way to Diagnostics.
+    pub fn worker_crashed(&self, crashes: u32, recovery: &crate::infer::Recovery) {
+        use crate::infer::Recovery;
+        let name = |id: &str| kivo_voice::engine(id).map_or_else(|| id.to_owned(), |e| e.name);
+        let detail = match recovery {
+            Recovery::Restart => text::t("recovery.restart"),
+            Recovery::Cpu => text::t("recovery.cpu"),
+            Recovery::Fallback(id) => text::tf("recovery.fallback", &[("engine", &name(id))]),
+            Recovery::Stopped => text::t("recovery.stopped"),
+        };
+        self.recorder
+            .worker_crashed(crashes, recovery.key(), &detail);
+        if *recovery == Recovery::Stopped {
+            self.core.set_speech_status(SpeechStatus::Failed {
+                message: detail.clone(),
+            });
+            if let Some(tasks) = self.tasks() {
+                let notifier = Arc::clone(tasks.notifier());
+                tokio::spawn(async move {
+                    notifier
+                        .announce(crate::notifier::Announcement {
+                            source: "system".into(),
+                            title: text::t("recovery.stoppedTitle"),
+                            text: detail,
+                            urgent: false,
+                            tell_me: false,
+                            task: None,
+                        })
+                        .await;
+                });
+            }
+        }
+    }
+
     /// The speech worker died mid-turn.
     pub fn engine_lost(&self) {
         if lock(&self.turn).is_some() {
@@ -2454,6 +2613,24 @@ impl Engine {
 
 /// Voice-pipeline signals and worker events, applied to the engine.
 pub async fn handle_signal(engine: &Arc<Engine>, signal: VoiceSignal) {
+    // In a realtime conversation the provider hears the user and handles interruptions itself
+    // (BRAIN-33): the listener's own utterances are dropped; "Kivo stop" still works.
+    if engine.live()
+        && matches!(
+            signal,
+            VoiceSignal::Wake { .. }
+                | VoiceSignal::BargeIn { .. }
+                | VoiceSignal::FollowUpSpeech { .. }
+                | VoiceSignal::SpeechStarted { .. }
+                | VoiceSignal::EndOfSpeech { .. }
+                | VoiceSignal::NoSpeech { .. }
+        )
+    {
+        if let Some(listener) = engine.listener() {
+            listener.cancel();
+        }
+        return;
+    }
     match signal {
         VoiceSignal::SpeechStarted { .. } => engine.mark("t2SpeechStarted"),
         VoiceSignal::EndOfSpeech { utterance } => engine.end_of_speech(utterance).await,
@@ -2516,6 +2693,7 @@ pub async fn handle_infer_event(engine: &Arc<Engine>, event: InferEvent) {
             error,
         } => engine.speech_fallback(slot, &from, to.as_deref(), &error),
         InferEvent::Lost => engine.engine_lost(),
+        InferEvent::Crashed { crashes, recovery } => engine.worker_crashed(crashes, &recovery),
     }
 }
 

@@ -150,7 +150,8 @@
       "expand": "Open a menu or list",
       "scroll_into_view": "Scroll to a control",
       "get_bounds": "Find where a control is",
-      "wait": "Wait for the app"
+      "wait": "Wait for the app",
+      "point_at": "Show where a control is"
     },
     "files": {
       "search": "Search your files for “{query}”",
@@ -206,6 +207,31 @@
     },
     "skills": {
       "load": "Use the {name} skill"
+    },
+    "routines": {
+      "draft": "Draft a routine"
+    },
+    "ai_apps": {
+      "prompt": "Prompt a desktop AI app"
+    },
+    "github": {
+      "pull_requests": "List pull requests on GitHub",
+      "issues": "List issues on GitHub",
+      "notifications": "Read your GitHub notifications",
+      "whoami": "Check your GitHub sign-in",
+      "create_issue": "Open an issue in {repo}"
+    },
+    "computer": {
+      "use": "Use the computer: {task} in {app} (at most {estimate})"
+    },
+    "google": {
+      "upcoming": "Read your Google Calendar",
+      "create": "Add “{title}” to your Google Calendar",
+      "drive": "Save {name} to your Google Drive"
+    },
+    "microsoft": {
+      "upcoming": "Read your Outlook calendar",
+      "create": "Add “{title}” to your Outlook calendar"
     }
   },
   "reply": {
@@ -310,7 +336,20 @@
       "on": "{name} is on.",
       "off": "{name} is off.",
       "expanded": "Opened.",
-      "collapsed": "Closed."
+      "collapsed": "Closed.",
+      "pointed": "{name} is {where}.",
+      "notFoundNamed": "I can’t find “{name}” in that window.",
+      "where": {
+        "topLeft": "at the top left of the window",
+        "top": "at the top of the window",
+        "topRight": "at the top right of the window",
+        "left": "on the left of the window",
+        "center": "in the middle of the window",
+        "right": "on the right of the window",
+        "bottomLeft": "at the bottom left of the window",
+        "bottom": "at the bottom of the window",
+        "bottomRight": "at the bottom right of the window"
+      }
     },
     "windows": {
       "moved": "Moved to monitor {number}.",
@@ -326,6 +365,48 @@
     },
     "mcp": {
       "done": "Done with {server}."
+    },
+    "ai": {
+      "sent": "Sent it to {name}.",
+      "filled": "I’ve put the prompt in {name}; press Enter when ready.",
+      "clipboard": "I couldn’t reach the text box in {name}, so the prompt is on the clipboard: click the box, press Ctrl+V, then Enter.",
+      "didntOpen": "{name} didn’t open in time.",
+      "notAnAiApp": "I can’t prompt “{name}”. I can prompt Claude, ChatGPT and Copilot.",
+      "noPrompt": "What should I ask?",
+      "notInstalled": "{name} isn’t installed on this PC."
+    },
+    "github": {
+      "badRepo": "Name the repository as owner/name, like MadBlast0/K.I.V.O.",
+      "noGh": "The GitHub CLI (gh) isn’t installed. Install it from the Agents page, then sign in with “gh auth login”.",
+      "signIn": "The GitHub CLI isn’t signed in. Run “gh auth login” in a terminal, then try again.",
+      "failed": "GitHub didn’t answer as expected.",
+      "noTitle": "What should the issue be called?",
+      "prs": {
+        "one": "{count} open pull request.",
+        "other": "{count} open pull requests."
+      },
+      "issues": {
+        "one": "{count} open issue.",
+        "other": "{count} open issues."
+      },
+      "notifications": {
+        "one": "{count} unread notification.",
+        "other": "{count} unread notifications."
+      },
+      "whoami": "Signed in to GitHub as {login}, with {open} open pull requests.",
+      "created": "Opened issue #{number} in {repo}."
+    },
+    "connect": {
+      "notSetUp": "KIVO’s sign-in with {name} isn’t set up in this build yet.",
+      "refused": "The sign-in wasn’t allowed.",
+      "badTime": "I need the start and end as a date and time.",
+      "noName": "What should the file be called?",
+      "events": {
+        "one": "{count} event coming up.",
+        "other": "{count} events coming up."
+      },
+      "added": "Added “{title}”.",
+      "saved": "Saved {name}."
     }
   },
   "error": {
@@ -462,7 +543,8 @@
     "privacyCustomSpeech": "Cloud speech is off in your custom privacy settings, so KIVO uses a speech engine on this PC.",
     "keptLocal": "This came from something private ({why}), so it stays on this PC and wasn’t shown to {brain}. Ask again with a brain on this PC.",
     "whyFolder": "a folder you keep on this PC",
-    "whyLabel": "something you marked private"
+    "whyLabel": "something you marked private",
+    "watchMode": "Watch mode: you approve each step it takes."
   },
   "turn": {
     "notUnderstood": "I can’t do that yet.",
@@ -492,7 +574,11 @@
     "crashed": "{process} stopped unexpectedly",
     "stoppedEverything": "Stopped everything",
     "memoryForgotten": "Forgot everything in memory ({count, plural, one {# note} other {# notes}})",
-    "privacyKept": "Kept “{tool}” result on this PC: it was private"
+    "privacyKept": "Kept “{tool}” result on this PC: it was private",
+    "computerUse": "Computer use: {task}",
+    "computerUseDetail": "{steps} steps · ≈ ${cost}",
+    "realtime": "Live conversation with {provider}",
+    "realtimeDetail": "{minutes} min · ≈ ${cost} · {exchanges} exchanges"
   },
   "notice": {
     "firstClose": {
@@ -574,7 +660,9 @@
     "misrouteNoted": "Noted. I’ll use that to route requests like it better.",
     "noBrainAnswer": "That last answer didn’t come from a brain.",
     "turnedOn": "{capability} is on now. Say your request again.",
-    "nothingToTurnOn": "There’s nothing to turn on."
+    "nothingToTurnOn": "There’s nothing to turn on.",
+    "notCloud": "That engine runs on this PC and needs no key.",
+    "badKey": "That doesn’t look like a key."
   },
   "brain": {
     "noBrain": "No AI brain is connected yet. You can connect one on the Brains page; some are free.",
@@ -769,7 +857,13 @@
         "over": "Focus time is over",
         "phrases": "focus for {minutes}|focus for {minutes} minutes|start a focus session for {minutes} minutes"
       }
-    }
+    },
+    "off": "“{name}” is turned off.",
+    "drafted": "I’ve drafted “{name}” in Routines. Check it, then save it.",
+    "fromLastTurn": "Here’s a routine from what I just did. Check it in Routines, then save it.",
+    "nothingToSave": "There’s nothing from your last request to save as a routine.",
+    "importBad": "That isn’t a KIVO routine file.",
+    "importUnknownTool": "The routine uses “{tool}”, which KIVO doesn’t have."
   },
   "workspace": {
     "badScope": "Instructions are either global or for one workspace.",
@@ -851,7 +945,10 @@
     "fromConversation": "From a conversation",
     "fromTask": "From a task",
     "changedFiles": "Changed {files}",
-    "noAnswer": "There’s no answer from that request to remember."
+    "noAnswer": "There’s no answer from that request to remember.",
+    "newWorkspace": "Keep notes for “{workspace}”? What KIVO does there, decisions and commands that worked.",
+    "newWorkspaceWhy": "KIVO asks before starting notes for a new workspace.",
+    "newWorkspaceYes": "Keep notes"
   },
   "connectors": {
     "ghSignedIn": "gh is signed in as {account}",
@@ -863,7 +960,8 @@
     "noSignIn": "This one needs no sign-in.",
     "badUrl": "Use the server’s https:// address.",
     "signInFailed": "Signing in didn’t work: {reason}",
-    "off": "{name} is switched off in Extensions → Connectors."
+    "off": "{name} is switched off in Extensions → Connectors.",
+    "notSetUp": "KIVO’s sign-in with {name} isn’t set up in this build yet."
   },
   "skills": {
     "notFound": "KIVO doesn’t have that skill, or it’s off.",
@@ -901,7 +999,8 @@
     "audit": "Audit log",
     "auditOk": "{count, plural, one {# entry} other {# entries}} · verified",
     "auditBroken": "The chain is broken at entry {row}: something changed the log",
-    "auditUnread": "Couldn't read the audit log"
+    "auditUnread": "Couldn't read the audit log",
+    "bundleFirst": "Make the bundle first, then save it."
   },
   "setup": {
     "reason": {
@@ -921,5 +1020,74 @@
   },
   "privacy": {
     "localWords": "confidential|locally|privately|keep it private|keep this private|on this pc|on my pc|on this computer|offline|don't upload|do not upload|without the cloud|no cloud"
+  },
+  "sounds": {
+    "onlyWavOgg": "Choose a .wav or .ogg file.",
+    "unreadable": "That sound file can’t be read.",
+    "tooBig": "Choose a sound file under 2 MB."
+  },
+  "modes": {
+    "switched": "{mode} mode is on.",
+    "normal": "Normal",
+    "private": "Private",
+    "offline": "Offline",
+    "battery": "Battery",
+    "performance": "Performance",
+    "gaming": "Gaming",
+    "presentation": "Presentation"
+  },
+  "recovery": {
+    "restart": "KIVO’s speech engine stopped unexpectedly and was started again.",
+    "cpu": "KIVO’s speech engine stopped while using the graphics card. It runs on the processor for now.",
+    "fallback": "KIVO’s speech engine keeps stopping with {engine}, so another engine stands in for now.",
+    "stopped": "KIVO’s speech engine keeps stopping, so KIVO stopped restarting it. Change the speech engine or run the checks in Diagnostics.",
+    "stoppedTitle": "Speech is paused"
+  },
+  "install": {
+    "step": {
+      "tool": "Install {name}",
+      "vendor": "Download {name} from its website",
+      "cli": "Install {name}",
+      "adapter": "Install the connector KIVO uses to talk to {name}"
+    },
+    "why": {
+      "node": "{name} is installed with npm, which comes with Node.js.",
+      "cli": "The program itself, from its publisher’s package.",
+      "adapter": "Lets KIVO work with it over the Agent Client Protocol.",
+      "tool": "KIVO uses {name} for this."
+    },
+    "unknown": "KIVO doesn’t know how to install “{name}”.",
+    "already": "That install is already running.",
+    "changed": "What needs installing changed since you looked. Check the steps again.",
+    "stepFailed": "“{step}” didn’t finish. Its output is below.",
+    "notVerified": "{name} was installed but doesn’t answer yet. Restart KIVO and try again."
+  },
+  "computer": {
+    "noProvider": "Computer use needs Claude, OpenAI or Gemini connected with a key, and screenshots allowed to go to the cloud (Permissions → Screen awareness).",
+    "noScreen": "KIVO couldn’t see the screen.",
+    "noWindow": "That app isn’t open.",
+    "controlling": "Controlling {app}",
+    "progress": "Step {step}/{max} · ≈ ${cost}",
+    "paused": "Paused while you use the mouse",
+    "stopped": "Stopped.",
+    "outOfTime": "It ran out of time before finishing.",
+    "outOfSteps": "It reached the most steps for one task before finishing.",
+    "outOfMoney": "It reached the most it may cost before finishing.",
+    "inputOff": "Computer use needs input control, which is off.",
+    "onlyInTurn": "Computer use only runs when you ask for it.",
+    "banner": "KIVO is controlling your screen — Stop (Ctrl+Alt+Shift+Esc)"
+  },
+  "realtime": {
+    "openers": "let's talk|lets talk|let's chat|lets chat|let's have a conversation|have a conversation with me|talk with me|talk to me about|chat with me|practice my interview|practice an interview|practice a conversation|let's practice|mock interview|let's discuss",
+    "closers": "that's all|that is all|goodbye|bye|bye bye|we're done|we are done|end the conversation|stop the conversation|that'll be all|thanks that's it|that's it",
+    "instructions": "You are in a live spoken conversation through KIVO. Speak naturally and keep each turn short, a few sentences at most. Use the tools offered when the user asks for an action; KIVO asks the user before anything risky. When the user says they are done, say a brief goodbye.",
+    "reason": "{profile} · a live conversation",
+    "unavailable": "Live conversation needs Realtime voice turned on in Capabilities, a connected OpenAI or Gemini key, and cloud AI allowed.",
+    "cardOpening": "Live conversation",
+    "declined": "The user declined this action. Don't retry it unless they ask again.",
+    "closedSilence": "Ending our conversation, it's gone quiet.",
+    "closedUser": "Talk soon.",
+    "closedCap": "That's the time limit for a live conversation. Ending it here.",
+    "closedDropped": "The live conversation was cut off."
   }
 }

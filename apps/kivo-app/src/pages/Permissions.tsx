@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "../components/layout/Shell";
+import { ComputerUseOptions } from "../components/permissions/ComputerUseOptions";
 import {
   Alert,
   Button,
@@ -49,7 +50,7 @@ import {
 } from "../ipc/generated";
 import { useRuntime } from "../ipc/runtime";
 import { ago } from "../lib/ago";
-import { bool, str } from "../lib/settings";
+import { bool, num, str } from "../lib/settings";
 
 export const PERMISSIONS_TABS = ["mode", "capabilities", "privacy"] as const;
 type Tab = (typeof PERMISSIONS_TABS)[number];
@@ -413,6 +414,7 @@ const WITH_OPTIONS: ReadonlySet<Capability> = new Set<Capability>([
   "screen-awareness",
   "computer-use",
   "browser-pages",
+  "realtime-voice",
 ]);
 
 const BADGE_TONE: Record<Badge, "success" | "accent" | "warning" | "neutral"> = {
@@ -596,6 +598,50 @@ function ListEditor({
   );
 }
 
+/** Realtime voice's options (BRAINS §8, BRAIN-33): which service, and when a quiet session ends. */
+function RealtimeOptions({ settings, save }: { settings: Settings; save: (p: Settings) => void }) {
+  const { t } = useTranslation();
+  const realtime = field(settings.brains, "realtime");
+  const set = (key: string, value: unknown) => save({ brains: { realtime: { [key]: value } } });
+  const provider = oneOf(field(realtime, "provider"), ["", "openai", "gemini"] as const) ?? "";
+  const silence = String(num(field(realtime, "silence-seconds"), 15));
+  return (
+    <Group>
+      <Row
+        title={t("permissions.rt.provider")}
+        subtitle={t("permissions.rt.providerHint")}
+        end={
+          <Select<string>
+            label={t("permissions.rt.provider")}
+            value={provider || "auto"}
+            onChange={(v) => set("provider", v === "auto" ? "" : v)}
+            items={[
+              { value: "auto", label: t("permissions.rt.auto") },
+              { value: "openai", label: "OpenAI Realtime" },
+              { value: "gemini", label: "Gemini Live" },
+            ]}
+          />
+        }
+      />
+      <Row
+        title={t("permissions.rt.silence")}
+        subtitle={t("permissions.rt.silenceHint")}
+        end={
+          <Select<string>
+            label={t("permissions.rt.silence")}
+            value={silence}
+            onChange={(v) => set("silence-seconds", Number(v))}
+            items={["10", "15", "30", "60"].map((s) => ({
+              value: s,
+              label: t("permissions.rt.seconds", { count: Number(s) }),
+            }))}
+          />
+        }
+      />
+    </Group>
+  );
+}
+
 function AppLists({ scope, settings, save }: { scope: string; settings: Settings; save: (p: Settings) => void }) {
   const { t } = useTranslation();
   const lists = settings.tools?.[scope];
@@ -740,7 +786,15 @@ function CapabilityOptions({
     case "ui-automation":
       return <AppLists scope="ui-automation-apps" settings={settings} save={save} />;
     case "computer-use":
-      return <AppLists scope="computer-use-apps" settings={settings} save={save} />;
+      return (
+        <ComputerUseOptions
+          settings={settings}
+          save={save}
+          apps={<AppLists scope="computer-use-apps" settings={settings} save={save} />}
+        />
+      );
+    case "realtime-voice":
+      return <RealtimeOptions settings={settings} save={save} />;
     case "browser-pages":
       return (
         <>
@@ -959,6 +1013,18 @@ function PrivacyTab() {
               label={t("permissions.privacy.transcripts")}
               checked={privacy["debug-transcripts"] === true}
               onChange={(v) => save({ privacy: { "debug-transcripts": v } })}
+            />
+          }
+        />
+        <Row
+          icon="refresh"
+          title={t("permissions.privacy.catalogs")}
+          subtitle={t("permissions.privacy.catalogsHint")}
+          end={
+            <Switch
+              label={t("permissions.privacy.catalogs")}
+              checked={privacy["catalog-updates"] !== false}
+              onChange={(v) => save({ privacy: { "catalog-updates": v } })}
             />
           }
         />

@@ -8,6 +8,7 @@ use kivo_ipc::infer::{
 };
 use kivo_ipc::{Peer, RpcError};
 use kivo_voice::moonshine::{self, Moonshine};
+use kivo_voice::parakeet::{self, Parakeet};
 use kivo_voice::{SttEngine, SttEvent, SttOptions, VoiceError};
 use std::path::Path;
 use std::sync::mpsc;
@@ -84,7 +85,7 @@ fn user_error(e: &VoiceError) -> RpcError {
 }
 
 fn run(rx: &mpsc::Receiver<Command>, peer: &Peer, tokens: &Tokens) {
-    let mut engine: Option<Moonshine> = None;
+    let mut engine: Option<Box<dyn SttEngine>> = None;
     while let Ok(command) = rx.recv() {
         match command {
             Command::Load { load, reply } => {
@@ -99,6 +100,31 @@ fn run(rx: &mpsc::Receiver<Command>, peer: &Peer, tokens: &Tokens) {
                 let loaded = match (load.engine.as_str(), &load.dir) {
                     (id, Some(dir)) if moonshine::variant(id).is_some() => {
                         Moonshine::load(Path::new(dir), load.threads.max(1))
+                            .map(|e| Box::new(e) as Box<dyn SttEngine>)
+                    }
+                    (id, _) if kivo_voice::cloud::provider(id).is_some() => load
+                        .cloud
+                        .as_ref()
+                        .ok_or_else(|| VoiceError::Engine(format!("{id}: no key")))
+                        .and_then(|c| {
+                            kivo_voice::cloud::CloudStt::new(
+                                id,
+                                access(c),
+                                load.language.as_deref().unwrap_or("en"),
+                            )
+                        })
+                        .map(|e| Box::new(e) as Box<dyn SttEngine>),
+                    (kivo_voice::whisper::MODEL_ID, Some(dir)) => {
+                        kivo_voice::whisper::Whisper::load_on(
+                            Path::new(dir),
+                            load.threads.max(1),
+                            device(&load),
+                        )
+                        .map(|e| Box::new(e) as Box<dyn SttEngine>)
+                    }
+                    (parakeet::MODEL_ID, Some(dir)) => {
+                        Parakeet::load_on(Path::new(dir), load.threads.max(1), device(&load))
+                            .map(|e| Box::new(e) as Box<dyn SttEngine>)
                     }
                     (other, _) => Err(VoiceError::Unavailable(format!(
                         "the {other} speech recognizer"
@@ -158,7 +184,7 @@ fn run(rx: &mpsc::Receiver<Command>, peer: &Peer, tokens: &Tokens) {
 
 /// Runs one utterance until it is finished or cancelled.
 fn utterance(
-    engine: &mut Moonshine,
+    engine: &mut Box<dyn SttEngine>,
     start: &SttStart,
     cancel: CancellationToken,
     rx: &mpsc::Receiver<Command>,
@@ -238,4 +264,21 @@ fn utterance(
         }
     }
     report(peer, &id, Residency::Idle);
+}
+
+/// The worker's view of a cloud engine's access.
+pub fn access(load: &kivo_ipc::infer::CloudLoad) -> kivo_voice::cloud::CloudAccess {
+    kivo_voice::cloud::CloudAccess {
+        key: load.key.clone(),
+        base_url: load.base_url.clone(),
+        region: load.region.clone(),
+    }
+}
+
+/// Where the runtime's GPU policy says to run (PLAN-09).
+fn device(load: &kivo_ipc::infer::ModelLoad) -> kivo_voice::accel::Device {
+    load.gpu.map_or(
+        kivo_voice::accel::Device::Cpu,
+        kivo_voice::accel::Device::Gpu,
+    )
 }

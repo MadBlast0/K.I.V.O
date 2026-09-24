@@ -783,6 +783,17 @@ function ProfileSheet({
           onChange={(e) => setDraft({ ...draft, maxContext: e.target.value ? Number(e.target.value) : null })}
           aria-label={t("brains.maxContext")}
         />
+        <Row
+          title={t("brains.realtimeProfile")}
+          subtitle={t("brains.realtimeProfileHint")}
+          end={
+            <Switch
+              label={t("brains.realtimeProfile")}
+              checked={draft.realtime ?? false}
+              onChange={(v) => setDraft({ ...draft, realtime: v })}
+            />
+          }
+        />
       </div>
       <div className="k-brains__sheet-actions">
         <Button variant="primary" onClick={() => void save()}>

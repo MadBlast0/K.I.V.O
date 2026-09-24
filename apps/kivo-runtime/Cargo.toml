@@ -8,6 +8,8 @@ license.workspace = true
 publish = false
 
 [dependencies]
+ed25519-dalek.workspace = true
+lewton.workspace = true
 kivo-audio = { path = "../../crates/kivo-audio" }
 kivo-brain = { path = "../../crates/kivo-brain" }
 kivo-core.workspace = true

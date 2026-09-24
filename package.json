@@ -16,6 +16,7 @@
     "bench:data": "node scripts/bench-data.mjs",
     "lint": "pnpm --filter kivo-app lint",
     "format:check": "pnpm --filter kivo-app format:check",
-    "test": "pnpm --filter kivo-app test"
+    "test": "pnpm --filter kivo-app test",
+    "catalog:sign": "node scripts/catalog-sign.mjs"
   }
 }

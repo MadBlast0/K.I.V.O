@@ -110,12 +110,48 @@ impl Engine {
         self.authorize_spec(tool.spec(), assessed, call)
     }
 
+    /// `authorize_call` for a step of work the user already approved as a whole (computer use,
+    /// CAP-10): `task_grants` bound what it may do.
+    pub(super) fn authorize_with(
+        &self,
+        tool: &dyn kivo_tools::Tool,
+        call: &mut ToolCall,
+        task_grants: Option<&[kivo_security::Grant]>,
+    ) -> Decision {
+        if task_grants.is_none() {
+            return self.authorize_call(tool, call);
+        }
+        if let Err(e) = tool.hard_limit(&call.args) {
+            return Decision::Deny(kivo_security::Denial {
+                code: kivo_security::DenyCode::HardLimit,
+                message: e.message,
+            });
+        }
+        for t in tool.targets(&call.args) {
+            if !call.targets.contains(&t) {
+                call.targets.push(t);
+            }
+        }
+        let assessed = tool.assess(&call.args, call.initiated_by);
+        self.authorize_inner(tool.spec(), assessed, call, task_grants)
+    }
+
     /// `authorize_call` for a spec without a registered tool (an agent's request).
     pub(super) fn authorize_spec(
         &self,
         spec: &kivo_core::tool::ToolSpec,
         assessed: Risk,
         call: &mut ToolCall,
+    ) -> Decision {
+        self.authorize_inner(spec, assessed, call, None)
+    }
+
+    fn authorize_inner(
+        &self,
+        spec: &kivo_core::tool::ToolSpec,
+        assessed: Risk,
+        call: &mut ToolCall,
+        task_grants: Option<&[kivo_security::Grant]>,
     ) -> Decision {
         let taint = self.taint();
         let tainted = matches!(taint, Taint::Tainted(_));
@@ -156,7 +192,7 @@ impl Engine {
                 tools: &config.tools,
                 privacy: config.privacy.mode,
                 assessed: Some(assessed),
-                task_grants: None,
+                task_grants,
             },
         )
     }
@@ -221,6 +257,7 @@ impl Engine {
             allow_always: false,
             plan: true,
             hello: strength == Strength::Strong && self.verifier.available(),
+            watch: false,
         }
     }
 

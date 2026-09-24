@@ -4,6 +4,8 @@
 
 /// The only dependencies `kivo-core` may have.
 const ALLOWED: &[&str] = &[
+    // Dates, times and time zones for routine schedules (ROUT-11): pure computation.
+    "jiff",
     "serde",
     "serde_json",
     "thiserror",

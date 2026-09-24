@@ -1402,6 +1402,36 @@
   place-items: center;
   color: var(--isl-2);
 }
+/* A realtime conversation (BRAIN-33): LIVE with a softly pulsing dot and its clock. */
+.k-island__chip--live {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #ff8a80;
+  font-variant-numeric: tabular-nums;
+}
+.k-island__live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ff5147;
+  animation: k-live-pulse 1.6s ease-in-out infinite;
+}
+@keyframes k-live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .k-island__live-dot {
+    animation: none;
+  }
+}
+
 button.k-island__chip {
   border: 0;
   color: inherit;
@@ -2561,4 +2591,239 @@ button.k-island__chip {
   padding: 5px 2px;
   border-block-end: 1px solid var(--sep);
   font-size: 12.5px;
+}
+
+/* Cloud speech services on the Voice page (VOICE-10/11). */
+.k-cloud-engines {
+  margin-top: 12px;
+}
+.k-cloud-engines > summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+  padding: 6px 2px;
+}
+.k-cloud-engines__key {
+  padding: 4px 16px 12px 56px;
+}
+
+/* The diagnostics report, shown in full before it's saved (ARCH-40). */
+.k-report {
+  margin: 0;
+  max-height: 50vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-2);
+  background: var(--fill);
+  border-radius: var(--r-m);
+  padding: 10px 12px;
+}
+.k-report:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 2px;
+}
+
+/* The memory graph (CONV-25): quiet lines and dots; hover or focus brings out a note's neighbours. */
+.k-graph {
+  margin: 12px 0 0;
+  background: var(--group);
+  border-radius: var(--r-l);
+  box-shadow: var(--shadow);
+  padding: 8px;
+}
+.k-graph svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.k-graph__edges line {
+  stroke: var(--border);
+  stroke-width: 1.2;
+  transition:
+    stroke 160ms var(--ease-out, ease),
+    opacity 160ms var(--ease-out, ease);
+}
+.k-graph__edges line.is-tag {
+  stroke-dasharray: 2 3;
+}
+.k-graph__edges line.is-on {
+  stroke: var(--acc);
+  stroke-width: 1.6;
+}
+.k-graph__edges line.is-dim,
+.k-graph__node.is-dim {
+  opacity: 0.25;
+}
+.k-graph__node {
+  cursor: pointer;
+  outline: none;
+  transition: opacity 160ms var(--ease-out, ease);
+}
+.k-graph__hit {
+  fill: transparent;
+}
+.k-graph__dot {
+  fill: var(--text-3);
+  transition: fill 160ms var(--ease-out, ease);
+}
+.k-graph__node--person .k-graph__dot,
+.k-graph__node--about .k-graph__dot {
+  fill: var(--acc);
+}
+.k-graph__node--workspace .k-graph__dot,
+.k-graph__node--decisions .k-graph__dot {
+  fill: var(--green);
+}
+.k-graph__node--tag .k-graph__dot {
+  fill: var(--group);
+  stroke: var(--text-3);
+  stroke-width: 1.4;
+}
+.k-graph__node.is-on .k-graph__dot {
+  fill: var(--acc);
+  stroke: var(--acc);
+}
+.k-graph__node:focus-visible .k-graph__hit {
+  stroke: var(--acc);
+  stroke-width: 2;
+}
+.k-graph__node text {
+  font-size: 11px;
+  fill: var(--text-2);
+  pointer-events: none;
+}
+.k-graph__node.is-on text {
+  fill: var(--text);
+  font-weight: 600;
+}
+.k-graph figcaption {
+  font-size: 12px;
+  color: var(--text-2);
+  padding: 4px 8px 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .k-graph__edges line,
+  .k-graph__node,
+  .k-graph__dot {
+    transition: none;
+  }
+}
+
+/* A dialog's stacked fields. */
+.k-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Pointing at a control (UX-39): the arrow turns toward it and pulses twice. */
+.k-island__point {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--acc);
+  color: #fff;
+  animation: k-point-nudge 900ms var(--ease-out, ease) 2;
+}
+.k-island__point[data-dir="down"] svg {
+  transform: rotate(180deg);
+}
+.k-island__point[data-dir="left"] svg {
+  transform: rotate(-90deg);
+}
+.k-island__point[data-dir="right"] svg {
+  transform: rotate(90deg);
+}
+@keyframes k-point-nudge {
+  0%,
+  100% {
+    scale: 1;
+  }
+  50% {
+    scale: 1.14;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .k-island__point {
+    animation: none;
+  }
+}
+
+/* The Orb companion (UX-38): the orb floats above the card on the Island's black. */
+.k-island-orb {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+}
+.k-island-orb__orb {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: #000;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.55);
+  cursor: grab;
+}
+.k-orb-gl {
+  display: block;
+}
+.k-island--card {
+  border-radius: 20px;
+}
+
+/* The install sheet (DISC-07, DIST-14): each step, its command, and its output folded away. */
+.k-install {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.k-install__step {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.k-install__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.k-install__step p {
+  margin: 0;
+}
+.k-install__command {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--fill);
+  border-radius: var(--r-m);
+  padding: 6px 8px;
+  overflow-wrap: anywhere;
+}
+.k-install__output summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.k-install__output pre {
+  margin: 6px 0 0;
+  max-height: 160px;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  white-space: pre-wrap;
+  background: var(--fill);
+  border-radius: var(--r-m);
+  padding: 6px 8px;
 }

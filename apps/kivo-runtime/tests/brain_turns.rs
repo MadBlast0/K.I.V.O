@@ -1044,6 +1044,44 @@ async fn the_control_centers_brain_requests() {
         .await
         .unwrap();
 
+    // BRAIN-11: a custom OpenAI-compatible endpoint needs its address, has its key tested like
+    // any other, and counts as a cloud brain (privacy mode applies to it).
+    assert!(
+        call(
+            method::BRAINS_CONNECT,
+            json!({"id": "custom-mybox", "name": "My box"})
+        )
+        .await
+        .is_err(),
+        "no address, no brain"
+    );
+    call(
+        method::BRAINS_CONNECT,
+        json!({"id": "custom-mybox", "name": "My box", "baseUrl": format!("{}/v1", api.url)}),
+    )
+    .await
+    .unwrap();
+    let custom = call(
+        method::BRAINS_SET_KEY,
+        json!({"id": "custom-mybox", "key": "sk-good-123"}),
+    )
+    .await
+    .unwrap();
+    assert_eq!(custom["health"]["state"], "ready");
+    let list = call(method::BRAINS_LIST, Value::Null).await.unwrap();
+    let mybox = list["connected"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|b| b["id"] == "custom-mybox")
+        .unwrap()
+        .clone();
+    assert_eq!(mybox["name"], "My box");
+    assert_eq!(mybox["privacy"], "cloud");
+    call(method::BRAINS_DISCONNECT, json!({"id": "custom-mybox"}))
+        .await
+        .unwrap();
+
     // Chat: a thread, three exchanges, then "Compact now" (CONV-06) and a stated preference.
     let b = brain(
         "anthropic",

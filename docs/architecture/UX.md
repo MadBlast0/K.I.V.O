@@ -261,8 +261,8 @@ real runtime data over IPC, not mockup data.
 - [x] **UX-13** · M4 · Draggable, position remembered per monitor; setting Top center (default) / Bottom center / Remember drag (§2) → done: the Island is dragged by its card; the spot is remembered per monitor (`overlay.spots`, `island.moved`) and Settings → Island offers Top center (default) / Bottom center / Where I dragged it · verified: `place_top_bottom_and_remembered_spots` (overlay placement), Settings Island test (2026-09-23)
 - [x] **UX-14** · M4 · Title-bar overlap: shifts down by the title-bar height while only listening (§2) → done: the foreground window's title bar or tab strip (DWM caption-button height, else system metrics) is sent with the turn; while only listening, an Island over it moves just below · verified: `listening_moves_below_a_title_bar_only_while_listening` (2026-09-23)
 - [x] **UX-15** · M5 · Live activities (media, timer, download, agent progress), each source configurable, off in fullscreen (§2) → done: the collapsed Island shows timers (countdown), downloads, agent progress and, after a media request, the track; each source has a switch in Settings; hidden over fullscreen apps, games and presentations · verified: `a_media_command_shows_the_track_for_a_moment`, Island activity test, `activities_hide_over_fullscreen_apps_games_and_presentations` (2026-09-23)
-- [ ] **UX-16** · M8 · Optional edge glow (2–4 px, ~400 ms on wake, off by default), only if the M0 power measurement is acceptable (§2)
-- [ ] **UX-17** · M8 · Overlay style setting: Pill + card / Pill only / Card only / Off (§5)
+- [~] **UX-16** · M8 · Optional edge glow (2–4 px, ~400 ms on wake, off by default), only if the M0 power measurement is acceptable (§2) → partial: the wake glow — a click-through window (`glow.rs`, `glow.html`) draws a 3 px edge glow for ~400 ms on wake on the Island's monitor, off by default (Settings → Island "Wake glow") · verified: `wakes`/`should_glow` tests, glow page test · missing: the M0 power measurement the spec makes it conditional on (bench runs deferred by the owner)
+- [x] **UX-17** · M8 · Overlay style setting: Pill + card / Pill only / Card only / Off (§5) → done: Settings → Island "What it shows": Pill + card / Pill only / Card only / Off, applied to every state by `withStyle()` · verified: Island tests, Settings test
 
 **Control Center (§3)**
 
@@ -298,8 +298,8 @@ real runtime data over IPC, not mockup data.
 
 **Companion styles (§6)**
 
-- [ ] **UX-38** · M8 · Companion style setting Pill (default) / Orb (WebGL or Rive) / Character (Rive) / Hidden; all render the same `SessionState`, zero frames at idle (§6)
-- [ ] **UX-39** · M8 · Pointing: the companion moves to UIA bounds on the target monitor without covering the target (§6, plan §141)
+- [~] **UX-38** · M8 · Companion style setting Pill (default) / Orb (WebGL or Rive) / Character (Rive) / Hidden; all render the same `SessionState`, zero frames at idle (§6) → partial: Pill (default), Orb (a WebGL shader, `OrbGl.tsx`, drawing at 30 fps only while KIVO is active and not at all at idle, with a static fallback) and Hidden, all from the same `SessionState` · verified: OrbGl test, Island tests · missing: Character (needs a Rive character asset; none is bundled)
+- [x] **UX-39** · M8 · Pointing: the companion moves to UIA bounds on the target monitor without covering the target (§6, plan §141) → done: `uia.point_at` finds the control by name or text on the target app's UI Automation tree; the Island moves beside its bounds on that monitor without covering it (`overlay::beside`), shows an arrow toward it, and KIVO says where it is · verified: `kivo_points_at_a_control_and_says_where_it_is`, the UIA journey's real Export bounds on the dummy app, overlay placement test, Island tests
 
 **Proactive speech (§7)**
 

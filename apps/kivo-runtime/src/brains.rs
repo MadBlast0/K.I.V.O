@@ -123,6 +123,12 @@ pub struct Brains {
     utc_offset: i32,
     /// When each provider's connection was last warmed (PLAN-10).
     warmed: Mutex<HashMap<String, Instant>>,
+    /// A realtime provider put in directly (tests, the scripted rig); the capability and the
+    /// privacy mode still decide whether it is used.
+    realtime: RwLock<Option<Arc<dyn kivo_brain::realtime::RealtimeProvider>>>,
+    /// A computer-use provider put in directly (tests, the scripted rig); cloud vision and the
+    /// privacy mode still decide whether it is used.
+    computer: RwLock<Option<Arc<dyn kivo_brain::computer::ComputerUseProvider>>>,
 }
 
 impl Brains {
@@ -139,6 +145,8 @@ impl Brains {
             prices: RwLock::new(PriceTable::bundled()),
             utc_offset,
             warmed: Mutex::default(),
+            realtime: RwLock::default(),
+            computer: RwLock::default(),
         };
         brains.load_prices();
         brains
@@ -290,6 +298,19 @@ impl Brains {
     /// Adds a provider directly (tests and the scripted rig).
     pub fn insert(&self, provider: Arc<dyn BrainProvider>) {
         write(&self.injected).insert(provider.info().id, provider);
+    }
+
+    /// Puts in a computer-use provider (tests, the scripted rig), used instead of the connections'.
+    pub fn set_computer(
+        &self,
+        provider: Option<Arc<dyn kivo_brain::computer::ComputerUseProvider>>,
+    ) {
+        *write(&self.computer) = provider;
+    }
+
+    /// Puts in a realtime provider (tests, the scripted rig), used instead of the connections'.
+    pub fn set_realtime(&self, provider: Option<Arc<dyn kivo_brain::realtime::RealtimeProvider>>) {
+        *write(&self.realtime) = provider;
     }
 
     pub fn provider(&self, id: &str) -> Option<Arc<dyn BrainProvider>> {
@@ -687,6 +708,130 @@ impl Brains {
         out
     }
 
+    /// A computer-use model (CAP-09): an enabled Anthropic, OpenAI or Gemini connection with a
+    /// saved key, in that order, when screenshots may go to the cloud (privacy and the screen
+    /// option). The key is read here and handed to the adapter only.
+    pub fn computer_provider(
+        &self,
+        config: &KivoConfig,
+    ) -> Option<Arc<dyn kivo_brain::computer::ComputerUseProvider>> {
+        use kivo_brain::computer::{AnthropicComputer, GeminiComputer, OpenAiComputer};
+        if !kivo_security::privacy::cloud_vision(&config.privacy) || !config.tools.cloud_vision {
+            return None;
+        }
+        if let Some(injected) = read(&self.computer).clone() {
+            return Some(injected);
+        }
+        for id in ["anthropic", "openai", "gemini"] {
+            let Some(c) = config
+                .brains
+                .connections
+                .iter()
+                .find(|c| c.id == id && c.enabled && !c.key.is_empty())
+            else {
+                continue;
+            };
+            let Some(key) = parse_handle(&c.key).and_then(|h| self.secrets.get(&h).ok().flatten())
+            else {
+                continue;
+            };
+            let base = c.base_url.trim_end_matches('/').to_owned();
+            let http = self.http.clone();
+            let provider: Arc<dyn kivo_brain::computer::ComputerUseProvider> = match id {
+                "anthropic" => {
+                    let mut p = AnthropicComputer::new(key, http);
+                    if !base.is_empty() {
+                        p.base_url = base;
+                    }
+                    Arc::new(p)
+                }
+                "openai" => {
+                    let mut p = OpenAiComputer::new(key, http);
+                    if !base.is_empty() {
+                        p.base_url = base;
+                    }
+                    Arc::new(p)
+                }
+                _ => {
+                    let mut p = GeminiComputer::new(key, http);
+                    if !base.is_empty() {
+                        p.base_url = format!("{base}/v1beta");
+                    }
+                    Arc::new(p)
+                }
+            };
+            return Some(provider);
+        }
+        None
+    }
+
+    /// The realtime conversation brain (BRAINS §8, BRAIN-33): OpenAI Realtime or Gemini Live on
+    /// a connected key (the settings' choice first), only with the Realtime voice capability on
+    /// and cloud brains allowed by the privacy mode.
+    pub fn realtime_provider(
+        &self,
+        config: &KivoConfig,
+    ) -> Option<Arc<dyn kivo_brain::realtime::RealtimeProvider>> {
+        use kivo_brain::realtime::{GeminiLive, OpenAiRealtime};
+        if !config
+            .capabilities
+            .enabled(kivo_core::Capability::RealtimeVoice)
+            || !kivo_security::privacy::cloud_brains(&config.privacy, &config.capabilities)
+        {
+            return None;
+        }
+        if let Some(injected) = read(&self.realtime).clone() {
+            return Some(injected);
+        }
+        let chosen = config.brains.realtime.provider.as_str();
+        let order: Vec<&str> = if chosen.is_empty() {
+            vec!["openai", "gemini"]
+        } else {
+            vec![chosen]
+        };
+        for id in order {
+            let Some(c) = config
+                .brains
+                .connections
+                .iter()
+                .find(|c| c.id == id && c.enabled && !c.key.is_empty())
+            else {
+                continue;
+            };
+            let Some(key) = parse_handle(&c.key).and_then(|h| self.secrets.get(&h).ok().flatten())
+            else {
+                continue;
+            };
+            // A custom address (a proxy) keeps its host; the scheme becomes WebSocket.
+            let ws_base = c
+                .base_url
+                .trim_end_matches('/')
+                .trim_end_matches("/v1beta")
+                .trim_end_matches("/v1")
+                .replacen("https://", "wss://", 1)
+                .replacen("http://", "ws://", 1);
+            let provider: Arc<dyn kivo_brain::realtime::RealtimeProvider> = match id {
+                "openai" => {
+                    let mut p = OpenAiRealtime::new(key);
+                    if !ws_base.is_empty() {
+                        p.ws_base = ws_base;
+                    }
+                    Arc::new(p)
+                }
+                "gemini" => {
+                    let mut p = GeminiLive::new(key);
+                    if !ws_base.is_empty() {
+                        p.ws_base = ws_base;
+                    }
+                    Arc::new(p)
+                }
+                _ => continue,
+            };
+            return Some(provider);
+        }
+        None
+    }
+
     // Keys (BRAIN-18): write-only from the UI, tested by the runtime.
 
     /// Stores a key and returns the handle to put in the connection.
@@ -717,6 +862,8 @@ impl Brains {
             prices: RwLock::new(PriceTable::default()),
             utc_offset: 0,
             warmed: Mutex::default(),
+            realtime: RwLock::default(),
+            computer: RwLock::default(),
         };
         let connection = BrainConnection {
             id: provider.to_owned(),

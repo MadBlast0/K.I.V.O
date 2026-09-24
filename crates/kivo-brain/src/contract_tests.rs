@@ -116,6 +116,46 @@ async fn openai_streams_text_tool_calls_and_usage() {
     assert!(brain.health().await.is_ready());
 }
 
+/// BRAIN-11: Groq, Mistral, DeepSeek and xAI through the OpenAI-compatible adapter, each with its
+/// own quirks: Mistral refuses `stream_options` and reports usage in its last chunk; DeepSeek and
+/// xAI stream reasoning as `reasoning_content`; all take `max_tokens`.
+#[tokio::test]
+async fn groq_mistral_deepseek_and_xai_speak_the_compatible_dialect() {
+    let server = MockServer::start(|r| {
+        if r.body.get("stream_options").is_some() && r.path.starts_with("/mistral") {
+            return Reply::json(
+                422,
+                &json!({ "detail": [{ "type": "extra_forbidden", "loc": ["body", "stream_options"] }] }),
+            );
+        }
+        Reply::sse(&[
+            r#"data: {"choices":[{"index":0,"delta":{"reasoning_content":"Think."}}]}"#,
+            r#"data: {"choices":[{"index":0,"delta":{"content":"Hi."}}]}"#,
+            r#"data: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":2}}"#,
+            "data: [DONE]",
+        ])
+    })
+    .await;
+    for id in ["groq", "mistral", "deepseek", "xai"] {
+        let entry = crate::catalog::entry(id).expect("in the catalog");
+        let config =
+            OpenAiConfig::compatible(entry.id, entry.name, format!("{}/{id}/v1", server.url));
+        let brain = OpenAi::new(config, Some(key()), Http::new());
+        let got = collect(brain.chat(request(), CancellationToken::new())).await;
+        assert_eq!(got.error, None, "{id}");
+        assert_eq!(got.text, "Hi.", "{id}: reasoning is never text");
+        assert_eq!(got.usage.output_tokens, 2, "{id}");
+        let sent = server.requests().pop().unwrap();
+        assert_eq!(sent.path, format!("/{id}/v1/chat/completions"));
+        assert_eq!(sent.body["max_tokens"], 1024, "{id}");
+        assert_eq!(
+            sent.body.get("stream_options").is_some(),
+            id != "mistral",
+            "{id}"
+        );
+    }
+}
+
 #[tokio::test]
 async fn reasoning_is_reported_apart_and_never_as_text() {
     let server = MockServer::start(|_| {

@@ -251,6 +251,14 @@ impl Handler for Rpc {
                     });
                     Ok(Value::Null)
                 }
+                method::SESSION_COMPUTER_PAUSE => {
+                    Ok(serde_json::json!({ "paused": engine.computer_pause() }))
+                }
+                method::SESSION_LIVE => engine
+                    .start_live()
+                    .await
+                    .map(|()| Value::Null)
+                    .map_err(refuse),
                 method::SESSION_UNDO => engine
                     .undo_last()
                     .await
@@ -439,6 +447,16 @@ impl Handler for Rpc {
                     models.apply_engines(&saved);
                     engine.settings_changed(&saved);
                     lifecycle.apply_autostart(&saved);
+                    ok(&saved)
+                }
+                method::MODE_SET => {
+                    let mode: kivo_core::config::ProductMode =
+                        serde_json::from_value(params["mode"].clone())
+                            .map_err(RpcError::invalid_params)?;
+                    let engine = Arc::clone(&engine);
+                    let saved = tokio::task::spawn_blocking(move || engine.switch_mode(mode))
+                        .await
+                        .map_err(|e| RpcError::new(RpcError::INTERNAL, e.to_string()))?;
                     ok(&saved)
                 }
                 method::SETTINGS_SET => {

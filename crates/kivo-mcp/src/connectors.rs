@@ -15,6 +15,8 @@ pub enum Kind {
     Local,
     /// Always there.
     BuiltIn,
+    /// Signs in with KIVO's own OAuth app (INT-05): Google, Microsoft.
+    Native,
 }
 
 /// One connector in the directory.
@@ -39,6 +41,14 @@ pub struct Connector {
     pub app: Option<String>,
     #[serde(default)]
     pub badges: Vec<String>,
+    /// A native connector's OAuth provider (`google`, `microsoft`), the one scope it asks for,
+    /// and the prefix of its tools.
+    #[serde(default)]
+    pub provider: Option<String>,
+    #[serde(default)]
+    pub scope: Option<String>,
+    #[serde(default)]
+    pub tools: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -86,6 +96,11 @@ mod tests {
                     assert!(url.starts_with("https://"), "{url}");
                 }
                 Kind::Local => assert!(c.detect.is_some(), "{}", c.id),
+                Kind::Native => assert!(
+                    c.provider.is_some() && c.scope.is_some() && c.tools.is_some(),
+                    "{}",
+                    c.id
+                ),
                 Kind::BuiltIn => {}
             }
             assert!(

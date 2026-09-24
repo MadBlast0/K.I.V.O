@@ -34,6 +34,10 @@ pub struct Models {
     voice_wers: Mutex<(std::collections::BTreeMap<String, f64>, i64)>,
     /// The last download failure per model, until it is tried again (UX-61 "Error").
     errors: Mutex<HashMap<String, String>>,
+    /// Where the cloud speech services' keys are (Credential Manager; VOICE-10/11).
+    secrets: Mutex<Option<Arc<dyn kivo_platform::Secrets>>>,
+    /// The profile and GPU choice the engines were last configured with.
+    applied: Mutex<Option<(crate::profiles::Resolved, Option<u32>)>>,
 }
 
 impl Models {
@@ -48,6 +52,8 @@ impl Models {
             measurements: Mutex::default(),
             voice_wers: Mutex::default(),
             errors: Mutex::default(),
+            secrets: Mutex::new(None),
+            applied: Mutex::new(None),
         }
     }
 
@@ -62,6 +68,160 @@ impl Models {
 
     pub fn set_system(&self, system: Arc<dyn kivo_platform::SystemInfo>) {
         *lock(&self.system) = Some(system);
+    }
+
+    /// Where a GPU-capable recognizer should run now (PLAN-09): asks the PC how busy its GPU is.
+    /// What the PC is doing, for the profile and the GPU policy: its snapshot, and the GPU's load
+    /// when the recognizer `stt` could use the GPU (reading it takes a moment).
+    fn sample(&self, stt: Option<&str>) -> (Option<kivo_platform::SystemSnapshot>, Option<u8>) {
+        let Some(system) = lock(&self.system).clone() else {
+            return (None, None);
+        };
+        let load = stt
+            .filter(|id| crate::gpu::can_use_gpu(id))
+            .and_then(|_| system.gpu_load());
+        (system.snapshot().ok(), load)
+    }
+
+    /// The profile in effect and where the recognizer `stt` runs, from a sample of the PC.
+    fn decide(
+        &self,
+        config: &KivoConfig,
+        stt: Option<&str>,
+        machine: Option<&kivo_platform::SystemSnapshot>,
+        gpu_load: Option<u8>,
+    ) -> (crate::profiles::Resolved, Option<u32>) {
+        let resolved = crate::profiles::resolve(config, machine);
+        let on_gpu_now = self.infer.configured().gpu.is_some();
+        let gpu = match (stt, machine) {
+            (Some(id), Some(m)) if resolved.gpu && crate::gpu::can_use_gpu(id) => {
+                crate::gpu::choose(resolved.profile, m, gpu_load, on_gpu_now)
+            }
+            _ => None,
+        };
+        (resolved, gpu)
+    }
+
+    /// The profile in effect right now (the Performance page).
+    pub fn effective_profile(&self, config: &KivoConfig) -> kivo_core::config::PerformanceProfile {
+        lock(&self.applied).map_or_else(
+            || crate::profiles::resolve(config, None).profile,
+            |(r, _)| r.profile,
+        )
+    }
+
+    /// Checks the profile and the GPU policy again (PLAN-08, VOICE-35): Auto follows a game in
+    /// front or running on battery, and the recognizer leaves the GPU for games and busy GPUs and
+    /// comes back once it's free. Returns whether anything changed.
+    pub fn recheck(self: &Arc<Self>, config: &KivoConfig) -> bool {
+        let stt = self.infer.configured().stt.map(|(id, _)| id);
+        let (machine, load) = self.sample(stt.as_deref());
+        let decided = self.decide(config, stt.as_deref(), machine.as_ref(), load);
+        if lock(&self.applied).as_ref() == Some(&decided) {
+            return false;
+        }
+        tracing::info!(profile = ?decided.0.profile, gpu = ?decided.1, "speech engines adjust");
+        self.apply_with(config, machine.as_ref(), load);
+        true
+    }
+
+    /// `recheck`, by its older name (the GPU part of it, VOICE-35).
+    pub fn recheck_gpu(self: &Arc<Self>, config: &KivoConfig) -> bool {
+        self.recheck(config)
+    }
+
+    pub fn set_secrets(&self, secrets: Arc<dyn kivo_platform::Secrets>) {
+        *lock(&self.secrets) = Some(secrets);
+    }
+
+    /// How the worker reaches cloud engine `id`: the user's key for its vendor, and the Azure
+    /// region. `None` for a local engine, or when no key is saved yet.
+    pub fn cloud_access(
+        &self,
+        id: &str,
+        config: &KivoConfig,
+    ) -> Option<kivo_ipc::infer::CloudLoad> {
+        let provider = kivo_voice::cloud::provider(id)?;
+        let secrets = lock(&self.secrets).clone()?;
+        let key = secrets
+            .get(&crate::brains::key_handle(provider.vendor))
+            .ok()
+            .flatten()?;
+        Some(kivo_ipc::infer::CloudLoad {
+            key: key.expose().clone(),
+            base_url: None,
+            region: (provider.vendor == "azure-speech" && !config.voice.azure_region.is_empty())
+                .then(|| config.voice.azure_region.clone()),
+        })
+    }
+
+    fn has_key(&self, vendor: &str) -> bool {
+        lock(&self.secrets).as_ref().is_some_and(|s| {
+            s.get(&crate::brains::key_handle(vendor))
+                .ok()
+                .flatten()
+                .is_some()
+        })
+    }
+
+    /// Saves the key for cloud engine `engine`'s service after checking it with one small request
+    /// (VOICE-10/11); the Azure region goes to the settings. The key is never shown again.
+    pub async fn save_key(
+        self: &Arc<Self>,
+        engine: &str,
+        key: &str,
+        region: Option<&str>,
+    ) -> Result<(), String> {
+        let provider = kivo_voice::cloud::provider(engine)
+            .ok_or_else(|| kivo_core::text::t("voice.notCloud"))?;
+        let key = key.trim().to_owned();
+        if key.is_empty() || key.len() > 512 {
+            return Err(kivo_core::text::t("voice.badKey"));
+        }
+        let region = region
+            .map(str::trim)
+            .filter(|r| !r.is_empty())
+            .map(str::to_owned);
+        let access = kivo_voice::cloud::CloudAccess {
+            key: key.clone(),
+            base_url: None,
+            region: region.clone(),
+        };
+        let id = engine.to_owned();
+        tokio::task::spawn_blocking(move || kivo_voice::cloud::check(&id, &access))
+            .await
+            .map_err(|e| e.to_string())?
+            .map_err(|e| e.detail())?;
+        let secrets = lock(&self.secrets)
+            .clone()
+            .ok_or_else(|| "no key store".to_owned())?;
+        secrets
+            .set(
+                &crate::brains::key_handle(provider.vendor),
+                kivo_core::Secret::new(key),
+            )
+            .map_err(|e| e.to_string())?;
+        if let Some(region) = region {
+            self.core.update_config(|c| c.voice.azure_region = region);
+        }
+        self.apply_engines(&self.core.config());
+        Ok(())
+    }
+
+    /// Forgets cloud engine `engine`'s key; the engine falls back to a local one.
+    pub fn delete_key(self: &Arc<Self>, engine: &str) {
+        if let (Some(p), Some(secrets)) = (
+            kivo_voice::cloud::provider(engine),
+            lock(&self.secrets).clone(),
+        ) {
+            let _ = secrets.delete(&crate::brains::key_handle(p.vendor));
+        }
+        self.apply_engines(&self.core.config());
+    }
+
+    /// Whether cloud engine `id` can be used now: allowed by privacy, and its key saved.
+    pub fn cloud_ready(&self, id: &str, config: &KivoConfig) -> bool {
+        speech_may_use(id, config) && self.cloud_access(id, config).is_some()
     }
 
     /// Reads KIVO's latest `stt` and `tts` benchmark runs on this PC (VOICE-42).
@@ -104,6 +264,10 @@ impl Models {
         kivo_voice::engines()
             .into_iter()
             .filter(|e| {
+                // A cloud engine is ready once its key is saved.
+                if let Some(p) = kivo_voice::cloud::provider(&e.id) {
+                    return self.has_key(p.vendor);
+                }
                 e.model
                     .as_deref()
                     .is_none_or(|m| self.store.installed(m).is_some())
@@ -474,26 +638,63 @@ impl Models {
     /// UI whether KIVO can hear.
     pub fn apply_engines(self: &Arc<Self>, config: &KivoConfig) {
         let wanted = self.listening_engine(config);
-        let stt = self
-            .installed_dir(&wanted)
-            .map(|dir| (wanted.clone(), dir))
-            .filter(|(id, _)| speech_may_use(id, config));
+        let (machine, load) = self.sample(Some(&wanted));
+        self.apply_with(config, machine.as_ref(), load);
+    }
+
+    fn apply_with(
+        self: &Arc<Self>,
+        config: &KivoConfig,
+        machine: Option<&kivo_platform::SystemSnapshot>,
+        gpu_load: Option<u8>,
+    ) {
+        let wanted = self.listening_engine(config);
+        let mut cloud = std::collections::BTreeMap::new();
+        // A cloud recognizer has no model folder: its key is what it needs (VOICE-10).
+        let stt = if kivo_voice::cloud::provider(&wanted).is_some() {
+            self.cloud_access(&wanted, config)
+                .filter(|_| speech_may_use(&wanted, config))
+                .map(|access| {
+                    cloud.insert(wanted.clone(), access);
+                    (wanted.clone(), PathBuf::new())
+                })
+        } else {
+            self.installed_dir(&wanted)
+                .map(|dir| (wanted.clone(), dir))
+                .filter(|(id, _)| speech_may_use(id, config))
+        };
         let stt_fallback = self.stt_fallback(config, &wanted);
         let ready = stt.is_some() || stt_fallback.is_some();
         let tts = (!config.voice.tts_engine.is_empty())
             .then(|| config.voice.tts_engine.clone())
             .map(|id| self.tts_engine(id, config));
-        let warm_minutes = warm_minutes(config);
+        if let Some((id, _)) = &tts
+            && let Some(access) = self.cloud_access(id, config)
+        {
+            cloud.insert(id.clone(), access);
+        }
+        // The profile in effect (PLAN-08) and the GPU policy (PLAN-09).
+        let decided = self.decide(
+            config,
+            stt.as_ref().map(|(id, _)| id.as_str()),
+            machine,
+            gpu_load,
+        );
+        let (resolved, gpu) = decided;
+        *lock(&self.applied) = Some(decided);
+        let warm_minutes = resolved.warm_minutes;
         self.infer.configure(
             Engines {
                 stt,
                 stt_fallback,
                 tts,
-                threads: threads_for(config).min(
+                threads: resolved.threads.min(
                     self.recommended_threads
                         .load(std::sync::atomic::Ordering::Relaxed),
                 ),
                 language: config.general.language.clone(),
+                cloud,
+                gpu,
             },
             std::time::Duration::from_secs(warm_minutes.max(1) * 60),
         );
@@ -511,6 +712,14 @@ impl Models {
         let system = (kivo_voice::system_tts::ENGINE_ID.to_owned(), None);
         if !speech_may_use(&id, config) {
             return system;
+        }
+        // A cloud voice needs its key; without one the Windows voices speak.
+        if kivo_voice::cloud::provider(&id).is_some() {
+            return if self.cloud_access(&id, config).is_some() {
+                (id, None)
+            } else {
+                system
+            };
         }
         let needs_model = kivo_voice::engine(&id).is_some_and(|e| e.model.is_some());
         if !needs_model {
@@ -586,17 +795,7 @@ fn percent(progress: Progress) -> u8 {
 /// Threads for the speech models: half the machine, at least one, at most four (plan §128:
 /// KIVO never takes the whole CPU).
 fn threads_for(config: &KivoConfig) -> usize {
-    let cores = std::thread::available_parallelism().map_or(2, std::num::NonZero::get);
-    // The user's own limit (VOICE-49), never more than the machine has.
-    if config.performance.speech_threads > 0 {
-        return usize::from(config.performance.speech_threads).min(cores);
-    }
-    let limit = match config.performance.profile {
-        kivo_core::config::PerformanceProfile::Battery
-        | kivo_core::config::PerformanceProfile::Gaming => 2,
-        _ => 4,
-    };
-    (cores / 2).clamp(1, limit)
+    crate::profiles::resolve(config, None).threads
 }
 
 /// The privacy check for a speech engine (VOICE-07): audio and text go to a cloud engine only
@@ -614,20 +813,127 @@ fn speech_may_use(engine: &str, config: &KivoConfig) -> bool {
 /// Minutes speech models stay loaded after use (VOICE §8); none in low-memory mode, which
 /// unloads them as soon as a request is done (UX §5, General).
 pub fn warm_minutes(config: &KivoConfig) -> u64 {
-    if config.general.low_memory_mode {
-        return 0;
-    }
-    u64::from(
-        config
-            .performance
-            .stt_warm_minutes
-            .max(config.performance.tts_warm_minutes),
-    )
+    crate::profiles::resolve(config, None).warm_minutes
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_recognizer_leaves_the_gpu_for_games_and_busy_gpus() {
+        let dir = tempfile::tempdir().unwrap();
+        let core = Arc::new(Core::with_config(KivoConfig::default(), None));
+        let (infer, _events, _sender) = Infer::new(dir.path().join("no-worker.exe"));
+        let models = Arc::new(Models::new(
+            dir.path().to_path_buf(),
+            Arc::clone(&core),
+            infer.clone(),
+        ));
+        // Parakeet "installed" (a manifest with no files).
+        let mut manifest = kivo_store::models::catalog()
+            .into_iter()
+            .find(|m| m.id == kivo_voice::parakeet::MODEL_ID)
+            .unwrap();
+        manifest.files.clear();
+        let folder = dir.path().join(kivo_voice::parakeet::MODEL_ID);
+        std::fs::create_dir_all(&folder).unwrap();
+        std::fs::write(
+            folder.join("manifest.json"),
+            serde_json::to_vec(&manifest).unwrap(),
+        )
+        .unwrap();
+        let system = Arc::new(kivo_testkit::FakeSystemInfo::default());
+        system.snapshot.lock().unwrap().gpus = vec![kivo_platform::GpuInfo {
+            name: "RTX".into(),
+            vram_mb: 6_144,
+        }];
+        *system.gpu_load.lock().unwrap() = Some(5);
+        models.set_system(system.clone());
+        core.update_config(|c| c.voice.stt_engine = kivo_voice::parakeet::MODEL_ID.into());
+        models.apply_engines(&core.config());
+        assert_eq!(
+            infer.configured().stt.unwrap().0,
+            kivo_voice::parakeet::MODEL_ID
+        );
+        assert_eq!(
+            infer.configured().gpu,
+            Some(0),
+            "on the GPU while it's free"
+        );
+        // Something else keeps the GPU busy: off it (VOICE-35).
+        *system.gpu_load.lock().unwrap() = Some(80);
+        assert!(models.recheck_gpu(&core.config()));
+        assert_eq!(infer.configured().gpu, None);
+        // Still 40 %: not back yet; 10 %: back.
+        *system.gpu_load.lock().unwrap() = Some(40);
+        assert!(!models.recheck_gpu(&core.config()));
+        *system.gpu_load.lock().unwrap() = Some(10);
+        assert!(models.recheck_gpu(&core.config()));
+        assert_eq!(infer.configured().gpu, Some(0));
+        // The Gaming profile: off the GPU whatever it's doing.
+        core.update_config(|c| {
+            c.performance.profile = kivo_core::config::PerformanceProfile::Gaming
+        });
+        assert!(models.recheck_gpu(&core.config()));
+        assert_eq!(infer.configured().gpu, None);
+        // A recognizer that can't use the GPU is never moved.
+        core.update_config(|c| {
+            c.performance.profile = kivo_core::config::PerformanceProfile::Auto;
+            c.voice.stt_engine = kivo_voice::moonshine::MODEL_ID.into();
+        });
+        models.apply_engines(&core.config());
+        assert!(!models.recheck_gpu(&core.config()));
+    }
+
+    #[test]
+    fn a_cloud_voice_needs_its_key_and_the_privacy_mode() {
+        use kivo_platform::Secrets as _;
+        let dir = tempfile::tempdir().unwrap();
+        let core = Arc::new(Core::with_config(KivoConfig::default(), None));
+        let (infer, _events, _sender) = Infer::new(dir.path().join("no-worker.exe"));
+        let models = Arc::new(Models::new(
+            dir.path().to_path_buf(),
+            Arc::clone(&core),
+            infer.clone(),
+        ));
+        let secrets = Arc::new(kivo_testkit::FakeSecrets::default());
+        models.set_secrets(secrets.clone());
+        core.update_config(|c| {
+            c.voice.tts_engine = kivo_voice::cloud::ELEVENLABS.into();
+            c.capabilities.set(kivo_core::Capability::CloudBrains, true);
+        });
+        // No key yet: the Windows voices speak, and the engine isn't "ready".
+        models.apply_engines(&core.config());
+        assert_eq!(infer.configured().tts.unwrap().0, "system");
+        assert!(
+            !models
+                .ready_engines()
+                .contains(&kivo_voice::cloud::ELEVENLABS.to_owned())
+        );
+        // With a key: the cloud voice, and the worker gets the key.
+        secrets
+            .set(
+                &crate::brains::key_handle("elevenlabs"),
+                kivo_core::Secret::new("xi-key".into()),
+            )
+            .unwrap();
+        models.apply_engines(&core.config());
+        let engines = infer.configured();
+        assert_eq!(engines.tts.unwrap().0, kivo_voice::cloud::ELEVENLABS);
+        assert_eq!(engines.cloud[kivo_voice::cloud::ELEVENLABS].key, "xi-key");
+        assert!(
+            models
+                .ready_engines()
+                .contains(&kivo_voice::cloud::ELEVENLABS.to_owned())
+        );
+        // Local-only privacy: back to the Windows voices, and no key goes anywhere.
+        core.update_config(|c| c.privacy.mode = kivo_core::config::PrivacyMode::Local);
+        models.apply_engines(&core.config());
+        let engines = infer.configured();
+        assert_eq!(engines.tts.unwrap().0, "system");
+        assert!(engines.cloud.is_empty());
+    }
 
     #[test]
     fn low_memory_mode_unloads_speech_models_after_use() {

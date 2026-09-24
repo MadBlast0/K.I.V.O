@@ -22,6 +22,18 @@ use windows::core::w;
 pub struct WindowsSystemInfo;
 
 impl SystemInfo for WindowsSystemInfo {
+    fn gpu_load(&self) -> Option<u8> {
+        gpu_load()
+    }
+    fn gpu_memory(&self, pids: &[u32]) -> Option<u64> {
+        gpu_memory(pids)
+    }
+    fn networks(&self) -> Vec<String> {
+        crate::devices::networks()
+    }
+    fn usb_devices(&self) -> Vec<String> {
+        crate::devices::usb_devices()
+    }
     fn network(&self) -> Option<kivo_platform::Network> {
         use windows::Win32::NetworkManagement::IpHelper::GetNetworkConnectivityHint;
         use windows::Win32::Networking::WinSock::{
@@ -77,6 +89,155 @@ impl SystemInfo for WindowsSystemInfo {
             fullscreen_app,
             focus_mode,
         })
+    }
+}
+
+/// The busiest adapter's 3D-engine use, from the "GPU Engine" performance counters over 200 ms:
+/// each process's share summed per adapter (`luid_0x…_phys_N`), the highest adapter wins.
+fn gpu_load() -> Option<u8> {
+    use windows::Win32::System::Performance::{
+        PDH_FMT_COUNTERVALUE_ITEM_W, PDH_FMT_DOUBLE, PDH_HCOUNTER, PDH_HQUERY, PDH_MORE_DATA,
+        PdhAddEnglishCounterW, PdhCloseQuery, PdhCollectQueryData, PdhGetFormattedCounterArrayW,
+        PdhOpenQueryW,
+    };
+    // SAFETY: the query is closed on every path; buffers are sized as PDH reports.
+    unsafe {
+        let mut query = PDH_HQUERY::default();
+        if PdhOpenQueryW(None, 0, &raw mut query) != 0 {
+            return None;
+        }
+        let close = |q: PDH_HQUERY| {
+            let _ = PdhCloseQuery(q);
+        };
+        let mut counter = PDH_HCOUNTER::default();
+        if PdhAddEnglishCounterW(
+            query,
+            w!("\\GPU Engine(*engtype_3D)\\Utilization Percentage"),
+            0,
+            &raw mut counter,
+        ) != 0
+        {
+            close(query);
+            return None;
+        }
+        // Rates need two samples.
+        let _ = PdhCollectQueryData(query);
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        if PdhCollectQueryData(query) != 0 {
+            close(query);
+            return None;
+        }
+        let (mut size, mut count) = (0u32, 0u32);
+        if PdhGetFormattedCounterArrayW(
+            counter,
+            PDH_FMT_DOUBLE,
+            &raw mut size,
+            &raw mut count,
+            None,
+        ) != PDH_MORE_DATA
+        {
+            close(query);
+            return Some(0);
+        }
+        let items = (size as usize).div_ceil(std::mem::size_of::<PDH_FMT_COUNTERVALUE_ITEM_W>());
+        let mut buffer = vec![PDH_FMT_COUNTERVALUE_ITEM_W::default(); items.max(1)];
+        let status = PdhGetFormattedCounterArrayW(
+            counter,
+            PDH_FMT_DOUBLE,
+            &raw mut size,
+            &raw mut count,
+            Some(buffer.as_mut_ptr()),
+        );
+        if status != 0 {
+            close(query);
+            return None;
+        }
+        let mut per_adapter: std::collections::HashMap<String, f64> =
+            std::collections::HashMap::new();
+        for item in &buffer[..count as usize] {
+            let name = item.szName.to_string().unwrap_or_default();
+            // "pid_1234_luid_0x0000_0x0000A1B2_phys_0_eng_0_engtype_3D": the adapter part.
+            let adapter = name
+                .split("_eng_")
+                .next()
+                .and_then(|n| n.split_once("luid_"))
+                .map_or(name.clone(), |(_, rest)| rest.to_owned());
+            *per_adapter.entry(adapter).or_default() += item.FmtValue.Anonymous.doubleValue;
+        }
+        close(query);
+        let busiest = per_adapter.values().copied().fold(0.0_f64, f64::max);
+        #[allow(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "0–100"
+        )]
+        Some(busiest.clamp(0.0, 100.0).round() as u8)
+    }
+}
+
+/// The dedicated GPU memory of `pids`, from the "GPU Process Memory" counters (one instance per
+/// process and adapter, named `pid_1234_luid_…_phys_0`).
+fn gpu_memory(pids: &[u32]) -> Option<u64> {
+    use windows::Win32::System::Performance::{
+        PDH_FMT_COUNTERVALUE_ITEM_W, PDH_FMT_LARGE, PDH_HCOUNTER, PDH_HQUERY, PDH_MORE_DATA,
+        PdhAddEnglishCounterW, PdhCloseQuery, PdhCollectQueryData, PdhGetFormattedCounterArrayW,
+        PdhOpenQueryW,
+    };
+    // SAFETY: the query is closed on every path; buffers are sized as PDH reports.
+    unsafe {
+        let mut query = PDH_HQUERY::default();
+        if PdhOpenQueryW(None, 0, &raw mut query) != 0 {
+            return None;
+        }
+        let mut counter = PDH_HCOUNTER::default();
+        let ok = PdhAddEnglishCounterW(
+            query,
+            w!("\\GPU Process Memory(*)\\Dedicated Usage"),
+            0,
+            &raw mut counter,
+        ) == 0
+            && PdhCollectQueryData(query) == 0;
+        let mut total = None;
+        if ok {
+            let (mut size, mut count) = (0u32, 0u32);
+            if PdhGetFormattedCounterArrayW(
+                counter,
+                PDH_FMT_LARGE,
+                &raw mut size,
+                &raw mut count,
+                None,
+            ) == PDH_MORE_DATA
+            {
+                let items =
+                    (size as usize).div_ceil(std::mem::size_of::<PDH_FMT_COUNTERVALUE_ITEM_W>());
+                let mut buffer = vec![PDH_FMT_COUNTERVALUE_ITEM_W::default(); items.max(1)];
+                if PdhGetFormattedCounterArrayW(
+                    counter,
+                    PDH_FMT_LARGE,
+                    &raw mut size,
+                    &raw mut count,
+                    Some(buffer.as_mut_ptr()),
+                ) == 0
+                {
+                    let mut sum = 0u64;
+                    for item in &buffer[..count as usize] {
+                        let name = item.szName.to_string().unwrap_or_default();
+                        let pid = name
+                            .strip_prefix("pid_")
+                            .and_then(|r| r.split('_').next())
+                            .and_then(|p| p.parse::<u32>().ok());
+                        if pid.is_some_and(|p| pids.contains(&p)) {
+                            sum += u64::try_from(item.FmtValue.Anonymous.largeValue).unwrap_or(0);
+                        }
+                    }
+                    total = Some(sum);
+                }
+            } else {
+                total = Some(0);
+            }
+        }
+        let _ = PdhCloseQuery(query);
+        total
     }
 }
 
@@ -286,6 +447,22 @@ pub fn utc_offset_minutes() -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_a_processs_gpu_memory() {
+        // This test process holds no GPU memory; the call still answers.
+        let used = WindowsSystemInfo.gpu_memory(&[std::process::id()]);
+        println!("{used:?}");
+        assert!(used.is_some());
+    }
+
+    #[test]
+    fn reads_how_busy_the_gpu_is() {
+        // Any GPU has performance counters on Windows 10 1709+; the value depends on what runs.
+        let load = WindowsSystemInfo.gpu_load();
+        println!("{load:?}");
+        assert!(load.is_some_and(|l| l <= 100));
+    }
 
     #[test]
     fn tells_whether_it_is_online() {

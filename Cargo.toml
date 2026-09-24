@@ -22,6 +22,9 @@ zeroize = "1.9.0"
 toml = "1.1.6"
 rusqlite = { version = "0.40.2", features = ["bundled"] }
 rusqlite_migration = "2.6.0"
+sqlite-vec = "0.1.9"
+jiff = "0.2.37"
+ed25519-dalek = "3.0.0"
 dirs = "7.0.0"
 # Folder and download watchers (TOOL-28): ReadDirectoryChangesW on Windows.
 notify = { version = "8.2.0", default-features = false }
@@ -35,7 +38,7 @@ getrandom = "0.4.3"
 ts-rs = { version = "12.0.1", features = ["uuid-impl", "serde-json-impl"] }
 windows = "0.62.2"
 # ONNX Runtime (MIT) for the speech models: Silero VAD in the runtime, STT/TTS in kivo-infer.
-ort = { version = "=2.0.0-rc.13", default-features = false, features = ["std", "download-binaries", "tls-native", "api-22"] }
+ort = { version = "=2.0.0-rc.13", default-features = false, features = ["std", "download-binaries", "tls-native", "api-22", "directml"] }
 base64 = "0.22"
 rubato = "5.0"
 realfft = "3.5"
@@ -49,8 +52,13 @@ bzip2 = "0.6"
 ringbuf = "0.5"
 sha2 = "0.10"
 ureq = { version = "3.4", default-features = false, features = ["native-tls", "gzip"] }
+# Custom sounds (VOICE-28): the user's .ogg cues, decoded in pure Rust.
+lewton = "0.10"
+# Streaming cloud speech engines (VOICE-10): a blocking WebSocket client on the worker's threads.
+tungstenite = { version = "0.28", default-features = false, features = ["handshake", "native-tls"] }
+tokio-tungstenite = { version = "0.28", default-features = false, features = ["connect", "handshake", "native-tls"] }
 # Async HTTP with streaming bodies for the brain adapters (SSE), Windows TLS via schannel.
-reqwest = { version = "0.13", default-features = false, features = ["native-tls", "stream", "json", "http2", "system-proxy"] }
+reqwest = { version = "0.13", default-features = false, features = ["native-tls", "stream", "json", "form", "http2", "system-proxy"] }
 # MCP (TOOLS_AND_CONTROL §9, TOOL-34): the official Rust SDK, Apache-2.0. The client (stdio child
 # processes and Streamable HTTP), KIVO's own server for agents, and MCP authorization (OAuth 2.1 +
 # PKCE with dynamic client registration) for remote connectors.

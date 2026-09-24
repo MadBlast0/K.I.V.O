@@ -33,6 +33,10 @@ pub struct TasksRpc {
     pub uia: Arc<dyn kivo_platform::UiAutomation>,
     pub clipboard: Arc<dyn kivo_platform::Clipboard>,
     pub db: Arc<std::sync::Mutex<kivo_store::Database>>,
+    /// Where exported routines go (Downloads).
+    pub exports: Option<std::path::PathBuf>,
+    /// Installs CLI agents and tools with the user's consent (DISC-07, DIST-14).
+    pub installer: Arc<crate::installer::Installer>,
 }
 
 fn parse<T: serde::de::DeserializeOwned>(params: Value) -> Result<T, RpcError> {
@@ -109,6 +113,86 @@ impl TasksRpc {
             // ---- Routines (UX-26, ROUT-01..10) ------------------------------------------------
             method::ROUTINES_LIST => ok(&self.routines.list()),
             method::ROUTINES_TOOLS => ok(&self.routines.tools()),
+            method::ROUTINES_DRAFT => ok(&self.routines.take_draft()),
+            method::ROUTINES_EXPORT => parse::<Id>(params).and_then(|Id { id }| {
+                let dir = self
+                    .exports
+                    .clone()
+                    .ok_or_else(|| refuse(kivo_core::text::t("settings.noExports")))?;
+                let doc = self.routines.export(&id).map_err(refuse)?;
+                crate::routines::save_file(&dir, &doc)
+                    .map(|file| json!({ "file": file.display().to_string() }))
+                    .map_err(refuse)
+            }),
+            method::ROUTINES_TO_SKILL => parse::<Id>(params).and_then(|Id { id }| {
+                let routine = self
+                    .routines
+                    .get(&id)
+                    .ok_or_else(|| refuse(kivo_core::text::t("routine.notFound")))?;
+                let skills = self
+                    .engine
+                    .skills()
+                    .ok_or_else(|| refuse(kivo_core::text::t("task.notReady")))?;
+                skills
+                    .from_routine(&routine)
+                    .map(|skill| json!({ "skill": skill }))
+                    .map_err(refuse)
+            }),
+            method::INSTALLS_PLAN => parse::<Id>(params).and_then(|Id { id }| {
+                let installer = Arc::clone(&self.installer);
+                tokio::task::block_in_place(|| installer.plan(&id))
+                    .map_err(refuse)
+                    .and_then(|p| ok(&p))
+            }),
+            method::INSTALLS_START => {
+                #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
+                struct P {
+                    id: String,
+                    /// The commands the user was shown and agreed to.
+                    commands: Vec<String>,
+                }
+                parse::<P>(params).and_then(|p| {
+                    let installer = Arc::clone(&self.installer);
+                    tokio::task::block_in_place(|| installer.start(&p.id, &p.commands))
+                        .map(|()| Value::Null)
+                        .map_err(refuse)
+                })
+            }
+            method::INSTALLS_STATUS => {
+                parse::<Id>(params).and_then(|Id { id }| ok(&self.installer.status(&id)))
+            }
+            method::INSTALLS_CANCEL => {
+                parse::<Id>(params).and_then(|Id { id }| ok(&self.installer.cancel(&id)))
+            }
+            method::INSTALLS_TOOLS => {
+                let installer = Arc::clone(&self.installer);
+                let tools = tokio::task::block_in_place(|| {
+                    crate::installer::DEPENDENCIES
+                        .iter()
+                        .map(|d| {
+                            json!({
+                                "id": d.id, "name": d.name, "vendor": d.vendor,
+                                "version": installer.version(d.command),
+                            })
+                        })
+                        .collect::<Vec<_>>()
+                });
+                ok(&tools)
+            }
+            method::ROUTINES_IMPORT => {
+                #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
+                struct P {
+                    content: String,
+                }
+                parse::<P>(params).and_then(|p| {
+                    self.routines
+                        .parse_file(&p.content)
+                        .map_err(refuse)
+                        .and_then(|r| ok(&r))
+                })
+            }
             method::ROUTINES_CHECK => {
                 #[derive(Deserialize)]
                 #[serde(deny_unknown_fields)]

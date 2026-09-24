@@ -120,6 +120,7 @@ pub(crate) struct Rig {
     caps: Arc<RwLock<CapabilitySettings>>,
     vision: Arc<std::sync::atomic::AtomicBool>,
     pub terminals: Arc<kivo_testkit::FakeTerminals>,
+    pub controls: Arc<Controls>,
 }
 
 fn test_app_window() -> WindowInfo {
@@ -167,7 +168,7 @@ pub(crate) fn rig() -> Rig {
     let vision = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let mut apps = AppRegistry::core();
     let mut entry: crate::appreg::AppEntry = toml::from_str(
-        "id = \"kivo-test-app\"\nname = \"KIVO Test App\"\naliases = [\"test app\"]\n[match]\nexe = [\"kivo-test-app.exe\"]\n[uia.hints]\nexport = { automationId = \"107\" }\nname = { automationId = \"101\" }\n",
+        "id = \"kivo-test-app\"\nname = \"KIVO Test App\"\naliases = [\"test app\"]\n[match]\nexe = [\"kivo-test-app.exe\"]\n[uia.hints]\nexport = { automationId = \"107\" }\nname = { automationId = \"101\" }\n[ai]\nversion = \"test\"\nverified = true\ncomposer = { automationId = \"110\" }\nsend = { automationId = \"103\" }\nreply = { automationId = \"101\" }\n",
     )
     .unwrap();
     entry.origin = "test".into();
@@ -219,9 +220,11 @@ pub(crate) fn rig() -> Rig {
         terminals: terminals.clone(),
         terminal_sessions: Arc::default(),
         workspace_folder: Arc::new(|_| None),
+        launcher: Arc::new(kivo_testkit::FakeApps::default()),
     });
     let tools = controls(&c);
     Rig {
+        controls: Arc::clone(&c),
         dir,
         tools,
         uia,

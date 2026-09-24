@@ -394,6 +394,13 @@ impl Engine {
             }
             Spend::Stop => return,
         };
+        // Realtime conversation mode (BRAIN-33): only after the fast path, and only when asked.
+        if route.kind != ProviderKind::Cli
+            && let Some(provider) = self.live_wanted(&text, &route, false)
+        {
+            self.realtime_turn(Some(&text), route, provider).await;
+            return;
+        }
         self.show_route(&route, warning);
         if route.kind == ProviderKind::Cli {
             self.agent_turn(&text, &route).await;
@@ -571,6 +578,7 @@ impl Engine {
             allow_always: false,
             plan: false,
             hello: false,
+            watch: false,
         };
         matches!(self.decide(spec, call).await, Some((true, _, _)))
     }
@@ -614,12 +622,17 @@ impl Engine {
             () = cancel.cancelled() => None,
         };
         if let Some((false, _, _)) = answer {
-            // Denied: the turn ends, as for any declined action.
             self.core.advance(SessionInput::Denied);
             self.speaker.cue(Cue::Cancelled);
-            self.core
-                .update_turn(|view| view.answer = Some(text::t("reply.cancelled")));
-            self.finish_turn("cancelled", Some(&text::t("reply.cancelled")));
+            if lock(&self.turn).as_ref().is_some_and(|t| t.live) {
+                // In a realtime conversation only this action is declined (BRAIN-33).
+                self.core.update_turn(|view| view.confirm = None);
+            } else {
+                // Denied: the turn ends, as for any declined action.
+                self.core
+                    .update_turn(|view| view.answer = Some(text::t("reply.cancelled")));
+                self.finish_turn("cancelled", Some(&text::t("reply.cancelled")));
+            }
         }
         answer
     }
@@ -905,8 +918,11 @@ impl Engine {
                     };
                     self.say_phrase(answer.clone()).await;
                 }
-                self.core
-                    .update_turn(|view| view.answer = Some(answer.clone()));
+                let offer = self.live_available();
+                self.core.update_turn(|view| {
+                    view.answer = Some(answer.clone());
+                    view.live_offer = offer;
+                });
                 self.recorder.answer(&turn, &answer, "done");
                 match &thread {
                     Some(id) => {
@@ -1083,7 +1099,7 @@ impl Engine {
     /// tokens used, the budget and how many older turns should be compacted. `dry` builds it for
     /// "Preview what the AI sees" only: nothing is recorded and the turn is left alone.
     #[allow(clippy::too_many_arguments, reason = "one request's inputs")]
-    fn brain_request(
+    pub(super) fn brain_request(
         &self,
         config: &kivo_core::KivoConfig,
         route: &Route,
@@ -1341,7 +1357,7 @@ impl Engine {
 
     /// One tool call from a brain, through the permission engine (invariant 4): decided now,
     /// run later by `finish_brain_tool`.
-    fn prepare_brain_tool(
+    pub(super) fn prepare_brain_tool(
         &self,
         wire_id: &str,
         name: &str,
@@ -1379,6 +1395,15 @@ impl Engine {
             self.recorder.tool_denied(&self.turn_key(), &call, &reason);
             return Prepared::Done(wire, text::tf("brain.toolMissing", &[("reason", &reason)]));
         };
+        // Computer use: the card says what it may cost at most (CAP-09).
+        if call.tool == crate::computer_tool::ID {
+            let config = self.core.config();
+            if let Some(p) = self.brains.computer_provider(&config) {
+                let most = super::computer::estimate(&config.tools.computer_use, p.cost_per_step());
+                call.args["estimate"] = json!(format!("${most:.2}"));
+                call.args["model"] = json!(p.name());
+            }
+        }
         let decision = self.authorize_call(tool.as_ref(), &mut call);
         self.mark("t7Permission");
         self.recorder
@@ -1402,7 +1427,7 @@ impl Engine {
 
     /// Runs a prepared call (asking first if it must) and returns what to tell the brain, or
     /// `None` when the turn ended (declined or cancelled).
-    async fn finish_brain_tool(
+    pub(super) async fn finish_brain_tool(
         self: &Arc<Self>,
         prepared: Prepared,
         approved: &mut std::collections::HashMap<String, kivo_security::Permit>,
@@ -1449,6 +1474,13 @@ impl Engine {
             self.core.advance(SessionInput::StartActing);
         }
         let title = tool.spec().title.clone();
+        // Computer use runs as its own loop inside the turn (CAP-10), each step authorized.
+        if call.tool == crate::computer_tool::ID {
+            drop(permit);
+            let outcome = self.computer_use(&call).await;
+            let body = json!({ "ok": outcome.done, "said": outcome.summary, "steps": outcome.steps, "cost": outcome.cost }).to_string();
+            return Some(vec![result(&wire, body, !outcome.done)]);
+        }
         let (outcome, output) = self.run_step(tool, &call, permit, &title).await;
         Some(match (outcome.status, output) {
             (Ok(_), Some(output)) => {

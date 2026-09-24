@@ -541,6 +541,71 @@ impl Recorder {
         });
     }
 
+    /// A computer-use task ended (CAP-10): its steps, cost and whether it finished.
+    pub fn computer_use_done(&self, turn: &str, task: &str, steps: u32, cost: f64, done: bool) {
+        self.add(NewActivity {
+            ts: kivo_store::brains::now_ms(),
+            turn_id: (!turn.is_empty()).then(|| turn.to_owned()),
+            task_id: None,
+            kind: "computer".into(),
+            title: kivo_core::text::tf("activity.computerUse", &[("task", &task)]),
+            detail: Some(kivo_core::text::tf(
+                "activity.computerUseDetail",
+                &[("steps", &steps), ("cost", &format!("{cost:.2}"))],
+            )),
+            status: if done { "done" } else { "failed" }.into(),
+            data: Some(serde_json::json!({ "steps": steps, "cost": cost })),
+        });
+    }
+
+    /// A realtime conversation ended (BRAIN-33): how long, what it cost, why it closed.
+    pub fn realtime_done(
+        &self,
+        turn: &str,
+        provider: &str,
+        minutes: f64,
+        cost: f64,
+        exchanges: u32,
+        ended: &str,
+    ) {
+        self.add(NewActivity {
+            ts: kivo_store::brains::now_ms(),
+            turn_id: (!turn.is_empty()).then(|| turn.to_owned()),
+            task_id: None,
+            kind: "brain".into(),
+            title: kivo_core::text::tf("activity.realtime", &[("provider", &provider)]),
+            detail: Some(kivo_core::text::tf(
+                "activity.realtimeDetail",
+                &[
+                    ("minutes", &format!("{minutes:.1}")),
+                    ("cost", &format!("{cost:.2}")),
+                    ("exchanges", &exchanges),
+                ],
+            )),
+            status: "done".into(),
+            data: Some(serde_json::json!({
+                "minutes": minutes,
+                "cost": cost,
+                "exchanges": exchanges,
+                "ended": ended,
+            })),
+        });
+    }
+
+    /// The speech worker crashed while KIVO ran, and what was done about it (PLAN-12).
+    pub fn worker_crashed(&self, crashes: u32, recovery: &str, detail: &str) {
+        self.add(NewActivity {
+            ts: kivo_store::brains::now_ms(),
+            turn_id: None,
+            task_id: None,
+            kind: "crash".into(),
+            title: kivo_core::text::tf("activity.crashed", &[("process", &"kivo-infer")]),
+            detail: Some(detail.to_owned()),
+            status: "failed".into(),
+            data: Some(serde_json::json!({ "crashes": crashes, "recovery": recovery })),
+        });
+    }
+
     /// The emergency stop was used (SECURITY §8).
     pub fn emergency_stop(&self) {
         self.audit(&AuditRecord {

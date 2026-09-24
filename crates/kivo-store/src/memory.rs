@@ -249,6 +249,77 @@ impl Database {
         Ok(rows.collect::<Result<_, _>>()?)
     }
 
+    /// Notes whose vector is missing or was made by another model than `model`, up to `limit`:
+    /// (row id, the text to embed).
+    pub fn memories_to_embed(
+        &self,
+        model: &str,
+        limit: u32,
+    ) -> Result<Vec<(i64, String)>, DbError> {
+        let owner = self.owner()?;
+        let mut stmt = self.connection().prepare(
+            "SELECT m.id, m.title, m.text FROM memories m
+             LEFT JOIN memory_vector_models v ON v.memory_id = m.id
+             WHERE m.profile_id = ?1 AND (v.model IS NULL OR v.model != ?2)
+             ORDER BY m.id LIMIT ?3",
+        )?;
+        let rows = stmt.query_map(params![owner, model, limit], |r| {
+            let (id, title, text): (i64, String, String) = (r.get(0)?, r.get(1)?, r.get(2)?);
+            Ok((id, format!("{title}\n{text}")))
+        })?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    /// Stores a note's vector (MEM-09) and the model that made it.
+    pub fn set_memory_vector(&self, id: i64, model: &str, vector: &[f32]) -> Result<(), DbError> {
+        let blob: Vec<u8> = vector.iter().flat_map(|v| v.to_le_bytes()).collect();
+        let c = self.connection();
+        c.execute("DELETE FROM memory_vectors WHERE rowid = ?1", [id])?;
+        c.execute(
+            "INSERT INTO memory_vectors (rowid, embedding) VALUES (?1, ?2)",
+            params![id, blob],
+        )?;
+        c.execute(
+            "INSERT INTO memory_vector_models (profile_id, memory_id, model)
+             SELECT profile_id, id, ?2 FROM memories WHERE id = ?1
+             ON CONFLICT (memory_id) DO UPDATE SET model = excluded.model",
+            params![id, model],
+        )?;
+        Ok(())
+    }
+
+    /// The `k` notes nearest to `vector` among those embedded by `model`, nearest first, with
+    /// their cosine distance (0 is the same direction, 2 the opposite).
+    pub fn nearest_memories(
+        &self,
+        vector: &[f32],
+        model: &str,
+        k: u32,
+    ) -> Result<Vec<(MemoryRow, f32)>, DbError> {
+        let owner = self.owner()?;
+        let blob: Vec<u8> = vector.iter().flat_map(|v| v.to_le_bytes()).collect();
+        let prefixed: Vec<String> = COLUMNS
+            .split(',')
+            .map(|c| format!("m.{}", c.trim()))
+            .collect();
+        let mut stmt = self.connection().prepare(&format!(
+            "SELECT {}, n.distance FROM
+                 (SELECT rowid, distance FROM memory_vectors WHERE embedding MATCH ?1 AND k = ?2) n
+             JOIN memories m ON m.id = n.rowid
+             JOIN memory_vector_models v ON v.memory_id = m.id
+             WHERE m.profile_id = ?3 AND v.model = ?4
+             ORDER BY n.distance",
+            prefixed.join(", ")
+        ))?;
+        let columns = COLUMNS.split(',').count();
+        let rows = stmt.query_map(params![blob, k, owner, model], |r| {
+            let distance: f64 = r.get(columns)?;
+            #[allow(clippy::cast_possible_truncation, reason = "a distance in 0..=2")]
+            Ok((row(r)?, distance as f32))
+        })?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
     /// Counts a use of each note (retrieval put it in a request).
     pub fn mark_memories_used(&self, paths: &[String], at: i64) -> Result<(), DbError> {
         let owner = self.owner()?;
@@ -260,6 +331,17 @@ impl Database {
             )?;
         }
         Ok(())
+    }
+
+    /// Every `[[link]]`: (the linking note's path, the target as written).
+    pub fn memory_link_pairs(&self) -> Result<Vec<(String, String)>, DbError> {
+        let owner = self.owner()?;
+        let mut stmt = self.connection().prepare(
+            "SELECT m.path, l.target FROM memory_links l JOIN memories m ON m.id = l.memory_id
+             WHERE l.profile_id = ?1 ORDER BY m.path, l.target",
+        )?;
+        let rows = stmt.query_map([owner], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        Ok(rows.collect::<Result<_, _>>()?)
     }
 
     /// Notes that link to any of `targets` (a note's title, path, or file name).
@@ -548,5 +630,50 @@ mod tests {
         );
         db.forget_memories().unwrap();
         assert!(db.turn_memories("t1").unwrap().is_empty());
+    }
+
+    /// MEM-09: vectors in sqlite-vec, nearest first; a changed note needs a new vector, an
+    /// unchanged re-index keeps it, another model's vectors don't count, a deleted note's go.
+    #[test]
+    fn note_vectors_are_searched_and_kept_current() {
+        let db = Database::in_memory().unwrap();
+        let axis = |i: usize| {
+            let mut v = vec![0.0_f32; 384];
+            v[i] = 1.0;
+            v
+        };
+        let mut a = note("a.md", "Parking", "Level 3, spot 12");
+        let b = note("b.md", "Sister", "Priya");
+        db.index_memory(&a, &GraphRows::default()).unwrap();
+        db.index_memory(&b, &GraphRows::default()).unwrap();
+        let todo = db.memories_to_embed("minilm", 10).unwrap();
+        assert_eq!(todo.len(), 2);
+        assert!(todo[0].1.starts_with("Parking\n"));
+        db.set_memory_vector(todo[0].0, "minilm", &axis(0)).unwrap();
+        db.set_memory_vector(todo[1].0, "minilm", &axis(1)).unwrap();
+        assert!(db.memories_to_embed("minilm", 10).unwrap().is_empty());
+
+        let mut query = axis(0);
+        query[1] = 0.3;
+        let near = db.nearest_memories(&query, "minilm", 5).unwrap();
+        assert_eq!(near[0].0.path, "a.md");
+        assert!(near[0].1 < near[1].1);
+        assert!(
+            db.nearest_memories(&query, "other-model", 5)
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(db.memories_to_embed("other-model", 10).unwrap().len(), 2);
+
+        // Re-indexed unchanged: the vector stays. Changed: it's embedded again.
+        db.index_memory(&a, &GraphRows::default()).unwrap();
+        assert!(db.memories_to_embed("minilm", 10).unwrap().is_empty());
+        a.text = "Level 4".into();
+        db.index_memory(&a, &GraphRows::default()).unwrap();
+        assert_eq!(db.memories_to_embed("minilm", 10).unwrap().len(), 1);
+
+        db.unindex_memory("b.md").unwrap();
+        let left = db.nearest_memories(&axis(1), "minilm", 5).unwrap();
+        assert!(left.iter().all(|(m, _)| m.path != "b.md"));
     }
 }

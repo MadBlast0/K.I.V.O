@@ -63,10 +63,28 @@ pub trait SystemInfo: Send + Sync {
     fn process_usage(&self, _pid: u32) -> Option<ProcessUsage> {
         None
     }
+    /// Dedicated graphics memory the processes `pids` use, in bytes (PLAN-07). `None` when it
+    /// can't be read.
+    fn gpu_memory(&self, _pids: &[u32]) -> Option<u64> {
+        None
+    }
+    /// How busy the graphics cards' 3D engines are right now, 0–100 (the busiest adapter), over a
+    /// short sample (PLAN-09). `None` when it can't be read.
+    fn gpu_load(&self) -> Option<u8> {
+        None
+    }
     /// Whether the PC reaches the internet and whether the connection is metered (plan §130).
     /// `None` when it can't be told.
     fn network(&self) -> Option<Network> {
         None
+    }
+    /// The names of the networks the PC is connected to (routines' network trigger, ROUT-11).
+    fn networks(&self) -> Vec<String> {
+        Vec::new()
+    }
+    /// The names of the USB devices plugged in (routines' USB trigger, ROUT-11).
+    fn usb_devices(&self) -> Vec<String> {
+        Vec::new()
     }
 }
 

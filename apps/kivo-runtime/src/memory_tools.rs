@@ -72,6 +72,7 @@ fn item(id: String, kind: &str, title: &str, text: &str, sensitive: bool) -> Val
 struct Search {
     spec: ToolSpec,
     db: Arc<Mutex<Database>>,
+    memory: Arc<Memory>,
 }
 
 impl Tool for Search {
@@ -99,11 +100,13 @@ impl Tool for Search {
             words.iter().any(|w| s.contains(w.as_str()))
         };
         let mut items = Vec::new();
-        let db = lock(&self.db);
-        // Notes in the vault, best first; superseded facts are left out.
+        // Notes in the vault, best first by words and meaning (CONV-23); superseded facts are
+        // left out.
         let now = kivo_store::brains::now_ms();
-        if let Some(fts) = query::fts_query(&query_text) {
-            for m in db.search_memories(&fts, 30).unwrap_or_default() {
+        let notes = self.memory.find(&query_text, 30);
+        let db = lock(&self.db);
+        {
+            for m in notes {
                 if m.valid_until.is_some_and(|v| v <= now) {
                     continue;
                 }
@@ -344,6 +347,7 @@ pub fn tools(db: &Arc<Mutex<Database>>, memory: &Arc<Memory>) -> Vec<Arc<dyn Too
                 false,
             ),
             db: Arc::clone(db),
+            memory: Arc::clone(memory),
         }),
         Arc::new(Get {
             spec: spec(

@@ -266,6 +266,19 @@ async fn a_crashed_speech_worker_fails_the_turn_aloud_and_comes_back() {
     })
     .await;
     assert_ne!(rig.core.state().borrow().session, SessionState::Listening);
+    // PLAN-12: the crash is in Activity with what KIVO did about it (restart it as it was).
+    until("the crash in Activity", Duration::from_secs(10), || {
+        rig.db
+            .lock()
+            .unwrap()
+            .activity(None, 20)
+            .unwrap()
+            .iter()
+            .any(|a| {
+                a.kind == "crash" && a.data.as_ref().is_some_and(|d| d["recovery"] == "restart")
+            })
+    })
+    .await;
 
     // The next use starts a new worker.
     rig.infer.warm();
@@ -1395,6 +1408,224 @@ async fn changing_a_decision_by_voice_goes_to_a_brain() {
         asked.contains("chrome") && asked.contains("firefox"),
         "{asked}"
     );
+    rig.core.quit();
+    let _ = tokio::time::timeout(Duration::from_secs(5), worker_task).await;
+    pump.abort();
+}
+
+/// VOICE-10: Parakeet TDT v3 (the Balanced recognizer) in the speech worker hears "Open Chrome."
+/// and KIVO acts on it, as with Moonshine. Runs where its model is (`KIVO_PARAKEET_DIR`).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn parakeet_hears_a_spoken_command() {
+    let _turn = ONE_AT_A_TIME.lock().await;
+    let Some(dir) = std::env::var_os("KIVO_PARAKEET_DIR").map(PathBuf::from) else {
+        eprintln!("KIVO_PARAKEET_DIR isn't set; skipping");
+        return;
+    };
+    if !worker().is_file() {
+        eprintln!("kivo-infer isn't built beside the tests; skipping");
+        return;
+    }
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter("warn")
+        .with_test_writer()
+        .try_init();
+    let (rig, worker_task, pump) = rig(spoken("Open Chrome."), PathBuf::from("no-model"));
+    rig.infer.configure(
+        kivo_runtime::infer::Engines {
+            stt: Some((kivo_voice::parakeet::MODEL_ID.to_owned(), dir)),
+            stt_fallback: None,
+            tts: Some(("system".to_owned(), None)),
+            threads: 4,
+            language: "en-US".into(),
+            cloud: Default::default(),
+            gpu: None,
+        },
+        Duration::from_secs(600),
+    );
+    // Loaded ahead, as when it's chosen (VOICE-34): the larger model takes a couple of seconds.
+    rig.infer.warm();
+    tokio::time::sleep(Duration::from_secs(6)).await;
+    rig.engine
+        .talk(TurnSource::PushToTalk)
+        .await
+        .expect("KIVO starts listening");
+    until("Chrome to open", Duration::from_secs(60), || {
+        !rig.apps.launched.lock().unwrap().is_empty()
+    })
+    .await;
+    let heard = rig.core.turn_view().unwrap().transcript;
+    assert!(heard.to_lowercase().contains("chrome"), "heard: {heard}");
+    rig.core.quit();
+    let _ = tokio::time::timeout(Duration::from_secs(5), worker_task).await;
+    pump.abort();
+}
+
+/// VOICE-10: Whisper large-v3-turbo (the Accurate recognizer) in the speech worker hears "Open
+/// Chrome." and KIVO acts on it. Runs where its model is (`KIVO_WHISPER_DIR`).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn whisper_hears_a_spoken_command() {
+    let _turn = ONE_AT_A_TIME.lock().await;
+    let Some(dir) = std::env::var_os("KIVO_WHISPER_DIR").map(PathBuf::from) else {
+        eprintln!("KIVO_WHISPER_DIR isn't set; skipping");
+        return;
+    };
+    if !worker().is_file() {
+        eprintln!("kivo-infer isn't built beside the tests; skipping");
+        return;
+    }
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter("warn")
+        .with_test_writer()
+        .try_init();
+    let (rig, worker_task, pump) = rig(spoken("Open Chrome."), PathBuf::from("no-model"));
+    rig.infer.configure(
+        kivo_runtime::infer::Engines {
+            stt: Some((kivo_voice::whisper::MODEL_ID.to_owned(), dir)),
+            stt_fallback: None,
+            tts: Some(("system".to_owned(), None)),
+            threads: 4,
+            language: "en-US".into(),
+            cloud: Default::default(),
+            gpu: None,
+        },
+        Duration::from_secs(600),
+    );
+    // Loaded ahead, as when it's chosen (VOICE-34): the larger model takes a couple of seconds.
+    rig.infer.warm();
+    tokio::time::sleep(Duration::from_secs(6)).await;
+    rig.engine
+        .talk(TurnSource::PushToTalk)
+        .await
+        .expect("KIVO starts listening");
+    until("Chrome to open", Duration::from_secs(60), || {
+        !rig.apps.launched.lock().unwrap().is_empty()
+    })
+    .await;
+    let heard = rig.core.turn_view().unwrap().transcript;
+    assert!(heard.to_lowercase().contains("chrome"), "heard: {heard}");
+    rig.core.quit();
+    let _ = tokio::time::timeout(Duration::from_secs(5), worker_task).await;
+    pump.abort();
+}
+
+/// VOICE-11: a cloud voice through the speech worker. KIVO's spoken answer is requested from the
+/// service (a local stand-in here) with the key it was given, and the PCM it streams back is
+/// played.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_cloud_voice_speaks_the_answer() {
+    use std::io::{BufRead, BufReader, Read, Write};
+    let _turn = ONE_AT_A_TIME.lock().await;
+    if !worker().is_file() {
+        eprintln!("kivo-infer isn't built beside the tests; skipping");
+        return;
+    }
+    // The stand-in: checks the key and answers with a second of 24 kHz PCM.
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    let server = std::thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        let (mut head, mut length) = (String::new(), 0);
+        loop {
+            let mut line = String::new();
+            reader.read_line(&mut line).unwrap();
+            if line == "\r\n" {
+                break;
+            }
+            if let Some(v) = line.to_ascii_lowercase().strip_prefix("content-length:") {
+                length = v.trim().parse().unwrap();
+            }
+            head.push_str(&line);
+        }
+        let mut body = vec![0; length];
+        reader.read_exact(&mut body).unwrap();
+        let pcm: Vec<u8> = (0..24_000i32)
+            .flat_map(|i| ((i % 100) as i16 * 200).to_le_bytes())
+            .collect();
+        let mut stream = stream;
+        write!(
+            stream,
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n",
+            pcm.len()
+        )
+        .unwrap();
+        stream.write_all(&pcm).unwrap();
+        (head, String::from_utf8_lossy(&body).into_owned())
+    });
+    let (rig, worker_task, pump) = rig(Vec::new(), PathBuf::from("no-model"));
+    rig.core.update_config(|c| {
+        c.capabilities.set(Capability::SpeakResponses, true);
+        c.voice.speak_typed_replies = true;
+    });
+    let mut cloud = std::collections::BTreeMap::new();
+    cloud.insert(
+        kivo_voice::cloud::OPENAI_TTS.to_owned(),
+        kivo_ipc::infer::CloudLoad {
+            key: "sk-test".into(),
+            base_url: Some(url),
+            region: None,
+        },
+    );
+    rig.infer.configure(
+        kivo_runtime::infer::Engines {
+            stt: None,
+            stt_fallback: None,
+            tts: Some((kivo_voice::cloud::OPENAI_TTS.to_owned(), None)),
+            threads: 2,
+            language: "en-US".into(),
+            cloud,
+            gpu: None,
+        },
+        Duration::from_secs(600),
+    );
+    rig.engine.say("mute").await.unwrap();
+    until("the answer to be played", Duration::from_secs(20), || {
+        rig.audio.played.lock().unwrap().len() > 10_000
+    })
+    .await;
+    let (head, body) = server.join().unwrap();
+    assert!(head.starts_with("POST /v1/audio/speech"), "{head}");
+    assert!(
+        head.to_lowercase()
+            .contains("authorization: bearer sk-test"),
+        "{head}"
+    );
+    assert!(body.contains("Muted."), "{body}");
+    rig.core.quit();
+    let _ = tokio::time::timeout(Duration::from_secs(5), worker_task).await;
+    pump.abort();
+}
+
+/// VOICE-11: the Expressive voice through the speech worker. Chatterbox copies one of the Windows
+/// voices (made on this PC as its reference) and speaks KIVO's answer. Runs where its model is
+/// (`KIVO_CHATTERBOX_DIR`).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn chatterbox_speaks_the_answer_in_a_copied_windows_voice() {
+    let _turn = ONE_AT_A_TIME.lock().await;
+    let Some(dir) = std::env::var_os("KIVO_CHATTERBOX_DIR").map(PathBuf::from) else {
+        eprintln!("KIVO_CHATTERBOX_DIR isn't set; skipping");
+        return;
+    };
+    if !worker().is_file() {
+        eprintln!("kivo-infer isn't built beside the tests; skipping");
+        return;
+    }
+    let (rig, worker_task, pump) = rig_with_voice(
+        Vec::new(),
+        PathBuf::from("no-model"),
+        (kivo_voice::chatterbox::ENGINE_ID.to_owned(), Some(dir)),
+    );
+    rig.core.update_config(|c| {
+        c.capabilities.set(Capability::SpeakResponses, true);
+        c.voice.speak_typed_replies = true;
+    });
+    rig.engine.say("mute").await.unwrap();
+    // A second or more of 24 kHz speech.
+    until("the answer to be played", Duration::from_secs(120), || {
+        rig.audio.played.lock().unwrap().len() > 24_000
+    })
+    .await;
     rig.core.quit();
     let _ = tokio::time::timeout(Duration::from_secs(5), worker_task).await;
     pump.abort();

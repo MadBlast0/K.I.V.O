@@ -11,6 +11,7 @@
  *
  * The runtime checks and stores everything; the page only edits a draft.
  */
+import { OtherTriggers, describeTrigger, isOther } from "../components/routines/OtherTriggers";
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "../components/layout/Shell";
@@ -49,7 +50,7 @@ import {
   type ToolItem,
   type Trigger,
 } from "../ipc/generated";
-import { useRuntime } from "../ipc/runtime";
+import { useRuntime, useRuntimeEvents } from "../ipc/runtime";
 import { display, fieldsOf, missing, parseInput, type FormField } from "../lib/schemaForm";
 
 const RISK_TONE: Record<Risk, Tone> = { safe: "success", low: "success", medium: "neutral", high: "danger" };
@@ -91,11 +92,18 @@ export function hotkeyOf(routine: Routine): string | undefined {
   return routine.triggers.find((t): t is Extract<Trigger, { type: "hotkey" }> => t.type === "hotkey")?.chord;
 }
 
-/** The draft with `phrases` and `hotkey` as its triggers. */
-export function withTriggers(routine: Routine, phrases: string[], hotkey: string | undefined): Routine {
+/** The draft with `phrases` and `hotkey` as its triggers; its schedules and events are kept
+ * unless `others` replaces them. */
+export function withTriggers(
+  routine: Routine,
+  phrases: string[],
+  hotkey: string | undefined,
+  others: Trigger[] = routine.triggers.filter(isOther),
+): Routine {
   const triggers: Trigger[] = [];
   if (phrases.length > 0) triggers.push({ type: "phrase", phrases, lang: "en" });
   if (hotkey) triggers.push({ type: "hotkey", chord: hotkey });
+  triggers.push(...others);
   if (triggers.length === 0) triggers.push({ type: "manual" });
   return { ...routine, triggers };
 }
@@ -127,6 +135,36 @@ export function Routines() {
       .catch(() => {});
   }, [connected, request]);
   useEffect(load, [load]);
+  // A routine drafted by voice, chat, "save what you just did" or an import opens for review
+  // (ROUT-13, ROUT-14).
+  const takeDraft = useCallback(() => {
+    if (!connected) return;
+    void request<Routine | null>(Method.routinesDraft)
+      .then((draft) => {
+        if (draft) {
+          setEditing(draft);
+          toast(t("routines.draftReady"));
+        }
+      })
+      .catch(() => {});
+  }, [connected, request, t, toast]);
+  useEffect(takeDraft, [takeDraft]);
+  useRuntimeEvents((event) => {
+    if (event.group === "system" && event.event.type === "discoveryChanged" && event.event.section === "routines") {
+      takeDraft();
+      load();
+    }
+  });
+  const file = useRef<HTMLInputElement>(null);
+  const importFile = (chosen: File) =>
+    void chosen
+      .text()
+      .then((content) => request<Routine>(Method.routinesImport, { content }))
+      .then((draft) => {
+        setEditing(draft);
+        toast(t("routines.imported", { name: draft.name }));
+      })
+      .catch((e: unknown) => toast(message(e)));
   useEffect(() => {
     if (!connected) return;
     void request<ToolItem[]>(Method.routinesTools)
@@ -165,9 +203,26 @@ export function Routines() {
         title={t("nav.routines")}
         subtitle={t("routines.subtitle")}
         actions={
-          <Button variant="primary" icon="add" onClick={() => setChoosing(true)}>
-            {t("routines.new")}
-          </Button>
+          <>
+            <Button icon="download" onClick={() => file.current?.click()}>
+              {t("routines.import")}
+            </Button>
+            <input
+              ref={file}
+              type="file"
+              accept=".json,application/json"
+              hidden
+              aria-label={t("routines.importFile")}
+              onChange={(e) => {
+                const chosen = e.target.files?.[0];
+                e.target.value = "";
+                if (chosen) importFile(chosen);
+              }}
+            />
+            <Button variant="primary" icon="add" onClick={() => setChoosing(true)}>
+              {t("routines.new")}
+            </Button>
+          </>
         }
       />
       <div className="k-routines">
@@ -197,6 +252,7 @@ export function Routines() {
             key={editing.id || "new"}
             initial={editing}
             tools={tools}
+            all={routines.map((r) => ({ id: r.routine.id, name: r.routine.name }))}
             saved={routines.find((r) => r.routine.id === editing.id)}
             onSaved={(view) => {
               load();
@@ -275,10 +331,12 @@ function RoutineRow({
   const r = view.routine;
   const phrases = phrasesOf(r);
   const hotkey = hotkeyOf(r);
+  const others = r.triggers.filter(isOther);
   const subtitle = [
     phrases.length > 0 ? phrases.map((p) => `“${p}”`).join(", ") : undefined,
     hotkey,
-    phrases.length === 0 && !hotkey ? t("routines.manual") : undefined,
+    ...others.map((o) => describeTrigger(o, t, (id) => id)),
+    phrases.length === 0 && !hotkey && others.length === 0 ? t("routines.manual") : undefined,
     view.containsAi ? t("routines.usesAi") : undefined,
     view.customCommand ? t("routines.customCommand") : undefined,
   ]
@@ -380,6 +438,7 @@ function argsOf(action: StepAction): Record<string, unknown> {
 function Builder({
   initial,
   tools,
+  all,
   saved,
   onSaved,
   onDeleted,
@@ -388,6 +447,8 @@ function Builder({
 }: {
   initial: Routine;
   tools: ToolItem[];
+  /** Every routine, for "After another routine". */
+  all: { id: string; name: string }[];
   saved: RoutineView | undefined;
   onSaved: (view: RoutineView) => void;
   onDeleted: () => void;
@@ -528,6 +589,13 @@ function Builder({
           </Button>
         )}
       </div>
+      <Section title={t("routines.when.title")} />
+      <OtherTriggers
+        triggers={draft.triggers.filter(isOther)}
+        routines={all}
+        selfId={draft.id}
+        onChange={(next) => setDraft((d) => withTriggers(d, phrasesOf(d), hotkeyOf(d), next))}
+      />
       {check && check.collisions.length > 0 && (
         <ul className="k-builder__issues">
           {check.collisions.map((c) => (
@@ -630,6 +698,30 @@ function Builder({
         {saved && (
           <Button variant="destructive" icon="delete" onClick={remove}>
             {t("routines.delete")}
+          </Button>
+        )}
+        {saved && (
+          <Button
+            icon="upload"
+            onClick={() =>
+              void request<{ file: string }>(Method.routinesExport, { id: saved.routine.id })
+                .then((r) => toast(t("routines.exported", { file: r.file })))
+                .catch((e: unknown) => toast(message(e)))
+            }
+          >
+            {t("routines.export")}
+          </Button>
+        )}
+        {saved && (
+          <Button
+            icon="skill"
+            onClick={() =>
+              void request<{ skill: string }>(Method.routinesToSkill, { id: saved.routine.id })
+                .then(() => toast(t("routines.skillMade", { name: saved.routine.name })))
+                .catch((e: unknown) => toast(message(e)))
+            }
+          >
+            {t("routines.makeSkill")}
           </Button>
         )}
         <span className="k-builder__spacer" />

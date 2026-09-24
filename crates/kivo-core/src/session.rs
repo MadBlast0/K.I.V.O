@@ -58,6 +58,8 @@ pub enum SessionInput {
     Resume,
     Fail,
     ErrorShown,
+    /// A realtime conversation listens again after the model's turn or a decision (BRAIN-33).
+    LiveListening,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
@@ -98,6 +100,7 @@ impl SessionState {
                 I::Fail,
             ) => S::Error,
             (S::Error, I::ErrorShown) => S::Idle,
+            (S::Idle | S::Thinking | S::Acting | S::Speaking, I::LiveListening) => S::Listening,
             (from, input) => return Err(InvalidTransition { from, input }),
         };
         Ok(next)

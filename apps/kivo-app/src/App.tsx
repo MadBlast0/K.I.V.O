@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { MODES } from "./lib/modes";
 import { useTranslation } from "react-i18next";
 import { RuntimeStatus } from "./components/layout/RuntimeStatus";
 import { AppWindow, NAV, Sidebar, type PageId } from "./components/layout/Shell";
@@ -200,6 +201,18 @@ function Shell({
               icon: "permissions",
               run: () => setPage("permissions"),
             },
+            ...MODES.map((m): Command => ({
+              id: `mode-${m.mode}`,
+              group: t("palette.actions"),
+              label: t("modes.switchTo", { mode: t(`modes.${m.mode}`) }),
+              icon: m.icon,
+              keywords: t("modes.keywords"),
+              run: () => {
+                request(Method.modeSet, { mode: m.mode })
+                  .then(() => toast(t("modes.switched", { mode: t(`modes.${m.mode}`) })))
+                  .catch(fail);
+              },
+            })),
             {
               id: "tidy-memory",
               group: t("palette.actions"),

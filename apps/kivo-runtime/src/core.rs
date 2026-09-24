@@ -63,6 +63,8 @@ fn placement(config: &KivoConfig) -> kivo_ipc::protocol::IslandPlacement {
         announcements: config.accessibility.announcements,
         motion: config.appearance.motion,
         companion: config.companion.style,
+        style: config.overlay.style,
+        wake_glow: config.overlay.wake_glow,
     }
 }
 
@@ -94,6 +96,7 @@ impl Core {
                 bypass_until: None,
                 offer: None,
                 has_selection: false,
+                controlling: None,
                 revision: 0,
             }),
             settings: watch::Sender::new(0),
@@ -305,6 +308,22 @@ impl Core {
     }
 
     /// Changes what the Island shows about the current turn.
+    /// Computer use's live state (CAP-12): the banner, frame and KIVO's cursor follow it.
+    pub fn update_controlling(
+        &self,
+        change: impl FnOnce(&mut Option<kivo_ipc::protocol::ControlView>),
+    ) {
+        self.state.send_if_modified(|s| {
+            let before = s.controlling.clone();
+            change(&mut s.controlling);
+            let changed = s.controlling != before;
+            if changed {
+                s.revision += 1;
+            }
+            changed
+        });
+    }
+
     pub fn update_turn(&self, change: impl FnOnce(&mut TurnView)) {
         self.state.send_if_modified(|s| {
             let Some(turn) = s.turn.as_mut() else {
@@ -721,6 +740,7 @@ mod tests {
                 bypass_until: None,
                 offer: None,
                 has_selection: false,
+                controlling: None,
                 revision: 1
             }
         );

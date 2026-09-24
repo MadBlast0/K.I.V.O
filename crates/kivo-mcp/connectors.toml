@@ -48,6 +48,40 @@ kind = "remote"
 url = "https://mcp.stripe.com"
 badges = ["cloud", "sensitive"]
 
+# Native: signs in with KIVO's own OAuth app (INT-05), one narrow scope each, asked when connected.
+[[connector]]
+id = "google-calendar"
+name = "Google Calendar"
+description = "See what's coming up and add events."
+access = "Your calendar's events (not your other Google data)"
+kind = "native"
+provider = "google"
+scope = "https://www.googleapis.com/auth/calendar.events"
+tools = "google.calendar."
+badges = ["cloud"]
+
+[[connector]]
+id = "google-drive"
+name = "Google Drive"
+description = "Save notes and files KIVO makes to your Drive."
+access = "Only the files KIVO creates (not the rest of your Drive)"
+kind = "native"
+provider = "google"
+scope = "https://www.googleapis.com/auth/drive.file"
+tools = "google.drive."
+badges = ["cloud"]
+
+[[connector]]
+id = "outlook-calendar"
+name = "Outlook Calendar"
+description = "Your Microsoft 365 or Outlook.com calendar."
+access = "Your calendar's events"
+kind = "native"
+provider = "microsoft"
+scope = "Calendars.ReadWrite"
+tools = "microsoft.calendar."
+badges = ["cloud"]
+
 # Local: ready on this PC, no sign-in (DISC-08).
 [[connector]]
 id = "github-cli"

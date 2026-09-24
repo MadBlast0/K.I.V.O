@@ -43,6 +43,8 @@ pub struct Platform {
     pub terminals: Arc<dyn kivo_platform::Terminals>,
     /// A remembered workspace's folder by its name (CONV-10).
     pub workspace_folder: kivo_tools::controls::FolderLookup,
+    /// Opens apps (a desktop AI app that isn't running, CONV-16).
+    pub launcher: Arc<dyn kivo_platform::Apps>,
 }
 
 fn failed(e: String) -> ToolError {
@@ -93,6 +95,7 @@ pub fn build(
         browser: platform.browser,
         managed: platform.managed,
         apps: Arc::new(apps),
+        launcher: platform.launcher,
         shell_home,
         language: if language.contains('-') {
             language

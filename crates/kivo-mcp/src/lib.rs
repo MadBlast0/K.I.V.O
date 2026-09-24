@@ -8,6 +8,8 @@ pub mod config;
 pub mod connectors;
 pub mod hash;
 pub mod imports;
+pub mod native;
+pub mod oauth;
 pub mod server;
 pub mod tool;
 

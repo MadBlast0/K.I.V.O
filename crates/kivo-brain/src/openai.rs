@@ -31,6 +31,9 @@ pub struct OpenAiConfig {
     pub max_completion_tokens: bool,
     /// Extra headers (OpenRouter's app attribution).
     pub extra_headers: Vec<(&'static str, String)>,
+    /// Asks for usage at the end of the stream (`stream_options`). Mistral refuses the field (a
+    /// 422) and reports usage in its last chunk anyway (BRAIN-11).
+    pub stream_usage: bool,
 }
 
 impl OpenAiConfig {
@@ -44,6 +47,7 @@ impl OpenAiConfig {
             free: false,
             max_completion_tokens: true,
             extra_headers: Vec::new(),
+            stream_usage: true,
         }
     }
 
@@ -64,6 +68,7 @@ impl OpenAiConfig {
                 ),
                 ("x-title", "KIVO".into()),
             ],
+            stream_usage: true,
         }
     }
 
@@ -82,6 +87,7 @@ impl OpenAiConfig {
             free: true,
             max_completion_tokens: false,
             extra_headers: Vec::new(),
+            stream_usage: true,
         }
     }
 
@@ -91,8 +97,10 @@ impl OpenAiConfig {
         name: impl Into<String>,
         base_url: impl Into<String>,
     ) -> Self {
+        let id = id.into();
         Self {
-            id: id.into(),
+            stream_usage: id != "mistral",
+            id,
             name: name.into(),
             base_url: base_url.into(),
             kind: ProviderKind::Api,
@@ -216,8 +224,10 @@ pub fn body(config: &OpenAiConfig, request: &ChatRequest) -> Value {
         "model": request.model,
         "messages": messages,
         "stream": true,
-        "stream_options": { "include_usage": true },
     });
+    if config.stream_usage {
+        body["stream_options"] = json!({ "include_usage": true });
+    }
     let limit = if config.max_completion_tokens {
         "max_completion_tokens"
     } else {

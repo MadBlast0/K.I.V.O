@@ -70,6 +70,9 @@ fn report(peer: &Peer, engine: &str, state: Residency) {
     );
 }
 
+/// What a Windows voice reads for Chatterbox to copy it: varied sounds, about seven seconds.
+const REFERENCE_SENTENCE: &str = "Hello, I'm KIVO. I can open your apps, find your files, and answer questions whenever you need a hand with your computer.";
+
 fn load(request: &ModelLoad) -> Result<Box<dyn TtsEngine>, VoiceError> {
     match request.engine.as_str() {
         kivo_voice::kokoro::ENGINE_ID => {
@@ -91,6 +94,49 @@ fn load(request: &ModelLoad) -> Result<Box<dyn TtsEngine>, VoiceError> {
                 std::path::Path::new(dir),
                 request.threads,
                 request.language.as_deref().unwrap_or("en"),
+            )?))
+        }
+        id if kivo_voice::cloud::provider(id).is_some() => {
+            let cloud = request
+                .cloud
+                .as_ref()
+                .ok_or_else(|| VoiceError::Engine(format!("{id}: no key")))?;
+            Ok(Box::new(kivo_voice::cloud::CloudTts::new(
+                id,
+                crate::stt::access(cloud),
+                request.language.as_deref().unwrap_or("en"),
+            )?))
+        }
+        // Chatterbox copies a voice: one of the Windows voices reads a reference sentence here, on
+        // this PC, the first time a voice is used (VOICE-11).
+        #[cfg(windows)]
+        kivo_voice::chatterbox::ENGINE_ID => {
+            let dir = request
+                .dir
+                .as_deref()
+                .ok_or_else(|| VoiceError::ModelMissing(request.engine.clone()))?;
+            let mut windows = SystemTts::new(Arc::new(kivo_platform_windows::WindowsSpeech));
+            let voices = windows.voices();
+            let reference = Box::new(move |voice: &str| -> Result<(Vec<f32>, u32), VoiceError> {
+                let mut audio = Vec::new();
+                let mut rate = 16_000;
+                windows.speak(
+                    REFERENCE_SENTENCE,
+                    Some(voice).filter(|v| !v.is_empty()),
+                    &CancellationToken::new(),
+                    &mut |pcm, r| {
+                        audio.extend_from_slice(pcm);
+                        rate = r;
+                        Ok(())
+                    },
+                )?;
+                Ok((audio, rate))
+            });
+            Ok(Box::new(kivo_voice::chatterbox::Chatterbox::load(
+                std::path::Path::new(dir),
+                request.threads,
+                voices,
+                reference,
             )?))
         }
         #[cfg(windows)]

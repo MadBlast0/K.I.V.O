@@ -405,6 +405,22 @@ const SCHEMA: &[&str] = &[
              title      TEXT NOT NULL,
              PRIMARY KEY (profile_id, turn_id, path)
          ) STRICT;",
+    // Hybrid memory search (MEM-09, CONV-23): one 384-dimension vector per note in sqlite-vec,
+    // keyed by the note's row id, with the model that made it. A changed or deleted note loses
+    // its vector, and the runtime embeds it again in the background.
+    "CREATE VIRTUAL TABLE memory_vectors USING vec0 (embedding float[384] distance_metric=cosine);
+     CREATE TABLE memory_vector_models (
+             profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+             memory_id  INTEGER PRIMARY KEY REFERENCES memories(id) ON DELETE CASCADE,
+             model      TEXT NOT NULL
+         ) STRICT;
+     CREATE TRIGGER memory_vectors_delete AFTER DELETE ON memories BEGIN
+         DELETE FROM memory_vectors WHERE rowid = old.id;
+     END;
+     CREATE TRIGGER memory_vectors_stale AFTER UPDATE OF title, text ON memories
+         WHEN old.title IS NOT new.title OR old.text IS NOT new.text BEGIN
+         DELETE FROM memory_vector_models WHERE memory_id = new.id;
+     END;",
 ];
 
 static MIGRATIONS: LazyLock<Migrations<'static>> =
@@ -429,6 +445,7 @@ impl Database {
     /// Opens (or creates) the database at `path`, backs it up if an upgrade is due, migrates it,
     /// and makes sure the owner profile exists.
     pub fn open(path: &Path) -> Result<Self, DbError> {
+        register_vectors();
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
@@ -446,6 +463,7 @@ impl Database {
 
     /// An in-memory database with the full schema (tests).
     pub fn in_memory() -> Result<Self, DbError> {
+        register_vectors();
         let mut conn = Connection::open_in_memory()?;
         configure(&conn)?;
         MIGRATIONS.to_latest(&mut conn)?;
@@ -518,6 +536,24 @@ impl Database {
     pub(crate) fn connection_mut(&mut self) -> &mut Connection {
         &mut self.conn
     }
+}
+
+/// Makes sqlite-vec available to every connection opened after this (once per process).
+fn register_vectors() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        // SAFETY: `sqlite3_vec_init` is sqlite-vec's extension entry point, with the signature
+        // `sqlite3_auto_extension` expects; registering it has no other effect.
+        unsafe {
+            #[allow(
+                clippy::missing_transmute_annotations,
+                reason = "the FFI entry point's type"
+            )]
+            rusqlite::ffi::sqlite3_auto_extension(Some(std::mem::transmute(
+                sqlite_vec::sqlite3_vec_init as *const (),
+            )));
+        }
+    });
 }
 
 fn configure(conn: &Connection) -> rusqlite::Result<()> {

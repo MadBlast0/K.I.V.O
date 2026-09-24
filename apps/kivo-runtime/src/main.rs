@@ -332,7 +332,11 @@ async fn run(
     let mut tools = kivo_tools::builtin(&tools_env);
     tools.extend(kivo_tools::controls(&controls));
     tools.extend(kivo_runtime::task_tools::tools(&task_handle));
+    tools.extend(kivo_runtime::computer_tool::tools());
+    let routine_handle: kivo_runtime::routine_tools::RoutineHandle = Arc::default();
+    tools.extend(kivo_runtime::routine_tools::tools(&routine_handle));
     let registry = Arc::new(kivo_tools::Registry::new(tools));
+    speaker.set_custom_dir(paths.sounds());
     speaker.configure(&config.sounds);
     let grammar = match Grammar::bundled(&config.general.language) {
         Ok(grammar) => grammar,
@@ -368,7 +372,7 @@ async fn run(
         brains: Arc::clone(&brains),
         agents: Arc::clone(&agents),
         verifier: Arc::new(kivo_platform_windows::WindowsHello),
-        commands: Some(commands),
+        commands: Some(Arc::clone(&commands) as Arc<dyn kivo_platform::CommandRunner>),
         input_abort: Some(input_abort),
         vision,
     }));
@@ -380,6 +384,8 @@ async fn run(
     kivo_runtime::tasks::set_utc_offset(kivo_platform_windows::utc_offset_minutes());
     engine.set_app_registry(Arc::clone(&controls.apps));
     engine.set_uia(Arc::clone(&controls.uia));
+    // Computer use takes its own screenshots (CAP-10).
+    engine.set_screen(Arc::clone(&platform.screen));
     let notifier = kivo_runtime::notifier::Notifier::new(
         Arc::clone(&core),
         Arc::clone(&platform.system),
@@ -416,6 +422,54 @@ async fn run(
     );
     routines.seed_starters();
     engine.set_routines(Arc::clone(&routines));
+    // Installs with consent (DISC-07, DIST-14), using newer signed catalogs when there are some
+    // (DISC-17): fetched once a day unless turned off or in Strictly private.
+    let installer = kivo_runtime::installer::Installer::new(
+        Arc::clone(&core),
+        // The same runner as the shell tool: the emergency stop kills installs too.
+        Arc::clone(&commands) as Arc<dyn kivo_platform::CommandRunner>,
+        dirs::home_dir().unwrap_or_else(std::env::temp_dir),
+    );
+    {
+        let catalogs = Arc::new(kivo_runtime::catalogs::Catalogs::new(
+            paths.catalogs(),
+            kivo_runtime::catalogs::keys(),
+            {
+                // The model downloader's client: HTTPS through Windows' own TLS.
+                let http = kivo_store::models::HttpFetcher::new();
+                Arc::new(move |url: &str| {
+                    use kivo_store::models::Fetcher as _;
+                    use std::io::Read as _;
+                    let (reader, _) = http.open(url, 0).map_err(|e| e.to_string())?;
+                    let mut body = Vec::new();
+                    reader
+                        .take(4 * 1024 * 1024)
+                        .read_to_end(&mut body)
+                        .map_err(|e| e.to_string())?;
+                    Ok(body)
+                })
+            },
+        ));
+        installer.set_catalogs(Arc::clone(&catalogs));
+        let allowed_core = Arc::clone(&core);
+        tokio::spawn(catalogs.run_daily(
+            Arc::new(move || {
+                let config = allowed_core.config();
+                config.privacy.catalog_updates
+                    && config.privacy.mode != kivo_core::config::PrivacyMode::StrictPrivate
+            }),
+            core.shutdown(),
+        ));
+    }
+    let _ = routine_handle.set(Arc::downgrade(&routines));
+    // Schedules and events start routines on their own (ROUT-11, ROUT-12).
+    tokio::spawn(kivo_runtime::triggers::run(
+        Arc::clone(&core),
+        Arc::clone(&routines),
+        Arc::new(kivo_platform_windows::WindowsSystemInfo),
+        Arc::new(kivo_platform_windows::WindowsProcesses),
+        Arc::clone(&db),
+    ));
     // Instructions and workspaces (CONVERSATION §4): the Markdown mirrors are watched for edits.
     let workspaces = kivo_runtime::workspaces::Workspaces::new(
         Arc::clone(&core),
@@ -439,6 +493,11 @@ async fn run(
     );
     memory.watch();
     engine.set_memory(Arc::clone(&memory));
+    // A product mode switched by voice applies the speech engines too (PLAN-06).
+    {
+        let models = Arc::clone(&models);
+        engine.set_engines_hook(Arc::new(move |config| models.apply_engines(config)));
+    }
     kivo_runtime::memory::tidy_daily(Arc::clone(&memory), Arc::clone(&engine));
     // What KIVO remembers, for brains and for agents through KIVO's MCP server (CONV-24).
     registry.set_live("memory.", kivo_runtime::memory_tools::tools(&db, &memory));
@@ -498,6 +557,8 @@ async fn run(
         Some(Arc::clone(&browser)),
         Arc::new(|url| kivo_platform_windows::open_uri(url).map_err(|e| e.to_string())),
     );
+    // Native connectors' tools (INT-05) go into the registry once signed in.
+    connectors.set_registry(Arc::clone(&registry));
     {
         let mcp = Arc::clone(&mcp);
         let connectors = Arc::clone(&connectors);
@@ -553,11 +614,12 @@ async fn run(
         let engine = Arc::clone(&engine);
         let models = Arc::clone(&models);
         let core = Arc::clone(&core);
+        let memory = Arc::clone(&memory);
         let mut events = core.bus.subscribe();
         tokio::spawn(async move {
             let load = |engine: Arc<Engine>, models: Arc<Models>, language: String| async move {
                 let dir = models.installed_dir(kivo_store::models::EMBEDDING_MODEL);
-                let semantic = match dir {
+                let loaded = match dir {
                     Some(dir) => tokio::task::spawn_blocking(move || {
                         kivo_runtime::semantic::load(&dir, &language)
                     })
@@ -566,14 +628,27 @@ async fn run(
                     .flatten(),
                     None => None,
                 };
+                let (semantic, model) = loaded.unzip();
                 engine.set_semantic(semantic);
+                model
             };
-            load(
-                Arc::clone(&engine),
-                Arc::clone(&models),
-                core.config().general.language,
-            )
-            .await;
+            // The same model finds memories by meaning (MEM-09, CONV-23).
+            let share = |model: Option<Arc<kivo_voice::embed::MiniLm>>| {
+                if let Some(model) = model {
+                    memory.set_embedder(
+                        kivo_runtime::semantic::embedder(model),
+                        kivo_store::models::EMBEDDING_MODEL,
+                    );
+                }
+            };
+            share(
+                load(
+                    Arc::clone(&engine),
+                    Arc::clone(&models),
+                    core.config().general.language,
+                )
+                .await,
+            );
             loop {
                 let event = match events.recv().await {
                     kivo_core::Received::Event(event) => event,
@@ -587,12 +662,14 @@ async fn run(
                 }) = &event.kind
                     && id == kivo_store::models::EMBEDDING_MODEL
                 {
-                    load(
-                        Arc::clone(&engine),
-                        Arc::clone(&models),
-                        core.config().general.language,
-                    )
-                    .await;
+                    share(
+                        load(
+                            Arc::clone(&engine),
+                            Arc::clone(&models),
+                            core.config().general.language,
+                        )
+                        .await,
+                    );
                 }
             }
         });
@@ -664,6 +741,28 @@ async fn run(
 
     // What this PC can do, for the speech engines' threads (PLAN-01).
     models.set_system(Arc::clone(&platform.system));
+    models.set_secrets(Arc::new(kivo_platform_windows::WindowsSecrets));
+    // The performance profile and the GPU policy, checked again every ten seconds while KIVO is
+    // idle (PLAN-08, VOICE-35): Auto follows a game in front or the battery, and the recognizer
+    // leaves the GPU for games and busy GPUs and comes back when it's free.
+    {
+        let (models, core) = (Arc::clone(&models), Arc::clone(&core));
+        let shutdown = core.shutdown();
+        tokio::spawn(async move {
+            let mut tick = tokio::time::interval(std::time::Duration::from_secs(10));
+            loop {
+                tokio::select! {
+                    _ = tick.tick() => {}
+                    () = shutdown.cancelled() => break,
+                }
+                if core.state().borrow().session != kivo_core::SessionState::Idle {
+                    continue;
+                }
+                let (m, config) = (Arc::clone(&models), core.config());
+                let _ = tokio::task::spawn_blocking(move || m.recheck(&config)).await;
+            }
+        });
+    }
     match platform.system.snapshot() {
         Ok(machine) => {
             let advice = models.recommend(
@@ -761,6 +860,8 @@ async fn run(
                     uia: Arc::clone(&controls.uia),
                     clipboard: Arc::clone(&controls.clipboard),
                     db: Arc::clone(&db),
+                    exports: dirs::download_dir(),
+                    installer: Arc::clone(&installer),
                 }))
                 .with_extensions(Arc::new(kivo_runtime::extensions_rpc::ExtensionsRpc {
                     core: Arc::clone(&core),
@@ -791,6 +892,10 @@ async fn run(
                     processes: Arc::new(kivo_platform_windows::WindowsProcesses),
                     browser: Some(Arc::clone(&browser)),
                     discovery: Some(Arc::clone(&discovery)),
+                    platform: kivo_platform_windows::detect_capabilities(),
+                    logs: Some(paths.logs()),
+                    exports: dirs::download_dir(),
+                    bundle: std::sync::Mutex::new(None),
                     open_url: Arc::new(|url: &str| {
                         use kivo_platform::SystemControl;
                         kivo_platform_windows::WindowsControl
@@ -1047,6 +1152,7 @@ fn windows_controls(
         }),
         terminals: Arc::new(kivo_platform_windows::WindowsTerminals),
         workspace_folder: Arc::new(move |name| kivo_runtime::workspaces::folder_named(&db, name)),
+        launcher: Arc::clone(&platform.apps),
     }
 }
 

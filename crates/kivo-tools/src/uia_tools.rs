@@ -93,6 +93,38 @@ fn compact(node: &UiNode) -> Value {
     v
 }
 
+/// Where `target` sits in `window`, as a location key (`topRight`, `center`, …) for "It's at the
+/// top right of the window" (UX-39, plan §141).
+pub fn location_in(window: &kivo_platform::Rect, target: &kivo_platform::Rect) -> &'static str {
+    let third = |start: i32, size: u32, at: i32| {
+        let size = i64::from(size.max(3));
+        let rel = i64::from(at) - i64::from(start);
+        if rel * 3 < size {
+            0
+        } else if rel * 3 < size * 2 {
+            1
+        } else {
+            2
+        }
+    };
+    let cx = target.x + i32::try_from(target.width / 2).unwrap_or(0);
+    let cy = target.y + i32::try_from(target.height / 2).unwrap_or(0);
+    match (
+        third(window.y, window.height, cy),
+        third(window.x, window.width, cx),
+    ) {
+        (0, 0) => "topLeft",
+        (0, 1) => "top",
+        (0, _) => "topRight",
+        (1, 0) => "left",
+        (1, 1) => "center",
+        (1, _) => "right",
+        (_, 0) => "bottomLeft",
+        (_, 1) => "bottom",
+        _ => "bottomRight",
+    }
+}
+
 pub(crate) fn tools(c: &Arc<Controls>) -> Vec<Arc<dyn Tool>> {
     use Reversibility::{NotApplicable, Undoable};
     use SideEffect::{LocalRead, LocalWrite};
@@ -129,6 +161,66 @@ pub(crate) fn tools(c: &Arc<Controls>) -> Vec<Arc<dyn Tool>> {
                 let say = text::plural("reply.uia.found", found.len() as u64, &[]);
                 Ok(Output::new(say, json!({ "elements": found.iter().map(compact).collect::<Vec<_>>() }))
                     .untrusted(window_source(&window)))
+            }),
+        )
+        .targets(Box::new(window_targets))
+        .build(),
+        b.tool(
+            &def(
+                "uia.point_at",
+                "Show the user where a control is: finds it by name in a window (the one in front by default), points KIVO's Island at it and says where it is. Nothing is clicked.",
+                object(
+                    json!({
+                        "window": { "type": "string", "description": "Window id; the window in front by default" },
+                        "name": { "type": "string", "description": "The control's name, like Export or Save" },
+                        "text": { "type": "string", "description": "The same, as the grammar passes it" }
+                    }),
+                    &[],
+                ),
+                Risk::Safe,
+                &[LocalRead],
+                NotApplicable,
+            ),
+            Box::new(|args, c, _| {
+                let window = window_of(args, c)?;
+                // `text` when the grammar matched "where is the … button".
+                let name = args["name"].as_str().or_else(|| args["text"].as_str()).unwrap_or_default().trim().to_owned();
+                let query = ElementQuery {
+                    window: Some(window.id),
+                    name: Some(name.clone()),
+                    role: None,
+                    automation_id: None,
+                };
+                let found = c.uia.find(&query, 5).map_err(uia_error)?;
+                let Some((node, bounds)) = found
+                    .into_iter()
+                    .find_map(|n| n.bounds.filter(|b| b.width > 0 && b.height > 0).map(|b| (n, b)))
+                else {
+                    return Err(ToolError::new(
+                        ToolErrorCode::NotFound,
+                        text::tf("reply.uia.notFoundNamed", &[("name", &name)]),
+                    ));
+                };
+                let place = location_in(&window.bounds, &bounds);
+                let label = if node.name.is_empty() { name } else { node.name.clone() };
+                let say = text::tf(
+                    "reply.uia.pointed",
+                    &[
+                        ("name", &label),
+                        ("where", &text::t(&format!("reply.uia.where.{place}"))),
+                    ],
+                );
+                Ok(Output::new(
+                    say,
+                    json!({
+                        "point": {
+                            "x": bounds.x, "y": bounds.y,
+                            "width": bounds.width, "height": bounds.height,
+                            "label": label, "where": place,
+                        }
+                    }),
+                )
+                .untrusted(window_source(&window)))
             }),
         )
         .targets(Box::new(window_targets))
@@ -637,5 +729,25 @@ mod tests {
         assert!(
             matches!(&t[0], kivo_core::tool::Target::App { name, .. } if name == "kivo-test-app")
         );
+    }
+
+    #[test]
+    fn a_controls_place_in_its_window_in_words() {
+        let window = kivo_platform::Rect {
+            x: 100,
+            y: 100,
+            width: 900,
+            height: 600,
+        };
+        let at = |x, y| kivo_platform::Rect {
+            x,
+            y,
+            width: 60,
+            height: 24,
+        };
+        assert_eq!(location_in(&window, &at(900, 110)), "topRight");
+        assert_eq!(location_in(&window, &at(520, 380)), "center");
+        assert_eq!(location_in(&window, &at(110, 660)), "bottomLeft");
+        assert_eq!(location_in(&window, &at(520, 110)), "top");
     }
 }

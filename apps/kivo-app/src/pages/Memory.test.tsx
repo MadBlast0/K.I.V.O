@@ -52,6 +52,7 @@ const overview: MemoryOverview = {
   suggestions: [
     { id: 7, text: "Sam ships releases on Fridays", reason: "From a conversation", workspace: null, createdAt: 1 },
   ],
+  links: [{ from: "notes/design-reviews.md", to: "people/maya.md" }],
 };
 
 function detail(path: string): MemoryNoteDetail {
@@ -199,5 +200,22 @@ describe("Memory (UX-29, MEM-06)", () => {
       method: "memory.remember",
       params: { text: "Standups are at 9:30", tags: ["work", "team"] },
     });
+  });
+});
+
+describe("Memory graph (CONV-25)", () => {
+  it("shows notes, links and tags; a note opens and a tag filters", async () => {
+    page();
+    fireEvent.click(await screen.findByRole("button", { name: "Graph" }));
+    const graph = await screen.findByRole("group", { name: "Memory graph of 4 notes" });
+    const maya = within(graph).getByRole("button", { name: "Maya, 1 link" });
+    expect(within(graph).getByRole("button", { name: "#design, 1 note" })).toBeTruthy();
+    expect(within(graph).getByRole("button", { name: "Design reviews, 2 links" })).toBeTruthy();
+    fireEvent.keyDown(maya, { key: "Enter" });
+    expect(await screen.findByRole("heading", { name: "Maya" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Graph" }));
+    fireEvent.click(await screen.findByRole("button", { name: "#projects, 1 note" }));
+    expect(await screen.findByText("Project folder")).toBeTruthy();
+    expect(screen.queryByText("Design reviews")).toBeNull();
   });
 });

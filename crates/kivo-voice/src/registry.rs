@@ -7,7 +7,7 @@
 //! anything unmeasured is shown as "Not benchmarked by KIVO".
 
 use crate::engine::{EngineInfo, EngineKind, EngineSlot};
-use crate::{kokoro, moonshine, supertonic, system_tts};
+use crate::{chatterbox, cloud, kokoro, moonshine, parakeet, supertonic, system_tts, whisper};
 use serde::{Deserialize, Serialize};
 
 /// A curated choice (VOICE §11). STT uses Recommended, Lightweight, HighAccuracy and
@@ -144,6 +144,17 @@ pub fn registry() -> Vec<RegistryEntry> {
         })
         .collect();
 
+    // Balanced: 25 European languages in one model (VOICE-10).
+    all.push(RegistryEntry::new(
+        parakeet::info(),
+        &[Profile::Multilingual],
+    ));
+    // Accurate: Whisper large-v3-turbo (VOICE-10).
+    all.push(RegistryEntry::new(
+        whisper::info(),
+        &[Profile::HighAccuracy],
+    ));
+
     all.push(RegistryEntry::new(
         system_tts::info(),
         &[Profile::Lightweight],
@@ -172,6 +183,28 @@ pub fn registry() -> Vec<RegistryEntry> {
         })
         .collect();
     all.push(supertonic);
+
+    // Expressive: Chatterbox Turbo, speaking in a copy of one of the Windows voices (VOICE-11).
+    all.push(RegistryEntry::new(
+        chatterbox::info(),
+        &[Profile::Expressive],
+    ));
+
+    // Cloud engines (VOICE-10/11): outside the local profiles, chosen from "Other engines", used
+    // only when privacy allows and a key is saved.
+    for p in &cloud::PROVIDERS {
+        let mut entry = RegistryEntry::new(cloud::info(p), &[]);
+        entry.voices = cloud::voices(p.id)
+            .into_iter()
+            .map(|v| VoiceOption {
+                id: v.id,
+                name: v.name,
+                style: String::new(),
+                languages: vec![v.language],
+            })
+            .collect();
+        all.push(entry);
+    }
     all
 }
 
@@ -383,10 +416,17 @@ mod tests {
         for engine in crate::engines() {
             assert!(ids.contains(&engine.id), "{} is missing", engine.id);
         }
-        assert!(
-            registry().iter().all(|e| e.privacy == Privacy::Local),
-            "every engine KIVO ships today runs on this PC"
-        );
+        // Only the cloud engines send anything off the device, and they're labelled so.
+        for e in registry() {
+            let cloud = crate::cloud::provider(e.id()).is_some();
+            assert_eq!(e.privacy == Privacy::Cloud, cloud, "{}", e.id());
+            if cloud {
+                assert!(
+                    e.profiles.is_empty(),
+                    "no local profile points at the cloud"
+                );
+            }
+        }
     }
 
     #[test]
@@ -409,11 +449,16 @@ mod tests {
             Some("moonshine-tiny-en")
         );
         assert_eq!(
-            engine(&stt, Profile::HighAccuracy),
-            None,
-            "not available yet"
+            engine(&stt, Profile::HighAccuracy).as_deref(),
+            Some("whisper-large-v3-turbo")
         );
-        let multi = stt
+        assert_eq!(
+            engine(&stt, Profile::Multilingual).as_deref(),
+            Some("parakeet-tdt-v3"),
+            "Parakeet speaks English among its 25 languages"
+        );
+        let sw = profiles(EngineSlot::Stt, "sw");
+        let multi = sw
             .iter()
             .find(|c| c.profile == Profile::Multilingual)
             .unwrap();
@@ -437,7 +482,10 @@ mod tests {
             engine(&tts, Profile::Multilingual).as_deref(),
             Some("supertonic-3")
         );
-        assert_eq!(engine(&tts, Profile::Expressive), None);
+        assert_eq!(
+            engine(&tts, Profile::Expressive).as_deref(),
+            Some("chatterbox-turbo")
+        );
         let hi = profiles(EngineSlot::Tts, "hi");
         assert_eq!(
             engine(&hi, Profile::Natural),
@@ -464,11 +512,38 @@ mod tests {
             (es.engine.as_str(), es.language.as_str()),
             ("Moonshine Base", "Spanish")
         );
-        assert_eq!(es.alternatives, ["Moonshine Base (Spanish)"]);
+        assert_eq!(
+            es.alternatives,
+            [
+                "Moonshine Base (Spanish)",
+                "Parakeet TDT v3",
+                "Whisper large-v3-turbo",
+                "OpenAI Transcribe"
+            ]
+        );
         let fr = language_problem("moonshine-base-en", "fr-FR").unwrap();
-        assert!(fr.alternatives.is_empty(), "no recognizer for French yet");
+        assert_eq!(
+            fr.alternatives,
+            [
+                "Parakeet TDT v3",
+                "Whisper large-v3-turbo",
+                "OpenAI Transcribe"
+            ]
+        );
+        let sw = language_problem("moonshine-base-en", "sw").unwrap();
+        assert_eq!(sw.alternatives, ["OpenAI Transcribe"], "only in the cloud");
         let kokoro = language_problem("kokoro-82m", "hi").unwrap();
-        assert_eq!(kokoro.alternatives, ["Windows voices", "Supertonic 3"]);
+        assert_eq!(
+            kokoro.alternatives,
+            [
+                "Windows voices",
+                "Supertonic 3",
+                "Cartesia Sonic",
+                "ElevenLabs Flash",
+                "Azure neural voices",
+                "OpenAI voices"
+            ]
+        );
         assert_eq!(language_name("xx"), "xx");
     }
 

@@ -83,6 +83,8 @@ const choices: SpeechChoices = {
       voices: [{ id: "af_heart", name: "Heart (American, female)", style: "female", languages: ["en"] }],
     }),
     engine({ id: "supertonic-3", name: "Supertonic 3", slot: "tts", license: "OpenRAIL-M", languages: ["en", "es"] }),
+    engine({ id: "deepgram-flux", name: "Deepgram Flux", slot: "stt", privacy: "cloud", model: null, ready: false }),
+    engine({ id: "openai-tts", name: "OpenAI voices", slot: "tts", privacy: "cloud", model: null, ready: true }),
   ],
   profiles: [
     { slot: "stt", profile: "recommended", engine: "moonshine-base-en", otherLanguagesOnly: false },
@@ -254,6 +256,27 @@ describe("Voice page", () => {
     expect(calls).toContainEqual({
       method: "voice.switch",
       params: { slot: "tts", engine: "kokoro-82m", voice: null },
+    });
+  });
+
+  it("adds a cloud service's key, tested by the runtime, and uses a ready one (VOICE-10/11)", async () => {
+    await mount();
+    fireEvent.click(screen.getAllByText("Cloud services")[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Add key" }));
+    const field = screen.getByLabelText("API key for Deepgram Flux");
+    expect(field.getAttribute("type")).toBe("password");
+    fireEvent.change(field, { target: { value: "dg-secret" } });
+    fireEvent.click(screen.getByRole("button", { name: "Test and save" }));
+    await settle();
+    expect(calls).toContainEqual({
+      method: "voice.setKey",
+      params: { engine: "deepgram-flux", key: "dg-secret", region: null },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Use" }));
+    await settle();
+    expect(calls).toContainEqual({
+      method: "voice.switch",
+      params: { slot: "tts", engine: "openai-tts", voice: null },
     });
   });
 

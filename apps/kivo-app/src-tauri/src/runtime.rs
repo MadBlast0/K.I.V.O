@@ -51,6 +51,8 @@ pub struct Runtime {
     client: Mutex<Option<Client>>,
     /// Stops the connection loop when the app exits.
     stop: CancellationToken,
+    /// Computer use as last shown by the control overlay.
+    controlling: std::sync::Mutex<Option<kivo_ipc::protocol::ControlView>>,
 }
 
 impl Runtime {
@@ -63,12 +65,13 @@ impl Runtime {
     }
 
     fn set_link(&self, app: &AppHandle, update: impl FnOnce(&mut Link)) {
-        let (link, previous_mode) = {
+        let (link, previous_mode, previous_session) = {
             let mut guard = self.link.lock().unwrap_or_else(|e| e.into_inner());
             let link = guard.get_or_insert_with(Link::connecting);
             let previous_mode = link.snapshot.as_ref().map(|s| s.mode);
+            let previous_session = link.snapshot.as_ref().map(|s| s.session);
             update(link);
-            (link.clone(), previous_mode)
+            (link.clone(), previous_mode, previous_session)
         };
         let snapshot = link
             .snapshot
@@ -99,7 +102,38 @@ impl Runtime {
             snapshot
                 .and_then(|s| s.turn.as_ref())
                 .and_then(|t| t.title_bar_bottom),
+            snapshot
+                .and_then(|s| s.turn.as_ref())
+                .and_then(|t| t.point.as_ref())
+                .map(|p| (p.x, p.y, p.width, p.height)),
         );
+        // Computer use: the frame, banner and KIVO's cursor while it controls the screen (CAP-12).
+        let controlling_now = snapshot.and_then(|s| s.controlling.as_ref());
+        let controlling_before = self
+            .controlling
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        if controlling_now != controlling_before.as_ref() {
+            *self.controlling.lock().unwrap_or_else(|e| e.into_inner()) = controlling_now.cloned();
+            crate::glow::control(
+                app,
+                controlling_now,
+                snapshot
+                    .and_then(|s| s.turn.as_ref())
+                    .and_then(|t| t.anchor)
+                    .map(|p| (p.x, p.y)),
+            );
+        }
+        // "Hey Kivo": the wake glow, when it's on (UX-16).
+        if let Some(now) = snapshot
+            && crate::glow::wakes(previous_session, now)
+        {
+            crate::glow::flash(
+                app,
+                now.turn.as_ref().and_then(|t| t.anchor).map(|p| (p.x, p.y)),
+            );
+        }
         // A change of mode while connected (not the first state seen) shows the Island's notice.
         if let (Some(before), Some(now)) = (previous_mode, snapshot.map(|s| s.mode))
             && before != now

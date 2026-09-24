@@ -86,7 +86,7 @@ pub fn recommend(i: &Inputs<'_>) -> SetupAdvice {
     }
     let performance = if m.ram_mb < LOW_RAM_MB {
         reasons.push(text::t("setup.reason.lowMemory"));
-        "battery"
+        "low-resource"
     } else {
         "auto"
     };
@@ -226,7 +226,7 @@ mod tests {
         });
         assert_eq!(offline.brain, None, "nothing online can answer");
         assert_eq!(offline.privacy, "local");
-        assert_eq!(offline.performance, "battery");
+        assert_eq!(offline.performance, "low-resource");
         assert!(!offline.download_now);
         let metered = recommend(&Inputs {
             machine: &m,

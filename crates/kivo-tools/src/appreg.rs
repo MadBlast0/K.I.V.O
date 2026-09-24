@@ -99,6 +99,22 @@ pub struct Hint {
     pub name: Option<String>,
 }
 
+/// Where a desktop AI app's composer, send button, latest reply and project picker are
+/// (CONVERSATION §5.3), for the app version they were written against. Apps change their UI, so
+/// the flow falls back when a hint stops matching.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct AiHints {
+    /// The app version the hints were written for.
+    pub version: String,
+    /// Whether they were checked against that version on a real install.
+    pub verified: bool,
+    pub composer: Hint,
+    pub send: Option<Hint>,
+    pub reply: Option<Hint>,
+    pub project: Option<Hint>,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Uia {
@@ -171,6 +187,8 @@ pub struct AppEntry {
     pub agent: Option<AgentLaunch>,
     /// A desktop AI app (DISC-06): found in the installed apps and listed on the Agents page.
     pub desktop_ai: bool,
+    /// How to prompt it through UI Automation (CONV-16).
+    pub ai: Option<AiHints>,
     /// Where the entry came from: `core` or the file it was read from.
     #[serde(skip)]
     pub origin: String,

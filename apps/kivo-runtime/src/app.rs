@@ -3,11 +3,18 @@
 //! drops and doesn't come back, it crashed or was killed, and it is relaunched in the background
 //! with backoff. After repeated quick crashes the supervisor stops trying until the user asks for
 //! the Control Center (tray click, "Open KIVO").
+//!
+//! In low-memory mode (Settings → General, ARCH-08) the app isn't started in the background at all:
+//! the supervisor waits until the Island first has something to show (KIVO hears the wake word,
+//! push-to-talk, a live activity, an offer) or the Control Center is asked for, and launches it
+//! then. That trades the first show's latency for the app's idle memory.
 
 use crate::core::Core;
 use kivo_core::Received;
+use kivo_core::SessionState;
 use kivo_core::event::{EventKind, UiEvent};
 use kivo_ipc::APP_CLIENT;
+use kivo_ipc::protocol::StateSnapshot;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -134,8 +141,17 @@ pub async fn supervise(
     let mut next: Option<Launch> = initial;
 
     loop {
-        // 1. Launch if needed, then wait for the app to connect.
-        if let Some(how) = next.take() {
+        // 1. Launch if needed, then wait for the app to connect. In low-memory mode a background
+        // launch waits until the Island is needed.
+        if let Some(mut how) = next.take() {
+            if how == Launch::Background && core.config().general.low_memory_mode {
+                tracing::info!("low-memory mode: the app starts when the Island is first needed");
+                let mut requests = core.bus.subscribe();
+                let Some(needed) = wait_for_need(&core, &mut requests).await else {
+                    return;
+                };
+                how = needed;
+            }
             awaiting = launcher.launch(&how);
         }
         if std::mem::take(&mut awaiting) {
@@ -200,6 +216,27 @@ pub async fn supervise(
                 None => return,
             },
         });
+    }
+}
+
+/// Whether the Island has something to show: KIVO is listening or busy, or a live activity, an
+/// offer or a selection is waiting (low-memory mode launches the app for it).
+pub fn needs_overlay(state: &StateSnapshot) -> bool {
+    !matches!(state.session, SessionState::Idle | SessionState::Paused)
+        || !state.activities.is_empty()
+        || state.offer.is_some()
+        || state.has_selection
+}
+
+/// Waits until the app is needed: a Control Center request shows it, the Island having something
+/// to show starts it in the background. `None` if KIVO is quitting.
+async fn wait_for_need(core: &Core, requests: &mut kivo_core::Subscription) -> Option<Launch> {
+    let mut state = core.state();
+    let shutdown = core.shutdown();
+    tokio::select! {
+        page = wait_for_open(core, requests) => page.map(Launch::Show),
+        r = state.wait_for(needs_overlay) => r.ok().map(|_| Launch::Background),
+        () = shutdown.cancelled() => None,
     }
 }
 
@@ -290,6 +327,65 @@ mod tests {
 
     async fn settle() {
         tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+
+    /// ARCH-08: in low-memory mode the app isn't started at sign-in or after a crash; it starts
+    /// when the Island is first needed, or shown when the Control Center is asked for.
+    #[tokio::test]
+    async fn low_memory_mode_starts_the_app_only_when_the_island_is_needed() {
+        let core = Arc::new(Core::default());
+        core.update_config(|c| c.general.low_memory_mode = true);
+        let (clients, rx) = watch::channel(Vec::new());
+        let app = Arc::new(FakeApp {
+            launches: Mutex::new(Vec::new()),
+            clients,
+            works: Mutex::new(true),
+        });
+        let task = tokio::spawn(supervise(
+            Arc::clone(&core),
+            Arc::clone(&app) as Arc<dyn Launcher>,
+            Some(Launch::Background),
+            rx,
+            fast(),
+        ));
+        settle().await;
+        assert!(app.launches().is_empty(), "not at sign-in");
+
+        // "Hey Kivo": the Island is needed, so the app starts (in the background; it shows the
+        // Island from the state it reads on connecting).
+        core.advance(kivo_core::SessionInput::Activate);
+        settle().await;
+        assert_eq!(app.launches(), [Launch::Background]);
+
+        // A crash while idle: nothing is relaunched until it's needed again.
+        core.advance(kivo_core::SessionInput::Cancel);
+        core.advance(kivo_core::SessionInput::InterruptionHandled { listen: false });
+        settle().await;
+        app.crash();
+        settle().await;
+        assert_eq!(app.launches().len(), 1);
+        // The tray's "Open KIVO" shows it at once.
+        core.open_control_center(Some("settings"));
+        settle().await;
+        assert_eq!(
+            app.launches(),
+            [Launch::Background, Launch::Show(Some("settings".into()))]
+        );
+        core.quit();
+        task.await.unwrap();
+    }
+
+    #[test]
+    fn the_island_is_needed_while_kivo_listens_or_something_waits() {
+        let mut state = Core::default().state().borrow().clone();
+        assert!(!needs_overlay(&state));
+        state.session = SessionState::Paused;
+        assert!(!needs_overlay(&state));
+        state.session = SessionState::Listening;
+        assert!(needs_overlay(&state));
+        state.session = SessionState::Idle;
+        state.has_selection = true;
+        assert!(needs_overlay(&state));
     }
 
     #[tokio::test]

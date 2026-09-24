@@ -98,6 +98,7 @@ describe("Permissions (UX-28)", () => {
       item("shell", false),
       item("ui-automation", true),
       item("screen-awareness", false),
+      item("computer-use", false),
     ];
     grants = [
       {
@@ -158,6 +159,59 @@ describe("Permissions (UX-28)", () => {
     });
   });
 
+  it("sets computer use's visibility, control and limits (CAP-13)", async () => {
+    page("capabilities");
+    await settle();
+    const rows = screen.getAllByRole("button", { name: "Options" });
+    fireEvent.click(rows[rows.length - 1]);
+    await settle();
+    const sheet = screen.getByRole("dialog");
+    expect(within(sheet).getByText("While it works")).toBeTruthy();
+    expect(within(sheet).getByText("Apps")).toBeTruthy();
+    fireEvent.click(within(sheet).getByRole("button", { name: "Always" }));
+    await settle();
+    expect(calls).toContainEqual({
+      method: "settings.set",
+      params: { tools: { "computer-use": { approve: "always" } } },
+    });
+    fireEvent.click(within(sheet).getByRole("switch", { name: "Pause when I use the mouse" }));
+    await settle();
+    expect(calls).toContainEqual({
+      method: "settings.set",
+      params: { tools: { "computer-use": { "pause-on-mouse": false } } },
+    });
+    fireEvent.click(within(sheet).getByRole("combobox", { name: "Most cost per task" }));
+    await settle();
+    fireEvent.keyDown(screen.getByRole("option", { name: "$2.00" }), { key: "Enter" });
+    await settle();
+    expect(calls).toContainEqual({
+      method: "settings.set",
+      params: { tools: { "computer-use": { "max-cost-cents": 200 } } },
+    });
+  });
+
+  it("chooses realtime voice's service and silence timeout (BRAIN-33)", async () => {
+    capabilities = [item("realtime-voice", true)];
+    page("capabilities");
+    await settle();
+    fireEvent.click(screen.getByRole("button", { name: "Options" }));
+    await settle();
+    const sheet = screen.getByRole("dialog");
+    fireEvent.click(within(sheet).getByRole("combobox", { name: "Service" }));
+    await settle();
+    fireEvent.keyDown(screen.getByRole("option", { name: "Gemini Live" }), { key: "Enter" });
+    await settle();
+    expect(calls).toContainEqual({ method: "settings.set", params: { brains: { realtime: { provider: "gemini" } } } });
+    fireEvent.click(within(sheet).getByRole("combobox", { name: "End after silence" }));
+    await settle();
+    fireEvent.keyDown(screen.getByRole("option", { name: "30 seconds" }), { key: "Enter" });
+    await settle();
+    expect(calls).toContainEqual({
+      method: "settings.set",
+      params: { brains: { realtime: { "silence-seconds": 30 } } },
+    });
+  });
+
   it("sets where requests go and asks before keeping nothing", async () => {
     page("privacy");
     await settle();
@@ -167,6 +221,10 @@ describe("Permissions (UX-28)", () => {
     fireEvent.click(screen.getByRole("switch", { name: "Save transcripts in logs" }));
     await settle();
     expect(calls).toContainEqual({ method: "settings.set", params: { privacy: { "debug-transcripts": true } } });
+    // Newer signed catalogs once a day (DISC-17), on until turned off.
+    fireEvent.click(screen.getByRole("switch", { name: "Check for catalog updates" }));
+    await settle();
+    expect(calls).toContainEqual({ method: "settings.set", params: { privacy: { "catalog-updates": false } } });
   });
 
   it("has Custom's switches, folders kept on this PC and private words (SEC-20, SEC-21)", async () => {

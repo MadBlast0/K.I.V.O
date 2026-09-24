@@ -12,6 +12,7 @@ mod com;
 mod control;
 pub mod crash;
 mod desktop;
+mod devices;
 mod displays;
 pub mod environment;
 mod files;

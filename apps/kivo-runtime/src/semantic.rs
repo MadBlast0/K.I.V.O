@@ -15,8 +15,9 @@ impl kivo_intent::Embedder for LocalEmbedder {
     }
 }
 
-/// Loads the model from `dir` and embeds the exemplars for `language`.
-pub fn load(dir: &Path, language: &str) -> Option<kivo_intent::Semantic> {
+/// Loads the model from `dir` and embeds the exemplars for `language`. The model is returned too,
+/// for memory's meaning search (MEM-09: one model, shared).
+pub fn load(dir: &Path, language: &str) -> Option<(kivo_intent::Semantic, Arc<MiniLm>)> {
     let model = match MiniLm::load(dir) {
         Ok(m) => Arc::new(m),
         Err(e) => {
@@ -27,7 +28,14 @@ pub fn load(dir: &Path, language: &str) -> Option<kivo_intent::Semantic> {
             return None;
         }
     };
-    kivo_intent::Semantic::new(language, Box::new(LocalEmbedder(model)))
+    let semantic =
+        kivo_intent::Semantic::new(language, Box::new(LocalEmbedder(Arc::clone(&model))))?;
+    Some((semantic, model))
+}
+
+/// The model as memory's embedder (MEM-09).
+pub fn embedder(model: Arc<MiniLm>) -> crate::memory::Embedder {
+    Arc::new(move |text: &str| model.embed(text).ok())
 }
 
 #[cfg(test)]
@@ -43,7 +51,7 @@ mod tests {
             eprintln!("KIVO_MINILM_DIR isn't set; skipping");
             return;
         };
-        let semantic = load(Path::new(&dir), "en").expect("the model loads");
+        let (semantic, _) = load(Path::new(&dir), "en").expect("the model loads");
         let grammar = Grammar::bundled("en").unwrap();
         let apps = Index::new(vec![
             IndexEntry {

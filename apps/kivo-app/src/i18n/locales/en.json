@@ -108,7 +108,19 @@
     },
     "rememberThis": "Remember this",
     "remembered": "Remembered",
-    "rememberFailed": "Couldn’t remember it: try again"
+    "rememberFailed": "Couldn’t remember it: try again",
+    "pointing": "Pointing at {name}",
+    "watchAllow": "Allow",
+    "watchSkip": "Skip",
+    "controlling": "Controlling {app}",
+    "controlProgress": "Step {step}/{max} · ≈ ${cost}",
+    "controlPaused": "Paused",
+    "pause": "Pause",
+    "resume": "Resume",
+    "live": "Live",
+    "liveFor": "Live conversation, {clock}",
+    "liveOf": "Live conversation, {clock} of {minutes} minutes",
+    "talkLive": "Talk live"
   },
   "home": {
     "talk": "Talk",
@@ -829,7 +841,28 @@
     "recommendedTitle": "Recommended for your PC",
     "recommendedPair": "Hear with {stt}, speak with {tts}.",
     "recommendedNoStt": "Speak with {tts}. KIVO has no recognizer for your language yet.",
-    "useRecommended": "Use recommended"
+    "useRecommended": "Use recommended",
+    "cloud": {
+      "title": "Cloud services",
+      "hint": {
+        "stt": "Your own account with a speech service. Audio goes to the service while you speak.",
+        "tts": "Your own account with a voice service. What KIVO says goes to the service as text."
+      },
+      "sends": {
+        "stt": "Sends your audio to the service",
+        "tts": "Sends KIVO’s replies to the service as text"
+      },
+      "use": "Use",
+      "addKey": "Add key",
+      "removeKey": "Remove key",
+      "key": "API key for {name}",
+      "keyPlaceholder": "Paste your API key",
+      "region": "Azure region",
+      "regionPlaceholder": "Region, like westeurope",
+      "testing": "Testing…",
+      "testAndSave": "Test and save",
+      "saved": "{name} is ready to use"
+    }
   },
   "onboarding": {
     "setUp": "Set up KIVO",
@@ -1102,7 +1135,7 @@
       "minimal": "Minimal",
       "minimalHint": "Barely there",
       "custom": "Custom",
-      "customHint": "Your own sounds"
+      "customHint": "Your own sounds, with Soft for the rest"
     },
     "preview": "Preview",
     "previewCue": "Play {cue}",
@@ -1134,7 +1167,17 @@
       "hangup": "When the conversation ends",
       "notification": "When KIVO has news for you"
     },
-    "previewSet": "Play {set}"
+    "previewSet": "Play {set}",
+    "yours": "Your sound",
+    "useSets": "Use the set’s",
+    "import": "Import…",
+    "importFor": "Your sound for {cue}",
+    "imported": "Your sound plays for {cue}",
+    "tooBig": "Choose a sound file under 2 MB.",
+    "notificationSound": "Notification sound",
+    "notificationSoundHint": "For messages KIVO brings up by itself",
+    "sameAsSet": "Same as the set",
+    "importNote": "Your own sounds: a .wav or .ogg file per cue, up to 2 seconds are played. They stay on this PC."
   },
   "settings": {
     "subtitle": "How KIVO behaves. More settings are on their way.",
@@ -1187,11 +1230,22 @@
       "seconds": "{count} s",
       "never": "Never",
       "glow": "Wake glow",
-      "glowHint": "A soft light at the screen edge when KIVO wakes",
+      "glowHint": "A soft light along the screen’s edges for a moment when KIVO wakes",
       "fullscreen": "In fullscreen apps and games",
       "fullscreens": {
         "hide": "Hide it",
         "tinyPill": "Tiny dot"
+      },
+      "overlayStyle": "What it shows",
+      "overlayStyles": {
+        "pill-and-card": "Pill and card",
+        "pill-and-cardHint": "Status in the pill, words and answers in the card under it",
+        "pill-only": "Pill",
+        "pill-onlyHint": "Only the status; answers are spoken",
+        "card-only": "Card",
+        "card-onlyHint": "Only when there’s something to read",
+        "off": "Off",
+        "offHint": "Sounds only; questions that need you still show"
       }
     },
     "notify": {
@@ -1303,7 +1357,7 @@
       "resetConfirm": "Every setting goes back to its default. Your memory, conversations, routines and connected brains stay.",
       "resetDone": "Settings reset.",
       "lowMemory": "Low-memory mode",
-      "lowMemoryHint": "Speech models unload right after each request. Slower to answer, lighter on the PC"
+      "lowMemoryHint": "Speech models unload after each request, and the window and Island start only when first needed. Slower to answer, lighter on the PC"
     },
     "appearance": {
       "theme": "Theme",
@@ -1369,7 +1423,9 @@
         "battery": "Battery",
         "balanced": "Balanced",
         "performance": "Performance",
-        "gaming": "Gaming"
+        "gaming": "Gaming",
+        "low-resource": "Low resource",
+        "custom": "Custom"
       },
       "now": "Right now",
       "measure": "Measure again",
@@ -1398,6 +1454,34 @@
         "warm": "Warm",
         "active": "In use",
         "idle": "Idle"
+      },
+      "gpuKivo": "In use · {mb} MB",
+      "gpuLoad": "Graphics card load",
+      "vram": "{mb} MB of its own memory",
+      "noGpu": "No graphics card found",
+      "ram": "This PC’s memory",
+      "ramFree": "{free} GB free of {total} GB",
+      "npu": "Neural processing unit (NPU)",
+      "npuYes": "Found · not used by KIVO yet",
+      "npuNo": "None",
+      "liveNote": "Updated every 2 seconds while this page is open. Speech runs on the graphics card only when it isn’t busy, you aren’t gaming and you’re plugged in.",
+      "autoChose": "Auto is using {profile} right now",
+      "profileHints": {
+        "auto": "Picks one for what the PC is doing: a game, the battery, a small PC",
+        "low-resource": "Two cores for speech; models unload after each request",
+        "battery": "Light on the processor, no graphics card",
+        "balanced": "Suits most PCs",
+        "performance": "More cores, models stay loaded, the graphics card when it’s free",
+        "gaming": "Stays out of the way of games: two cores, no graphics card",
+        "custom": "Your own numbers for cores and loaded time, on the Voice page"
+      },
+      "stages": "Each stage · median",
+      "stage": {
+        "stt": "Speech to text",
+        "brain": "Brain, to its first word",
+        "tool": "Tool",
+        "tts": "Voice, to its first sound",
+        "total": "Whole request"
       }
     },
     "diagnostics": {
@@ -1406,7 +1490,13 @@
       "fix": "Fix",
       "ok": "Working",
       "problem": "Needs attention",
-      "note": "Checks run on this PC. Nothing is sent anywhere."
+      "note": "Checks run on this PC. Reports never include passwords, sign-in tokens or what you said, and you review them before sharing.",
+      "report": "Create report",
+      "making": "Making the report…",
+      "reportTitle": "Diagnostics report",
+      "reportDetail": "This is everything in it. It never includes passwords, sign-in tokens, what you said or your files. Nothing is sent anywhere; share the file only if you choose to.",
+      "save": "Save to Downloads",
+      "saved": "Saved to {file}"
     },
     "about": {
       "tagline": "Knowledge · Intelligence · Voice · Operations",
@@ -1518,7 +1608,9 @@
     "models": "{count, plural, one {# model} other {# models}}",
     "runningHere": "{count, plural, one {Running on this PC · # model} other {Running on this PC · # models}}",
     "ownKey": "Your own API key",
-    "noKey": "No key yet"
+    "noKey": "No key yet",
+    "realtimeProfile": "Realtime conversation",
+    "realtimeProfileHint": "Voice requests on this profile open a live speech-to-speech conversation (needs Realtime voice on)."
   },
   "persona": {
     "calm": "Calm",
@@ -1846,7 +1938,9 @@
         "personal": "Personal",
         "sensitive": "Sensitive",
         "highly-sensitive": "Highly sensitive"
-      }
+      },
+      "catalogs": "Check for catalog updates",
+      "catalogsHint": "Once a day, KIVO looks for newer lists of agents, connectors, plugins and models from its own site, and uses them only if they’re signed. Nothing about you is sent. Never in Strictly private."
     },
     "bypass": {
       "title": "Bypass permissions",
@@ -1867,6 +1961,54 @@
       "forOff": "Until I turn it off",
       "hello": "Confirm with Windows Hello",
       "cancel": "Cancel"
+    },
+    "cu": {
+      "visibility": "While it works",
+      "frame": "Screen frame",
+      "frameHint": "A border around the screen while KIVO is in control.",
+      "frames": {
+        "off": "Off",
+        "subtle": "Subtle",
+        "full": "Full"
+      },
+      "cursor": "Show KIVO's cursor",
+      "cursorHint": "A second pointer where KIVO acts; yours stays yours.",
+      "highlight": "Highlight what it's about to use",
+      "island": "Controller on the Island",
+      "islandHint": "Step, cost so far, Pause and Stop.",
+      "control": "Control",
+      "approve": "Approve each step",
+      "approveHint": "Watch mode shows each step and waits for Allow.",
+      "approves": {
+        "always": "Always",
+        "firstTasks": "First 10 tasks",
+        "never": "Never"
+      },
+      "pauseOnMouse": "Pause when I use the mouse",
+      "pauseOnMouseHint": "KIVO waits until you've let go for a moment.",
+      "speed": "Speed",
+      "speeds": {
+        "careful": "Careful",
+        "normal": "Normal",
+        "fast": "Fast"
+      },
+      "limits": "Limits",
+      "maxSteps": "Most steps per task",
+      "steps": "{count, plural, one {# step} other {# steps}}",
+      "maxCost": "Most cost per task",
+      "maxCostHint": "Estimated from the brain's prices; KIVO stops and asks at the limit.",
+      "timeLimit": "Time limit",
+      "seconds": "{count, plural, one {# second} other {# seconds}}",
+      "minutes": "{count, plural, one {# minute} other {# minutes}}",
+      "apps": "Apps"
+    },
+    "rt": {
+      "provider": "Service",
+      "providerHint": "Uses a connected OpenAI or Gemini key. The fast path and permissions stay on this PC.",
+      "auto": "First connected",
+      "silence": "End after silence",
+      "silenceHint": "A live conversation closes when nobody has spoken for this long, or when you say “that's all”.",
+      "seconds": "{count, plural, one {# second} other {# seconds}}"
     }
   },
   "undo": {
@@ -2007,7 +2149,77 @@
     "withPrevious": "Run together with the step before",
     "tool": "Which action",
     "noArgs": "This action needs nothing else.",
-    "badJson": "Not valid JSON: {error}"
+    "badJson": "Not valid JSON: {error}",
+    "day": {
+      "0": "Sun",
+      "1": "Mon",
+      "2": "Tue",
+      "3": "Wed",
+      "4": "Thu",
+      "5": "Fri",
+      "6": "Sat"
+    },
+    "when": {
+      "title": "Also starts",
+      "add": "Add a trigger",
+      "addButton": "Add",
+      "remove": "Remove {trigger}",
+      "kind": "Starts",
+      "unattended": "These start the routine with no one asking, so steps that could do harm ask on screen first.",
+      "kinds": {
+        "time": "At a time of day",
+        "schedule": "On a schedule",
+        "appLaunched": "When an app starts",
+        "usbDevice": "When a USB device is plugged in",
+        "network": "When the PC joins a network",
+        "idle": "When I’ve been away",
+        "return": "When I’m back",
+        "batteryLow": "When the battery is low",
+        "afterRoutine": "After another routine"
+      },
+      "time": "Time",
+      "days": "Days",
+      "cron": "Schedule",
+      "tz": "Time zone",
+      "tzPlaceholder": "This PC’s (or e.g. Europe/Berlin)",
+      "cronHelp": "Minute, hour, day, month, weekday — like 30 7 * * mon-fri, or @daily.",
+      "field": {
+        "appLaunched": "App",
+        "usbDevice": "Device name (any if empty)",
+        "network": "Network name",
+        "idle": "Minutes away",
+        "return": "Away at least (minutes)",
+        "batteryLow": "Battery percent",
+        "afterRoutine": "Routine"
+      },
+      "placeholder": {
+        "appLaunched": "Spotify",
+        "usbDevice": "YubiKey",
+        "network": "Office Wi-Fi"
+      },
+      "schedule": "Schedule {cron}",
+      "scheduleTz": "Schedule {cron} ({tz})",
+      "timeOfDay": "{days} at {time}",
+      "everyDay": "Every day",
+      "weekdays": "Weekdays",
+      "weekends": "Weekends",
+      "appLaunched": "When {app} starts",
+      "usbAny": "When a USB device is plugged in",
+      "usbNamed": "When {name} is plugged in",
+      "network": "On the {name} network",
+      "idle": "After {minutes, plural, one {# minute} other {# minutes}} away",
+      "return": "When I’m back after {minutes, plural, one {# minute} other {# minutes}}",
+      "batteryLow": "Battery at {percent}%",
+      "afterRoutine": "After “{name}”"
+    },
+    "draftReady": "A routine is ready for you to check. Save it when it looks right.",
+    "import": "Import",
+    "importFile": "Import a routine file",
+    "imported": "“{name}” is ready to check. Saving shows what it may do.",
+    "export": "Export",
+    "exported": "Saved to {file}",
+    "makeSkill": "Make a skill",
+    "skillMade": "“{name}” is now a skill too, for brains and agents to use."
   },
   "agents": {
     "subtitle": "Other AIs KIVO can run and talk to for you: coding agents, terminals and desktop AI apps.",
@@ -2059,7 +2271,12 @@
     "shareWith": "Let {name} use my memory",
     "shareDetail": "Through KIVO’s MCP server. Every change it asks for needs your OK.",
     "shareSensitive": "Include personal memories",
-    "shareSensitiveDetail": "Personal notes and past conversations; off, agents only see the rest"
+    "shareSensitiveDetail": "Personal notes and past conversations; off, agents only see the rest",
+    "notInstalledTitle": "Not installed",
+    "notInstalledHint": "KIVO can install it for you, after showing exactly what it will run",
+    "tools": "Tools KIVO uses",
+    "toolVersion": "Version {version}",
+    "toolMissing": "Not on this PC"
   },
   "workspaces": {
     "aboutMe": "About me",
@@ -2171,7 +2388,11 @@
       "kivo": "KIVO’s skills folder",
       "claude-code": "from Claude Code",
       "project": "from {name}",
-      "import": "imported"
+      "import": "imported",
+      "codex": "from Codex",
+      "gemini": "from Gemini CLI",
+      "agents": "from your agents",
+      "routine": "from a routine"
     },
     "badge": {
       "sensitive": "Sensitive"
@@ -2272,7 +2493,16 @@
     "forgetConfirm": "{count, plural, one {# note} other {# notes}} and every suggestion will be deleted from this PC. This can’t be undone.",
     "forgotten": "{count, plural, one {Forgot # note.} other {Forgot # notes.}}",
     "note": "Your memory is a folder of Markdown files: {folder}. Edit them anywhere; KIVO reads the changes. Notes never hold passwords or keys.",
-    "lastUsed": "last {when}"
+    "lastUsed": "last {when}",
+    "askNew": "Ask before new workspace notes",
+    "askNewDetail": "KIVO asks the first time it works in a workspace; say no and it keeps none there",
+    "view": "View",
+    "viewNotes": "Notes",
+    "viewGraph": "Graph",
+    "graphLabel": "{notes, plural, one {Memory graph of # note} other {Memory graph of # notes}}",
+    "graphNote": "{title}, {count, plural, =0 {no links} one {# link} other {# links}}",
+    "graphTag": "{tag}, {count, plural, one {# note} other {# notes}}",
+    "graphHidden": "{count, plural, one {# less-used note isn’t shown} other {# less-used notes aren’t shown}}"
   },
   "usage": {
     "subtitle": "Estimated cost of cloud AI and speech. Work done on this PC is free.",
@@ -2342,5 +2572,51 @@
     "showCost": "Show the cost in the card",
     "showCostDetail": "A live “≈ $0.12” next to the brain while it answers",
     "note": "All costs are estimates from public price lists, refreshed weekly. Your provider’s bill is what counts."
+  },
+  "modes": {
+    "title": "Mode",
+    "label": "How KIVO behaves right now",
+    "keywords": "mode product private offline battery performance gaming presentation normal",
+    "switchTo": "Switch to {mode} mode",
+    "switched": "{mode} mode is on",
+    "normal": "Normal",
+    "normalHint": "Your own settings, as you set them",
+    "private": "Private",
+    "privateHint": "Prefers this PC; cloud only when it has to",
+    "offline": "Offline",
+    "offlineHint": "Nothing leaves this PC",
+    "battery": "Battery",
+    "batteryHint": "Light on power: fewer threads, models unloaded sooner, no GPU",
+    "performance": "Performance",
+    "performanceHint": "Models stay loaded and warm for the fastest answers",
+    "gaming": "Gaming",
+    "gamingHint": "Stays off the GPU and out of the way over fullscreen games",
+    "presentation": "Presentation",
+    "presentationHint": "A large Island with your words shown; no toasts, nothing said unasked"
+  },
+  "install": {
+    "title": "Install {name}",
+    "explain": "This is everything KIVO will do. Nothing runs until you press Install.",
+    "consent": "Installing downloads software from its publisher (winget or npm) and accepts its licence terms.",
+    "installed": "{name} is installed{version, select, other { (version {version})}}.",
+    "install": "Install",
+    "retry": "Try again",
+    "close": "Done",
+    "signIn": "Sign in",
+    "test": "Test",
+    "tested": "{name} answered.",
+    "checking": "Checking what’s on this PC…",
+    "running": "Installing…",
+    "steps": "Steps",
+    "output": "Output",
+    "openWebsite": "Open the website",
+    "status": {
+      "pending": "Next",
+      "running": "Now",
+      "done": "Done",
+      "failed": "Failed",
+      "needsYou": "Your turn",
+      "cancelled": "Cancelled"
+    }
   }
 }

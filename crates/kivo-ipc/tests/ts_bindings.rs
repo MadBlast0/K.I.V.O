@@ -6,14 +6,14 @@
 
 use kivo_core::capability::{Badge, Capability};
 use kivo_core::config::{
-    CompanionStyle, IslandSize, IslandSpot, MotionPref, OverlayPosition, PermissionMode, Preset,
-    SoundCue, SoundSet,
+    CompanionStyle, IslandSize, IslandSpot, MotionPref, OverlayPosition, OverlayStyle,
+    PermissionMode, Preset, ProductMode, SoundCue, SoundSet,
 };
 use kivo_core::event::{
     CancelReason, DeviceKind, EventKind, IntentPath, PermissionDecision, ProviderEvent, StepStatus,
     SystemEvent, TaskEvent, ToolEvent, TtsStopReason, TurnEvent, TurnSource, UiEvent, VoiceEvent,
 };
-use kivo_core::routine::{Routine, RoutineStep, Trigger, VarDef, VarKind};
+use kivo_core::routine::{Routine, RoutineEvent, RoutineStep, Trigger, VarDef, VarKind};
 use kivo_core::task::{
     Criterion, Notify, OnError, StepAction, TaskGrant, TaskKind, TaskStatus, WatchSpec, WindowEvent,
 };
@@ -24,11 +24,11 @@ use kivo_ipc::protocol::{
     ActivityItem, AgentItem, AgentSessionItem, AgentsOverview, AuditItem, BrainChip,
     CapabilityItem, Collision, ConnectorView, DesktopAiItem, DraftView, GrantItem, GrantLine,
     IslandPlacement, LiveActivity, McpFoundView, McpServerView, McpToolView, MeasuredItem,
-    MemoryFolderView, MemoryNoteDetail, MemoryNoteView, MemoryOverview, MemorySuggestionView,
-    MemoryTagView, ModelItem, Offer, ProfileItem, ProtocolVersion, QuietIsland, RecommendationItem,
-    RoutineCheck, RoutineView, ScreenPoint, SetupAdvice, SkillView, SpeechChoices,
-    SpeechEngineItem, SpeechStatus, StepView, TaskQuestion, TaskStepView, TaskView, ToolItem,
-    TurnView, UndoOffer, VoiceItem, WorkspaceItem,
+    MemoryFolderView, MemoryLinkView, MemoryNoteDetail, MemoryNoteView, MemoryOverview,
+    MemorySuggestionView, MemoryTagView, ModelItem, Offer, ProfileItem, ProtocolVersion,
+    QuietIsland, RecommendationItem, RoutineCheck, RoutineView, ScreenPoint, SetupAdvice,
+    SkillView, SpeechChoices, SpeechEngineItem, SpeechStatus, StepView, TaskQuestion, TaskStepView,
+    TaskView, ToolItem, TurnView, UndoOffer, VoiceItem, WorkspaceItem,
 };
 use kivo_ipc::{Link, LinkStatus, RpcError, StateSnapshot, Welcome, method};
 use std::path::PathBuf;
@@ -93,6 +93,8 @@ fn render() -> String {
         IslandSpot::decl(&cfg),
         OverlayPosition::decl(&cfg),
         IslandSize::decl(&cfg),
+        ProductMode::decl(&cfg),
+        OverlayStyle::decl(&cfg),
         MotionPref::decl(&cfg),
         CompanionStyle::decl(&cfg),
         // Control Center lists
@@ -121,6 +123,7 @@ fn render() -> String {
         TaskStepView::decl(&cfg),
         TaskQuestion::decl(&cfg),
         Trigger::decl(&cfg),
+        RoutineEvent::decl(&cfg),
         VarKind::decl(&cfg),
         VarDef::decl(&cfg),
         RoutineStep::decl(&cfg),
@@ -147,6 +150,17 @@ fn render() -> String {
         MemoryFolderView::decl(&cfg),
         MemorySuggestionView::decl(&cfg),
         MemoryOverview::decl(&cfg),
+        kivo_ipc::protocol::PointTarget::decl(&cfg),
+        kivo_ipc::protocol::LiveView::decl(&cfg),
+        kivo_ipc::protocol::ControlView::decl(&cfg),
+        kivo_core::config::ScreenFrame::decl(&cfg),
+        kivo_core::config::ComputerUse::decl(&cfg),
+        kivo_core::config::ApproveSteps::decl(&cfg),
+        kivo_core::config::CuSpeed::decl(&cfg),
+        kivo_ipc::protocol::InstallPlan::decl(&cfg),
+        kivo_ipc::protocol::InstallStepView::decl(&cfg),
+        kivo_ipc::protocol::InstallView::decl(&cfg),
+        MemoryLinkView::decl(&cfg),
         SetupAdvice::decl(&cfg),
         MemoryNoteDetail::decl(&cfg),
         ProtocolVersion::decl(&cfg),
@@ -193,6 +207,7 @@ fn render() -> String {
         ("modelsSetDefault", method::MODELS_SET_DEFAULT),
         ("settingsGet", method::SETTINGS_GET),
         ("settingsSet", method::SETTINGS_SET),
+        ("modeSet", method::MODE_SET),
         ("wakeList", method::WAKE_LIST),
         ("wakeCheck", method::WAKE_CHECK),
         ("wakeSave", method::WAKE_SAVE),
@@ -210,9 +225,13 @@ fn render() -> String {
         ("voiceIdCancel", method::VOICE_ID_CANCEL),
         ("voiceIdDelete", method::VOICE_ID_DELETE),
         ("soundsPreview", method::SOUNDS_PREVIEW),
+        ("soundsImport", method::SOUNDS_IMPORT),
+        ("soundsClear", method::SOUNDS_CLEAR),
         ("voiceEngines", method::VOICE_ENGINES),
         ("voiceRecommend", method::VOICE_RECOMMEND),
         ("voiceSwitch", method::VOICE_SWITCH),
+        ("voiceSetKey", method::VOICE_SET_KEY),
+        ("voiceDeleteKey", method::VOICE_DELETE_KEY),
         ("voicePreview", method::VOICE_PREVIEW),
         ("voiceMicCheck", method::VOICE_MIC_CHECK),
         ("voiceDevices", method::VOICE_DEVICES),
@@ -272,6 +291,17 @@ fn render() -> String {
         ("routinesEnable", method::ROUTINES_ENABLE),
         ("routinesCheck", method::ROUTINES_CHECK),
         ("routinesTools", method::ROUTINES_TOOLS),
+        ("routinesDraft", method::ROUTINES_DRAFT),
+        ("routinesExport", method::ROUTINES_EXPORT),
+        ("routinesImport", method::ROUTINES_IMPORT),
+        ("routinesToSkill", method::ROUTINES_TO_SKILL),
+        ("installsPlan", method::INSTALLS_PLAN),
+        ("installsStart", method::INSTALLS_START),
+        ("installsStatus", method::INSTALLS_STATUS),
+        ("installsCancel", method::INSTALLS_CANCEL),
+        ("installsTools", method::INSTALLS_TOOLS),
+        ("sessionComputerPause", method::SESSION_COMPUTER_PAUSE),
+        ("sessionLive", method::SESSION_LIVE),
         ("agentsOverview", method::AGENTS_OVERVIEW),
         ("agentsOpenInTerminal", method::AGENTS_OPEN_TERMINAL),
         ("agentsStart", method::AGENTS_START),
@@ -321,6 +351,8 @@ fn render() -> String {
         ("performanceStatus", method::PERFORMANCE_STATUS),
         ("setupRecommend", method::SETUP_RECOMMEND),
         ("diagnosticsRun", method::DIAGNOSTICS_RUN),
+        ("diagnosticsBundle", method::DIAGNOSTICS_BUNDLE),
+        ("diagnosticsSave", method::DIAGNOSTICS_SAVE),
         ("settingsExport", method::SETTINGS_EXPORT),
         ("settingsImport", method::SETTINGS_IMPORT),
         ("settingsReset", method::SETTINGS_RESET),

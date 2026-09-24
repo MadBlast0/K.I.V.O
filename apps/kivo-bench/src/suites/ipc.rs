@@ -59,6 +59,7 @@ impl Ipc {
             bypass_until: None,
             offer: None,
             has_selection: false,
+            controlling: None,
             revision: 0,
         });
         let shutdown = CancellationToken::new();

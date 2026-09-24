@@ -74,6 +74,8 @@ pub struct General {
     pub language: String,
     pub languages: Vec<String>,
     pub low_memory_mode: bool,
+    /// How KIVO behaves right now (plan §142, PLAN-06).
+    pub product_mode: ProductMode,
     /// Dates, times and numbers as Windows formats them, or as the app's language does.
     pub format: FormatLocale,
     /// The one-time "KIVO is still running" notice after the first close has been shown (UX §1).
@@ -91,6 +93,7 @@ impl Default for General {
             language: "en".into(),
             languages: Vec::new(),
             low_memory_mode: false,
+            product_mode: ProductMode::Normal,
             format: FormatLocale::Windows,
             first_close_seen: false,
             onboarded: false,
@@ -127,6 +130,8 @@ pub struct Voice {
     pub tts_speed: u16,
     /// Keep another installed recognizer ready in case the chosen one fails (VOICE-47, VOICE-49).
     pub stt_fallback: bool,
+    /// The Azure Speech region for Azure's neural voices ("westeurope"; VOICE-11).
+    pub azure_region: String,
 }
 
 impl Default for Voice {
@@ -147,6 +152,7 @@ impl Default for Voice {
             speak_typed_replies: false,
             tts_speed: 100,
             stt_fallback: true,
+            azure_region: String::new(),
         }
     }
 }
@@ -204,9 +210,13 @@ impl Default for Overlay {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+/// What the Island shows (UX-17): the pill and the card, only the pill (status, no text), only
+/// the card (text when there is some), or nothing but decisions and sounds.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum OverlayStyle {
+    #[default]
     PillAndCard,
     PillOnly,
     CardOnly,
@@ -327,6 +337,34 @@ pub enum MotionPref {
     Reduced,
 }
 
+/// Product modes (plan §142, PLAN-06): each sets the privacy mode, the performance profile and
+/// the Island together; Normal is the user's own settings.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ProductMode {
+    #[default]
+    Normal,
+    Private,
+    Offline,
+    Battery,
+    Performance,
+    Gaming,
+    Presentation,
+}
+
+impl ProductMode {
+    pub const ALL: [ProductMode; 7] = [
+        ProductMode::Normal,
+        ProductMode::Private,
+        ProductMode::Offline,
+        ProductMode::Battery,
+        ProductMode::Performance,
+        ProductMode::Gaming,
+        ProductMode::Presentation,
+    ];
+}
+
 /// Settings → Context (CONV-31, CONVERSATION §8): which layers a brain starts with, the live fields
 /// it sees, and when the conversation is compacted. Defaults just work.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -428,6 +466,11 @@ pub struct Sounds {
     pub thinking_cue: bool,
     /// Cues switched off one by one in Settings → Sounds (VOICE-27).
     pub off: Vec<SoundCue>,
+    /// Cues with a sound the user imported (`sounds/<cue>.wav|ogg`), played instead of the set's
+    /// in any set (VOICE-28).
+    pub custom: Vec<SoundCue>,
+    /// The notification sound's own set; `None` follows the chosen set (VOICE-28).
+    pub notification_set: Option<SoundSet>,
 }
 
 impl Default for Sounds {
@@ -438,6 +481,8 @@ impl Default for Sounds {
             volume: 70,
             thinking_cue: false,
             off: Vec::new(),
+            custom: Vec::new(),
+            notification_set: None,
         }
     }
 }
@@ -552,6 +597,8 @@ pub struct Privacy {
     pub labels: Vec<PrivacyLabel>,
     /// What Custom mode lets off the device, one switch each.
     pub custom: CustomPrivacy,
+    /// Look for newer signed catalogs once a day (DISC-17). Never in Strictly private.
+    pub catalog_updates: bool,
 }
 
 impl Default for Privacy {
@@ -563,6 +610,7 @@ impl Default for Privacy {
             sensitive_folders: Vec::new(),
             labels: Vec::new(),
             custom: CustomPrivacy::default(),
+            catalog_updates: true,
         }
     }
 }
@@ -635,6 +683,10 @@ pub struct Memory {
     pub sensitive_to_cloud: bool,
     /// The most memories put into one request (MEM-08).
     pub max_items: u32,
+    /// Ask before starting notes for a workspace KIVO hasn't kept notes for (CONV-22).
+    pub ask_new_notes: bool,
+    /// Workspaces the user said not to keep notes for (their folder names).
+    pub no_notes_for: Vec<String>,
 }
 
 impl Default for Memory {
@@ -647,6 +699,8 @@ impl Default for Memory {
             condense_logs: true,
             sensitive_to_cloud: false,
             max_items: 5,
+            ask_new_notes: true,
+            no_notes_for: Vec::new(),
         }
     }
 }
@@ -718,10 +772,14 @@ impl Default for Performance {
 #[serde(rename_all = "kebab-case")]
 pub enum PerformanceProfile {
     Auto,
+    /// A small PC: light threads, models unloaded after use (PLAN-08).
+    LowResource,
     Battery,
     Balanced,
     Performance,
     Gaming,
+    /// The user's own thread and residency numbers.
+    Custom,
 }
 
 /// Brains (BRAINS §4–5, §9–10; CONVERSATION §1). Keys are never here: a connection names its key
@@ -749,6 +807,8 @@ pub struct Brains {
     pub voice_session_minutes: u16,
     /// Voice sessions within this many minutes join the same thread (CONV-01).
     pub thread_join_minutes: u16,
+    /// Realtime conversation mode (BRAINS §8); used only with the Realtime voice capability on.
+    pub realtime: Realtime,
 }
 
 impl Default for Brains {
@@ -763,6 +823,32 @@ impl Default for Brains {
             show_cost: false,
             voice_session_minutes: 2,
             thread_join_minutes: 30,
+            realtime: Realtime::default(),
+        }
+    }
+}
+
+/// Realtime conversation mode's settings (BRAINS §8, BRAIN-33).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
+pub struct Realtime {
+    /// `openai` or `gemini`; empty picks the first connected one.
+    pub provider: String,
+    /// Empty: the provider's default realtime model.
+    pub model: String,
+    /// Empty: the provider's default voice.
+    pub voice: String,
+    /// The session closes after this much silence.
+    pub silence_seconds: u16,
+}
+
+impl Default for Realtime {
+    fn default() -> Self {
+        Self {
+            provider: String::new(),
+            model: String::new(),
+            voice: String::new(),
+            silence_seconds: 15,
         }
     }
 }
@@ -794,6 +880,8 @@ pub struct Tools {
     pub ui_automation_apps: AppScope,
     pub screen_apps: AppScope,
     pub computer_use_apps: AppScope,
+    /// How computer use behaves (CAP-10–CAP-13).
+    pub computer_use: ComputerUse,
     /// Screen awareness may send a screenshot to a cloud vision brain (off: local OCR only).
     pub cloud_vision: bool,
     pub clipboard_read: bool,
@@ -824,6 +912,7 @@ impl Default for Tools {
             ui_automation_apps: AppScope::default(),
             screen_apps: AppScope::default(),
             computer_use_apps: AppScope::default(),
+            computer_use: ComputerUse::default(),
             cloud_vision: false,
             clipboard_read: true,
             clipboard_write: true,
@@ -837,6 +926,77 @@ impl Default for Tools {
             connectors_off: Vec::new(),
         }
     }
+}
+
+/// Computer use's options (CAPABILITIES §4.1): visibility, control and limits.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
+pub struct ComputerUse {
+    /// Approve each step: always, for the first ten tasks (watch mode), or never.
+    pub approve: ApproveSteps,
+    /// Wait while the user uses the mouse or keyboard.
+    pub pause_on_mouse: bool,
+    pub speed: CuSpeed,
+    pub max_steps: u32,
+    /// Most estimated cost per task, in US cents.
+    pub max_cost_cents: u32,
+    pub time_limit_seconds: u32,
+    /// The frame around the screen while KIVO controls it.
+    pub frame: ScreenFrame,
+    /// A second, KIVO cursor where it acts.
+    pub show_cursor: bool,
+    /// A ring around what it's about to act on.
+    pub highlight: bool,
+    /// The Island's controller (step, cost, Pause, Stop).
+    pub island_controls: bool,
+}
+
+impl Default for ComputerUse {
+    fn default() -> Self {
+        Self {
+            approve: ApproveSteps::FirstTasks,
+            pause_on_mouse: true,
+            speed: CuSpeed::Normal,
+            max_steps: 25,
+            max_cost_cents: 50,
+            time_limit_seconds: 120,
+            frame: ScreenFrame::Subtle,
+            show_cursor: true,
+            highlight: true,
+            island_controls: true,
+        }
+    }
+}
+
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ApproveSteps {
+    Always,
+    #[default]
+    FirstTasks,
+    Never,
+}
+
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum CuSpeed {
+    Careful,
+    #[default]
+    Normal,
+    Fast,
+}
+
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ScreenFrame {
+    Off,
+    #[default]
+    Subtle,
+    Full,
 }
 
 /// Capability presets (CAPABILITIES §2).

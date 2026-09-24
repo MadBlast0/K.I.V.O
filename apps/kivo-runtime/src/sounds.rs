@@ -117,7 +117,168 @@ pub fn earcon(set: SoundSet, cue: Cue, gain: f32) -> Vec<f32> {
     out
 }
 
-/// The sets people can pick (Custom arrives with imported sounds).
+/// The longest imported cue KIVO plays; anything longer is cut, with a short fade.
+pub const MAX_CUSTOM_SECONDS: f32 = 2.0;
+/// The largest sound file KIVO imports.
+pub const MAX_CUSTOM_BYTES: usize = 2 * 1024 * 1024;
+
+/// A `.wav` (PCM 8/16/24/32-bit or 32-bit float, any channels) or `.ogg` (Vorbis) file as mono
+/// samples and their rate (VOICE-28, the Custom set).
+pub fn decode(bytes: &[u8]) -> Result<(Vec<f32>, u32), String> {
+    if bytes.starts_with(b"OggS") {
+        return decode_ogg(bytes);
+    }
+    if bytes.len() < 12 || &bytes[..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
+        return Err("not a WAV or OGG file".into());
+    }
+    let u16_at = |i: usize| u16::from_le_bytes([bytes[i], bytes[i + 1]]);
+    let u32_at =
+        |i: usize| u32::from_le_bytes([bytes[i], bytes[i + 1], bytes[i + 2], bytes[i + 3]]);
+    let (mut format, mut channels, mut rate, mut bits) = (0u16, 0u16, 0u32, 0u16);
+    let mut at = 12;
+    while at + 8 <= bytes.len() {
+        let len = u32_at(at + 4) as usize;
+        let body = at + 8;
+        match &bytes[at..at + 4] {
+            b"fmt " if body + 16 <= bytes.len() => {
+                format = u16_at(body);
+                channels = u16_at(body + 2).max(1);
+                rate = u32_at(body + 4);
+                bits = u16_at(body + 14);
+                // WAVE_FORMAT_EXTENSIBLE: the real format is in the sub-format GUID.
+                if format == 0xFFFE && body + 26 <= bytes.len() {
+                    format = u16_at(body + 24);
+                }
+            }
+            b"data" => {
+                let end = (body + len).min(bytes.len());
+                let data = &bytes[body..end];
+                let width = usize::from(bits / 8).max(1);
+                let frame = width * usize::from(channels);
+                let sample = |b: &[u8]| -> f32 {
+                    match (format, bits) {
+                        (3, 32) => f32::from_le_bytes([b[0], b[1], b[2], b[3]]),
+                        (_, 8) => (f32::from(b[0]) - 128.0) / 128.0,
+                        (_, 16) => f32::from(i16::from_le_bytes([b[0], b[1]])) / 32_768.0,
+                        #[allow(clippy::cast_precision_loss, reason = "24-bit samples")]
+                        (_, 24) => {
+                            (i32::from_le_bytes([0, b[0], b[1], b[2]]) >> 8) as f32 / 8_388_608.0
+                        }
+                        #[allow(clippy::cast_precision_loss, reason = "32-bit samples")]
+                        (_, 32) => {
+                            i32::from_le_bytes([b[0], b[1], b[2], b[3]]) as f32 / 2_147_483_648.0
+                        }
+                        _ => 0.0,
+                    }
+                };
+                if !matches!(format, 1 | 3) || !matches!(bits, 8 | 16 | 24 | 32) || rate == 0 {
+                    return Err("an unsupported WAV encoding".into());
+                }
+                let samples = data
+                    .chunks_exact(frame)
+                    .map(|f| {
+                        let sum: f32 = f.chunks_exact(width).map(sample).sum();
+                        sum / f32::from(channels)
+                    })
+                    .collect();
+                return Ok((samples, rate));
+            }
+            _ => {}
+        }
+        at = body + len + (len & 1);
+    }
+    Err("the WAV file has no audio".into())
+}
+
+fn decode_ogg(bytes: &[u8]) -> Result<(Vec<f32>, u32), String> {
+    let mut reader = lewton::inside_ogg::OggStreamReader::new(std::io::Cursor::new(bytes))
+        .map_err(|e| format!("the OGG file can't be read: {e}"))?;
+    let channels = usize::from(reader.ident_hdr.audio_channels).max(1);
+    let rate = reader.ident_hdr.audio_sample_rate;
+    let mut out = Vec::new();
+    while let Some(packet) = reader
+        .read_dec_packet_itl()
+        .map_err(|e| format!("the OGG file can't be read: {e}"))?
+    {
+        #[allow(clippy::cast_precision_loss, reason = "channel count")]
+        out.extend(
+            packet
+                .chunks_exact(channels)
+                .map(|f| f.iter().map(|&s| f32::from(s) / 32_768.0).sum::<f32>() / channels as f32),
+        );
+        if out.len() > rate as usize * 10 {
+            break;
+        }
+    }
+    Ok((out, rate))
+}
+
+/// An imported sound made ready to play as a cue: at KIVO's cue rate, at most two seconds, fading
+/// in and out so it never clicks, at `gain`.
+pub fn prepare(samples: &[f32], rate: u32, gain: f32) -> Vec<f32> {
+    let mut out = resample(samples, rate, CUE_RATE);
+    out.truncate(samples_for(MAX_CUSTOM_SECONDS));
+    let fade = samples_for(0.01).min(out.len() / 2);
+    let n = out.len();
+    for i in 0..fade {
+        #[allow(clippy::cast_precision_loss, reason = "fade position")]
+        let level = i as f32 / fade as f32;
+        out[i] *= level;
+        out[n - 1 - i] *= level;
+    }
+    let peak = out.iter().fold(0.0_f32, |m, v| m.max(v.abs()));
+    let scale = if peak > 0.95 { 0.95 / peak } else { 1.0 };
+    out.iter_mut().for_each(|v| *v *= scale * gain);
+    out
+}
+
+fn samples_for(seconds: f32) -> usize {
+    samples(seconds)
+}
+
+/// Linear resampling (cues are short; quality beyond this isn't audible in a chime).
+fn resample(audio: &[f32], from: u32, to: u32) -> Vec<f32> {
+    if from == to || audio.is_empty() {
+        return audio.to_vec();
+    }
+    let ratio = f64::from(from) / f64::from(to);
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss,
+        reason = "positions"
+    )]
+    let n = (audio.len() as f64 / ratio) as usize;
+    (0..n)
+        .map(|i| {
+            #[allow(clippy::cast_precision_loss, reason = "positions")]
+            let x = i as f64 * ratio;
+            #[allow(
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                reason = "floor"
+            )]
+            let j = x as usize;
+            #[allow(clippy::cast_possible_truncation, reason = "fraction")]
+            let t = (x - j as f64) as f32;
+            let a = audio[j.min(audio.len() - 1)];
+            let b = audio[(j + 1).min(audio.len() - 1)];
+            a + (b - a) * t
+        })
+        .collect()
+}
+
+/// Where an imported cue lives: `<dir>/<cue>.wav` or `.ogg`.
+pub fn custom_file(dir: &std::path::Path, cue: Cue) -> Option<std::path::PathBuf> {
+    let name = serde_json::to_value(cue).ok()?.as_str()?.to_owned();
+    ["wav", "ogg"]
+        .iter()
+        .map(|ext| dir.join(format!("{name}.{ext}")))
+        .find(|p| p.is_file())
+}
+
+/// The sets people can pick; Custom plays the user's own sounds where they imported one and Soft
+/// for the rest.
 pub const SETS: [SoundSet; 5] = [
     SoundSet::Soft,
     SoundSet::Glass,
@@ -129,6 +290,80 @@ pub const SETS: [SoundSet; 5] = [
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A WAV file of `samples` frames, `channels` channels, in `format` (1 PCM, 3 float) at `bits`.
+    fn wav(format: u16, bits: u16, channels: u16, rate: u32, data: &[u8]) -> Vec<u8> {
+        let mut out = b"RIFF\0\0\0\0WAVEfmt ".to_vec();
+        out.extend(16u32.to_le_bytes());
+        out.extend(format.to_le_bytes());
+        out.extend(channels.to_le_bytes());
+        out.extend(rate.to_le_bytes());
+        out.extend((rate * u32::from(channels) * u32::from(bits / 8)).to_le_bytes());
+        out.extend((channels * bits / 8).to_le_bytes());
+        out.extend(bits.to_le_bytes());
+        out.extend(b"LIST");
+        out.extend(4u32.to_le_bytes());
+        out.extend(b"INFO");
+        out.extend(b"data");
+        out.extend(u32::try_from(data.len()).unwrap().to_le_bytes());
+        out.extend(data);
+        out
+    }
+
+    #[test]
+    fn imported_wav_and_ogg_files_decode() {
+        // 16-bit stereo: the channels are averaged.
+        let pcm: Vec<u8> = [16_384i16, -16_384, 8_192, 8_192]
+            .iter()
+            .flat_map(|s| s.to_le_bytes())
+            .collect();
+        let (mono, rate) = decode(&wav(1, 16, 2, 44_100, &pcm)).unwrap();
+        assert_eq!(rate, 44_100);
+        assert_eq!(mono, [0.0, 0.25]);
+        // 32-bit float and 24-bit, mono.
+        let floats: Vec<u8> = [0.5f32, -0.5]
+            .iter()
+            .flat_map(|s| s.to_le_bytes())
+            .collect();
+        assert_eq!(
+            decode(&wav(3, 32, 1, 16_000, &floats)).unwrap().0,
+            [0.5, -0.5]
+        );
+        let (s24, _) = decode(&wav(1, 24, 1, 16_000, &[0x00, 0x00, 0x40])).unwrap();
+        assert!((s24[0] - 0.5).abs() < 1e-6);
+        // OGG Vorbis (a 0.3 s tone made for this test).
+        let ogg = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/chime.ogg"
+        ))
+        .unwrap();
+        let (tone, rate) = decode(&ogg).unwrap();
+        assert_eq!(rate, 44_100);
+        #[allow(clippy::cast_precision_loss, reason = "a short sound")]
+        let seconds = tone.len() as f32 / rate as f32;
+        assert!((seconds - 0.3).abs() < 0.05, "{seconds}");
+        let peak = tone.iter().fold(0.0f32, |m, s| m.max(s.abs()));
+        assert!(peak > 0.05, "audible: {peak}");
+        // Anything else is refused.
+        assert!(decode(b"not audio at all").is_err());
+        assert!(
+            decode(&wav(2, 4, 1, 8_000, &[1, 2])).is_err(),
+            "ADPCM isn't supported"
+        );
+    }
+
+    #[test]
+    fn an_imported_cue_is_resampled_capped_and_click_free() {
+        let long: Vec<f32> = vec![0.8; 48_000 * 5];
+        let cue = prepare(&long, 48_000, 1.0);
+        assert_eq!(cue.len(), (CUE_RATE as f32 * MAX_CUSTOM_SECONDS) as usize);
+        assert!(
+            cue[0].abs() < 0.01 && cue[cue.len() - 1].abs() < 0.01,
+            "fades"
+        );
+        let quiet = prepare(&long, 48_000, 0.5);
+        assert!((quiet[CUE_RATE as usize] - 0.4).abs() < 0.01);
+    }
 
     #[allow(clippy::cast_precision_loss)]
     fn seconds(samples: usize) -> f32 {

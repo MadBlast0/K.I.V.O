@@ -380,6 +380,41 @@ pub fn tool_id(wire: &str) -> String {
 
 /// Words in a request that point at a tool namespace.
 const HINTS: &[(&str, &[&str])] = &[
+    // Computer use, the last rung (CAP-09): only when the request asks for it in so many words.
+    (
+        "computer",
+        &[
+            "computer use",
+            "use the computer",
+            "operate the computer",
+            "take control",
+            "control my screen",
+            "click through",
+        ],
+    ),
+    // Prompting the desktop AI apps (CONV-16).
+    (
+        "ai_apps",
+        &[
+            "claude desktop",
+            "claude app",
+            "chatgpt",
+            "copilot",
+            "prompt",
+            "in claude",
+        ],
+    ),
+    // Drafting a routine for the user to review (ROUT-13).
+    (
+        "routines",
+        &[
+            "routine",
+            "custom command",
+            "shortcut for",
+            "every morning",
+            "automate",
+        ],
+    ),
     (
         "apps",
         &[

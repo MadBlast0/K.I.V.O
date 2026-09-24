@@ -172,6 +172,7 @@ impl Switcher {
             id,
             dir,
             &config.general.language,
+            self.models.cloud_access(id, &self.core.config()),
         )
         .await
         .map_err(|e| text::tf("voice.loadFailed", &[("error", &e)]))?;
@@ -281,6 +282,7 @@ impl Switcher {
             id,
             Some(dir),
             &config.general.language,
+            self.models.cloud_access(id, &self.core.config()),
         )
         .await?;
         let result = self.sample(&mut probe, &config.general.language).await;
@@ -314,6 +316,7 @@ impl Switcher {
                 &id,
                 Some(dir),
                 &language,
+                self.models.cloud_access(&id, &self.core.config()),
             )
             .await
             else {
@@ -376,6 +379,7 @@ impl Switcher {
             id,
             dir,
             &language,
+            self.models.cloud_access(id, &self.core.config()),
         )
         .await?;
         let spoken = probe.speak(&text::t("voice.preview"), voice).await;
@@ -416,6 +420,7 @@ impl Probe {
         id: &str,
         dir: Option<PathBuf>,
         language: &str,
+        cloud: Option<kivo_ipc::infer::CloudLoad>,
     ) -> Result<Self, String> {
         let (infer, events, sender) = Infer::new(program);
         let stop = CancellationToken::new();
@@ -430,12 +435,18 @@ impl Probe {
         probe.infer.set_engines(Engines {
             stt: match (slot, &dir) {
                 (InferSlot::Stt, Some(dir)) => Some((engine.clone(), dir.clone())),
+                // A cloud recognizer has no folder, only its key.
+                (InferSlot::Stt, None) if cloud.is_some() => Some((engine.clone(), PathBuf::new())),
                 _ => None,
             },
             stt_fallback: None,
             tts: (slot == InferSlot::Tts).then_some((engine, dir)),
             threads: 2,
             language: language.to_owned(),
+            cloud: cloud
+                .map(|c| std::collections::BTreeMap::from([(id.to_owned(), c)]))
+                .unwrap_or_default(),
+            gpu: None,
         });
         let ready = probe.infer.wait_ready(LOAD_LIMIT).await;
         // A failed load shows up as a fallback (the worker stays up) or a lost worker.
@@ -534,7 +545,7 @@ fn failure(event: &InferEvent) -> Option<String> {
         } else {
             error.clone()
         }),
-        InferEvent::Lost => Some("the test worker stopped".to_owned()),
+        InferEvent::Lost | InferEvent::Crashed { .. } => Some("the test worker stopped".to_owned()),
         _ => None,
     }
 }

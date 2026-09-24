@@ -46,6 +46,11 @@ impl Paths {
         self.local.join("crashes")
     }
 
+    /// Newer signed catalogs KIVO fetched (DISC-17).
+    pub fn catalogs(&self) -> PathBuf {
+        self.local.join("data").join("catalogs")
+    }
+
     pub fn models(&self) -> PathBuf {
         self.local.join("models")
     }
@@ -53,6 +58,11 @@ impl Paths {
     /// Voice enrollment clips, encrypted (VOICE §5, SECURITY §5).
     pub fn voice(&self) -> PathBuf {
         self.local.join("data").join("voice")
+    }
+
+    /// Sounds the user imported for cues (VOICE-28).
+    pub fn sounds(&self) -> PathBuf {
+        self.local.join("data").join("sounds")
     }
 
     /// The runtime's session token and other per-run files (ARCHITECTURE §3).

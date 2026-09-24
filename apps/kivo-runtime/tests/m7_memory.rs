@@ -173,7 +173,9 @@ async fn remembering_by_voice_then_answers_use_it() {
     );
 
     // The Island's "Remember this" (MEM-05): that turn's own answer becomes a fact.
-    let b3 = local_brain(vec![Script::text("Your dentist is Dr. Rao on Park Street.")]);
+    let b3 = local_brain(vec![Script::text(
+        "Your dentist is Dr. Rao on Park Street.",
+    )]);
     r.rig.brains.insert(b3.clone());
     let turn = say(&r.rig, "who is my dentist again?").await;
     let kept = r
@@ -186,7 +188,11 @@ async fn remembering_by_voice_then_answers_use_it() {
             .unwrap(),
     )
     .unwrap();
-    assert!(detail.markdown.contains("Dr. Rao on Park Street"), "{}", detail.markdown);
+    assert!(
+        detail.markdown.contains("Dr. Rao on Park Street"),
+        "{}",
+        detail.markdown
+    );
     assert!(
         r.rpc("memory.rememberTurn", json!({ "turnId": "no-such-turn" }))
             .await

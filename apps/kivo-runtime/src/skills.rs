@@ -1,8 +1,12 @@
 //! Agent Skills (CONVERSATION §9, CONV-32; DISCOVERY §1.2, DISC-10/16): `SKILL.md` folders — the
 //! open standard Claude, Codex and Gemini use.
 //!
-//! - Found in KIVO's own `skills\` folder (the user's, on), in `~/.claude/skills/` and in the
-//!   workspaces' `.claude/skills/` (referenced in place, off until the user reviews them).
+//! - Found in KIVO's own `skills\` folder (the user's, on), and shared by the agents KIVO
+//!   launches: `~/.claude/skills/`, `~/.codex/skills/`, `~/.gemini/skills/`, the cross-tool
+//!   `~/.agents/skills/`, and the same folders in the workspaces (referenced in place, off until
+//!   the user reviews and turns them on: sharing needs their permission, CONV-33).
+//! - A routine can become a skill (CONV-33): its steps, as instructions a brain or agent can
+//!   follow with KIVO's tools, in KIVO's own folder.
 //! - Only a skill's name and description go into a request (the context's skills layer); the body
 //!   loads when the brain calls `skills.load`. Scripts in a skill run through the shell tool,
 //!   under the permission engine, like any command.
@@ -24,6 +28,68 @@ use notify::{RecursiveMode, Watcher};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+
+/// Where the agents KIVO launches keep their skills, under the profile folder or a workspace
+/// (CONV-33): (source, folder).
+const AGENT_FOLDERS: &[(&str, &str)] = &[
+    ("claude-code", ".claude"),
+    ("codex", ".codex"),
+    ("gemini", ".gemini"),
+    ("agents", ".agents"),
+];
+/// Marks a skill made from a routine (it holds the routine's id).
+const FROM_ROUTINE: &str = ".kivo-routine";
+
+/// A skill name as the standard wants it: lower-case letters, digits and hyphens.
+fn slug(name: &str) -> String {
+    let mut out = String::new();
+    for c in name.trim().to_lowercase().chars() {
+        if c.is_ascii_alphanumeric() {
+            out.push(c);
+        } else if !out.ends_with('-') && !out.is_empty() {
+            out.push('-');
+        }
+    }
+    out.trim_end_matches('-').chars().take(64).collect()
+}
+
+/// A routine as `SKILL.md`: what it's for, then its steps as tool calls.
+fn routine_skill(routine: &kivo_core::routine::Routine, name: &str) -> String {
+    use kivo_core::task::StepAction;
+    let phrases: Vec<&str> = routine.phrases().collect();
+    let what = if routine.description.trim().is_empty() {
+        format!("The user's “{}” routine", routine.name)
+    } else {
+        routine.description.trim().to_owned()
+    };
+    let when = if phrases.is_empty() {
+        String::new()
+    } else {
+        format!(
+            " Use when the user asks for {}.",
+            phrases
+                .iter()
+                .map(|p| format!("“{p}”"))
+                .collect::<Vec<_>>()
+                .join(" or ")
+        )
+    };
+    let description = format!("{what}.{when}").replace(['\n', '\r'], " ");
+    let mut body = format!(
+        "---\nname: {name}\ndescription: {}\n---\n\n# {}\n\nMade from a KIVO routine. Do these steps in order with KIVO's tools; each goes through KIVO's permission checks.\n\n",
+        description.replace(':', " -"),
+        routine.name
+    );
+    for (i, s) in routine.steps.iter().enumerate() {
+        let line = match &s.action {
+            StepAction::Tool { tool, args } => format!("Call `{tool}` with `{args}`"),
+            StepAction::Say { text } => format!("Say: “{text}”"),
+            other => serde_json::to_string(other).unwrap_or_default(),
+        };
+        body.push_str(&format!("{}. {line}\n", i + 1));
+    }
+    body
+}
 
 /// The most a skill's body may be (bigger ones are cut when loaded).
 const MAX_BODY_CHARS: usize = 30_000;
@@ -148,26 +214,45 @@ impl Skills {
 
     /// The folders skills come from: (source, folder, trusted).
     fn sources(&self) -> Vec<(String, PathBuf, bool)> {
-        let mut out = vec![
-            ("kivo".to_owned(), self.own.clone(), true),
-            (
-                "claude-code".to_owned(),
-                self.home.join(".claude").join("skills"),
+        let mut out = vec![("kivo".to_owned(), self.own.clone(), true)];
+        for (agent, folder) in AGENT_FOLDERS {
+            out.push((
+                (*agent).to_owned(),
+                self.home.join(folder).join("skills"),
                 false,
-            ),
-        ];
+            ));
+        }
         for p in lock(&self.projects).iter() {
             let label = p.file_name().map_or_else(
                 || p.display().to_string(),
                 |n| n.to_string_lossy().into_owned(),
             );
-            out.push((
-                format!("project:{label}"),
-                p.join(".claude").join("skills"),
-                false,
-            ));
+            for (_, folder) in AGENT_FOLDERS {
+                out.push((
+                    format!("project:{label}"),
+                    p.join(folder).join("skills"),
+                    false,
+                ));
+            }
         }
         out
+    }
+
+    /// Makes a skill from a routine (CONV-33): a `SKILL.md` in KIVO's folder whose body lists the
+    /// routine's steps as KIVO tool calls, so a brain (or an agent reading KIVO's skills) can do
+    /// the same thing, each call under the permission engine. Returns the skill's id.
+    pub fn from_routine(&self, routine: &kivo_core::routine::Routine) -> Result<String, String> {
+        let name = slug(&routine.name);
+        if name.is_empty() {
+            return Err(text::t("routine.noName"));
+        }
+        let folder = self.own.join(&name);
+        std::fs::create_dir_all(&folder).map_err(|e| e.to_string())?;
+        std::fs::write(folder.join("SKILL.md"), routine_skill(routine, &name))
+            .map_err(|e| e.to_string())?;
+        std::fs::write(folder.join(FROM_ROUTINE), &routine.id).map_err(|e| e.to_string())?;
+        self.scan();
+        Ok(format!("kivo:{name}"))
     }
 
     /// Looks at every source again and records what's there (DISC-10). A skill in KIVO's own
@@ -189,6 +274,7 @@ impl Skills {
                 };
                 let id = format!("{source}:{}", parsed.name);
                 let imported = folder.join(".kivo-imported").exists();
+                let from_routine = folder.join(FROM_ROUTINE).exists();
                 let fresh = !known.iter().any(|k| k.id == id);
                 let on = trusted && !imported;
                 let _ = lock(&self.db).upsert_skill(&StoredSkill {
@@ -197,6 +283,8 @@ impl Skills {
                     path: folder.display().to_string(),
                     source: if imported {
                         "import".into()
+                    } else if from_routine {
+                        "routine".into()
                     } else {
                         source.clone()
                     },
@@ -654,5 +742,68 @@ mod tests {
             z.finish().unwrap();
         }
         assert_eq!(skills.import(&good).unwrap(), "brief");
+    }
+
+    /// CONV-33: a routine becomes a skill in KIVO's folder, on, with the routine as its source,
+    /// and its body parses as a skill with the steps; skills in other agents' folders are found
+    /// but stay off until the user turns them on.
+    #[test]
+    fn routines_become_skills_and_agents_share_theirs_with_permission() {
+        let dir = tempfile::tempdir().unwrap();
+        let (own, home) = (dir.path().join("own"), dir.path().join("home"));
+        let codex = home.join(".codex").join("skills").join("deploy");
+        std::fs::create_dir_all(&codex).unwrap();
+        std::fs::write(
+            codex.join("SKILL.md"),
+            "---\nname: deploy\ndescription: Deploy the app\n---\nRun the deploy script.\n",
+        )
+        .unwrap();
+        let core = Arc::new(Core::default());
+        let db = Arc::new(Mutex::new(Database::in_memory().unwrap()));
+        let skills = Skills::new(core, db, own.clone(), home);
+        let routine = kivo_core::routine::Routine {
+            id: "r1".into(),
+            name: "Work mode!".into(),
+            description: String::new(),
+            enabled: true,
+            triggers: vec![kivo_core::routine::Trigger::Phrase {
+                phrases: vec!["work mode".into()],
+                lang: "en".into(),
+            }],
+            steps: vec![kivo_core::routine::RoutineStep {
+                id: "a".into(),
+                action: kivo_core::task::StepAction::Tool {
+                    tool: "apps.launch".into(),
+                    args: json!({ "app": "Slack" }),
+                },
+                on_error: kivo_core::task::OnError::Stop,
+                delay_ms: None,
+                parallel_group: None,
+                confirm: false,
+            }],
+            variables: Vec::new(),
+            grants: Vec::new(),
+            starter: None,
+        };
+        let id = skills.from_routine(&routine).unwrap();
+        assert_eq!(id, "kivo:work-mode");
+        let text = std::fs::read_to_string(own.join("work-mode").join("SKILL.md")).unwrap();
+        let parsed = parse(&text).expect("a valid skill");
+        assert_eq!(parsed.name, "work-mode");
+        assert!(
+            parsed.description.contains("“work mode”"),
+            "{}",
+            parsed.description
+        );
+        assert!(text.contains("1. Call `apps.launch`"), "{text}");
+        let list = skills.list();
+        let mine = list.iter().find(|s| s.id == id).unwrap();
+        assert_eq!(mine.source, "routine");
+        assert!(mine.enabled);
+        let shared = list
+            .iter()
+            .find(|s| s.id == "codex:deploy")
+            .expect("Codex's skill is found");
+        assert!(!shared.enabled, "off until the user turns it on");
     }
 }

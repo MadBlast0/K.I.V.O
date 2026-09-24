@@ -316,6 +316,12 @@ pub struct FakeSystemInfo {
     pub usage: Mutex<std::collections::HashMap<u32, kivo_platform::ProcessUsage>>,
     /// Online and unmetered unless a test says otherwise.
     pub network: Mutex<Option<kivo_platform::Network>>,
+    /// How busy the GPU is, as the test sets it.
+    pub gpu_load: Mutex<Option<u8>>,
+    /// The networks the PC is connected to, by name.
+    pub networks: Mutex<Vec<String>>,
+    /// The USB devices plugged in, by name.
+    pub usb: Mutex<Vec<String>>,
 }
 
 impl Default for FakeSystemInfo {
@@ -324,6 +330,9 @@ impl Default for FakeSystemInfo {
         Self {
             presence: Mutex::default(),
             usage: Mutex::default(),
+            gpu_load: Mutex::new(Some(0)),
+            networks: Mutex::new(vec!["Home".to_owned()]),
+            usb: Mutex::new(vec!["USB Root Hub (USB 3.0)".to_owned()]),
             network: Mutex::new(Some(kivo_platform::Network {
                 online: true,
                 metered: false,
@@ -356,6 +365,15 @@ impl SystemInfo for FakeSystemInfo {
     }
     fn network(&self) -> Option<kivo_platform::Network> {
         *lock(&self.network)
+    }
+    fn gpu_load(&self) -> Option<u8> {
+        *lock(&self.gpu_load)
+    }
+    fn networks(&self) -> Vec<String> {
+        lock(&self.networks).clone()
+    }
+    fn usb_devices(&self) -> Vec<String> {
+        lock(&self.usb).clone()
     }
     fn attention(&self) -> PlatformResult<kivo_platform::Attention> {
         let s = lock(&self.snapshot);

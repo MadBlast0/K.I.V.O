@@ -191,6 +191,55 @@ impl VoiceRpc {
     }
 
     /// The registry, profiles and current choice for the speech choosers (VOICE-42/43/48).
+    /// Saves the user's sound for `cue` after checking it decodes, plays it once, and uses it
+    /// (VOICE-28). Only `.wav` and `.ogg`, at most 2 MB.
+    fn import_sound(&self, cue: SoundCue, name: &str, data: &str) -> Result<Value, String> {
+        use base64::Engine as _;
+        let ext = std::path::Path::new(name)
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(str::to_ascii_lowercase)
+            .filter(|e| e == "wav" || e == "ogg")
+            .ok_or_else(|| text::t("sounds.onlyWavOgg"))?;
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(data.trim())
+            .map_err(|_| text::t("sounds.unreadable"))?;
+        if bytes.len() > crate::sounds::MAX_CUSTOM_BYTES {
+            return Err(text::t("sounds.tooBig"));
+        }
+        let (pcm, rate) =
+            crate::sounds::decode(&bytes).map_err(|_| text::t("sounds.unreadable"))?;
+        if pcm.is_empty() {
+            return Err(text::t("sounds.unreadable"));
+        }
+        let dir = self
+            .engine
+            .speaker
+            .custom_dir()
+            .ok_or_else(|| text::t("sounds.unreadable"))?;
+        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        if let Some(old) = crate::sounds::custom_file(&dir, cue) {
+            let _ = std::fs::remove_file(old);
+        }
+        let stem = serde_json::to_value(cue)
+            .ok()
+            .and_then(|v| v.as_str().map(str::to_owned))
+            .unwrap_or_default();
+        std::fs::write(dir.join(format!("{stem}.{ext}")), &bytes).map_err(|e| e.to_string())?;
+        self.core.update_config(|c| {
+            if !c.sounds.custom.contains(&cue) {
+                c.sounds.custom.push(cue);
+            }
+        });
+        // A new file for the same cue: render the cues again.
+        self.engine.speaker.set_custom_dir(dir);
+        self.engine.speaker.configure(&self.core.config().sounds);
+        self.engine.speaker.preview_custom(&pcm, rate);
+        #[allow(clippy::cast_precision_loss, reason = "a short sound")]
+        let seconds = pcm.len() as f32 / rate as f32;
+        Ok(serde_json::json!({ "seconds": seconds.min(crate::sounds::MAX_CUSTOM_SECONDS) }))
+    }
+
     fn speech_choices(&self) -> SpeechChoices {
         let config = self.core.config();
         let language = config.general.language.clone();
@@ -225,7 +274,10 @@ impl VoiceRpc {
                 ram_mb: e.engine.resources.ram_mb,
                 ready: ready.contains(&e.engine.id),
                 fits_language: e.engine.supports(&language),
-                voices: if e.engine.id == kivo_voice::system_tts::ENGINE_ID {
+                // Chatterbox speaks in copies of the Windows voices.
+                voices: if e.engine.id == kivo_voice::system_tts::ENGINE_ID
+                    || e.engine.id == kivo_voice::chatterbox::ENGINE_ID
+                {
                     windows_voices.clone()
                 } else {
                     e.voices
@@ -394,6 +446,30 @@ impl VoiceRpc {
     pub async fn call(&self, name: &str, params: Value) -> Option<Result<Value, RpcError>> {
         let result = match name {
             method::VOICE_ENGINES => ok(&self.speech_choices()),
+            method::VOICE_SET_KEY => {
+                #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
+                struct Params {
+                    engine: String,
+                    key: String,
+                    #[serde(default)]
+                    region: Option<String>,
+                }
+                match parse::<Params>(params) {
+                    Ok(p) => self
+                        .models
+                        .save_key(&p.engine, &p.key, p.region.as_deref())
+                        .await
+                        .map(|()| Value::Null)
+                        .map_err(refuse),
+                    Err(e) => Err(e),
+                }
+            }
+            method::VOICE_DELETE_KEY => {
+                let engine = params["engine"].as_str().unwrap_or_default().to_owned();
+                self.models.delete_key(&engine);
+                Ok(Value::Null)
+            }
             method::VOICE_RECOMMEND => {
                 #[derive(Deserialize, Default)]
                 #[serde(deny_unknown_fields)]
@@ -973,6 +1049,37 @@ impl VoiceRpc {
                     Err(e) => Err(refuse(e)),
                 }
             }
+            method::SOUNDS_IMPORT => {
+                #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
+                struct Params {
+                    cue: SoundCue,
+                    /// The file's name, for its type.
+                    name: String,
+                    /// Its bytes, base64.
+                    data: String,
+                }
+                let p: Params = match parse(params) {
+                    Ok(p) => p,
+                    Err(e) => return Some(Err(e)),
+                };
+                self.import_sound(p.cue, &p.name, &p.data).map_err(refuse)
+            }
+            method::SOUNDS_CLEAR => {
+                let cue: SoundCue = match serde_json::from_value(params["cue"].clone()) {
+                    Ok(c) => c,
+                    Err(e) => return Some(Err(RpcError::invalid_params(e))),
+                };
+                if let Some(dir) = self.engine.speaker.custom_dir()
+                    && let Some(file) = crate::sounds::custom_file(&dir, cue)
+                {
+                    let _ = std::fs::remove_file(file);
+                }
+                self.core
+                    .update_config(|c| c.sounds.custom.retain(|x| *x != cue));
+                self.engine.speaker.configure(&self.core.config().sounds);
+                Ok(Value::Null)
+            }
             method::SOUNDS_PREVIEW => {
                 #[derive(Deserialize)]
                 #[serde(deny_unknown_fields)]
@@ -987,6 +1094,10 @@ impl VoiceRpc {
                 };
                 let speaker = Arc::clone(&self.engine.speaker);
                 match p.cue {
+                    // A cue of the chosen set: as it will play, the user's own sound included.
+                    Some(cue) if p.set == self.core.config().sounds.set => {
+                        speaker.preview_current(cue)
+                    }
                     Some(cue) => speaker.preview(p.set, cue),
                     // The whole set: the cues people hear most, one after another.
                     None => {

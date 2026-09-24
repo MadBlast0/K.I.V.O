@@ -6,7 +6,7 @@
 
 use kivo_brain::PrivacyClass;
 use kivo_brain::testing::{Script, ScriptedBrain};
-use kivo_core::routine::{Routine, RoutineStep, Trigger, VarDef, VarKind};
+use kivo_core::routine::{Routine, RoutineEvent, RoutineStep, Trigger, VarDef, VarKind};
 use kivo_core::task::{OnError, StepAction, TaskStatus};
 use kivo_core::{Capability, SessionState};
 use kivo_runtime::scripted::{self, Rig};
@@ -391,5 +391,199 @@ async fn starters_are_added_once_and_hotkeys_run_routines() {
     let task = r.rig.engine.run_routine(&saved.routine.id).unwrap();
     r.task_done(&task).await;
     assert!((r.rig.control.volume.lock().unwrap().level - 0.7).abs() < 0.01);
+    r.stop().await;
+}
+
+/// ROUT-11, ROUT-12: an app launching starts a routine on its own; its High-risk step asks on
+/// screen first even though the routine is granted (the user says no, so nothing shuts down);
+/// the routine waiting on it runs when it finishes. KIVO starting up doesn't count as a launch.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn events_start_routines_unattended_and_high_risk_steps_ask_first() {
+    let _one = ONE_AT_A_TIME.lock().await;
+    let r = start();
+    // Already running before the triggers start: no launch.
+    r.rig.processes.start(4100, "code.exe");
+    let mut on_app = routine(
+        "Music time",
+        &[],
+        vec![
+            step("v", volume(25)),
+            step(
+                "off",
+                StepAction::Tool {
+                    tool: "system.shutdown".into(),
+                    args: json!({}),
+                },
+            ),
+        ],
+    );
+    on_app.triggers = vec![
+        Trigger::Event {
+            event: RoutineEvent::AppLaunched {
+                app: "Spotify".into(),
+            },
+        },
+        Trigger::Event {
+            event: RoutineEvent::AppLaunched { app: "code".into() },
+        },
+    ];
+    let music = r.rig.routines.save(on_app, true).unwrap();
+    let mut after = routine("After music", &[], vec![step("v2", volume(40))]);
+    after.triggers = vec![Trigger::Event {
+        event: RoutineEvent::AfterRoutine {
+            routine: music.routine.id.clone(),
+        },
+    }];
+    r.rig.routines.save(after, true).unwrap();
+    // A schedule that doesn't parse is refused when saving.
+    let mut bad = routine("Bad", &[], vec![step("v3", volume(10))]);
+    bad.triggers = vec![Trigger::Schedule {
+        cron: "every morning".into(),
+        tz: None,
+    }];
+    assert!(r.rig.routines.save(bad, true).is_err());
+
+    let runner = tokio::spawn(kivo_runtime::triggers::run(
+        Arc::clone(&r.rig.core),
+        Arc::clone(&r.rig.routines),
+        r.rig.system.clone(),
+        r.rig.processes.clone(),
+        Arc::clone(&r.rig.db),
+    ));
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    assert!(r.rig.tasks.list(false, 20).is_empty(), "nothing at start");
+    r.rig.processes.start(4200, "Spotify.exe");
+
+    let find = |title: &str| {
+        r.rig
+            .tasks
+            .list(true, 50)
+            .into_iter()
+            .chain(r.rig.tasks.list(false, 50))
+            .find(|t| t.title == title)
+    };
+    until("the routine to ask", Duration::from_secs(15), || {
+        find("Music time").is_some_and(|t| t.question.is_some())
+    })
+    .await;
+    let task = find("Music time").unwrap();
+    assert!((r.rig.control.volume.lock().unwrap().level - 0.25).abs() < 0.01);
+    let q = task.question.unwrap();
+    assert_eq!(q.choices, ["allow", "deny"]);
+    r.rig.tasks.answer(&task.id, "deny").unwrap();
+    r.task_done(&task.id).await;
+    assert!(
+        r.rig.control.power.lock().unwrap().is_empty(),
+        "nothing shut down"
+    );
+
+    until("the routine after it", Duration::from_secs(10), || {
+        find("After music").is_some_and(|t| t.status.is_final())
+    })
+    .await;
+    assert!((r.rig.control.volume.lock().unwrap().level - 0.40).abs() < 0.01);
+    runner.abort();
+    r.stop().await;
+}
+
+/// ROUT-13, ROUT-14: "save that as a routine" turns the last request into a draft; a brain asked
+/// to create a routine drafts one through `routines.draft`; neither is saved until the user saves
+/// it. A routine exports to a file and comes back in as an off, ungranted draft; a file naming a
+/// tool KIVO doesn't have, or that isn't a routine file, is refused.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn routines_are_drafted_by_voice_and_chat_and_move_as_files() {
+    let _one = ONE_AT_A_TIME.lock().await;
+    let r = start();
+    let call = |method: &'static str, params: serde_json::Value| {
+        let rpc = Arc::clone(&r.rig.rpc);
+        async move { rpc.call(method, params).await.expect("handled") }
+    };
+    let before = r.rig.routines.list().len();
+
+    // What I just did.
+    r.rig.engine.say("set the volume to 30").await.unwrap();
+    answered(&r.rig).await;
+    r.rig.engine.say("save that as a routine").await.unwrap();
+    let t = answered(&r.rig).await;
+    assert_eq!(
+        t.answer.as_deref(),
+        Some(kivo_core::text::t("routine.fromLastTurn").as_str())
+    );
+    let draft = call("routines.draft", serde_json::Value::Null)
+        .await
+        .unwrap();
+    assert_eq!(draft["name"], "Set the volume to 30");
+    assert_eq!(draft["enabled"], false);
+    assert_eq!(draft["steps"][0]["action"]["tool"], "audio.volume_set");
+    assert_eq!(
+        call("routines.draft", serde_json::Value::Null)
+            .await
+            .unwrap(),
+        serde_json::Value::Null,
+        "taken once"
+    );
+    assert_eq!(r.rig.routines.list().len(), before, "nothing saved");
+
+    // By chat or voice, through a brain.
+    let brain = Arc::new(ScriptedBrain::new(
+        "anthropic",
+        PrivacyClass::Cloud,
+        vec![
+            Script::tool(
+                "routines__draft",
+                json!({
+                    "name": "Work mode",
+                    "phrases": ["work mode"],
+                    "steps": [
+                        { "tool": "apps.launch", "args": { "app": { "id": "Slack", "name": "Slack" } } },
+                        { "say": "Ready." }
+                    ]
+                }),
+            ),
+            Script::text("I've drafted Work mode for you to check."),
+        ],
+    ));
+    r.rig.brains.insert(brain.clone());
+    r.rig
+        .engine
+        .say("create a routine called work mode that opens slack and says ready")
+        .await
+        .unwrap();
+    answered(&r.rig).await;
+    let draft = call("routines.draft", serde_json::Value::Null)
+        .await
+        .unwrap();
+    assert_eq!(draft["name"], "Work mode", "{draft}");
+    assert_eq!(draft["triggers"][0]["phrases"][0], "work mode");
+    assert_eq!(r.rig.routines.list().len(), before, "still nothing saved");
+
+    // Export and import.
+    let routine: kivo_core::routine::Routine = serde_json::from_value(draft).unwrap();
+    let saved = r.rig.routines.save(routine, true).unwrap();
+    let file = call("routines.export", json!({ "id": saved.routine.id }))
+        .await
+        .unwrap();
+    let path = std::path::PathBuf::from(file["file"].as_str().unwrap());
+    assert!(path.to_string_lossy().ends_with(".kivo-routine.json"));
+    let content = std::fs::read_to_string(&path).unwrap();
+    assert!(!content.contains("grants") && !content.contains(&saved.routine.id));
+    let back = call("routines.import", json!({ "content": content }))
+        .await
+        .unwrap();
+    assert_eq!(back["name"], "Work mode");
+    assert_eq!(back["enabled"], false);
+    assert_eq!(back["grants"], json!([]));
+    let evil = content.replace("apps.launch", "shell.format_everything");
+    assert!(
+        call("routines.import", json!({ "content": evil }))
+            .await
+            .is_err()
+    );
+    assert!(
+        call("routines.import", json!({ "content": "{}" }))
+            .await
+            .is_err()
+    );
+    std::fs::remove_file(path).ok();
     r.stop().await;
 }

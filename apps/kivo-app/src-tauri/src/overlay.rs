@@ -58,6 +58,8 @@ struct State {
     placement: IslandPlacement,
     /// The bottom of the title bar or tabs of the window in front (UX-14).
     title_bar_bottom: Option<i32>,
+    /// A control KIVO is pointing at (UX-39): x, y, width, height in physical pixels.
+    point: Option<(i32, i32, u32, u32)>,
     /// A drag is in progress: moves are reported once it settles (UX-13).
     dragging: bool,
     /// Bumped on every move while dragging.
@@ -169,6 +171,7 @@ pub fn apply(
     anchor: Option<(i32, i32)>,
     placement: IslandPlacement,
     title_bar_bottom: Option<i32>,
+    point: Option<(i32, i32, u32, u32)>,
 ) {
     let state = app.state::<Overlay>();
     let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
@@ -178,12 +181,14 @@ pub fn apply(
     let moved = (anchor.is_some() && anchor != guard.anchor)
         || placement != guard.placement
         || title_bar_bottom != guard.title_bar_bottom
+        || point != guard.point
         || was_listening != listening(session);
     if anchor.is_some() {
         guard.anchor = anchor;
     }
     guard.placement = placement;
     guard.title_bar_bottom = title_bar_bottom;
+    guard.point = point;
     update(app, &mut guard);
     // The request's window is known a moment after the Island appears, and the Island moves
     // below a title bar only while listening: place it again when either changes.
@@ -366,7 +371,16 @@ pub fn overlay_fit(window: tauri::WebviewWindow, height: f64) {
 /// listening, a title bar or tab strip under it pushes it just below (UX-14). The height
 /// follows the Island (`overlay_fit`).
 fn place(app: &AppHandle, window: &tauri::WebviewWindow, state: &State) {
-    let anchor = state.anchor;
+    // Pointing at a control: beside it, on its monitor (UX-39).
+    let anchor = state
+        .point
+        .map(|(x, y, w, h)| {
+            (
+                x + i32::try_from(w / 2).unwrap_or(0),
+                y + i32::try_from(h / 2).unwrap_or(0),
+            )
+        })
+        .or(state.anchor);
     let monitor = anchor
         .and_then(|(x, y)| {
             app.monitor_from_point(f64::from(x), f64::from(y))
@@ -387,6 +401,11 @@ fn place(app: &AppHandle, window: &tauri::WebviewWindow, state: &State) {
         scale: monitor.scale_factor(),
     };
     let height = window.outer_size().map_or(0, |s| s.height);
+    if let Some(target) = state.point {
+        let (x, y) = beside(&screen, target, height);
+        let _ = window.set_position(PhysicalPosition::new(x, y));
+        return;
+    }
     let (x, y) = position(
         &screen,
         &state.placement,
@@ -457,6 +476,45 @@ fn position(
     (x, y)
 }
 
+/// Where the Island goes to point at a control (UX-39, plan §141): just below it, centred on
+/// it; above it when there's no room below; beside it when there's no room either way. Always
+/// on the control's monitor, never over the control.
+fn beside(screen: &Screen, target: (i32, i32, u32, u32), height: u32) -> (i32, i32) {
+    let scale = screen.scale;
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "window sizes in physical pixels"
+    )]
+    let width = (WIDTH * scale).round() as i32;
+    #[allow(clippy::cast_possible_truncation, reason = "a pixel offset")]
+    let gap = (10.0 * scale).round() as i32;
+    let height = i32::try_from(height.max(1)).unwrap_or(1);
+    let (ox, oy) = screen.origin;
+    let (right_edge, bottom_edge) = (
+        ox + i32::try_from(screen.size.0).unwrap_or(0),
+        oy + i32::try_from(screen.size.1).unwrap_or(0),
+    );
+    let (tx, ty, tw, th) = target;
+    let (tw, th) = (
+        i32::try_from(tw).unwrap_or(0),
+        i32::try_from(th).unwrap_or(0),
+    );
+    let centred = (tx + tw / 2 - width / 2).clamp(ox, (right_edge - width).max(ox));
+    if ty + th + gap + height <= bottom_edge {
+        return (centred, ty + th + gap);
+    }
+    if ty - gap - height >= oy {
+        return (centred, ty - gap - height);
+    }
+    let y = ty.clamp(oy, (bottom_edge - height).max(oy));
+    if tx + tw + gap + width <= right_edge {
+        (tx + tw + gap, y)
+    } else {
+        ((tx - gap - width).max(ox), y)
+    }
+}
+
 /// The Island's buttons (Allow, Deny, Stop, the text field) must receive clicks; the rest of the
 /// time it lets clicks through to what is underneath (UX §2: it never gets in the way).
 #[tauri::command]
@@ -489,8 +547,13 @@ pub fn overlay_typing_done(window: tauri::WebviewWindow) {
 
 /// What the Island may ask the runtime: only the actions its own buttons offer (SECURITY §9: the
 /// overlay window gets almost nothing).
-const ISLAND_METHODS: [&str; 11] = [
+const ISLAND_METHODS: [&str; 13] = [
     kivo_ipc::method::SESSION_CANCEL,
+    // "Talk live" (BRAIN-33): starts a realtime conversation, still behind the capability and
+    // the permission engine.
+    kivo_ipc::method::SESSION_LIVE,
+    // The computer-use controller's Pause (CAP-12): only pauses or resumes KIVO's own control.
+    kivo_ipc::method::SESSION_COMPUTER_PAUSE,
     // The Undo button (UX-43): only takes back KIVO's own last change.
     kivo_ipc::method::SESSION_UNDO,
     // "That's not what I meant" on a brain's answer (BRAIN-06): it only records a report.
@@ -578,7 +641,7 @@ pub async fn island_request(
 
 #[cfg(test)]
 mod tests {
-    use super::{Screen, allowed_capability_change, position, quiet_state};
+    use super::{Screen, WIDTH, allowed_capability_change, beside, position, quiet_state};
     use kivo_core::Capability;
     use kivo_core::config::{IslandSpot, OverlayPosition};
     use kivo_ipc::protocol::IslandPlacement;
@@ -699,5 +762,45 @@ mod tests {
             &json!({ "capability": "screen-awareness", "on": false })
         ));
         assert!(!allowed_capability_change(None, &on("screen-awareness")));
+    }
+
+    /// UX-39: the Island points at a control from below, else above, else beside, on the
+    /// control's monitor, and never covers it.
+    #[test]
+    fn pointing_places_the_island_beside_the_control_not_over_it() {
+        let screen = Screen {
+            name: Some("DISPLAY1"),
+            origin: (0, 0),
+            size: (1920, 1080),
+            scale: 1.0,
+        };
+        let overlaps = |(x, y): (i32, i32), (tx, ty, tw, th): (i32, i32, u32, u32), h: i32| {
+            let w = WIDTH as i32;
+            x < tx + tw as i32 && tx < x + w && y < ty + th as i32 && ty < y + h
+        };
+        for target in [
+            (900, 100, 80, 24),  // near the top: below it
+            (900, 1040, 80, 24), // at the bottom: above it
+            (1860, 500, 50, 24), // far right: centred, clamped on screen
+        ] {
+            let at = beside(&screen, target, 60);
+            assert!(!overlaps(at, target, 60), "{target:?} → {at:?}");
+            assert!(at.0 >= 0 && at.0 + WIDTH as i32 <= 1920, "{at:?}");
+            assert!(at.1 >= 0 && at.1 + 60 <= 1080, "{at:?}");
+        }
+        assert_eq!(beside(&screen, (900, 100, 80, 24), 60).1, 134);
+        // A tall Island next to a tall control: beside it.
+        let tall = (100, 40, 60, 1000);
+        let at = beside(&screen, tall, 400);
+        assert!(!overlaps(at, tall, 400), "{at:?}");
+        // On a second monitor, it stays there.
+        let second = Screen {
+            name: None,
+            origin: (1920, 0),
+            size: (1280, 1024),
+            scale: 1.25,
+        };
+        let at = beside(&second, (2000, 300, 40, 20), 80);
+        assert!(at.0 >= 1920, "{at:?}");
     }
 }

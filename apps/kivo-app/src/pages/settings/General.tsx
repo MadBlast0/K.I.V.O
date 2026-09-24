@@ -19,7 +19,9 @@ import {
 } from "../../components/ui";
 import { Method } from "../../ipc/generated";
 import { useRuntime } from "../../ipc/runtime";
+import { MODES } from "../../lib/modes";
 import { bool, oneOf, str, strings } from "../../lib/settings";
+import type { ProductMode } from "../../ipc/generated";
 import { message, useConfig } from "./useConfig";
 
 /** Languages people can speak to KIVO in; the speech engines' own lists decide what works. */
@@ -44,9 +46,35 @@ export function GeneralTab() {
   const spoken = strings(get("general", "languages"));
   const primary = str(get("general", "language"), "en");
   const all = [primary, ...spoken.filter((l) => l !== primary)];
+  const mode =
+    oneOf(
+      get("general", "product-mode"),
+      MODES.map((m) => m.mode),
+    ) ?? "normal";
+  const switchMode = (next: ProductMode) =>
+    void request(Method.modeSet, { mode: next })
+      .then(() => toast(t("modes.switched", { mode: t(`modes.${next}`) })))
+      .catch((e: unknown) => toast(message(e)));
 
   return (
     <>
+      <Section title={t("modes.title")} />
+      <Group>
+        <Row
+          icon={MODES.find((m) => m.mode === mode)?.icon ?? "home"}
+          title={t("modes.label")}
+          subtitle={t(`modes.${mode}Hint`)}
+          end={
+            <Select<ProductMode>
+              label={t("modes.label")}
+              value={mode}
+              onChange={switchMode}
+              items={MODES.map((m) => ({ value: m.mode, label: t(`modes.${m.mode}`) }))}
+            />
+          }
+        />
+      </Group>
+
       <Section title={t("settings.general.startup")} />
       <Group>
         <Row

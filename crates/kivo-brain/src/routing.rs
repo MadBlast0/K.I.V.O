@@ -52,6 +52,10 @@ pub struct Profile {
     pub system_prompt_addendum: String,
     /// Overrides the user's persona for this profile (BRAIN-38).
     pub persona: Option<String>,
+    /// Voice requests on this profile open a realtime conversation (BRAINS §8), when the
+    /// Realtime voice capability is on.
+    #[serde(default)]
+    pub realtime: bool,
     pub built_in: bool,
 }
 
@@ -68,6 +72,7 @@ impl Profile {
             allowed_tools: ToolScope::All,
             system_prompt_addendum: String::new(),
             persona: None,
+            realtime: false,
             built_in: true,
         }
     }

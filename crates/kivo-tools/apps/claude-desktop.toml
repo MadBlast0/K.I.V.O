@@ -7,3 +7,12 @@ desktop_ai = true
 prefer = ["uia"]
 examples = ["In Claude, prompt: summarize my notes", "Open Claude"]
 
+# Prompting it through UI Automation (CONV-16). Written from the app's accessible names; not yet
+# checked on a real install (KIVO's tests never act on the owner's apps), so the flow falls back
+# ("I've put the prompt in; press Enter when ready", or the clipboard) when they don't match.
+[ai]
+version = "Claude for Windows 0.14 (2026)"
+verified = false
+composer = { role = "Edit", name = "Write your prompt to Claude" }
+send = { role = "Button", name = "Send message" }
+project = { role = "Button", name = "Project" }

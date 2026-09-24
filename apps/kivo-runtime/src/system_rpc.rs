@@ -23,6 +23,19 @@ const KIVO_PROGRAMS: &[&str] = &[
     "kivo.exe",
     "kivo-infer.exe",
 ];
+/// The graphics card and memory, for the dashboard (PLAN-07).
+#[derive(Default)]
+struct Gpu {
+    /// The busiest adapter's load, 0–100.
+    load: Option<u8>,
+    /// KIVO's processes' dedicated GPU memory.
+    kivo_bytes: Option<u64>,
+    /// The largest card's own memory.
+    vram_mb: Option<u64>,
+    /// The PC's memory and what's free.
+    ram: Option<(u64, u64)>,
+}
+
 /// The latest requests the medians are taken over.
 const RECENT_TURNS: u32 = 200;
 
@@ -37,6 +50,14 @@ pub struct SystemRpc {
     pub browser: Option<Arc<dyn kivo_tools::Browser>>,
     /// What's installed, for setup's recommendations (UX-36).
     pub discovery: Option<Arc<crate::discovery::Discovery>>,
+    /// What this PC and Windows version can do (the OS, an NPU; PLAN-07, ARCH-40).
+    pub platform: kivo_platform::Capabilities,
+    /// KIVO's log folder, for the bundle's recent errors.
+    pub logs: Option<std::path::PathBuf>,
+    /// Where a saved bundle goes (Downloads).
+    pub exports: Option<std::path::PathBuf>,
+    /// The bundle the user was shown, which is what Save writes.
+    pub bundle: std::sync::Mutex<Option<Value>>,
     /// Opens an https page in the default browser.
     pub open_url: OpenUrl,
 }
@@ -96,6 +117,10 @@ pub fn latencies(turns: &[(Option<String>, String, Value)]) -> Value {
     let mut stt = Vec::new();
     let mut command = Vec::new();
     let mut answer = Vec::new();
+    // Each stage on its own (PLAN-07): recognition, the brain's first token, the tool, the voice's
+    // first audio, and the whole request.
+    let (mut brain, mut tool, mut voice, mut total) =
+        (Vec::new(), Vec::new(), Vec::new(), Vec::new());
     for (route, source, spans) in turns {
         let spoke = at(spans, "t4EndOfSpeech");
         let from = spoke.unwrap_or(0);
@@ -106,6 +131,26 @@ pub fn latencies(turns: &[(Option<String>, String, Value)]) -> Value {
         }
         if let (Some(t4), Some(t5)) = (spoke, at(spans, "t5FinalTranscript")) {
             stt.push(t5.saturating_sub(t4));
+        }
+        if let (Some(from), Some(first)) = (at(spans, "t6Intent"), at(spans, "t7FirstToken")) {
+            brain.push(first.saturating_sub(from));
+        }
+        if let Some(done) = at(spans, "t8ToolDone") {
+            let from = at(spans, "t7Permission")
+                .or_else(|| at(spans, "t6Intent"))
+                .or(spoke);
+            if let Some(from) = from {
+                tool.push(done.saturating_sub(from));
+            }
+        }
+        if let Some(audio) = at(spans, "t9FirstAudio") {
+            let from = at(spans, "t8ToolDone").or_else(|| at(spans, "t7FirstToken"));
+            if let Some(from) = from.filter(|f| *f <= audio) {
+                voice.push(audio - from);
+            }
+        }
+        if let (Some(t4), Some(end)) = (spoke, at(spans, "t10Complete")) {
+            total.push(end.saturating_sub(t4));
         }
         match route {
             None => {
@@ -122,9 +167,16 @@ pub fn latencies(turns: &[(Option<String>, String, Value)]) -> Value {
     }
     json!({
         "wakeToChime": median(wake),
-        "speechToText": median(stt),
+        "speechToText": median(stt.clone()),
         "commandDone": median(command),
         "firstWord": median(answer),
+        "stages": {
+            "stt": median(stt),
+            "brain": median(brain),
+            "tool": median(tool),
+            "tts": median(voice),
+            "total": median(total),
+        },
     })
 }
 
@@ -134,6 +186,8 @@ impl SystemRpc {
         Some(match name {
             method::PERFORMANCE_STATUS => Ok(self.performance().await),
             method::DIAGNOSTICS_RUN => Ok(json!(self.diagnostics().await)),
+            method::DIAGNOSTICS_BUNDLE => Ok(self.make_bundle().await),
+            method::DIAGNOSTICS_SAVE => self.save_bundle(),
             method::SETUP_RECOMMEND => self.recommend().await,
             method::SYSTEM_OPEN_URL => {
                 let url = params["url"].as_str().unwrap_or_default();
@@ -148,6 +202,65 @@ impl SystemRpc {
             }
             _ => return None,
         })
+    }
+
+    /// The diagnostics bundle (ARCH-40), kept for Save so what's saved is what the user read.
+    async fn make_bundle(&self) -> Value {
+        let checks = self.diagnostics().await;
+        let performance = self.performance().await;
+        let system = Arc::clone(&self.system);
+        let machine = tokio::task::spawn_blocking(move || system.snapshot().ok())
+            .await
+            .ok()
+            .flatten();
+        let home = dirs::home_dir();
+        let errors = self.logs.as_deref().map_or_else(Vec::new, |dir| {
+            crate::diagnostics::recent_errors(dir, home.as_deref())
+        });
+        let config = self.engine.core.config();
+        let brains = self.engine.brains.views(&config);
+        let created = kivo_memory::date::format(
+            kivo_store::brains::now_ms(),
+            self.engine.brains.utc_offset(),
+        );
+        let bundle = crate::diagnostics::bundle(&crate::diagnostics::Parts {
+            config: &config,
+            platform: &self.platform,
+            machine: machine.as_ref(),
+            brains: &brains,
+            checks: &checks,
+            performance,
+            errors,
+            created,
+            home: home.as_deref(),
+        });
+        *self
+            .bundle
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(bundle.clone());
+        bundle
+    }
+
+    fn save_bundle(&self) -> Result<Value, RpcError> {
+        let refuse = |m: String| RpcError::new(RpcError::REFUSED, m);
+        let bundle = self
+            .bundle
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+            .ok_or_else(|| refuse(text::t("diagnostics.bundleFirst")))?;
+        let dir = self
+            .exports
+            .clone()
+            .ok_or_else(|| refuse(text::t("settings.noExports")))?;
+        let date = bundle["created"]
+            .as_str()
+            .and_then(|c| c.split(' ').next())
+            .unwrap_or("today")
+            .to_owned();
+        crate::diagnostics::save(&dir, &bundle, &date)
+            .map(|file| json!({ "file": file.display().to_string() }))
+            .map_err(refuse)
     }
 
     /// Setup's recommended defaults (UX-36). Looks for agents and local servers first if it
@@ -199,14 +312,23 @@ impl SystemRpc {
             let (cpu_before, _) = usage(&pids);
             std::thread::sleep(std::time::Duration::from_secs(1));
             let (cpu_after, memory) = usage(&pids);
-            let cpus = system.snapshot().map_or(1, |s| s.logical_cpus.max(1));
+            let machine = system.snapshot().ok();
+            let cpus = machine.as_ref().map_or(1, |s| s.logical_cpus.max(1));
             let busy_ms = cpu_after.saturating_sub(cpu_before);
             #[allow(clippy::cast_precision_loss, reason = "milliseconds in a second")]
             let percent = busy_ms as f64 / (1_000.0 * f64::from(cpus)) * 100.0;
-            (percent, memory, pids.len())
+            let gpu = Gpu {
+                load: system.gpu_load(),
+                kivo_bytes: system.gpu_memory(&pids),
+                vram_mb: machine
+                    .as_ref()
+                    .and_then(|m| m.gpus.iter().map(|g| g.vram_mb).max()),
+                ram: machine.as_ref().map(|m| (m.ram_mb, m.ram_free_mb)),
+            };
+            (percent, memory, pids.len(), gpu)
         })
         .await
-        .unwrap_or((0.0, 0, 0));
+        .unwrap_or((0.0, 0, 0, Gpu::default()));
         let timings = self
             .engine
             .recorder
@@ -230,11 +352,19 @@ impl SystemRpc {
             "cpuPercent": (sampled.0 * 10.0).round() / 10.0,
             "memoryMb": sampled.1 / (1024 * 1024),
             "processes": sampled.2,
-            // Speech runs on the CPU (ONNX Runtime's CPU provider): KIVO uses no graphics card.
-            "gpu": false,
+            // The recognizer runs on the graphics card when the GPU policy put it there (PLAN-09).
+            "gpu": self.engine.infer.configured().gpu.is_some(),
+            "gpuPercent": sampled.3.load,
+            "gpuMemoryMb": sampled.3.kivo_bytes.map(|b| b / (1024 * 1024)),
+            "vramMb": sampled.3.vram_mb,
+            "ramMb": sampled.3.ram.map(|r| r.0),
+            "ramFreeMb": sampled.3.ram.map(|r| r.1),
+            "npu": self.platform.npu,
             "latency": latencies(&timings),
             "models": models,
             "profile": self.engine.core.config().performance.profile,
+            // Auto's choice right now (PLAN-08).
+            "effectiveProfile": self.models.effective_profile(&self.engine.core.config()),
         })
     }
 
@@ -392,6 +522,33 @@ mod tests {
             p(51, "msedgewebview2.exe", 50),
         ];
         assert_eq!(kivo_pids(&list, 40), [20, 21, 22, 30, 40]);
+    }
+
+    /// PLAN-07: each stage on its own — recognition, the brain to its first token, the tool, the
+    /// voice to its first sound, the whole request.
+    #[test]
+    fn each_stage_has_its_own_median() {
+        let turns = vec![
+            (
+                Some("brain".into()),
+                "wake".into(),
+                json!({"t4EndOfSpeech": 1000, "t5FinalTranscript": 1250, "t6Intent": 1260,
+                       "t7FirstToken": 1760, "t9FirstAudio": 2060, "t10Complete": 4000}),
+            ),
+            (
+                None,
+                "wake".into(),
+                json!({"t4EndOfSpeech": 500, "t5FinalTranscript": 700, "t6Intent": 705,
+                       "t7Permission": 710, "t8ToolDone": 790, "t9FirstAudio": 990, "t10Complete": 1500}),
+            ),
+        ];
+        let stages = &latencies(&turns)["stages"];
+        assert_eq!(stages["stt"], 250);
+        assert_eq!(stages["brain"], 500);
+        assert_eq!(stages["tool"], 80);
+        assert_eq!(stages["tts"], 300);
+        assert_eq!(stages["total"], 3000);
+        assert_eq!(latencies(&[])["stages"]["tool"], Value::Null);
     }
 
     #[test]

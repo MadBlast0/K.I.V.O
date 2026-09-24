@@ -60,6 +60,10 @@ pub mod method {
     pub const SESSION_STOP_ALL: &str = "session.stopEverything";
     /// Takes back the last change (UX-43): the Island's Undo, the toast, "Kivo, undo that".
     pub const SESSION_UNDO: &str = "session.undo";
+    /// Pauses or resumes computer use (the Island's controller, CAP-12) → `{ paused }`.
+    pub const SESSION_COMPUTER_PAUSE: &str = "session.computerPause";
+    /// Starts a realtime conversation (the card's "Talk live", BRAIN-33).
+    pub const SESSION_LIVE: &str = "session.live";
     /// The Island was dragged (the app reports where, UX-13): remembered for that monitor.
     pub const ISLAND_MOVED: &str = "island.moved";
     /// Client → runtime: answer a confirmation
@@ -91,6 +95,8 @@ pub mod method {
     pub const SETTINGS_GET: &str = "settings.get";
     /// Client → runtime: change settings (merged into the current values).
     pub const SETTINGS_SET: &str = "settings.set";
+    /// Switches the product mode (PLAN-06); Normal restores the user's own settings.
+    pub const MODE_SET: &str = "mode.set";
     /// Client → runtime: the "always allow" grants in force (SEC-08).
     pub const PERMISSIONS_GRANTS: &str = "permissions.grants";
     /// Client → runtime: revoke one grant (`{ "id": 3 }`).
@@ -125,11 +131,18 @@ pub mod method {
     pub const VOICE_ID_DELETE: &str = "voiceId.delete";
     /// Settings → Sounds: play a set's cues (VOICE-27).
     pub const SOUNDS_PREVIEW: &str = "sounds.preview";
+    /// Imports the user's `.wav`/`.ogg` for one cue (VOICE-28).
+    pub const SOUNDS_IMPORT: &str = "sounds.import";
+    /// Goes back to the set's own sound for a cue.
+    pub const SOUNDS_CLEAR: &str = "sounds.clear";
     /// Choosing speech engines (VOICE §11): the registry, profiles and current choice; the
     /// recommendation; a safe switch (progress as `engineSwitch` events); a voice preview.
     pub const VOICE_ENGINES: &str = "voice.engines";
     pub const VOICE_RECOMMEND: &str = "voice.recommend";
     pub const VOICE_SWITCH: &str = "voice.switch";
+    /// Saves a cloud speech service's key after testing it (VOICE-10/11); write-only.
+    pub const VOICE_SET_KEY: &str = "voice.setKey";
+    pub const VOICE_DELETE_KEY: &str = "voice.deleteKey";
     pub const VOICE_PREVIEW: &str = "voice.preview";
     /// Onboarding's microphone check (UX-33) and a recognizer's "Try sample" (UX-60).
     pub const VOICE_MIC_CHECK: &str = "voice.micCheck";
@@ -210,6 +223,24 @@ pub mod method {
     pub const ROUTINES_CHECK: &str = "routines.check";
     /// The tools a step can use, with their JSON Schemas for the builder's forms (ROUT-09).
     pub const ROUTINES_TOOLS: &str = "routines.tools";
+    /// The routine waiting for review (drafted by voice, chat or "save what you just did";
+    /// ROUT-13), taken once; `null` when there's none.
+    pub const ROUTINES_DRAFT: &str = "routines.draft";
+    /// Saves a routine as a `.kivo-routine.json` file in Downloads (ROUT-14): `{ id }`.
+    pub const ROUTINES_EXPORT: &str = "routines.export";
+    /// Reads a routine file's contents into a draft for review (ROUT-14): `{ content }`.
+    pub const ROUTINES_IMPORT: &str = "routines.import";
+    /// Makes a skill from a saved routine (CONV-33): `{ id }` → `{ skill }`.
+    pub const ROUTINES_TO_SKILL: &str = "routines.toSkill";
+    /// What installing a CLI agent or a tool takes: `{ id }` → `InstallPlan` (DISC-07, DIST-14).
+    pub const INSTALLS_PLAN: &str = "installs.plan";
+    /// Installs it, the user having read the plan: `{ id, commands }` (the commands shown).
+    pub const INSTALLS_START: &str = "installs.start";
+    /// Where an install stands: `{ id }` → `InstallView | null`.
+    pub const INSTALLS_STATUS: &str = "installs.status";
+    pub const INSTALLS_CANCEL: &str = "installs.cancel";
+    /// The tools KIVO can install, with their versions (Node.js, Git, Ollama; DIST-14).
+    pub const INSTALLS_TOOLS: &str = "installs.tools";
     /// The Agents page (UX-25): CLI agents, desktop AI apps, sessions.
     pub const AGENTS_OVERVIEW: &str = "agents.overview";
     /// Hands an agent session to a visible terminal (CONV-13).
@@ -308,6 +339,10 @@ pub mod method {
     pub const SETUP_RECOMMEND: &str = "setup.recommend";
     /// Runs the checks: microphone, wake word, speech, echo cancellation, brains, extension, audit.
     pub const DIAGNOSTICS_RUN: &str = "diagnostics.run";
+    /// Makes the diagnostics bundle for the user to read (ARCH-40); nothing is saved yet.
+    pub const DIAGNOSTICS_BUNDLE: &str = "diagnostics.bundle";
+    /// Saves the bundle the user read to their Downloads folder.
+    pub const DIAGNOSTICS_SAVE: &str = "diagnostics.save";
     /// Saves settings, routines and memory to one file in Downloads; returns it.
     pub const SETTINGS_EXPORT: &str = "settings.export";
     /// Restores from such a file's contents: `{ content }`.
@@ -391,6 +426,11 @@ pub struct StateSnapshot {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     #[cfg_attr(feature = "ts", ts(as = "Option<bool>", optional))]
     pub has_selection: bool,
+    /// KIVO is controlling the screen (computer use, CAP-12): the banner, the frame and KIVO's
+    /// cursor follow this.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub controlling: Option<ControlView>,
     /// Increases with every state change, so a client can tell whether its view is current.
     pub revision: u64,
 }
@@ -452,6 +492,10 @@ pub struct IslandPlacement {
     pub motion: kivo_core::config::MotionPref,
     /// Island (the pill), or Hidden: sounds only, except a question that needs an answer.
     pub companion: kivo_core::config::CompanionStyle,
+    /// Pill and card, pill only, card only, or off (UX-17).
+    pub style: kivo_core::config::OverlayStyle,
+    /// A brief glow along the screen's edges on wake (UX-16; off by default).
+    pub wake_glow: bool,
 }
 
 impl Default for IslandPlacement {
@@ -468,6 +512,8 @@ impl Default for IslandPlacement {
             announcements: true,
             motion: kivo_core::config::MotionPref::System,
             companion: kivo_core::config::CompanionStyle::Pill,
+            style: kivo_core::config::OverlayStyle::PillAndCard,
+            wake_glow: false,
         }
     }
 }
@@ -510,6 +556,11 @@ pub struct TurnView {
     /// sits at the top of its monitor: while only listening, the Island moves below it (UX-14).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title_bar_bottom: Option<i32>,
+    /// A control KIVO is showing the user (UX-39, plan §141): the Island moves beside it on its
+    /// monitor without covering it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub point: Option<PointTarget>,
     /// Someone other than the enrolled owner is talking: a guest turn (UX-08, VOICE-22).
     #[serde(default)]
     pub guest: bool,
@@ -549,6 +600,30 @@ pub struct TurnView {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "ts", ts(optional))]
     pub task_id: Option<String>,
+    /// A realtime conversation is open (BRAIN-33): the card's Live chip, its time and End.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub live: Option<LiveView>,
+    /// A realtime conversation can be started from this card ("Talk live", BRAINS §8).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[cfg_attr(feature = "ts", ts(as = "Option<bool>", optional))]
+    pub live_offer: bool,
+}
+
+/// An open realtime conversation (BRAIN-33).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LiveView {
+    /// "Gemini Live".
+    pub provider: String,
+    /// When it started (epoch ms), for the card's clock.
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
+    pub started: u64,
+    /// The session ends at this many minutes (the realtime cap), if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub max_minutes: Option<u32>,
 }
 
 /// The Draft card (CONV-15): what KIVO will type, where, before it presses send.
@@ -630,6 +705,80 @@ pub struct StepView {
     pub status: StepStatus,
     /// A short result or reason ("Volume 30%", "Chrome isn't installed").
     pub detail: Option<String>,
+}
+
+/// What installing a CLI agent or a tool takes, shown before anything runs (DISC-07, DIST-14).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstallPlan {
+    pub id: String,
+    pub name: String,
+    /// Already on this PC: nothing to do.
+    pub installed: bool,
+    pub version: Option<String>,
+    pub steps: Vec<InstallStepView>,
+}
+
+/// One step: what it does, the exact command, why, and how it went.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstallStepView {
+    pub id: String,
+    pub title: String,
+    /// Empty when the user does it (a vendor download).
+    pub command: String,
+    pub why: String,
+    /// `pending`, `running`, `done`, `failed`, `needsYou`.
+    pub status: String,
+    /// The last lines the command printed.
+    pub output: String,
+}
+
+/// An install as it runs (the progress sheet).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstallView {
+    pub id: String,
+    pub name: String,
+    /// `running`, `done`, `failed`, `cancelled`, `needsYou`.
+    pub status: String,
+    pub steps: Vec<InstallStepView>,
+    /// The version it answers with once verified.
+    pub version: Option<String>,
+    pub error: Option<String>,
+}
+
+/// Computer use as it runs (CAP-12).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ControlView {
+    /// The app being controlled ("Notes").
+    pub app: String,
+    pub step: u32,
+    pub max_steps: u32,
+    /// Estimated cost so far, in US cents.
+    pub cost_cents: u32,
+    pub paused: bool,
+    pub frame: kivo_core::config::ScreenFrame,
+    /// KIVO's cursor, where it acts (physical pixels).
+    pub cursor: Option<ScreenPoint>,
+}
+
+/// Where a control is on screen, in physical pixels, for the Island to point at (UX-39).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PointTarget {
+    pub x: i32,
+    pub y: i32,
+    pub width: u32,
+    pub height: u32,
+    /// The control's name ("Export…").
+    pub label: String,
 }
 
 /// Whether KIVO can hear: the speech model is a download (DIST-12).
@@ -1384,6 +1533,17 @@ pub struct MemoryOverview {
     pub tags: Vec<MemoryTagView>,
     pub folders: Vec<MemoryFolderView>,
     pub suggestions: Vec<MemorySuggestionView>,
+    /// `[[wikilinks]]` between notes, resolved to paths (the graph view, CONV-25).
+    pub links: Vec<MemoryLinkView>,
+}
+
+/// One link in the memory graph: `from` links to `to` (both vault paths).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemoryLinkView {
+    pub from: String,
+    pub to: String,
 }
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]

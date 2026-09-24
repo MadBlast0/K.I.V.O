@@ -4,16 +4,19 @@
  * for the user. Only what the runtime reports is shown.
  */
 import type { TFunction } from "i18next";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type {
   Capability,
   ConfirmSpec,
+  ControlView,
   DraftView,
   GrantDuration,
   LiveActivity,
   Offer,
+  OverlayStyle,
   PermissionMode,
+  PointTarget,
   StateSnapshot,
   StepView,
   TurnView,
@@ -64,6 +67,10 @@ export interface IslandHandlers {
   editDraft: (callId: string, text: string) => void;
   /** Answers an offer the Island makes outside a turn (CONV-10). */
   offer: (id: string, accept: boolean) => void;
+  /** Pauses or resumes computer use (CAP-12). */
+  computerPause?: () => void;
+  /** "Talk live": starts a realtime conversation (BRAIN-33). */
+  live?: () => void;
   /** Opens a task on the Tasks page (UX-24). */
   openTask: (id: string) => void;
 }
@@ -141,6 +148,33 @@ function brainChip(turn: TurnView | null | undefined, t: TFunction) {
   );
 }
 
+/** A realtime conversation's chip (BRAIN-33): LIVE with its running time. */
+function liveChip(turn: TurnView | null | undefined, t: TFunction) {
+  const live = turn?.live;
+  return live ? <LiveClock started={live.started} maxMinutes={live.maxMinutes ?? null} t={t} /> : null;
+}
+
+/** mm:ss since `started`, ticking once a second (only while a live conversation is open). */
+export function LiveClock({ started, maxMinutes, t }: { started: number; maxMinutes: number | null; t: TFunction }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+  const seconds = Math.max(0, Math.floor((now - started) / 1000));
+  const time = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+  const label =
+    maxMinutes != null
+      ? t("island.liveOf", { clock: time, minutes: maxMinutes })
+      : t("island.liveFor", { clock: time });
+  return (
+    <span className="k-island__chip k-island__chip--live" aria-label={label} title={label}>
+      <span className="k-island__live-dot" aria-hidden />
+      {`${t("island.live").toUpperCase()} · ${time}`}
+    </span>
+  );
+}
+
 /** A guest's turn (VOICE-22, UX-08): a neutral "Guest" chip, so it's clear KIVO didn't
  * recognize the owner's voice. */
 function guestChip(turn: TurnView | null | undefined, t: TFunction) {
@@ -183,7 +217,11 @@ function ConfirmButtons({ confirm, t, on }: { confirm: ConfirmSpec; t: TFunction
             ]
           : []),
         {
-          label: confirm.plan ? t("island.approvePlan") : t("island.allowOnce"),
+          label: confirm.watch
+            ? t("island.watchAllow")
+            : confirm.plan
+              ? t("island.approvePlan")
+              : t("island.allowOnce"),
           kind: confirm.hello ? undefined : ("primary" as const),
           onClick: () => on.answer(confirm.callId, true, false),
         },
@@ -198,7 +236,11 @@ function ConfirmButtons({ confirm, t, on }: { confirm: ConfirmSpec; t: TFunction
               },
             ]
           : []),
-        { label: t("island.deny"), kind: "danger" as const, onClick: () => on.answer(confirm.callId, false, false) },
+        {
+          label: confirm.watch ? t("island.watchSkip") : t("island.deny"),
+          kind: confirm.watch ? undefined : ("danger" as const),
+          onClick: () => on.answer(confirm.callId, false, false),
+        },
       ]}
     />
   );
@@ -385,6 +427,43 @@ function activityIsland(a: LiveActivity, more: number, t: TFunction, on: IslandH
   };
 }
 
+/** Computer use's controller (CAP-12): what KIVO controls, its progress, Pause / Resume, Stop. */
+function controllerIsland(cu: ControlView, t: TFunction, on: IslandHandlers): IslandModel {
+  return {
+    state: `controller-${cu.paused ? "paused" : "running"}`,
+    width: 360,
+    label: t("island.controlling", { app: cu.app }),
+    sub: cu.paused
+      ? t("island.controlPaused")
+      : t("island.controlProgress", { step: cu.step, max: cu.maxSteps, cost: (cu.costCents / 100).toFixed(2) }),
+    lead: <Icon name="cursor" />,
+    trail: (
+      <>
+        {on.computerPause && (
+          <button
+            type="button"
+            className="k-island__btn"
+            aria-label={cu.paused ? t("island.resume") : t("island.pause")}
+            title={cu.paused ? t("island.resume") : t("island.pause")}
+            onClick={on.computerPause}
+          >
+            <Icon name={cu.paused ? "play" : "pause"} />
+          </button>
+        )}
+        <button
+          type="button"
+          className="k-island__btn"
+          aria-label={t("island.stop")}
+          title={t("island.stop")}
+          onClick={on.stop}
+        >
+          <Icon name="stop" />
+        </button>
+      </>
+    ),
+  };
+}
+
 /** A question the Island asks outside a turn ("Remember kivo as a workspace?", CONV-10). */
 function offerIsland(offer: Offer, on: IslandHandlers): IslandModel {
   return {
@@ -513,8 +592,36 @@ export function islandPrefs(snapshot: StateSnapshot | null): IslandPrefs {
   };
 }
 
-/** The Island for the runtime's state, or `null` when there is nothing to show. */
+/** The Island for the runtime's state, as the overlay style shows it (UX-17), or `null` when
+ * there is nothing to show. */
 export function islandForTurn(snapshot: StateSnapshot, t: TFunction, on: IslandHandlers): IslandModel | null {
+  return withStyle(islandModel(snapshot, t, on), snapshot.island?.style ?? "pill-and-card");
+}
+
+/** Decisions always show: KIVO can't go on without an answer. */
+function isDecision(model: IslandModel): boolean {
+  return model.state.startsWith("confirm-") || model.state.startsWith("draft-");
+}
+
+/** Width of the pill without its card. */
+const PILL = 300;
+
+/** Applies the overlay style (UX-17): pill only drops the card (and so the text), card only shows
+ * the Island only when there's something to read, off shows decisions alone (sounds carry the
+ * rest). */
+export function withStyle(model: IslandModel | null, style: OverlayStyle): IslandModel | null {
+  if (!model || style === "pill-and-card" || isDecision(model)) return model;
+  switch (style) {
+    case "pill-only":
+      return model.body ? { ...model, body: undefined, width: Math.min(model.width, PILL) } : model;
+    case "card-only":
+      return model.body ? model : null;
+    case "off":
+      return null;
+  }
+}
+
+function islandModel(snapshot: StateSnapshot, t: TFunction, on: IslandHandlers): IslandModel | null {
   if (snapshot.islandHidden) return null;
   const prefs = islandPrefs(snapshot);
   const { session } = snapshot;
@@ -536,6 +643,10 @@ export function islandForTurn(snapshot: StateSnapshot, t: TFunction, on: IslandH
   if (turn?.confirm) return confirmCard(turn.confirm, turn, t, on);
   // Hidden (Settings → Island): sounds only. A question that needs an answer still shows.
   if (snapshot.island?.companion === "hidden") return null;
+
+  // Computer use (CAP-12): the controller, with the step, the cost so far, Pause and Stop.
+  const cu = snapshot.controlling;
+  if (cu && !turn?.confirm) return controllerIsland(cu, t, on);
 
   // Over a fullscreen app or during Focus, a dot is all that shows (UX-11; "hidden" never
   // reaches here: the window stays hidden).
@@ -604,11 +715,21 @@ export function islandForTurn(snapshot: StateSnapshot, t: TFunction, on: IslandH
         trail: (
           <>
             {guestChip(turn, t)}
+            {liveChip(turn, t)}
             {seconds ? <IslandCountdown seconds={seconds} label={t("island.followUpLeft", { seconds })} /> : null}
           </>
         ),
         wave: true,
-        body: heard && turn ? <Heard turn={turn} /> : undefined,
+        body:
+          turn?.live && turn ? (
+            <>
+              {heard && <Heard turn={turn} />}
+              {caption(turn.answer)}
+              <Footer t={t} on={on} stop />
+            </>
+          ) : heard && turn ? (
+            <Heard turn={turn} />
+          ) : undefined,
       };
     }
     case "thinking":
@@ -619,6 +740,7 @@ export function islandForTurn(snapshot: StateSnapshot, t: TFunction, on: IslandH
         trail: (
           <>
             {guestChip(turn, t)}
+            {liveChip(turn, t)}
             {brainChip(turn, t)}
             <IslandSpin />
           </>
@@ -655,10 +777,15 @@ export function islandForTurn(snapshot: StateSnapshot, t: TFunction, on: IslandH
         state: "speaking",
         width: CARD,
         label: t("island.kivo"),
-        lead: appIcon(turn?.targetApp ?? null, turn?.targetIcon),
+        lead: turn?.point ? (
+          <PointArrow point={turn.point} t={t} />
+        ) : (
+          appIcon(turn?.targetApp ?? null, turn?.targetIcon)
+        ),
         trail: (
           <>
             {guestChip(turn, t)}
+            {liveChip(turn, t)}
             {brainChip(turn, t)}
           </>
         ),
@@ -689,7 +816,11 @@ export function islandForTurn(snapshot: StateSnapshot, t: TFunction, on: IslandH
           state: `done-${turn.id}`,
           width: CARD,
           label: t("island.kivo"),
-          lead: appIcon(turn.targetApp, turn.targetIcon) ?? <IslandOk />,
+          lead: turn.point ? (
+            <PointArrow point={turn.point} t={t} />
+          ) : (
+            (appIcon(turn.targetApp, turn.targetIcon) ?? <IslandOk />)
+          ),
           trail: turn.brain ? brainChip(turn, t) : <IslandChip>{t("island.stepDone").toUpperCase()}</IslandChip>,
           body: (
             <>
@@ -702,6 +833,11 @@ export function islandForTurn(snapshot: StateSnapshot, t: TFunction, on: IslandH
               <TaskLink turn={turn} t={t} on={on} />
               {turn.brain && (
                 <span className="k-island__links">
+                  {turn.liveOffer && on.live && (
+                    <button type="button" className="k-island__misroute" onClick={on.live}>
+                      {t("island.talkLive")}
+                    </button>
+                  )}
                   <RememberThis turnId={turn.id} on={on} />
                   <button type="button" className="k-island__misroute" onClick={() => on.misroute(turn.id)}>
                     {t("island.misroute")}
@@ -721,6 +857,39 @@ export function islandForTurn(snapshot: StateSnapshot, t: TFunction, on: IslandH
   }
 }
 
+/** Which way the target lies from the Island's window (UX-39): the runtime places the Island
+ * below it when it can, else above, else beside. Screen positions are physical pixels. */
+export function pointDirection(
+  p: PointTarget,
+  win: { x: number; y: number; width: number; height: number },
+): "up" | "down" | "left" | "right" {
+  if (p.y + p.height <= win.y) return "up";
+  if (p.y >= win.y + win.height) return "down";
+  if (p.x + p.width <= win.x) return "left";
+  return "right";
+}
+
+/** An arrow from the Island toward the control KIVO is pointing at. */
+function PointArrow({ point, t }: { point: PointTarget; t: TFunction }) {
+  const ratio = window.devicePixelRatio || 1;
+  const dir = pointDirection(point, {
+    x: window.screenX * ratio,
+    y: window.screenY * ratio,
+    width: window.outerWidth * ratio,
+    height: window.outerHeight * ratio,
+  });
+  return (
+    <span
+      className="k-island__point"
+      data-dir={dir}
+      role="img"
+      aria-label={t("island.pointing", { name: point.label })}
+    >
+      <Icon name="up" size={16} />
+    </span>
+  );
+}
+
 /** True when the Island shows buttons, so its window must take clicks (UX §2). */
 export function hasButtons(model: IslandModel | null): boolean {
   if (!model) return false;
@@ -732,6 +901,7 @@ export function hasButtons(model: IslandModel | null): boolean {
     model.state.startsWith("draft-") ||
     model.state.startsWith("offer-") ||
     model.state.startsWith("activity-") ||
+    model.state.startsWith("controller-") ||
     model.state === "acting" ||
     model.state === "speaking"
   );

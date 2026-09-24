@@ -67,6 +67,35 @@ pub struct ModelLoad {
     /// The language to speak or hear (BCP-47), for engines that cover several.
     #[serde(default)]
     pub language: Option<String>,
+    /// For a cloud engine: the user's key (from Credential Manager) and where to reach it.
+    #[serde(default)]
+    pub cloud: Option<CloudLoad>,
+    /// The graphics card (DXGI adapter) to run on through DirectML, when the GPU policy allows
+    /// it (PLAN-09); otherwise the processor.
+    #[serde(default)]
+    pub gpu: Option<u32>,
+}
+
+/// How the worker reaches a cloud speech service (VOICE-10/11). The key travels only over the
+/// runtime's private pipe to its own worker.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CloudLoad {
+    pub key: String,
+    #[serde(default)]
+    pub base_url: Option<String>,
+    #[serde(default)]
+    pub region: Option<String>,
+}
+
+impl std::fmt::Debug for CloudLoad {
+    /// Never prints the key.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CloudLoad")
+            .field("base_url", &self.base_url)
+            .field("region", &self.region)
+            .finish_non_exhaustive()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

@@ -14,6 +14,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "../components/layout/Shell";
+import { MemoryGraph } from "../components/memory/MemoryGraph";
 import {
   Button,
   Dialog,
@@ -47,7 +48,7 @@ function message(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-const EMPTY: MemoryOverview = { root: "", notes: [], tags: [], folders: [], suggestions: [] };
+const EMPTY: MemoryOverview = { root: "", notes: [], tags: [], folders: [], suggestions: [], links: [] };
 
 /** The overview, reloaded whenever the runtime says memory changed. */
 function useOverview(): [MemoryOverview, () => void] {
@@ -93,6 +94,7 @@ export function Memory({ onOpenAgents }: { onOpenAgents?: () => void }) {
   const [settings, save] = useSettings((e) => toast(message(e)));
   const [query, setQuery] = useState("");
   const [tag, setTag] = useState<string | null>(null);
+  const [view, setView] = useState<"notes" | "graph">("notes");
   const [selected, setSelected] = useState<Selection>({ kind: "about" });
   const [remember, setRemember] = useState(false);
   const [forget, setForget] = useState(false);
@@ -167,6 +169,18 @@ export function Memory({ onOpenAgents }: { onOpenAgents?: () => void }) {
           }
         />
         <Row
+          icon="help"
+          title={t("memory.askNew")}
+          subtitle={t("memory.askNewDetail")}
+          end={
+            <Switch
+              label={t("memory.askNew")}
+              checked={bool(memorySetting("ask-new-notes"), true)}
+              onChange={(on) => saveMemory({ "ask-new-notes": on })}
+            />
+          }
+        />
+        <Row
           icon="list"
           title={t("memory.detail")}
           end={
@@ -189,9 +203,20 @@ export function Memory({ onOpenAgents }: { onOpenAgents?: () => void }) {
       <Section
         title={t("memory.tags")}
         aside={
-          <Button size="sm" variant="plain" icon="add" onClick={() => setRemember(true)}>
-            {t("memory.remember")}
-          </Button>
+          <>
+            <Segmented
+              label={t("memory.view")}
+              value={view}
+              onChange={setView}
+              options={[
+                { value: "notes", label: t("memory.viewNotes") },
+                { value: "graph", label: t("memory.viewGraph") },
+              ]}
+            />
+            <Button size="sm" variant="plain" icon="add" onClick={() => setRemember(true)}>
+              {t("memory.remember")}
+            </Button>
+          </>
         }
       />
       <div className="k-chips" role="group" aria-label={t("memory.tags")}>
@@ -211,7 +236,22 @@ export function Memory({ onOpenAgents }: { onOpenAgents?: () => void }) {
         ))}
       </div>
 
-      {overview.notes.length === 0 ? (
+      {overview.notes.length > 0 && view === "graph" ? (
+        <MemoryGraph
+          notes={overview.notes}
+          links={overview.links}
+          onOpen={(path) => {
+            setView("notes");
+            setSelected({ kind: "note", path });
+            setQuery("");
+            setTag(null);
+          }}
+          onTag={(x) => {
+            setView("notes");
+            setTag(x);
+          }}
+        />
+      ) : overview.notes.length === 0 ? (
         <div style={{ marginTop: 12 }}>
           <EmptyState icon="memory" title={t("memory.empty")}>
             {t("memory.emptyDetail")}

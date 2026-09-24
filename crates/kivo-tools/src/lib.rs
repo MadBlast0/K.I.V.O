@@ -4,11 +4,13 @@
 //! the App Capability Registry.
 
 pub mod agents_tools;
+pub mod ai_apps;
 pub mod appreg;
 pub mod browser;
 pub mod builtin;
 pub mod controls;
 pub mod files;
+pub mod github;
 mod input_tools;
 mod plugin_shape;
 pub mod registry;

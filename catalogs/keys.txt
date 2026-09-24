@@ -1,0 +1,4 @@
+# KIVO's catalog signing keys (DISC-17): ed25519 public keys, one base64 key per line.
+# A catalog fetched from this repository's `catalogs/` folder is used only if one of these
+# signed it. Add the owner's key with `pnpm catalog:sign keygen`; the private key stays outside
+# the repository (%APPDATA%\KIVO-signing\catalog.key). Empty: fetched catalogs are never trusted.

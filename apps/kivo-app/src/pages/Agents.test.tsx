@@ -33,6 +33,45 @@ runtime.request = (method: string, params?: unknown) => {
       return Promise.resolve({ scope, text: instructions[scope] ?? "" });
     case "agents.openInTerminal":
       return Promise.resolve({ title: "Claude Code · kivo" });
+    case "installs.tools":
+      return Promise.resolve([
+        { id: "node", name: "Node.js", version: "22.9.0" },
+        { id: "git", name: "Git", version: null },
+      ]);
+    case "installs.plan":
+      return Promise.resolve({
+        id: "codex",
+        name: "Codex",
+        installed: false,
+        version: null,
+        steps: [
+          {
+            id: "codex",
+            title: "Install Codex",
+            command: "npm install -g @openai/codex",
+            why: "The program itself.",
+            status: "pending",
+            output: "",
+          },
+          {
+            id: "codex-adapter",
+            title: "Install the connector",
+            command: "npm install -g @zed-industries/codex-acp",
+            why: "Lets KIVO talk to it.",
+            status: "pending",
+            output: "",
+          },
+        ],
+      });
+    case "installs.status":
+      return Promise.resolve({
+        id: "codex",
+        name: "Codex",
+        status: "done",
+        steps: [],
+        version: "0.40.0",
+        error: null,
+      });
     case "workspaces.exportAgentsMd":
       return Promise.resolve({ file: "D:\\kivo\\AGENTS.md" });
     default:
@@ -96,7 +135,9 @@ describe("Agents page (UX-25)", () => {
     expect(screen.getByText("claude-code · D:\\kivo")).toBeTruthy();
     expect(screen.getByText("Claude Code")).toBeTruthy();
     expect(screen.getByText("2.1.0 · Signed in")).toBeTruthy();
-    expect(screen.getByText("Not installed: Codex.")).toBeTruthy();
+    expect(screen.getByText("Codex")).toBeTruthy();
+    expect(screen.getByText("Node.js")).toBeTruthy();
+    expect(screen.getByText("Version 22.9.0")).toBeTruthy();
     expect(screen.getByText("Claude Desktop")).toBeTruthy();
   });
 
@@ -121,6 +162,29 @@ describe("Agents page (UX-25)", () => {
       method: "agents.start",
       params: { agent: "claude-code", folder: "D:\\kivo", mode: "bypass" },
     });
+  });
+});
+
+describe("Installing (DISC-07, DIST-14)", () => {
+  it("shows every command first and installs only on Install, with exactly those commands", async () => {
+    page();
+    await settle();
+    fireEvent.click(screen.getAllByRole("button", { name: "Install" })[0]);
+    const dialog = await screen.findByRole("dialog", { name: "Install Codex" });
+    expect(within(dialog).getByText("npm install -g @openai/codex")).toBeTruthy();
+    expect(within(dialog).getByText("npm install -g @zed-industries/codex-acp")).toBeTruthy();
+    expect(calls.some((c) => c.method === "installs.start")).toBe(false);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Install" }));
+    await settle();
+    expect(calls).toContainEqual({
+      method: "installs.start",
+      params: {
+        id: "codex",
+        commands: ["npm install -g @openai/codex", "npm install -g @zed-industries/codex-acp"],
+      },
+    });
+    expect(await within(dialog).findByText(/Codex is installed/)).toBeTruthy();
+    expect(within(dialog).getByRole("button", { name: "Sign in" })).toBeTruthy();
   });
 });
 

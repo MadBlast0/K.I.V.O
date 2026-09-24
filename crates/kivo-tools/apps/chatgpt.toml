@@ -6,3 +6,11 @@ desktop_ai = true
 prefer = ["uia"]
 examples = ["Open ChatGPT", "In ChatGPT, prompt: plan my week"]
 
+# Prompting it through UI Automation (CONV-16). Written from the app's accessible names; not yet
+# checked on a real install (KIVO's tests never act on the owner's apps), so the flow falls back
+# ("I've put the prompt in; press Enter when ready", or the clipboard) when they don't match.
+[ai]
+version = "ChatGPT for Windows 1.2026"
+verified = false
+composer = { role = "Edit", name = "Ask anything" }
+send = { role = "Button", name = "Send prompt" }

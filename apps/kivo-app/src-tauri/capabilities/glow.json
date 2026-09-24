@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "glow",
+  "description": "The wake glow (UX-16): it only listens for the event that plays it. No runtime requests, no commands.",
+  "windows": [
+    "glow"
+  ],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten"
+  ]
+}

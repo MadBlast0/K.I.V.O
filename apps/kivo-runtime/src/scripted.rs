@@ -154,6 +154,8 @@ pub fn rig_with_voice(
             tts: Some(voice),
             threads: 4,
             language: "en-US".into(),
+            cloud: Default::default(),
+            gpu: None,
         },
         Duration::from_secs(600),
     );
@@ -230,6 +232,7 @@ pub fn rig_with_voice(
                 let db = Arc::clone(&db);
                 Arc::new(move |name| crate::workspaces::folder_named(&db, name))
             },
+            launcher: apps.clone(),
         },
         &core,
         crate::controls::app_registry(None),
@@ -241,6 +244,9 @@ pub fn rig_with_voice(
     let mut tools = kivo_tools::builtin(&env);
     tools.extend(kivo_tools::controls(&controls));
     tools.extend(crate::task_tools::tools(&task_handle));
+    tools.extend(crate::computer_tool::tools());
+    let routine_handle: crate::routine_tools::RoutineHandle = Arc::default();
+    tools.extend(crate::routine_tools::tools(&routine_handle));
     let registry = Arc::new(kivo_tools::Registry::new(tools));
     let heard = Arc::new(Heard::default());
     // Brains are put in by each test (scripted brains, a fake agent); none by default.
@@ -274,6 +280,7 @@ pub fn rig_with_voice(
     engine.refresh_apps();
     engine.set_app_registry(app_registry);
     engine.set_uia(uia.clone());
+    engine.set_screen(Arc::new(PlainScreen));
     // Background tasks (M5) on fakes.
     let processes = Arc::new(kivo_testkit::FakeProcesses::default());
     let downloads = screenshots.join("downloads");
@@ -306,6 +313,7 @@ pub fn rig_with_voice(
         Arc::clone(&tasks),
         Arc::clone(&registry),
     );
+    let _ = routine_handle.set(Arc::downgrade(&routines));
     engine.set_routines(Arc::clone(&routines));
     let workspaces = crate::workspaces::Workspaces::new(
         Arc::clone(&core),
@@ -376,6 +384,7 @@ pub fn rig_with_voice(
             })
         },
     );
+    connectors.set_registry(Arc::clone(&registry));
     let memory_rpc = Arc::new(crate::memory_rpc::MemoryRpc {
         memory: Arc::clone(&memory),
         utc_offset: 0,
@@ -422,6 +431,14 @@ pub fn rig_with_voice(
         uia: uia.clone(),
         clipboard: clipboard.clone(),
         db: Arc::clone(&db),
+        exports: Some(
+            std::env::temp_dir().join(format!("kivo-rig-exports-{}", std::process::id())),
+        ),
+        installer: crate::installer::Installer::new(
+            Arc::clone(&core),
+            commands.clone(),
+            std::env::temp_dir(),
+        ),
     });
     let (signals, mut voice_signals) = tokio::sync::mpsc::unbounded_channel();
     let (levels, _levels_rx) = tokio::sync::watch::channel(0.0);
