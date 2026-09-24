@@ -71,11 +71,11 @@ impl Idle {
         let counters = win::Counters::open(&[r"\Energy Meter(*_pkg)\Power"])?;
         // Context switches are read raw: threads come and go, and a reused thread name would
         // make a computed rate negative.
-        // Thread instances are "<process>/<n>"; the slash keeps "KIVO" from matching "kivo-runtime".
+        // Thread instances are "<process>/<n>". (A "/" in the pattern matches every thread.)
         let runtime_switches =
-            win::RawCounts::open(r"\Thread(kivo-runtime/*)\Context Switches/sec")?;
+            win::RawCounts::open(r"\Thread(kivo-runtime*)\Context Switches/sec")?;
         let app_switches =
-            win::RawCounts::open(&format!(r"\Thread({app_name}/*)\Context Switches/sec"))?;
+            win::RawCounts::open(&format!(r"\Thread({app_name}*)\Context Switches/sec"))?;
         let logical_cpus = std::thread::available_parallelism().map_or(1, |n| n.get());
         #[allow(clippy::cast_precision_loss, reason = "a CPU count")]
         Ok(Self {
