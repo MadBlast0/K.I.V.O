@@ -390,16 +390,51 @@ async fn the_gemini_cli_speaks_acp() {
     client.stop();
 }
 
-/// BRAIN-14: OpenCode speaks ACP itself (`opencode acp`); the handshake only, no prompt. Runs
-/// with KIVO_TEST_REAL_AGENTS=1 where `opencode` is installed.
+/// BRAIN-14: OpenCode speaks ACP itself (`opencode acp`), with its own free models.
 #[tokio::test]
 async fn opencode_speaks_acp() {
+    real_agent(&["opencode.cmd", "opencode"], &["acp"]).await;
+}
+
+/// An agent that never answers (one waiting for its first sign-in) fails to open a session
+/// after `SETUP_LIMIT` instead of hanging, so it can't hold every later request to it.
+#[tokio::test(start_paused = true)]
+async fn an_agent_that_never_answers_fails_instead_of_hanging() {
+    let (ours, theirs) = tokio::io::duplex(64 * 1024);
+    // It reads everything and says nothing.
+    tokio::spawn(async move {
+        let mut lines = BufReader::new(theirs).lines();
+        while let Ok(Some(_)) = lines.next_line().await {}
+    });
+    let answers = Arc::new(Answers {
+        allow: false,
+        asked: Mutex::default(),
+    });
+    let (read, write) = tokio::io::split(ours);
+    let client = AcpClient::connect(read, write, answers);
+    let started = tokio::time::Instant::now();
+    let failed = client
+        .session(Path::new("."), &[], None)
+        .await
+        .err()
+        .expect("no session");
+    assert!(
+        matches!(failed, NormalizedError::ProviderDown(ref m) if m.contains("sign in")),
+        "{failed:?}"
+    );
+    assert!(started.elapsed() >= crate::acp::SETUP_LIMIT);
+}
+
+/// Starts a real, installed agent over ACP and checks the handshake; with
+/// `KIVO_TEST_REAL_AGENT_PROMPTS=1` it also opens a session in an empty folder and sends one
+/// one-word prompt (a live run, BRAIN-14: it spends a request of the user's own plan).
+async fn real_agent(names: &[&str], args: &[&str]) {
     if std::env::var_os("KIVO_TEST_REAL_AGENTS").is_none() {
         eprintln!("KIVO_TEST_REAL_AGENTS not set; skipping");
         return;
     }
-    let Some(opencode) = which("opencode.cmd").or_else(|| which("opencode")) else {
-        eprintln!("opencode isn't installed; skipping");
+    let Some(program) = names.iter().find_map(|n| which(n)) else {
+        eprintln!("{} isn't installed; skipping", names[0]);
         return;
     };
     let answers = Arc::new(Answers {
@@ -407,21 +442,66 @@ async fn opencode_speaks_acp() {
         asked: Mutex::default(),
     });
     let command = AgentCommand {
-        program: opencode,
-        args: vec!["acp".into()],
+        program,
+        args: args.iter().map(ToString::to_string).collect(),
         env: Vec::new(),
     };
+    let dir = std::env::temp_dir().join(format!("kivo-acp-{}-{}", names[0], std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
     let client = tokio::time::timeout(
         Duration::from_secs(60),
-        AcpClient::spawn(&command, &std::env::temp_dir(), answers),
+        AcpClient::spawn(&command, &dir, answers),
     )
     .await
     .expect("it answers within a minute")
     .expect("it speaks ACP");
     let hello = client.hello.lock().unwrap().clone();
-    eprintln!("opencode ACP hello: {hello:?}");
+    eprintln!("{} ACP hello: {hello:?}", names[0]);
     assert_eq!(hello.protocol_version, 1);
+    if std::env::var_os("KIVO_TEST_REAL_AGENT_PROMPTS").is_some() {
+        let session = match client.session(&dir, &[], None).await {
+            Ok(s) => s,
+            Err(e) => {
+                client.stop();
+                panic!("{}: no session: {e}", names[0]);
+            }
+        };
+        let mut events = session.prompt(
+            "Reply with exactly one word: ready. Don't use any tools.",
+            CancellationToken::new(),
+        );
+        let mut text = String::new();
+        let ended = tokio::time::timeout(Duration::from_secs(120), async {
+            while let Some(event) = events.recv().await {
+                match event {
+                    AgentEvent::Message(t) => text.push_str(&t),
+                    AgentEvent::Done(reason) => return Ok(reason),
+                    AgentEvent::Error(e) => return Err(e),
+                    _ => {}
+                }
+            }
+            Err(NormalizedError::Other("the stream ended".into()))
+        })
+        .await
+        .expect("it answered within two minutes");
+        eprintln!("{} answered {text:?}: {ended:?}", names[0]);
+        assert_eq!(ended.as_deref(), Ok("end_turn"));
+        assert!(text.to_lowercase().contains("ready"), "{text}");
+    }
     client.stop();
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// BRAIN-14: Claude Code through Zed's adapter (`claude-agent-acp`).
+#[tokio::test]
+async fn claude_code_speaks_acp() {
+    real_agent(&["claude-agent-acp.cmd", "claude-agent-acp"], &[]).await;
+}
+
+/// BRAIN-14: Codex through Zed's adapter (`codex-acp`).
+#[tokio::test]
+async fn codex_speaks_acp() {
+    real_agent(&["codex-acp.cmd", "codex-acp"], &[]).await;
 }
 
 fn which(name: &str) -> Option<std::path::PathBuf> {

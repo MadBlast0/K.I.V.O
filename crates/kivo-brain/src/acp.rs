@@ -26,6 +26,8 @@ use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
 pub const PROTOCOL_VERSION: u64 = 1;
+/// How long an agent may take to start and to open a session (CLI agents load for a few seconds).
+pub const SETUP_LIMIT: std::time::Duration = std::time::Duration::from_secs(60);
 
 /// How to start an agent in ACP mode.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -276,6 +278,19 @@ impl AcpClient {
         }
     }
 
+    /// A setup call (`initialize`, `session/new`, `session/load`): an agent that doesn't answer
+    /// in `SETUP_LIMIT` — usually one waiting for its first sign-in — fails instead of holding
+    /// every later request to it.
+    async fn setup(&self, method: &str, params: Value) -> Result<Value, NormalizedError> {
+        match tokio::time::timeout(SETUP_LIMIT, self.request(method, params)).await {
+            Ok(result) => result,
+            Err(_) => Err(NormalizedError::ProviderDown(
+                "the agent didn't answer. It may need you to sign in: open it once in a terminal"
+                    .into(),
+            )),
+        }
+    }
+
     fn notify(&self, method: &str, params: Value) {
         let message = json!({ "jsonrpc": "2.0", "method": method, "params": params });
         let _ = self.outgoing.send(message.to_string());
@@ -283,7 +298,7 @@ impl AcpClient {
 
     async fn initialize(&self) -> Result<(), NormalizedError> {
         let result = self
-            .request(
+            .setup(
                 "initialize",
                 json!({
                     "protocolVersion": PROTOCOL_VERSION,
@@ -329,7 +344,7 @@ impl AcpClient {
                 let (tx, rx) = mpsc::unbounded_channel();
                 lock(&self.sessions).insert(id.to_owned(), tx);
                 let result = self
-                    .request(
+                    .setup(
                         "session/load",
                         json!({ "sessionId": id, "cwd": cwd, "mcpServers": servers }),
                     )
@@ -339,7 +354,7 @@ impl AcpClient {
             }
             None => {
                 let result = self
-                    .request("session/new", json!({ "cwd": cwd, "mcpServers": servers }))
+                    .setup("session/new", json!({ "cwd": cwd, "mcpServers": servers }))
                     .await?;
                 let id = result["sessionId"]
                     .as_str()
@@ -376,6 +391,18 @@ impl AcpClient {
     pub fn stop(&self) {
         self.closed.cancel();
         if let Some(mut child) = lock(&self.child).take() {
+            // npm agents run under a `cmd /c` shim: killing only the shim would leave the agent
+            // itself (node, codex-acp) running, so the whole tree goes.
+            #[cfg(windows)]
+            if let Some(pid) = child.id() {
+                use std::os::windows::process::CommandExt;
+                let _ = std::process::Command::new("taskkill")
+                    .args(["/PID", &pid.to_string(), "/T", "/F"])
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
+                    .status();
+            }
             let _ = child.start_kill();
         }
     }
