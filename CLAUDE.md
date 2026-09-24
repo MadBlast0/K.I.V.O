@@ -105,8 +105,7 @@ branch and export; Brains → Context (layer switches, compaction, preview); onb
 with setup recommendations; privacy by source and labels with Custom mode and a tool-result egress
 check; Mica, text-safe contrast tokens and Windows contrast themes; the Ctrl+K palette; and
 Playwright tests against the dev app over CDP (`pnpm dev:e2e`, then `pnpm --filter kivo-app e2e`).
-Still open in M7: the owner's side-by-side review of every screen against the mockup (DS-15,
-M7-X3). **M8 — beta hardening** is built: more STT/TTS tiers (Parakeet, Whisper, Chatterbox,
+ **M8 — beta hardening** is built: more STT/TTS tiers (Parakeet, Whisper, Chatterbox,
 cloud speech), more API providers, realtime conversation mode (OpenAI Realtime, Gemini Live) with
 its own echo-cancelled microphone, computer use with watch mode, limits and its options page,
 schedule and event triggers, routines drafted by voice and moved as files, automatic workspace
