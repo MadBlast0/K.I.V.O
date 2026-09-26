@@ -1016,6 +1016,37 @@ async fn a_new_speech_engine_is_tested_before_it_is_used() {
         )
         .with_test_voice(std::sync::Arc::new(kivo_platform_windows::WindowsSpeech)),
     );
+    // Setup's "Load and test": loaded and tested in a separate worker, with its stages, and
+    // nothing chosen yet.
+    let mut tested_events = rig.core.bus.subscribe();
+    let tested = switcher
+        .test(
+            kivo_ipc::infer::InferSlot::Stt,
+            kivo_voice::moonshine::MODEL_ID,
+            None,
+        )
+        .await
+        .expect("it loads and hears the sentence");
+    assert!(tested.passed, "{tested:?}");
+    assert!(!tested.heard.is_empty(), "{tested:?}");
+    assert!(
+        rig.core.config().voice.stt_engine.is_empty(),
+        "a test chooses nothing"
+    );
+    let mut test_stages = Vec::new();
+    while let Ok(kivo_core::Received::Event(event)) =
+        tokio::time::timeout(Duration::from_millis(200), tested_events.recv()).await
+    {
+        if let kivo_core::EventKind::System(kivo_core::event::SystemEvent::EngineSwitch {
+            stage,
+            ..
+        }) = &event.kind
+        {
+            test_stages.push(stage.clone());
+        }
+    }
+    assert_eq!(test_stages, ["loading", "testing", "tested"]);
+
     let mut events = rig.core.bus.subscribe();
     assert!(rig.core.config().voice.stt_engine.is_empty());
     switcher

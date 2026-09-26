@@ -1133,6 +1133,7 @@ export const Method = {
   voiceDevices: "voice.devices",
   voiceAdvanced: "voice.advanced",
   voiceTrySample: "voice.trySample",
+  voiceTest: "voice.test",
   voiceBenchmark: "voice.benchmark",
   voiceVocabulary: "voice.vocabulary",
   voiceAddWord: "voice.addWord",

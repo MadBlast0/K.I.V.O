@@ -245,6 +245,7 @@ fn render() -> String {
         ("voiceDevices", method::VOICE_DEVICES),
         ("voiceAdvanced", method::VOICE_ADVANCED),
         ("voiceTrySample", method::VOICE_TRY_SAMPLE),
+        ("voiceTest", method::VOICE_TEST),
         ("voiceBenchmark", method::VOICE_BENCHMARK),
         ("voiceVocabulary", method::VOICE_VOCABULARY),
         ("voiceAddWord", method::VOICE_ADD_WORD),

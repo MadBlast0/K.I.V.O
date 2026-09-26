@@ -15,8 +15,12 @@ import { useRuntime, useRuntimeEvents } from "../../ipc/runtime";
 
 export type Slot = "stt" | "tts";
 
-/** Where a switch is: checking → downloading → loading → testing → ready or failed. */
-const STAGES = ["checking", "downloading", "loading", "testing", "ready", "failed"] as const;
+/** Where a switch is: checking → downloading → loading → testing → ready or failed. Setup's
+ * "Load and test" (`voice.test`) goes loading → testing → tested or failed. */
+const STAGES = ["checking", "downloading", "loading", "testing", "tested", "ready", "failed"] as const;
+/** A switch or test that is still working. */
+export const working = (p: SwitchProgress | null) =>
+  p !== null && p.stage !== "ready" && p.stage !== "failed" && p.stage !== "tested";
 type Stage = (typeof STAGES)[number];
 const isStage = (s: string): s is Stage => (STAGES as ReadonlyArray<string>).includes(s);
 
@@ -72,6 +76,12 @@ export function useSpeech() {
       }));
       if (e.stage === "ready" || e.stage === "failed") load();
     } else if (e.type === "modelChanged") {
+      // Each model's own progress (setup's download step).
+      setModels((all) =>
+        all.map((m) =>
+          m.id === e.id && e.percent !== null ? { ...m, downloading: e.percent, state: "downloading" } : m,
+        ),
+      );
       // A download for a switch in progress shows its percentage on the card.
       setProgress((p) => {
         const next = { ...p };

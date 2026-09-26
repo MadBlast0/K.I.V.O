@@ -139,6 +139,8 @@ runtime.request = (method: string, params?: unknown) => {
       return Promise.resolve(recommendation);
     case "models.list":
       return Promise.resolve([]);
+    case "voice.test":
+      return Promise.resolve({ said: "What time is it", heard: "What time is it", passed: true });
     case "voice.micCheck":
       return Promise.resolve({ heard: true, peakDb: -12, seconds: 1.4 });
     case "settings.get":
@@ -269,18 +271,21 @@ describe("Onboarding (UX-33–36, UX-60)", () => {
 
     // Then how KIVO hears and speaks: four presets, the one for this PC in use already.
     expect(await screen.findByText("Choose how KIVO hears and speaks")).toBeTruthy();
+    // Listening and Speaking side by side, each with its levels; both already in use here.
+    expect(screen.getByRole("heading", { name: "Listening" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Speaking" })).toBeTruthy();
     for (const name of ["Recommended", "High", "Medium", "Low"]) {
-      expect(screen.getByRole("radio", { name: new RegExp(`^${name}`) })).toBeTruthy();
+      expect(screen.getAllByRole("button", { name }).length).toBe(2);
     }
-    expect(screen.getByText("This is a mid-range PC.")).toBeTruthy();
-    expect(screen.getByText("All set: KIVO can hear and speak.")).toBeTruthy();
+    expect(await screen.findByText("This is a mid-range PC.")).toBeTruthy();
+    expect(await screen.findAllByText("Tested and working")).toHaveLength(2);
     expect(screen.getByText("Microsoft Zira")).toBeTruthy();
     expect(await violations()).toEqual([]);
     await next();
 
     // Then how to call KIVO, with a first try.
     expect(await screen.findByText("How do you call KIVO?")).toBeTruthy();
-    expect(screen.getByRole("switch", { name: "Say “Hey Kivo”" })).toBeTruthy();
+    expect(await screen.findByRole("switch", { name: "Say “Hey Kivo”" })).toBeTruthy();
     expect(screen.getByRole("switch", { name: "Push-to-talk" })).toBeTruthy();
     expect(await violations()).toEqual([]);
     await next();
@@ -390,7 +395,7 @@ describe("Onboarding (UX-33–36, UX-60)", () => {
     await next();
     expect(await screen.findByText("How do you call KIVO?")).toBeTruthy();
     // "Hey Kivo" comes before push-to-talk, and both are on.
-    const heyKivoSwitch = screen.getByRole("switch", { name: "Say “Hey Kivo”" });
+    const heyKivoSwitch = await screen.findByRole("switch", { name: "Say “Hey Kivo”" });
     const pttSwitch = screen.getByRole("switch", { name: "Push-to-talk" });
     expect(heyKivoSwitch.compareDocumentPosition(pttSwitch) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.queryByText("At least one stays on, so you can always reach KIVO.")).toBeNull();
@@ -409,9 +414,11 @@ describe("Onboarding (UX-33–36, UX-60)", () => {
     runtime.link = { status: "connected", runtimeVersion: "0.0.0", snapshot: { mode: "auto" }, message: null };
   });
 
-  it("asks before downloading, and waits for both models before Continue", async () => {
+  it("walks a model through download, load and test, then use, before Continue", async () => {
     const stt = choices.engines[0];
     stt.ready = false;
+    // KIVO listens with something else now, so the recommended one has to be chosen.
+    choices.stt = "moonshine-tiny-en";
     try {
       await mount();
       fireEvent.click(screen.getByRole("button", { name: "Get started" }));
@@ -420,13 +427,28 @@ describe("Onboarding (UX-33–36, UX-60)", () => {
       expect(await screen.findByText("Choose how KIVO hears and speaks")).toBeTruthy();
       // Not ready yet: Continue waits.
       expect(screen.getByRole("button", { name: "Continue" })).toHaveProperty("disabled", true);
-      expect(screen.getAllByText(/135 MB to download/).length).toBeGreaterThan(0);
-      fireEvent.click(screen.getByRole("button", { name: "Download and set up" }));
+      // Step 1: size and licence up front; nothing downloads until the button.
+      expect(await screen.findByText("135 MB · MIT")).toBeTruthy();
+      expect(calls.some((c) => c.method === "models.install")).toBe(false);
+      expect(screen.queryByRole("button", { name: "Load and test" })).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "Download" }));
       await settle();
-      expect(screen.getByText("Download what’s recommended?")).toBeTruthy();
-      expect(screen.getByText(/135 MB · MIT/)).toBeTruthy();
+      expect(calls).toContainEqual({ method: "models.install", params: { id: "moonshine-base-en" } });
+      // Downloaded (the runtime reports it; another level re-reads the list here).
+      stt.ready = true;
+      fireEvent.click(screen.getAllByRole("button", { name: "High" })[0]);
+      await settle();
+      // Step 2: loaded and tested in a separate worker; what it heard is shown.
+      fireEvent.click(screen.getByRole("button", { name: "Load and test" }));
+      await settle();
+      expect(calls).toContainEqual({
+        method: "voice.test",
+        params: { slot: "stt", engine: "moonshine-base-en", voice: null },
+      });
+      expect(screen.getByText("Heard: “What time is it”")).toBeTruthy();
       expect(calls.some((c) => c.method === "voice.switch")).toBe(false);
-      fireEvent.click(screen.getByRole("button", { name: "Download and use" }));
+      // Step 3: only now is it chosen.
+      fireEvent.click(screen.getByRole("button", { name: "Use this" }));
       await settle();
       expect(calls).toContainEqual({
         method: "voice.switch",
@@ -434,6 +456,7 @@ describe("Onboarding (UX-33–36, UX-60)", () => {
       });
     } finally {
       stt.ready = true;
+      choices.stt = "moonshine-base-en";
     }
   });
 

@@ -704,35 +704,163 @@
 .k-onboarding__try-line {
   margin: 0;
 }
-/* The speech step: what a preset uses, its action and each model's way to ready. */
-.k-setup__uses {
-  display: block;
-  margin-top: 4px;
+/* The speech step: Listening and Speaking side by side (stacked when narrow), each with its level
+   and its model's three steps. */
+.k-onboarding__col--wide {
+  max-width: 900px;
+}
+.k-setup {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.k-setup__col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+  border-radius: var(--r-l);
+  background: var(--group);
+  box-shadow: var(--shadow);
+}
+.k-setup__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.k-setup__icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--acc-soft);
+  color: var(--acc-text);
+}
+.k-setup__icon svg {
+  width: 18px;
+  height: 18px;
+}
+.k-setup__heading {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
   font-size: 12px;
   color: var(--text-3);
 }
-.k-setup__action {
+.k-setup__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+.k-setup__col .k-seg {
+  width: 100%;
+}
+.k-setup__col .k-seg__item {
+  flex: 1;
+}
+.k-setup__about {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 13px;
+  min-height: 2.6em;
+}
+.k-setup__model {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin: 14px 0 4px;
-}
-.k-setup__done {
-  display: inline-flex;
-  align-items: center;
+  justify-content: space-between;
   gap: 8px;
   margin: 0;
-  font-weight: 500;
-  color: var(--green-text);
+  font-weight: 600;
 }
-.k-setup__ask {
-  margin: 0 0 6px;
+.k-setup__steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
 }
-.k-setup__ok {
-  color: var(--green-text);
+.k-setup__step {
+  position: relative;
+  display: flex;
+  gap: 12px;
+  padding-bottom: 14px;
 }
-.k-setup__bad {
+/* The line joining the steps. */
+.k-setup__step:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 11px;
+  top: 26px;
+  bottom: 2px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--sep);
+}
+.k-setup__step.is-done:not(:last-child)::before {
+  background: var(--green);
+}
+.k-setup__num {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--fill-2);
+  color: var(--text-3);
+  transition:
+    background var(--t-base),
+    color var(--t-base);
+}
+.k-setup__num svg {
+  width: 14px;
+  height: 14px;
+}
+.k-setup__step.is-active .k-setup__num {
+  background: var(--acc);
+  color: var(--on-acc);
+}
+.k-setup__step.is-done .k-setup__num {
+  background: var(--green);
+  color: #fff;
+}
+.k-setup__step.is-bad .k-setup__num {
+  background: var(--orange);
+  color: #fff;
+}
+.k-setup__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 2px;
+}
+.k-setup__step-title {
+  font-weight: 600;
+  font-size: 13.5px;
+}
+.k-setup__step:not(.is-active, .is-done, .is-bad) .k-setup__step-title {
+  color: var(--text-3);
+}
+.k-setup__status {
+  font-size: 12.5px;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+.k-setup__step.is-bad .k-setup__status {
   color: var(--orange-text);
+}
+.k-setup__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 /* Welcome follows the app’s theme (light, dark or the system’s), with a soft glow of the accent
    behind the Island. */

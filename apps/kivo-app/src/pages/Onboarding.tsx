@@ -303,7 +303,7 @@ export function Onboarding({ onFinish }: { onFinish: (then?: string) => void }) 
         <AnimatePresence mode="wait" initial={false} custom={direction}>
           <motion.div
             key={step}
-            className="k-onboarding__col"
+            className={step === "speech" ? "k-onboarding__col k-onboarding__col--wide" : "k-onboarding__col"}
             initial={reduce ? false : { opacity: 0, x: 18 * direction }}
             animate={{ opacity: 1, x: 0 }}
             exit={reduce ? { opacity: 0 } : { opacity: 0, x: -18 * direction }}

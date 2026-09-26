@@ -161,6 +161,9 @@ pub mod method {
     /// Client → runtime: the advanced view's details (VOICE-49).
     pub const VOICE_ADVANCED: &str = "voice.advanced";
     pub const VOICE_TRY_SAMPLE: &str = "voice.trySample";
+    /// Setup's "Load and test": a downloaded engine loaded in a separate worker and tested, with
+    /// its stages as `engineSwitch` events; nothing changes until `voice.switch`.
+    pub const VOICE_TEST: &str = "voice.test";
     /// Client → runtime: "Benchmark this engine" (BENCH-15); answers a `MeasuredItem`.
     pub const VOICE_BENCHMARK: &str = "voice.benchmark";
     /// Brains (BRAINS §4–5, UX-22): what KIVO can connect, what is connected and found, and

@@ -619,6 +619,27 @@ impl VoiceRpc {
                     Err(e) => Err(e),
                 }
             }
+            method::VOICE_TEST => {
+                #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
+                struct Params {
+                    slot: InferSlot,
+                    engine: String,
+                    #[serde(default)]
+                    voice: Option<String>,
+                }
+                match parse::<Params>(params) {
+                    Ok(p) => match self
+                        .switcher
+                        .test(p.slot, &p.engine, p.voice.as_deref())
+                        .await
+                    {
+                        Ok(tested) => ok(&tested),
+                        Err(e) => Err(refuse(e)),
+                    },
+                    Err(e) => Err(e),
+                }
+            }
             method::VOICE_BENCHMARK => {
                 #[derive(Deserialize)]
                 #[serde(deny_unknown_fields)]

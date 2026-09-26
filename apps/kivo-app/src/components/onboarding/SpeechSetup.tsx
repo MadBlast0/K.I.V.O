@@ -1,171 +1,76 @@
 /**
- * "Choose how KIVO hears and speaks" (UX §4, UX-60): four presets for this PC (Recommended, High,
- * Medium, Low), each naming the two models it uses and what still has to download. Setting one up
- * asks first when something must download (with sizes and licences), then each model is
- * downloaded, loaded once and tested, and the step shows how far it got. Anything that fails says
- * why, with Try again and another preset a click away. Someone who knows what they want picks the
- * models themselves below.
+ * "Choose how KIVO hears and speaks" (UX §4, UX-60): two columns, Listening and Speaking. Each
+ * picks a level for this PC (Recommended, High, Medium, Low, from the recommendation's
+ * priorities) and then walks its model through three steps the user sees and drives:
+ *
+ * 1. Download: its size and licence up front, nothing until the button; progress with Pause and
+ *    Cancel; Resume or Try again after.
+ * 2. Load and test (`voice.test`): loaded in a separate worker and tested; a recognizer hears
+ *    KIVO's test sentence (what it heard is shown), a voice says it aloud.
+ * 3. Use this (`voice.switch`, which checks once more and swaps it in safely).
+ *
+ * Setup goes on when both columns are in use (`speechReady`). Someone who knows what they want
+ * picks any model below.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Method, type RecommendationItem, type SpeechEngineItem } from "../../ipc/generated";
+import { Method, type ModelItem, type RecommendationItem, type SpeechEngineItem } from "../../ipc/generated";
 import { useRuntime } from "../../ipc/runtime";
-import { Alert, Button, Explain, Group, OptionCard, Pill, RadioGroup, Row, Section, Spinner, useToast } from "../ui";
-import { Icon } from "../../icons";
+import { Icon, type IconName } from "../../icons";
+import { cn } from "../../lib/cn";
+import { Button, Explain, Meter, Section, Segmented, Spinner, Tag, useToast } from "../ui";
 import { SpeechChooser, VoiceList } from "../voice/SpeechChooser";
-import type { Slot, Speech } from "../voice/useSpeech";
+import { working, type Slot, type Speech } from "../voice/useSpeech";
 
-/** The presets and what each asks the recommendation for (`kivo_voice::recommend::Priority`). */
-const PRESETS = [
+/** The levels and what each asks the recommendation for (`kivo_voice::recommend::Priority`). */
+const LEVELS = [
   { id: "recommended", priority: "balanced" },
   { id: "high", priority: "accuracy" },
   { id: "medium", priority: "speed" },
   { id: "low", priority: "resources" },
 ] as const;
-type PresetId = (typeof PRESETS)[number]["id"];
+type Level = (typeof LEVELS)[number]["id"];
+
+/** What `voice.test` found. */
+interface Tested {
+  said: string;
+  heard: string;
+  passed: boolean;
+}
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-/** Both models are on this PC, chosen and not switching: setup can go on. */
+/** Both chosen models are here, in use, and nothing is switching: setup can go on. */
 export function speechReady(speech: Speech): boolean {
   const { choices, progress } = speech;
   if (!choices) return false;
   const ready = (id: string) => choices.engines.find((e) => e.id === id)?.ready ?? false;
-  const busy = (["stt", "tts"] as const).some((s) => {
-    const p = progress[s];
-    return p !== null && p.stage !== "ready" && p.stage !== "failed";
-  });
-  return ready(choices.stt) && ready(choices.tts) && !busy;
+  return ready(choices.stt) && ready(choices.tts) && !working(progress.stt) && !working(progress.tts);
 }
 
 export function SpeechSetup({ speech }: { speech: Speech }) {
   const { t } = useTranslation();
   const { link, request } = useRuntime();
-  const toast = useToast();
   const connected = link?.status === "connected";
-  const [plans, setPlans] = useState<Partial<Record<PresetId, RecommendationItem>>>({});
-  const [preset, setPreset] = useState<PresetId>("recommended");
-  const [asking, setAsking] = useState(false);
+  const [plans, setPlans] = useState<Partial<Record<Level, RecommendationItem>>>({});
   const [mine, setMine] = useState(false);
   useEffect(() => {
     if (!connected) return;
-    for (const p of PRESETS) {
-      void request<RecommendationItem>(Method.voiceRecommend, { priority: p.priority })
-        .then((r) => setPlans((all) => ({ ...all, [p.id]: r })))
+    for (const l of LEVELS) {
+      void request<RecommendationItem>(Method.voiceRecommend, { priority: l.priority })
+        .then((r) => setPlans((all) => ({ ...all, [l.id]: r })))
         .catch(() => {});
     }
   }, [connected, request]);
-  const { choices } = speech;
-  if (!choices) return <Spinner label={t("onboarding.speech.loading")} />;
-
-  const engine = (id: string | null | undefined) => choices.engines.find((e) => e.id === id);
-  const plan = plans[preset];
-  const wanted = plan ? [engine(plan.sttEngine), engine(plan.ttsEngine)] : [];
-  const missing = wanted.filter((e): e is SpeechEngineItem => e !== undefined && !e.ready);
-  const inUse =
-    plan !== undefined && choices.stt === plan.sttEngine && choices.tts === plan.ttsEngine && missing.length === 0;
-  const busy = (["stt", "tts"] as const).some((s) => {
-    const p = speech.progress[s];
-    return p !== null && p.stage !== "ready" && p.stage !== "failed";
-  });
-
-  const setUp = async () => {
-    if (!plan) return;
-    setAsking(false);
-    try {
-      // Also when it's already the choice but not on this PC yet (a first launch's default).
-      const needs = (slot: Slot, id: string) =>
-        id !== (slot === "stt" ? choices.stt : choices.tts) || missing.some((e) => e.id === id);
-      if (plan.sttEngine && needs("stt", plan.sttEngine)) await speech.choose("stt", plan.sttEngine);
-      if (needs("tts", plan.ttsEngine)) await speech.choose("tts", plan.ttsEngine);
-    } catch (e) {
-      toast(message(e));
-    }
-  };
-  const start = () => {
-    if (missing.length > 0) setAsking(true);
-    else void setUp();
-  };
-
-  // One line per preset: what it hears and speaks with, and what's left to download.
-  const describe = (id: PresetId) => {
-    const p = plans[id];
-    if (!p) return t("onboarding.speech.checking");
-    const stt = engine(p.sttEngine);
-    const tts = engine(p.ttsEngine);
-    const download = [stt, tts]
-      .filter((e): e is SpeechEngineItem => e !== undefined && !e.ready)
-      .reduce((mb, e) => mb + e.downloadMb, 0);
-    return (
-      <>
-        {t(`onboarding.speech.presetHint.${id}`)}
-        <span className="k-setup__uses">
-          {t("onboarding.speech.uses", { stt: stt?.name ?? "—", tts: tts?.name ?? "—" })}
-          {" · "}
-          {download > 0 ? t("onboarding.speech.toDownload", { size: download }) : t("onboarding.speech.onThisPc")}
-        </span>
-      </>
-    );
-  };
+  if (!speech.choices) return <Spinner label={t("onboarding.speech.loading")} />;
 
   return (
     <>
-      <RadioGroup<PresetId> label={t("onboarding.speech.title")} value={preset} onChange={setPreset}>
-        {PRESETS.map((p) => (
-          <OptionCard
-            key={p.id}
-            value={p.id}
-            title={t(`onboarding.speech.preset.${p.id}`)}
-            badge={p.id === "recommended" ? <Pill tone="accent">{t("onboarding.speech.forThisPc")}</Pill> : undefined}
-            description={describe(p.id)}
-          />
-        ))}
-      </RadioGroup>
-      {plan && preset === "recommended" && <p className="k-note">{plan.reason}</p>}
-
-      <div className="k-setup__action">
-        {inUse && !busy ? (
-          <p className="k-setup__done" role="status">
-            <Icon name="check" />
-            {t("onboarding.speech.allSet")}
-          </p>
-        ) : (
-          <Button
-            variant="primary"
-            icon={missing.length > 0 ? "download" : "check"}
-            disabled={!plan || busy}
-            onClick={start}
-          >
-            {missing.length > 0 ? t("onboarding.speech.downloadAndSetUp") : t("onboarding.speech.setUp")}
-          </Button>
-        )}
+      <div className="k-setup">
+        <Column slot="stt" speech={speech} plans={plans} />
+        <Column slot="tts" speech={speech} plans={plans} />
       </div>
-
-      {asking && (
-        // Nothing downloads unasked (DIST-13): what, how big, whose licence.
-        <Alert kind="info" title={t("speech.missingTitle")}>
-          <p className="k-setup__ask">{t("speech.missingBody")}</p>
-          {missing.map((e) => (
-            <p key={e.id} className="k-setup__ask">
-              <b>{e.name}</b> · {t("speech.missingLine", { size: e.downloadMb, license: e.license })}
-              {!e.commercialUse && ` · ${t("speech.personalUseTitle")}`}
-            </p>
-          ))}
-          <div className="k-speech__actions">
-            <Button variant="primary" icon="download" onClick={() => void setUp()}>
-              {t("speech.downloadAndUse")}
-            </Button>
-            <Button variant="plain" onClick={() => setAsking(false)}>
-              {t("voice.cancel")}
-            </Button>
-          </div>
-        </Alert>
-      )}
-
-      <Steps speech={speech} onRetry={() => void setUp()} />
-
-      {speechReady(speech) && <VoiceList speech={speech} />}
-
+      {plans.recommended && <p className="k-note">{plans.recommended.reason}</p>}
       <div className="k-speech__actions">
         <Button size="sm" variant="plain" icon={mine ? "up" : "chevronDown"} onClick={() => setMine((m) => !m)}>
           {t("onboarding.speech.myself")}
@@ -173,15 +78,9 @@ export function SpeechSetup({ speech }: { speech: Speech }) {
       </div>
       {mine && (
         <>
-          <Section
-            title={t("speech.sttTitle")}
-            aside={<Explain tip={t("onboarding.speech.sttTip")}>{t("onboarding.speech.sttTerm")}</Explain>}
-          />
+          <Section title={t("speech.sttTitle")} />
           <SpeechChooser slot="stt" speech={speech} />
-          <Section
-            title={t("speech.ttsTitle")}
-            aside={<Explain tip={t("onboarding.speech.ttsTip")}>{t("onboarding.speech.ttsTerm")}</Explain>}
-          />
+          <Section title={t("speech.ttsTitle")} />
           <SpeechChooser slot="tts" speech={speech} />
         </>
       )}
@@ -189,59 +88,271 @@ export function SpeechSetup({ speech }: { speech: Speech }) {
   );
 }
 
-/** Each model's way to ready: downloading, starting, testing, ready; or why it didn't work. */
-function Steps({ speech, onRetry }: { speech: Speech; onRetry: () => void }) {
+/** One column: the level, then the chosen model's download → load and test → use. */
+function Column({
+  slot,
+  speech,
+  plans,
+}: {
+  slot: Slot;
+  speech: Speech;
+  plans: Partial<Record<Level, RecommendationItem>>;
+}) {
   const { t } = useTranslation();
-  const { choices, progress } = speech;
+  const { request } = useRuntime();
+  const toast = useToast();
+  const [level, setLevel] = useState<Level>("recommended");
+  const [tested, setTested] = useState<{ engine: string; result: Tested } | null>(null);
+  // "Use this" was pressed for this engine: its switch's stages belong to step 3, not step 2.
+  const [using, setUsing] = useState<string | null>(null);
+  const choices = speech.choices;
   if (!choices) return null;
-  const rows = (["stt", "tts"] as const).flatMap((slot) => {
-    const p = progress[slot];
-    if (!p) return [];
-    const name = choices.engines.find((e) => e.id === p.engine)?.name ?? p.engine;
-    const label =
-      p.stage === "downloading" && p.percent !== null
-        ? t("speech.stage.downloadingPercent", { percent: p.percent / 100 })
-        : t(`speech.stage.${p.stage}`);
-    return [{ slot, name, stage: p.stage, label, message: p.message }];
-  });
-  if (rows.length === 0) return null;
-  const failed = rows.some((r) => r.stage === "failed");
+
+  const plan = plans[level];
+  const id = slot === "stt" ? plan?.sttEngine : plan?.ttsEngine;
+  const engine: SpeechEngineItem | undefined = choices.engines.find((e) => e.id === id);
+  const model: ModelItem | undefined = engine?.model ? speech.models.find((m) => m.id === engine.model) : undefined;
+  const current = slot === "stt" ? choices.stt : choices.tts;
+  const progress = speech.progress[slot];
+  const stage = progress && progress.engine === id ? progress.stage : null;
+  const failure = progress && progress.engine === id && stage === "failed" ? progress.message : null;
+  const inUse = engine !== undefined && current === engine.id && engine.ready && !working(progress);
+  const result = tested && tested.engine === id ? tested.result : null;
+
+  // Step 1: the model on this PC.
+  const downloaded = engine?.ready ?? false;
+  const percent = model?.downloading ?? 0;
+  const downloading = model?.state === "downloading" || model?.state === "installing";
+  const paused = model?.state === "paused";
+  const downloadFailed = model?.state === "error";
+  // Step 2: loaded and tested (in use counts: it passed when it was chosen).
+  const chosen = engine !== undefined && using === engine.id;
+  const testing = !chosen && (stage === "loading" || stage === "testing");
+  const testFailed = !chosen && failure !== null;
+  const passed = inUse || (result?.passed ?? false);
+  // Step 3: switching to it (a switch checks and tests once more before it swaps it in).
+  const switching = chosen && !inUse && working(progress);
+  const switchFailed = chosen && failure !== null;
+
+  const act = (method: Method, params: unknown) =>
+    void request(method, params).catch((e: unknown) => toast(message(e)));
+  const loadAndTest = () => {
+    if (!engine) return;
+    setTested(null);
+    setUsing(null);
+    request<Tested>(Method.voiceTest, {
+      slot,
+      engine: engine.id,
+      voice: slot === "tts" ? choices.ttsVoice || null : null,
+    })
+      .then((r) => setTested({ engine: engine.id, result: r }))
+      // A failure shows in the step, from its `failed` stage.
+      .catch(() => {});
+  };
+  const use = () => {
+    if (!engine) return;
+    setUsing(engine.id);
+    speech.choose(slot, engine.id).catch((e: unknown) => {
+      setUsing(null);
+      toast(message(e));
+    });
+  };
+
+  const downloadStatus = !engine?.model
+    ? t("onboarding.speech.builtIn")
+    : downloaded
+      ? t("onboarding.speech.downloaded", { size: engine.downloadMb })
+      : downloading
+        ? t("onboarding.speech.downloading", { percent: percent / 100 })
+        : paused
+          ? t("onboarding.speech.paused", { percent: percent / 100 })
+          : downloadFailed
+            ? (model?.error ?? t("onboarding.speech.downloadFailed"))
+            : t("onboarding.speech.size", { size: engine.downloadMb, license: engine.license }) +
+              (engine.commercialUse ? "" : ` · ${t("speech.personalUseTitle")}`);
+  const testStatus = inUse
+    ? t("onboarding.speech.works")
+    : testing
+      ? t(`speech.stage.${stage}`)
+      : testFailed
+        ? (failure ?? "")
+        : result
+          ? slot === "tts"
+            ? t("onboarding.speech.spoke")
+            : result.passed
+              ? t("onboarding.speech.heard", { text: result.heard })
+              : t("onboarding.speech.heardWrong", { heard: result.heard || "…", said: result.said })
+          : t(`onboarding.speech.${slot}.testHint`);
+  const useStatus = inUse
+    ? t("onboarding.speech.inUseLine")
+    : switching
+      ? t("onboarding.speech.switching")
+      : switchFailed
+        ? (failure ?? "")
+        : t(`onboarding.speech.${slot}.useHint`);
+
   return (
-    <>
-      <Group>
-        {rows.map((r) => (
-          <Row
-            key={r.slot}
-            lead={
-              r.stage === "ready" ? (
-                <span className="k-row__icon k-setup__ok">
-                  <Icon name="check" />
-                </span>
-              ) : r.stage === "failed" ? (
-                <span className="k-row__icon k-setup__bad">
-                  <Icon name="warning" />
-                </span>
-              ) : (
-                <span className="k-row__icon">
-                  <Spinner label={r.label} />
-                </span>
-              )
-            }
-            title={t(`onboarding.speech.slot.${r.slot}`, { name: r.name })}
-            subtitle={r.stage === "failed" && r.message ? r.message : r.label}
-          />
-        ))}
-      </Group>
-      {failed && (
-        <Alert kind="warning" title={t("onboarding.speech.failedTitle")}>
-          <p className="k-setup__ask">{t("onboarding.speech.failedBody")}</p>
-          <div className="k-speech__actions">
-            <Button icon="refresh" onClick={onRetry}>
-              {t("onboarding.speech.retry")}
-            </Button>
-          </div>
-        </Alert>
+    <section className="k-setup__col" aria-labelledby={`setup-${slot}`}>
+      <header className="k-setup__head">
+        <span className="k-setup__icon" aria-hidden>
+          <Icon name={slot === "stt" ? "mic" : "volume"} />
+        </span>
+        <div className="k-setup__heading">
+          <h3 id={`setup-${slot}`} className="k-setup__title">
+            {t(`onboarding.speech.${slot}.title`)}
+          </h3>
+          <Explain tip={t(`onboarding.speech.${slot}.tip`)}>{t(`onboarding.speech.${slot}.term`)}</Explain>
+        </div>
+      </header>
+
+      <Segmented<Level>
+        label={t(`onboarding.speech.${slot}.title`)}
+        value={level}
+        onChange={(l) => {
+          setLevel(l);
+          setTested(null);
+        }}
+        options={LEVELS.map((l) => ({ value: l.id, label: t(`onboarding.speech.level.${l.id}`) }))}
+      />
+      <p className="k-setup__about">{t(`onboarding.speech.${slot}.${level}`)}</p>
+      <p className="k-setup__model">
+        <span>{engine ? engine.name : t("onboarding.speech.checking")}</span>
+        {inUse && <Tag tone="success">{t("onboarding.speech.inUse")}</Tag>}
+      </p>
+
+      {engine && (
+        <ol className="k-setup__steps">
+          <Step
+            n={1}
+            title={t("onboarding.speech.download")}
+            status={downloadStatus}
+            done={downloaded}
+            active={!downloaded}
+            bad={downloadFailed}
+          >
+            {downloading && engine.model && (
+              <>
+                <Meter value={percent} label={t("onboarding.speech.download")} />
+                <div className="k-setup__buttons">
+                  <Button
+                    size="sm"
+                    variant="plain"
+                    icon="pause"
+                    onClick={() => act(Method.modelsPause, { id: engine.model })}
+                  >
+                    {t("onboarding.speech.pause")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="plain"
+                    icon="close"
+                    onClick={() => act(Method.modelsCancel, { id: engine.model })}
+                  >
+                    {t("onboarding.speech.cancel")}
+                  </Button>
+                </div>
+              </>
+            )}
+            {!downloaded && !downloading && engine.model && (
+              <div className="k-setup__buttons">
+                <Button
+                  size="sm"
+                  variant="primary"
+                  icon="download"
+                  onClick={() => act(Method.modelsInstall, { id: engine.model })}
+                >
+                  {paused
+                    ? t("onboarding.speech.resume")
+                    : downloadFailed
+                      ? t("onboarding.speech.retry")
+                      : t("onboarding.speech.downloadButton")}
+                </Button>
+                {paused && (
+                  <Button size="sm" variant="plain" onClick={() => act(Method.modelsCancel, { id: engine.model })}>
+                    {t("onboarding.speech.cancel")}
+                  </Button>
+                )}
+              </div>
+            )}
+          </Step>
+
+          <Step
+            n={2}
+            title={t("onboarding.speech.test")}
+            status={testStatus}
+            done={passed}
+            active={downloaded && !passed}
+            bad={testFailed || (result !== null && !result.passed)}
+          >
+            {testing && <Spinner label={testStatus} />}
+            {downloaded && !inUse && !testing && (
+              <div className="k-setup__buttons">
+                <Button
+                  size="sm"
+                  variant={result?.passed ? "plain" : "primary"}
+                  icon={result || testFailed ? "refresh" : "play"}
+                  onClick={loadAndTest}
+                >
+                  {result || testFailed ? t("onboarding.speech.testAgain") : t("onboarding.speech.loadTest")}
+                </Button>
+              </div>
+            )}
+          </Step>
+
+          <Step
+            n={3}
+            title={t("onboarding.speech.use")}
+            status={useStatus}
+            done={inUse}
+            active={passed && !inUse}
+            bad={switchFailed}
+          >
+            {switching && <Spinner label={useStatus} />}
+            {passed && !inUse && !switching && (
+              <div className="k-setup__buttons">
+                <Button size="sm" variant="primary" icon="check" onClick={use}>
+                  {t("onboarding.speech.useThis")}
+                </Button>
+              </div>
+            )}
+          </Step>
+        </ol>
       )}
-    </>
+
+      {slot === "tts" && inUse && <VoiceList speech={speech} />}
+    </section>
+  );
+}
+
+/** One numbered step: a check when done, its line of status, and its controls. */
+function Step({
+  n,
+  title,
+  status,
+  done,
+  active,
+  bad = false,
+  children,
+}: {
+  n: number;
+  title: string;
+  status: string;
+  done: boolean;
+  active: boolean;
+  bad?: boolean;
+  children?: ReactNode;
+}) {
+  const icon: IconName | null = done ? "check" : bad ? "warning" : null;
+  return (
+    <li className={cn("k-setup__step", done && "is-done", active && "is-active", bad && "is-bad")}>
+      <span className="k-setup__num" aria-hidden>
+        {icon ? <Icon name={icon} /> : n}
+      </span>
+      <div className="k-setup__body">
+        <div className="k-setup__step-title">{title}</div>
+        <div className="k-setup__status">{status}</div>
+        {children}
+      </div>
+    </li>
   );
 }

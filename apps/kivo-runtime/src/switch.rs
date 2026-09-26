@@ -22,6 +22,18 @@ const LOAD_LIMIT: Duration = Duration::from_secs(120);
 /// How long one test sentence may take to speak or to hear.
 const TEST_LIMIT: Duration = Duration::from_secs(60);
 
+/// What setup's "Load and test" found (`voice.test`).
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Tested {
+    /// The test sentence: what a recognizer was played, or what a voice said.
+    pub said: String,
+    /// What a recognizer heard (empty for a voice).
+    pub heard: String,
+    /// A recognizer heard enough of it; a voice that spoke passes.
+    pub passed: bool,
+}
+
 pub struct Switcher {
     core: Arc<Core>,
     engine: Arc<Engine>,
@@ -256,6 +268,76 @@ impl Switcher {
             ));
         }
         Ok(())
+    }
+
+    /// Setup's "Load and test" (UX §4): loads downloaded engine `id` in a separate worker and
+    /// tests it, reporting `loading`, `testing`, then `tested` or `failed` as engine-switch
+    /// stages; what KIVO uses now is untouched. A recognizer transcribes the test sentence (what
+    /// was said and heard, and whether that's close enough); a voice says it aloud.
+    pub async fn test(
+        &self,
+        slot: InferSlot,
+        id: &str,
+        voice: Option<&str>,
+    ) -> Result<Tested, String> {
+        let result = self.run_test(slot, id, voice).await;
+        match &result {
+            Ok(_) => self.stage(slot, id, "tested", None),
+            Err(message) => self.stage(slot, id, "failed", Some(message.clone())),
+        }
+        result
+    }
+
+    async fn run_test(
+        &self,
+        slot: InferSlot,
+        id: &str,
+        voice: Option<&str>,
+    ) -> Result<Tested, String> {
+        let config = self.core.config();
+        check(slot, id, &config)?;
+        let dir = match kivo_voice::engine(id).and_then(|e| e.model) {
+            Some(model) => Some(
+                self.models
+                    .installed_dir(&model)
+                    .ok_or_else(|| text::t("voice.notDownloaded"))?,
+            ),
+            None => None,
+        };
+        self.stage(slot, id, "loading", None);
+        let language = config.general.language.clone();
+        let mut probe = self
+            .probe(slot, id, dir, &language)
+            .await
+            .map_err(|e| text::tf("voice.loadFailed", &[("error", &e)]))?;
+        self.stage(slot, id, "testing", None);
+        let tested = match slot {
+            InferSlot::Stt => self
+                .sample(&mut probe, &language)
+                .await
+                .map(|(said, heard)| {
+                    let english = language.split('-').next() == Some("en");
+                    let passed = !english || said.is_empty() || heard_enough(&said, &heard);
+                    Tested {
+                        said,
+                        heard: heard.trim().to_owned(),
+                        passed,
+                    }
+                }),
+            InferSlot::Tts => {
+                let said = text::t("voice.preview");
+                probe.speak(&said, voice).await.map(|(pcm, rate)| {
+                    self.engine.speaker.speak(&pcm, rate);
+                    Tested {
+                        said,
+                        heard: String::new(),
+                        passed: true,
+                    }
+                })
+            }
+        };
+        probe.close().await;
+        tested.map_err(|e| text::tf("voice.testFailed", &[("error", &e)]))
     }
 
     /// "Try sample" on a recognizer's card (UX-60): it transcribes the test sentence in a
