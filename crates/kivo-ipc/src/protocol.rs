@@ -185,6 +185,11 @@ pub mod method {
     pub const BRAINS_SET_WORKSPACE: &str = "brains.setWorkspace";
     /// Context (Settings → Context, CONV-30): the layers and their sizes.
     pub const BRAINS_CONTEXT: &str = "brains.context";
+    /// The brain KIVO uses (the default profile's choice): a connected brain, its model and
+    /// reasoning level, or `provider: null` for Automatic.
+    pub const BRAINS_SET_ACTIVE: &str = "brains.setActive";
+    /// The reasoning levels a brain's model can take (empty: it can't be set).
+    pub const BRAINS_REASONING: &str = "brains.reasoning";
     /// Usage and cost (BRAINS §9): totals, limits, task caps, price overrides, CSV export.
     pub const USAGE_SUMMARY: &str = "usage.summary";
     pub const USAGE_SET_LIMITS: &str = "usage.setLimits";

@@ -239,6 +239,7 @@ fn message_tokens(m: &Message) -> u32 {
             crate::types::Part::ToolResult { content, .. } => tokens(content) + 10,
             // A screenshot at most 1568 px on its longest side.
             crate::types::Part::Image { .. } => 1_600,
+            crate::types::Part::Thinking { text, .. } => tokens(text),
         })
         .sum::<u32>()
         + 4

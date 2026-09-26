@@ -15,6 +15,7 @@ pub mod openai;
 pub mod persona;
 pub mod provider;
 pub mod realtime;
+pub mod reasoning;
 pub mod routing;
 pub mod speech;
 pub mod sse;

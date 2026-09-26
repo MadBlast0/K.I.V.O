@@ -1029,6 +1029,7 @@ impl Tasks {
             tools: Vec::new(),
             max_tokens: 700,
             temperature: Some(0.3),
+            reasoning: route.target.reasoning,
         };
         let collected = kivo_brain::collect(provider.chat(request, cancel.child_token())).await;
         self.brains.meter(&Meter {

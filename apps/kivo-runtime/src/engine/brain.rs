@@ -296,6 +296,8 @@ struct Round {
     calls: Vec<(String, String, serde_json::Value)>,
     usage: Usage,
     reasoning: String,
+    /// Signed thinking blocks, sent back with this round's tool calls.
+    thinking: Vec<Part>,
     error: Option<NormalizedError>,
 }
 
@@ -743,6 +745,15 @@ impl Engine {
                     }
                     BrainEvent::ToolCall { id, name, args } => round.calls.push((id, name, args)),
                     BrainEvent::Reasoning(r) => round.reasoning.push_str(&r),
+                    BrainEvent::Thinking {
+                        text,
+                        signature,
+                        redacted,
+                    } => round.thinking.push(Part::Thinking {
+                        text,
+                        signature,
+                        redacted,
+                    }),
                     BrainEvent::Usage(u) => round.usage.add(u),
                     BrainEvent::Done(_) => break,
                     BrainEvent::Error(e) => {
@@ -832,9 +843,10 @@ impl Engine {
                 break Ok(());
             }
             // The brain asked for tools: each goes through the permission engine.
+            // The model's signed thinking comes first, as the API sent it (Anthropic).
             let mut asked = Message {
                 role: Role::Assistant,
-                parts: Vec::new(),
+                parts: std::mem::take(&mut round.thinking),
             };
             if !round.text.is_empty() {
                 asked.parts.push(Part::Text {
@@ -1360,6 +1372,7 @@ impl Engine {
         );
         let request = ChatRequest {
             model: attempt.model.clone(),
+            reasoning: attempt.reasoning,
             system: assembled.system,
             messages: assembled.messages,
             tools: assembled.tools,
@@ -1730,6 +1743,8 @@ impl Engine {
             tools: Vec::new(),
             max_tokens: 400,
             temperature: Some(0.2),
+            // A summary needs no deep thinking.
+            reasoning: None,
         };
         let collected =
             kivo_brain::collect(provider.chat(request, tokio_util::sync::CancellationToken::new()))

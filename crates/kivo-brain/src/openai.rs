@@ -237,6 +237,22 @@ pub fn body(config: &OpenAiConfig, request: &ChatRequest) -> Value {
     if let Some(t) = request.temperature {
         body["temperature"] = json!(t);
     }
+    // The reasoning level, in OpenAI's or OpenRouter's words, when the model takes one.
+    if let Some(effort) = crate::reasoning::applies(&config.id, &request.model, request.reasoning) {
+        if config.id == "openrouter" {
+            body["reasoning"] = if effort == crate::reasoning::Effort::Off {
+                json!({ "enabled": false })
+            } else {
+                json!({ "effort": crate::reasoning::openai_effort(effort) })
+            };
+        } else {
+            body["reasoning_effort"] = json!(crate::reasoning::openai_effort(effort));
+            // Reasoning models take no temperature.
+            if let Some(map) = body.as_object_mut() {
+                map.remove("temperature");
+            }
+        }
+    }
     if !request.tools.is_empty() {
         body["tools"] = Value::Array(
             request

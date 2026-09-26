@@ -1040,6 +1040,50 @@ async fn the_control_centers_brain_requests() {
     assert_eq!(openai["hasKey"], true);
     let config = serde_json::to_string(&r.rig.core.config()).unwrap();
     assert!(!config.contains("sk-good-123") && config.contains("secret://kivo/openai/api-key"));
+
+    // The active brain (owner, 2026-09-26): a connected brain, its model and the reasoning
+    // level the model takes; a level it can't take is dropped; null is Automatic.
+    let levels = call(
+        method::BRAINS_REASONING,
+        json!({"provider": "openai", "model": "o3"}),
+    )
+    .await
+    .unwrap();
+    assert_eq!(levels, json!(["low", "medium", "high"]));
+    let list = call(
+        method::BRAINS_SET_ACTIVE,
+        json!({"provider": "openai", "model": "o3", "reasoning": "high"}),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        list["active"],
+        json!({"provider": "openai", "model": "o3", "reasoning": "high"})
+    );
+    let list = call(
+        method::BRAINS_SET_ACTIVE,
+        json!({"provider": "openai", "model": "gpt-4o", "reasoning": "high"}),
+    )
+    .await
+    .unwrap();
+    assert!(
+        list["active"].get("reasoning").is_none(),
+        "gpt-4o can't take a level"
+    );
+    assert!(
+        call(
+            method::BRAINS_SET_ACTIVE,
+            json!({"provider": "anthropic", "model": "x"})
+        )
+        .await
+        .is_err(),
+        "only a connected brain"
+    );
+    let list = call(method::BRAINS_SET_ACTIVE, json!({"provider": null}))
+        .await
+        .unwrap();
+    assert!(list["active"].is_null(), "Automatic");
+
     call(method::BRAINS_DISCONNECT, json!({"id": "openai"}))
         .await
         .unwrap();

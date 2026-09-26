@@ -42,6 +42,16 @@ pub enum Part {
         media_type: String,
         data: String,
     },
+    /// The model's thinking before a tool call, signed by the provider (Anthropic's extended
+    /// thinking): sent back unchanged while the same answer's tool loop goes on, as the API
+    /// requires; never shown or spoken (BRAIN-09). `redacted`: `signature` holds the encrypted
+    /// block instead.
+    Thinking {
+        text: String,
+        signature: String,
+        #[serde(default)]
+        redacted: bool,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -103,6 +113,8 @@ pub struct ChatRequest {
     pub tools: Vec<ToolDef>,
     pub max_tokens: u32,
     pub temperature: Option<f32>,
+    /// How hard the model thinks, when it can take a level (`reasoning::applies`).
+    pub reasoning: Option<crate::reasoning::Effort>,
 }
 
 impl ChatRequest {
@@ -114,6 +126,7 @@ impl ChatRequest {
             tools: Vec::new(),
             max_tokens: 1024,
             temperature: None,
+            reasoning: None,
         }
     }
 
@@ -173,6 +186,12 @@ pub enum BrainEvent {
     /// The model's reasoning. Never shown or spoken (BRAIN-09); kept only if the user turns on
     /// the reasoning log.
     Reasoning(String),
+    /// A whole signed thinking block (Anthropic), to send back with the tool calls it led to.
+    Thinking {
+        text: String,
+        signature: String,
+        redacted: bool,
+    },
     Usage(Usage),
     Done(StopReason),
     Error(NormalizedError),

@@ -1163,6 +1163,8 @@ export const Method = {
   brainsViewed: "brains.viewed",
   brainsSetWorkspace: "brains.setWorkspace",
   brainsContext: "brains.context",
+  brainsSetActive: "brains.setActive",
+  brainsReasoning: "brains.reasoning",
   usageSummary: "usage.summary",
   usageSetLimits: "usage.setLimits",
   usageSetCaps: "usage.setCaps",

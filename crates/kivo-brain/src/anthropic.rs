@@ -48,6 +48,14 @@ impl Anthropic {
 
 /// The request body for `request`.
 pub fn body(request: &ChatRequest) -> Value {
+    let thinking = crate::reasoning::applies("anthropic", &request.model, request.reasoning)
+        .and_then(crate::reasoning::anthropic_budget);
+    // Signed thinking goes back only in the last assistant turn, the tool loop in progress, and
+    // only while thinking is on (the API requires it there and ignores it anywhere else).
+    let last_assistant = request
+        .messages
+        .iter()
+        .rposition(|m| m.role == Role::Assistant);
     let last_cacheable = request.system.iter().rposition(|b| b.cacheable);
     let system: Vec<Value> = request
         .system
@@ -62,7 +70,8 @@ pub fn body(request: &ChatRequest) -> Value {
         })
         .collect();
     let mut messages: Vec<Value> = Vec::new();
-    for message in &request.messages {
+    for (at, message) in request.messages.iter().enumerate() {
+        let keep_thinking = thinking.is_some() && Some(at) == last_assistant;
         let role = match message.role {
             Role::Assistant => "assistant",
             // Tool results are the user's turn in Anthropic's API.
@@ -74,6 +83,15 @@ pub fn body(request: &ChatRequest) -> Value {
             .filter_map(|p| match p {
                 Part::Text { text } if text.is_empty() => None,
                 Part::Text { text } => Some(json!({ "type": "text", "text": text })),
+                Part::Thinking { .. } if !keep_thinking => None,
+                Part::Thinking {
+                    signature,
+                    redacted: true,
+                    ..
+                } => Some(json!({ "type": "redacted_thinking", "data": signature })),
+                Part::Thinking {
+                    text, signature, ..
+                } => Some(json!({ "type": "thinking", "thinking": text, "signature": signature })),
                 Part::ToolCall { id, name, args } => {
                     Some(json!({ "type": "tool_use", "id": id, "name": name, "input": args }))
                 }
@@ -113,7 +131,12 @@ pub fn body(request: &ChatRequest) -> Value {
     if !system.is_empty() {
         body["system"] = Value::Array(system);
     }
-    if let Some(t) = request.temperature {
+    if let Some(budget) = thinking {
+        // The budget comes out of max_tokens, so the answer keeps its room; thinking takes no
+        // temperature.
+        body["max_tokens"] = json!(request.max_tokens + budget);
+        body["thinking"] = json!({ "type": "enabled", "budget_tokens": budget });
+    } else if let Some(t) = request.temperature {
         body["temperature"] = json!(t);
     }
     if !request.tools.is_empty() {
@@ -132,6 +155,8 @@ pub fn body(request: &ChatRequest) -> Value {
 pub struct Decoder {
     /// Content blocks by index: tool uses collect their input JSON.
     tools: BTreeMap<usize, (String, String, String)>,
+    /// Thinking blocks by index: their text and signature (or a redacted block's data).
+    thinking: BTreeMap<usize, (String, String, bool)>,
     stop: Option<StopReason>,
 }
 
@@ -171,6 +196,12 @@ impl Decode for Decoder {
                         args_delta: String::new(),
                     });
                     self.tools.insert(index, (id, name, String::new()));
+                } else if block["type"] == "thinking" {
+                    self.thinking
+                        .insert(index, (String::new(), String::new(), false));
+                } else if block["type"] == "redacted_thinking" {
+                    let data = block["data"].as_str().unwrap_or_default().to_owned();
+                    self.thinking.insert(index, (String::new(), data, true));
                 }
             }
             "content_block_delta" => {
@@ -194,13 +225,30 @@ impl Decode for Decoder {
                     }
                     "thinking_delta" => {
                         if let Some(t) = delta["thinking"].as_str() {
+                            if let Some(block) = self.thinking.get_mut(&index) {
+                                block.0.push_str(t);
+                            }
                             out.push(BrainEvent::Reasoning(t.to_owned()));
+                        }
+                    }
+                    "signature_delta" => {
+                        if let (Some(sig), Some(block)) =
+                            (delta["signature"].as_str(), self.thinking.get_mut(&index))
+                        {
+                            block.1.push_str(sig);
                         }
                     }
                     _ => {}
                 }
             }
             "content_block_stop" => {
+                if let Some((text, signature, redacted)) = self.thinking.remove(&index) {
+                    out.push(BrainEvent::Thinking {
+                        text,
+                        signature,
+                        redacted,
+                    });
+                }
                 if let Some((id, name, args)) = self.tools.remove(&index) {
                     let args = if args.trim().is_empty() {
                         json!({})

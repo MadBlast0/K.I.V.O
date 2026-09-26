@@ -11,7 +11,7 @@ use crate::engine::Engine;
 use crate::signin::{self, OpenRouterOAuth};
 use kivo_brain::catalog::{self, CATALOG, CLI_TOOLS};
 use kivo_brain::cost::{Limit, Price, TaskCaps};
-use kivo_brain::routing::Profile;
+use kivo_brain::routing::{ModelRef, Profile};
 use kivo_brain::{Health, ProviderKind};
 use kivo_core::config::BrainConnection;
 use kivo_core::event::{EventKind, ProviderEvent};
@@ -171,6 +171,42 @@ impl BrainsRpc {
 
     /// The Brains page: connected brains, profiles and the default (UX-22). Stale health is
     /// checked in the background and pushed (DISC-14); stale discovery likewise (DISC-15).
+    /// The brain KIVO uses: the default profile's choice, one of the connected brains (a model
+    /// it offers, when it lists them), at a level the model takes; `None` is Automatic.
+    fn set_active(
+        self: &Arc<Self>,
+        provider: Option<String>,
+        model: String,
+        reasoning: Option<kivo_brain::reasoning::Effort>,
+    ) -> Result<Value, RpcError> {
+        let config = self.core.config();
+        let chosen = match provider {
+            None => None,
+            Some(provider) => {
+                if !config.brains.connections.iter().any(|c| c.id == provider) {
+                    return Err(refuse(kivo_core::text::t("brain.chooseConnected")));
+                }
+                let levels = self.brains().reasoning_levels(&provider, &model);
+                Some(ModelRef {
+                    reasoning: reasoning.filter(|r| levels.contains(r)),
+                    provider,
+                    model,
+                })
+            }
+        };
+        let Some(mut profile) = self
+            .brains()
+            .profiles()
+            .into_iter()
+            .find(|p| p.id == config.brains.default_profile)
+        else {
+            return Err(refuse("no such profile"));
+        };
+        profile.primary = chosen;
+        self.brains().save_profile(profile);
+        ok(&self.list())
+    }
+
     fn list(self: &Arc<Self>) -> Value {
         let config = self.core.config();
         let me = Arc::clone(self);
@@ -198,6 +234,13 @@ impl BrainsRpc {
             "connected": self.brains().views(&config),
             "profiles": self.brains().profiles(),
             "defaultProfile": config.brains.default_profile,
+            // The brain KIVO uses: the default profile's choice (null: Automatic).
+            "active": self
+                .brains()
+                .profiles()
+                .into_iter()
+                .find(|p| p.id == config.brains.default_profile)
+                .and_then(|p| p.primary),
             "persona": config.brains.persona,
             "customPersona": config.brains.custom_persona,
             "cliAgentsOn": config.capabilities.enabled(Capability::CliAgents),
@@ -712,6 +755,33 @@ impl BrainsRpc {
                         });
                         ok(&saved.brains)
                     }
+                    Err(e) => Err(e),
+                }
+            }
+            method::BRAINS_SET_ACTIVE => {
+                #[derive(Deserialize)]
+                #[serde(rename_all = "camelCase", deny_unknown_fields)]
+                struct P {
+                    provider: Option<String>,
+                    #[serde(default)]
+                    model: String,
+                    #[serde(default)]
+                    reasoning: Option<kivo_brain::reasoning::Effort>,
+                }
+                match parse::<P>(params) {
+                    Ok(p) => self.set_active(p.provider, p.model, p.reasoning),
+                    Err(e) => Err(e),
+                }
+            }
+            method::BRAINS_REASONING => {
+                #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
+                struct P {
+                    provider: String,
+                    model: String,
+                }
+                match parse::<P>(params) {
+                    Ok(p) => ok(&self.brains().reasoning_levels(&p.provider, &p.model)),
                     Err(e) => Err(e),
                 }
             }

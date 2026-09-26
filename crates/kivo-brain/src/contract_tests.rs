@@ -534,3 +534,101 @@ fn screenshots_reach_vision_models_in_each_providers_shape() {
         "image/png"
     );
 }
+
+/// The reasoning level reaches each API in its own words, only for models that take it; and
+/// Anthropic's signed thinking goes back with the tool loop it belongs to (owner, 2026-09-26).
+#[test]
+fn the_reasoning_level_reaches_each_api_in_its_words() {
+    use crate::reasoning::Effort;
+    use crate::types::{Part, Role};
+    let mut r = request();
+    r.temperature = Some(0.3);
+    r.reasoning = Some(Effort::High);
+
+    r.model = "o3".into();
+    let o = crate::openai::body(&OpenAiConfig::openai(), &r);
+    assert_eq!(o["reasoning_effort"], "high");
+    assert!(
+        o.get("temperature").is_none(),
+        "reasoning models take no temperature"
+    );
+    r.model = "gpt-4o".into();
+    let o = crate::openai::body(&OpenAiConfig::openai(), &r);
+    assert!(
+        o.get("reasoning_effort").is_none(),
+        "a model that can't reason gets nothing"
+    );
+
+    r.model = "deepseek/deepseek-r1".into();
+    let or = crate::openai::body(&OpenAiConfig::openrouter(), &r);
+    assert_eq!(or["reasoning"]["effort"], "high");
+    r.reasoning = Some(Effort::Off);
+    let or = crate::openai::body(&OpenAiConfig::openrouter(), &r);
+    assert_eq!(or["reasoning"]["enabled"], false);
+
+    r.model = "gemini-2.5-flash".into();
+    let g = crate::gemini::body(&r);
+    assert_eq!(g["generationConfig"]["thinkingConfig"]["thinkingBudget"], 0);
+
+    r.model = "claude-sonnet-4-5".into();
+    r.reasoning = Some(Effort::Medium);
+    r.max_tokens = 1024;
+    // A tool loop in progress: the signed thinking comes back first in the assistant turn.
+    r.messages.push(crate::types::Message {
+        role: Role::Assistant,
+        parts: vec![
+            Part::Thinking {
+                text: "The user wants Chrome.".into(),
+                signature: "sig-123".into(),
+                redacted: false,
+            },
+            Part::ToolCall {
+                id: "call_1".into(),
+                name: "apps_launch".into(),
+                args: json!({ "app": "Chrome" }),
+            },
+        ],
+    });
+    let a = crate::anthropic::body(&r);
+    assert_eq!(a["thinking"]["budget_tokens"], 8192);
+    assert_eq!(a["max_tokens"], 1024 + 8192, "the answer keeps its room");
+    assert!(a.get("temperature").is_none());
+    let turn = &a["messages"][1]["content"];
+    assert_eq!(turn[0]["type"], "thinking");
+    assert_eq!(turn[0]["signature"], "sig-123");
+    assert_eq!(turn[1]["type"], "tool_use");
+    // Thinking off: no thinking field, and the old block isn't sent.
+    r.reasoning = Some(Effort::Off);
+    let a = crate::anthropic::body(&r);
+    assert!(a.get("thinking").is_none());
+    assert_eq!(a["messages"][1]["content"][0]["type"], "tool_use");
+}
+
+/// Anthropic's streamed thinking arrives whole, with its signature, before the tool call.
+#[test]
+fn anthropics_thinking_is_collected_with_its_signature() {
+    use crate::http::Decode;
+    use crate::sse::SseEvent;
+    let mut decoder = crate::anthropic::Decoder::default();
+    let mut out = Vec::new();
+    for data in [
+        json!({ "type": "content_block_start", "index": 0, "content_block": { "type": "thinking", "thinking": "" } }),
+        json!({ "type": "content_block_delta", "index": 0, "delta": { "type": "thinking_delta", "thinking": "Open " } }),
+        json!({ "type": "content_block_delta", "index": 0, "delta": { "type": "thinking_delta", "thinking": "Chrome." } }),
+        json!({ "type": "content_block_delta", "index": 0, "delta": { "type": "signature_delta", "signature": "abc" } }),
+        json!({ "type": "content_block_stop", "index": 0 }),
+    ] {
+        decoder.decode(
+            &SseEvent {
+                event: None,
+                data: data.to_string(),
+            },
+            &mut out,
+        );
+    }
+    assert!(out.contains(&BrainEvent::Thinking {
+        text: "Open Chrome.".into(),
+        signature: "abc".into(),
+        redacted: false,
+    }));
+}

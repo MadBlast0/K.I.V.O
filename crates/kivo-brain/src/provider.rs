@@ -41,6 +41,8 @@ pub struct Collected {
     pub text: String,
     pub tool_calls: Vec<(String, String, serde_json::Value)>,
     pub reasoning: String,
+    /// Signed thinking blocks (Anthropic), to send back with the tool calls.
+    pub thinking: Vec<crate::types::Part>,
     pub usage: crate::types::Usage,
     pub stop: Option<crate::types::StopReason>,
     pub error: Option<NormalizedError>,
@@ -54,6 +56,15 @@ pub async fn collect(mut stream: BrainStream) -> Collected {
             BrainEvent::ToolCall { id, name, args } => out.tool_calls.push((id, name, args)),
             BrainEvent::ToolCallDelta { .. } => {}
             BrainEvent::Reasoning(r) => out.reasoning.push_str(&r),
+            BrainEvent::Thinking {
+                text,
+                signature,
+                redacted,
+            } => out.thinking.push(crate::types::Part::Thinking {
+                text,
+                signature,
+                redacted,
+            }),
             BrainEvent::Usage(u) => out.usage.add(u),
             BrainEvent::Done(stop) => out.stop = Some(stop),
             BrainEvent::Error(e) => out.error = Some(e),

@@ -671,6 +671,7 @@
     "noBrainInSetup": "I heard you, but that needs an AI brain. You can connect one in a moment. Until then, try a command like “what time is it”.",
     "needsLocal": "That needs a brain on this PC, and none is running, so I didn’t send it anywhere.",
     "notConnected": "{name} isn’t connected. You can add it on the Brains page.",
+    "chooseConnected": "Connect that brain first, then choose it.",
     "unavailable": "{name} isn’t available right now. Try again in a moment.",
     "auth": "{name} refused the sign-in. Check it on the Brains page.",
     "busy": "{name} is busy right now. Try again in a moment.",

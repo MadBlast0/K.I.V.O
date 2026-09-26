@@ -98,6 +98,8 @@ pub fn body(request: &ChatRequest) -> Value {
             .filter_map(|p| match p {
                 Part::Text { text } if text.is_empty() => None,
                 Part::Text { text } => Some(json!({ "text": text })),
+                // Anthropic's signed thinking means nothing to Gemini.
+                Part::Thinking { .. } => None,
                 Part::ToolCall { name, args, .. } => {
                     Some(json!({ "functionCall": { "name": name, "args": args } }))
                 }
@@ -127,6 +129,10 @@ pub fn body(request: &ChatRequest) -> Value {
     let mut config = json!({ "maxOutputTokens": request.max_tokens });
     if let Some(t) = request.temperature {
         config["temperature"] = json!(t);
+    }
+    if let Some(effort) = crate::reasoning::applies("gemini", &request.model, request.reasoning) {
+        config["thinkingConfig"] =
+            json!({ "thinkingBudget": crate::reasoning::gemini_budget(effort) });
     }
     let mut body = json!({ "contents": contents, "generationConfig": config });
     let system = request.system_text();

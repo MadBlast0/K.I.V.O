@@ -8,12 +8,35 @@ use crate::catalog::{self, CatalogEntry, Tier};
 use crate::types::{NormalizedError, PrivacyClass, ProviderKind};
 use serde::{Deserialize, Serialize};
 
-/// A provider and one of its models.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+/// A provider and one of its models, with how hard it thinks when the user chose a level.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelRef {
     pub provider: String,
     pub model: String,
+    /// The user's reasoning level for this model; `None` is the model's own default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning: Option<crate::reasoning::Effort>,
+}
+
+impl ModelRef {
+    pub fn new(provider: impl Into<String>, model: impl Into<String>) -> Self {
+        Self {
+            provider: provider.into(),
+            model: model.into(),
+            reasoning: None,
+        }
+    }
+}
+
+/// The reasoning level the profile chose for `provider`'s `model`, if it chose that brain.
+fn effort_of(profile: &Profile, provider: &str, model: &str) -> Option<crate::reasoning::Effort> {
+    profile
+        .primary
+        .iter()
+        .chain(&profile.fallbacks)
+        .find(|c| c.provider == provider && (c.model.is_empty() || c.model == model))
+        .and_then(|c| c.reasoning)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -383,6 +406,7 @@ pub fn route(
         target: ModelRef {
             provider: target.id.clone(),
             model: model.clone(),
+            reasoning: effort_of(&profile, &target.id, model),
         },
         target_name: target.name.clone(),
         kind: target.kind,
@@ -394,6 +418,7 @@ pub fn route(
             .map(|(a, m)| ModelRef {
                 provider: a.id.clone(),
                 model: m.clone(),
+                reasoning: effort_of(&profile, &a.id, m),
             })
             .collect(),
         reason: reason_for(&profile, target, &why),
@@ -445,6 +470,7 @@ fn explicit(
         target: ModelRef {
             provider: target.id.clone(),
             model: model_of(target, tier),
+            reasoning: effort_of(default, &target.id, &model_of(target, tier)),
         },
         target_name: target.name.clone(),
         kind: target.kind,
@@ -676,12 +702,15 @@ mod tests {
         profiles[0].primary = Some(ModelRef {
             provider: "ollama".into(),
             model: "llama3.2:3b".into(),
+            reasoning: Some(crate::reasoning::Effort::Low),
         });
         let r = route(&request("hello"), &profiles, &all()).unwrap();
         assert_eq!(
             (r.target.provider.as_str(), r.target.model.as_str()),
             ("ollama", "llama3.2:3b")
         );
+        // The chosen reasoning level travels with the choice.
+        assert_eq!(r.target.reasoning, Some(crate::reasoning::Effort::Low));
         let brains = vec![brain("anthropic", true), brain("openrouter", true)];
         let mut req = request("hi");
         req.profile = Some("cheap");

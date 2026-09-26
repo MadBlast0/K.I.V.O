@@ -266,6 +266,8 @@ fn render() -> String {
         ("brainsViewed", method::BRAINS_VIEWED),
         ("brainsSetWorkspace", method::BRAINS_SET_WORKSPACE),
         ("brainsContext", method::BRAINS_CONTEXT),
+        ("brainsSetActive", method::BRAINS_SET_ACTIVE),
+        ("brainsReasoning", method::BRAINS_REASONING),
         ("usageSummary", method::USAGE_SUMMARY),
         ("usageSetLimits", method::USAGE_SET_LIMITS),
         ("usageSetCaps", method::USAGE_SET_CAPS),

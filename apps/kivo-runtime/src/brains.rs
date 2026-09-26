@@ -403,6 +403,16 @@ impl Brains {
         all
     }
 
+    /// The reasoning levels `provider`'s `model` can take: what its API offers for that model
+    /// (`kivo_brain::reasoning`); none for local servers.
+    pub fn reasoning_levels(
+        &self,
+        provider: &str,
+        model: &str,
+    ) -> Vec<kivo_brain::reasoning::Effort> {
+        kivo_brain::reasoning::levels(provider, model)
+    }
+
     /// Saves a profile (a changed built-in, or one of the user's own).
     pub fn save_profile(&self, profile: Profile) {
         let mut user: Vec<Profile> = self.meta(PROFILES_KEY).unwrap_or_default();
