@@ -174,6 +174,27 @@ impl Engine {
     }
 
     /// Hands the request to a CLI agent and follows its work.
+    /// Uses the model and reasoning level the user chose for this agent (the active brain), when
+    /// the agent offers them; the agent's own defaults otherwise.
+    pub(crate) async fn apply_agent_choice(
+        &self,
+        session: &kivo_brain::acp::AcpSession,
+        chosen: &kivo_brain::routing::ModelRef,
+    ) {
+        let options = session.options();
+        if options.models.iter().any(|m| m.id == chosen.model)
+            && options.model.as_deref() != Some(chosen.model.as_str())
+            && let Err(e) = session.set_model(&chosen.model).await
+        {
+            tracing::warn!(%e, model = chosen.model, "the agent didn't take the model");
+        }
+        if let Some(effort) = chosen.reasoning
+            && let Err(e) = session.set_reasoning(effort).await
+        {
+            tracing::warn!(%e, "the agent didn't take the reasoning level");
+        }
+    }
+
     pub(super) async fn agent_turn(self: &Arc<Self>, text: &str, route: &Route) {
         let config = self.core.config();
         let turn = self.turn_key();
@@ -217,6 +238,9 @@ impl Engine {
                 return;
             }
         };
+        // The agent's models and reasoning setting, and the ones the user chose for it.
+        self.brains.note_agent(&id, session.options());
+        self.apply_agent_choice(&session, &route.target).await;
         let keep = config.privacy.retention_days > 0 && !guest;
         let thread = self.pick_thread(text, chosen, keep, &config);
         if let Some(t) = &thread {

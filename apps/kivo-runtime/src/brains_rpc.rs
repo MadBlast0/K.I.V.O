@@ -210,6 +210,14 @@ impl BrainsRpc {
     fn list(self: &Arc<Self>) -> Value {
         let config = self.core.config();
         let me = Arc::clone(self);
+        // Connected CLI agents KIVO hasn't asked yet: what they offer.
+        for c in &config.brains.connections {
+            if catalog::entry(&c.id).is_some_and(|e| e.kind == ProviderKind::Cli)
+                && config.capabilities.enabled(Capability::CliAgents)
+            {
+                self.probe_agent(&c.id);
+            }
+        }
         tokio::spawn(async move {
             me.brains().refresh_health(crate::brains::HEALTH_TTL).await;
             for view in me.brains().views(&me.core.config()) {
@@ -284,6 +292,41 @@ impl BrainsRpc {
         }
         self.engine.settings_changed(&saved);
         Ok(json!({ "connected": self.brains().views(&saved) }))
+    }
+
+    /// Learns what connected CLI agent `id` offers (its models and reasoning setting) by
+    /// starting its session in the default folder, once: no prompt is sent, so it costs no
+    /// quota. Not for agents that aren't here or need a sign-in first.
+    fn probe_agent(self: &Arc<Self>, id: &str) {
+        if self.brains().knows_agent(id) {
+            return;
+        }
+        let Some(found) = self.brains().agent(id) else {
+            return;
+        };
+        if found.signed_in == Some(false) {
+            return;
+        }
+        let me = Arc::clone(self);
+        let id = id.to_owned();
+        tokio::spawn(async move {
+            let cwd = me.engine.agents.workspace();
+            match me
+                .engine
+                .agents
+                .session(&id, Some(found.program.as_path()), &cwd)
+                .await
+            {
+                Ok(session) => {
+                    me.brains().note_agent(&id, session.options());
+                    me.publish(ProviderEvent::HealthChanged {
+                        provider: id,
+                        healthy: true,
+                    });
+                }
+                Err(e) => tracing::info!(%e, agent = id, "couldn't ask the agent what it offers"),
+            }
+        });
     }
 
     async fn disconnect(&self, id: &str) -> Value {
@@ -679,13 +722,19 @@ impl BrainsRpc {
                     local: bool,
                 }
                 parse::<P>(params).and_then(|p| {
-                    self.connect(BrainConnection {
+                    let id = p.id.clone();
+                    let connected = self.connect(BrainConnection {
                         id: p.id,
                         name: p.name,
                         base_url: p.base_url,
                         local: p.local,
                         ..BrainConnection::default()
-                    })
+                    });
+                    // A CLI agent: learn what it offers (its models, its reasoning setting).
+                    if connected.is_ok() {
+                        self.probe_agent(&id);
+                    }
+                    connected
                 })
             }
             method::BRAINS_DISCONNECT => match parse::<Id>(params) {

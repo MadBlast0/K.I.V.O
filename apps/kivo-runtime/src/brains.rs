@@ -118,6 +118,8 @@ pub struct Brains {
     connections: RwLock<Vec<BrainConnection>>,
     known: Mutex<HashMap<String, Known>>,
     agents: RwLock<BTreeMap<String, FoundAgent>>,
+    /// What each CLI agent offers (its models and reasoning setting), from its last session.
+    agent_options: RwLock<BTreeMap<String, kivo_brain::acp::AgentOptions>>,
     prices: RwLock<PriceTable>,
     /// Minutes to add to UTC for local time (limit periods).
     utc_offset: i32,
@@ -142,6 +144,7 @@ impl Brains {
             connections: RwLock::default(),
             known: Mutex::default(),
             agents: RwLock::default(),
+            agent_options: RwLock::default(),
             prices: RwLock::new(PriceTable::bundled()),
             utc_offset,
             warmed: Mutex::default(),
@@ -404,13 +407,26 @@ impl Brains {
     }
 
     /// The reasoning levels `provider`'s `model` can take: what its API offers for that model
-    /// (`kivo_brain::reasoning`); none for local servers.
+    /// (`kivo_brain::reasoning`), or a CLI agent's own reasoning setting; none for local servers.
     pub fn reasoning_levels(
         &self,
         provider: &str,
         model: &str,
     ) -> Vec<kivo_brain::reasoning::Effort> {
-        kivo_brain::reasoning::levels(provider, model)
+        match read(&self.agent_options).get(provider) {
+            Some(options) => options.levels(),
+            None => kivo_brain::reasoning::levels(provider, model),
+        }
+    }
+
+    /// What CLI agent `id` offered in its latest session (its models and reasoning setting).
+    pub fn note_agent(&self, id: &str, options: kivo_brain::acp::AgentOptions) {
+        write(&self.agent_options).insert(id.to_owned(), options);
+    }
+
+    /// Whether KIVO knows what CLI agent `id` offers yet.
+    pub fn knows_agent(&self, id: &str) -> bool {
+        read(&self.agent_options).contains_key(id)
     }
 
     /// Saves a profile (a changed built-in, or one of the user's own).
@@ -722,9 +738,16 @@ impl Brains {
                 has_key: parse_handle(&c.key)
                     .and_then(|h| self.secrets.get(&h).ok().flatten())
                     .is_some(),
-                models: k
-                    .map(|k| k.models.iter().map(|m| m.id.clone()).collect())
-                    .unwrap_or_default(),
+                // A CLI agent's models are the ones it offered in its last session.
+                models: if kind == ProviderKind::Cli {
+                    read(&self.agent_options)
+                        .get(&c.id)
+                        .map(|o| o.models.iter().map(|m| m.id.clone()).collect())
+                        .unwrap_or_default()
+                } else {
+                    k.map(|k| k.models.iter().map(|m| m.id.clone()).collect())
+                        .unwrap_or_default()
+                },
                 checked_ago: k.and_then(|k| k.checked).map(|t| t.elapsed().as_secs()),
             });
         }
@@ -880,6 +903,7 @@ impl Brains {
             providers: RwLock::default(),
             injected: RwLock::default(),
             connections: RwLock::default(),
+            agent_options: RwLock::default(),
             known: Mutex::default(),
             agents: RwLock::default(),
             prices: RwLock::new(PriceTable::default()),

@@ -30,6 +30,8 @@ impl PermissionHandler for Answers {
 
 /// The `mcpServers` each fake agent's `session/new` was given.
 static SEEN_SERVERS: Mutex<Vec<Value>> = Mutex::new(Vec::new());
+/// The config options KIVO set on the fake agent (`configId`, `value`).
+static SEEN_CONFIG: Mutex<Vec<(String, String)>> = Mutex::new(Vec::new());
 
 /// A fake agent: answers `initialize`, `session/new`, `session/load`, `session/set_mode`, and a
 /// prompt with a thought, a plan, a tool call that asks permission and edits a file, then a
@@ -60,7 +62,26 @@ async fn fake_agent(stream: tokio::io::DuplexStream) {
                 "modes": { "currentModeId": "default", "availableModes": [
                     { "id": "default", "name": "Default" }, { "id": "bypassPermissions", "name": "Bypass" }
                 ]},
+                "configOptions": [
+                    { "id": "model", "category": "model", "type": "select", "currentValue": "fast-1",
+                      "options": [{ "value": "fast-1", "name": "Fast" }, { "value": "smart-2", "name": "Smart" }] },
+                    { "id": "reasoning", "category": "thought_level", "type": "select", "currentValue": "medium",
+                      "options": [{ "value": "low", "name": "Low" }, { "value": "medium", "name": "Medium" }, { "value": "high", "name": "High" }] },
+                ],
             }}));
+            }
+            Some("session/set_config_option") => {
+                SEEN_CONFIG.lock().unwrap().push((
+                    msg["params"]["configId"]
+                        .as_str()
+                        .unwrap_or_default()
+                        .to_owned(),
+                    msg["params"]["value"]
+                        .as_str()
+                        .unwrap_or_default()
+                        .to_owned(),
+                ));
+                out.push(json!({ "jsonrpc": "2.0", "id": id, "result": {} }));
             }
             Some("session/load") => {
                 out.push(json!({ "jsonrpc": "2.0", "id": id, "result": {} }));
@@ -520,4 +541,87 @@ fn which(name: &str) -> Option<std::path::PathBuf> {
                 .map(|dir| dir.join(format!("{name}.exe")))
                 .find(|p| p.is_file())
         })
+}
+
+/// An agent's models and reasoning setting are read from either ACP shape, and KIVO's reasoning
+/// levels map onto the agent's own values by name (owner, 2026-09-26).
+#[test]
+fn an_agents_models_and_reasoning_are_read_from_either_shape() {
+    use crate::acp::AgentOptions;
+    use crate::reasoning::Effort;
+    // The `models` field (session/set_model).
+    let a = AgentOptions::read(&serde_json::json!({
+        "sessionId": "s1",
+        "models": {
+            "availableModels": [
+                { "modelId": "claude-sonnet-4-5", "name": "Sonnet 4.5" },
+                { "modelId": "claude-opus-4-1", "name": "Opus 4.1" }
+            ],
+            "currentModelId": "claude-sonnet-4-5"
+        }
+    }));
+    assert_eq!(a.models.len(), 2);
+    assert_eq!(a.model.as_deref(), Some("claude-sonnet-4-5"));
+    assert!(a.model_option.is_none());
+    assert!(a.levels().is_empty(), "no reasoning setting");
+    // Session config options, with a thought level.
+    let b = AgentOptions::read(&serde_json::json!({
+        "sessionId": "s2",
+        "configOptions": [
+            { "id": "model", "category": "model", "type": "select", "currentValue": "gpt-5-codex",
+              "options": [{ "value": "gpt-5-codex", "name": "GPT-5 Codex" }, { "value": "gpt-5", "name": "GPT-5" }] },
+            { "id": "effort", "category": "thought_level", "type": "select", "currentValue": "medium",
+              "options": [{ "value": "minimal", "name": "Minimal" }, { "value": "low", "name": "Low" },
+                          { "value": "medium", "name": "Medium" }, { "value": "high", "name": "High" }] }
+        ]
+    }));
+    assert_eq!(b.model_option.as_deref(), Some("model"));
+    assert_eq!(b.models[1].id, "gpt-5");
+    assert_eq!(
+        b.levels(),
+        [Effort::Off, Effort::Low, Effort::Medium, Effort::High]
+    );
+    assert_eq!(b.thought_for(Effort::Off), Some("minimal"));
+    assert_eq!(b.thought_for(Effort::High), Some("high"));
+}
+
+/// The agent's models and reasoning setting reach KIVO from `session/new`, and the user's choice
+/// goes back as config options (owner, 2026-09-26).
+#[tokio::test]
+async fn the_chosen_model_and_reasoning_reach_the_agent() {
+    use crate::reasoning::Effort;
+    let (client, _) = connected(true).await;
+    let session = client
+        .session(Path::new("C:/work"), &[], None)
+        .await
+        .unwrap();
+    let options = session.options();
+    assert_eq!(
+        options
+            .models
+            .iter()
+            .map(|m| m.id.as_str())
+            .collect::<Vec<_>>(),
+        ["fast-1", "smart-2"]
+    );
+    assert_eq!(
+        options.levels(),
+        [Effort::Low, Effort::Medium, Effort::High]
+    );
+    session.set_model("smart-2").await.unwrap();
+    session.set_reasoning(Effort::High).await.unwrap();
+    // A level the agent has no value for is left alone.
+    session.set_reasoning(Effort::Off).await.unwrap();
+    let seen = SEEN_CONFIG.lock().unwrap().clone();
+    assert!(
+        seen.contains(&("model".into(), "smart-2".into())),
+        "{seen:?}"
+    );
+    assert!(
+        seen.contains(&("reasoning".into(), "high".into())),
+        "{seen:?}"
+    );
+    assert!(!seen.iter().any(|(_, v)| v == "off"), "{seen:?}");
+    assert_eq!(session.options().model.as_deref(), Some("smart-2"));
+    client.stop();
 }

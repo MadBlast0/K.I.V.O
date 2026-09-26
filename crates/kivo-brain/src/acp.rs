@@ -74,6 +74,102 @@ pub struct AgentMode {
     pub name: String,
 }
 
+/// The models an agent offers and its reasoning setting, as it reports them when a session
+/// starts: ACP's `models` (`session/set_model`) or its session config options (`model` and
+/// `thought_level` categories, `session/set_config_option`) (owner, 2026-09-26).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentOptions {
+    pub models: Vec<AgentMode>,
+    pub model: Option<String>,
+    /// The config option that holds the model, when the agent uses config options for it.
+    pub model_option: Option<String>,
+    /// The reasoning option's id and values, when the agent has one.
+    pub thought_option: Option<String>,
+    pub thoughts: Vec<AgentMode>,
+    pub thought: Option<String>,
+}
+
+impl AgentOptions {
+    /// Reads them from a `session/new` or `session/load` result.
+    pub fn read(result: &Value) -> Self {
+        let pairs = |list: Option<&Vec<Value>>, id: &str, name: &str| -> Vec<AgentMode> {
+            list.into_iter()
+                .flatten()
+                .filter_map(|m| {
+                    let value = m[id].as_str()?.to_owned();
+                    Some(AgentMode {
+                        name: m[name].as_str().unwrap_or(&value).to_owned(),
+                        id: value,
+                    })
+                })
+                .collect()
+        };
+        let mut out = Self {
+            models: pairs(
+                result
+                    .pointer("/models/availableModels")
+                    .and_then(Value::as_array),
+                "modelId",
+                "name",
+            ),
+            model: result
+                .pointer("/models/currentModelId")
+                .and_then(Value::as_str)
+                .map(str::to_owned),
+            ..Self::default()
+        };
+        for option in result["configOptions"].as_array().into_iter().flatten() {
+            let values = pairs(option["options"].as_array(), "value", "name");
+            let id = option["id"].as_str().map(str::to_owned);
+            let current = option["currentValue"].as_str().map(str::to_owned);
+            match option["category"].as_str() {
+                Some("model") if out.models.is_empty() => {
+                    out.models = values;
+                    out.model = current;
+                    out.model_option = id;
+                }
+                Some("thought_level") => {
+                    out.thoughts = values;
+                    out.thought = current;
+                    out.thought_option = id;
+                }
+                _ => {}
+            }
+        }
+        out
+    }
+
+    /// The agent's reasoning value for `effort`, matched by name ("low", "high", "off" …).
+    pub fn thought_for(&self, effort: crate::reasoning::Effort) -> Option<&str> {
+        use crate::reasoning::Effort;
+        let words: &[&str] = match effort {
+            Effort::Off => &["off", "none", "minimal", "disabled"],
+            Effort::Low => &["low"],
+            Effort::Medium => &["medium", "med"],
+            Effort::High => &["high", "max", "ultra"],
+        };
+        self.thoughts
+            .iter()
+            .find(|t| {
+                let key = format!("{} {}", t.id, t.name).to_lowercase();
+                words
+                    .iter()
+                    .any(|w| key.split(|c: char| !c.is_alphanumeric()).any(|p| p == *w))
+            })
+            .map(|t| t.id.as_str())
+    }
+
+    /// The levels the agent's reasoning option takes.
+    pub fn levels(&self) -> Vec<crate::reasoning::Effort> {
+        use crate::reasoning::Effort;
+        [Effort::Off, Effort::Low, Effort::Medium, Effort::High]
+            .into_iter()
+            .filter(|e| self.thought_for(*e).is_some())
+            .collect()
+    }
+}
+
 /// A step of the agent's plan.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -384,6 +480,7 @@ impl AcpClient {
             id,
             modes,
             mode: Mutex::new(mode),
+            options: Mutex::new(AgentOptions::read(&result)),
         })
     }
 
@@ -598,9 +695,62 @@ pub struct AcpSession {
     id: String,
     pub modes: Vec<AgentMode>,
     mode: Mutex<Option<String>>,
+    options: Mutex<AgentOptions>,
 }
 
 impl AcpSession {
+    /// The models and reasoning setting the agent offers, and what's chosen now.
+    pub fn options(&self) -> AgentOptions {
+        lock(&self.options).clone()
+    }
+
+    /// Uses `model` for the next prompts (the user's choice for this agent).
+    pub async fn set_model(&self, model: &str) -> Result<(), NormalizedError> {
+        let option = lock(&self.options).model_option.clone();
+        match option {
+            Some(config) => {
+                self.client
+                    .request(
+                        "session/set_config_option",
+                        json!({ "sessionId": self.id, "configId": config, "value": model }),
+                    )
+                    .await?;
+            }
+            None => {
+                self.client
+                    .request(
+                        "session/set_model",
+                        json!({ "sessionId": self.id, "modelId": model }),
+                    )
+                    .await?;
+            }
+        }
+        lock(&self.options).model = Some(model.to_owned());
+        Ok(())
+    }
+
+    /// Sets the agent's reasoning to `effort`, when it has a setting for it.
+    pub async fn set_reasoning(
+        &self,
+        effort: crate::reasoning::Effort,
+    ) -> Result<(), NormalizedError> {
+        let (option, value) = {
+            let options = lock(&self.options);
+            match (options.thought_option.clone(), options.thought_for(effort)) {
+                (Some(o), Some(v)) => (o, v.to_owned()),
+                _ => return Ok(()),
+            }
+        };
+        self.client
+            .request(
+                "session/set_config_option",
+                json!({ "sessionId": self.id, "configId": option, "value": value }),
+            )
+            .await?;
+        lock(&self.options).thought = Some(value);
+        Ok(())
+    }
+
     /// The agent's session id, stored so KIVO can resume it (CONV-02).
     pub fn id(&self) -> &str {
         &self.id
