@@ -11,6 +11,9 @@ pub struct SystemVoice {
     pub name: String,
     /// BCP-47 tag, e.g. "en-US".
     pub language: String,
+    /// `female`, `male`, or empty when the system doesn't say.
+    #[serde(default)]
+    pub gender: String,
 }
 
 /// Mono audio as the voice produced it.

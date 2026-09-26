@@ -128,6 +128,30 @@ pub struct RegistryEntry {
     /// The name `kivo-bench` reports this engine under, when it measures it.
     #[serde(skip)]
     pub bench_name: Option<&'static str>,
+    /// KIVO's estimates, 0–100, for the model pickers' bars (like Handy's): how quickly it
+    /// answers, and how accurate (a recognizer) or natural (a voice) it is. From the models'
+    /// published results; KIVO's own benchmark on this PC is `measured`.
+    pub speed: u8,
+    pub accuracy: u8,
+}
+
+/// Speed and accuracy (or naturalness) estimates per engine, 0–100 (`RegistryEntry::speed`).
+fn estimate(id: &str) -> (u8, u8) {
+    match id {
+        _ if id.starts_with("moonshine-tiny") => (95, 60),
+        _ if id.starts_with("moonshine-base") => (85, 72),
+        "whisper-cpp-base-en" => (88, 70),
+        "whisper-cpp-small" => (75, 80),
+        "whisper-cpp-turbo" => (60, 92),
+        "whisper-large-v3-turbo" => (40, 91),
+        "parakeet-tdt-v3" => (80, 88),
+        "system" => (98, 40),
+        "kokoro-82m" => (80, 85),
+        "supertonic-3" => (92, 70),
+        "chatterbox-turbo" => (35, 88),
+        // Cloud services: quick and accurate, as long as the network is.
+        _ => (80, 90),
+    }
 }
 
 impl RegistryEntry {
@@ -136,6 +160,7 @@ impl RegistryEntry {
             EngineKind::Local | EngineKind::System => Privacy::Local,
             EngineKind::Cloud => Privacy::Cloud,
         };
+        let (speed, accuracy) = estimate(&engine.id);
         Self {
             engine,
             profiles: profiles.to_vec(),
@@ -144,6 +169,8 @@ impl RegistryEntry {
             voices: Vec::new(),
             measured: None,
             bench_name: None,
+            speed,
+            accuracy,
         }
     }
 

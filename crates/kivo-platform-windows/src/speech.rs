@@ -4,7 +4,7 @@
 
 use crate::com::{Com, os_error};
 use kivo_platform::{PlatformError, PlatformResult, SpeechSynth, SynthAudio, SystemVoice};
-use windows::Media::SpeechSynthesis::SpeechSynthesizer;
+use windows::Media::SpeechSynthesis::{SpeechSynthesizer, VoiceGender};
 use windows::Storage::Streams::DataReader;
 use windows::core::HSTRING;
 
@@ -21,6 +21,11 @@ impl SpeechSynth for WindowsSpeech {
                 id: info.Id().map_err(|e| os_error(&e))?.to_string(),
                 name: info.DisplayName().map_err(|e| os_error(&e))?.to_string(),
                 language: info.Language().map_err(|e| os_error(&e))?.to_string(),
+                gender: match info.Gender() {
+                    Ok(VoiceGender::Female) => "female".into(),
+                    Ok(VoiceGender::Male) => "male".into(),
+                    _ => String::new(),
+                },
             });
         }
         Ok(voices)

@@ -942,9 +942,7 @@
     },
     "activation": {
       "title": "How do you call KIVO?",
-      "sub": "Say “Hey Kivo”, hold a shortcut, or keep both. Here’s what it looks like:",
-      "demoSay": "What time is it?",
-      "demoAnswer": "It’s 9:41 AM.",
+      "sub": "Say “Hey Kivo”, hold a shortcut, or keep both on.",
       "tryTitle": "Try it now",
       "tryHint": "Say “Hey Kivo, what time is it?”, or hold {keys} and say “What time is it?”. You’ll see what KIVO heard here, and the Island at the top of the screen.",
       "tryListening": "Listening… say “What time is it?”",
@@ -956,52 +954,39 @@
     },
     "listen": {
       "title": "How KIVO listens",
-      "sub": "It turns what you say into words it can act on. It runs on your PC, so it’s private and works offline."
+      "sub": "Pick the model that turns your voice into words. They all run on your PC, so they’re private and work offline."
     },
     "speak": {
       "title": "How KIVO speaks",
-      "sub": "It reads KIVO’s answers out loud. Pick how it sounds, then its voice."
-    },
-    "pipeline": {
-      "label": "Setup of KIVO’s voice",
-      "listen": "Listen",
-      "brain": "Think",
-      "speak": "Speak"
+      "sub": "Pick the model that reads answers out loud. You’ll choose its voice next."
     },
     "speech": {
       "loading": "Looking at your PC…",
-      "checking": "Checking…",
-      "why": "Why?",
-      "level": {
-        "recommended": "Recommended",
-        "high": "High",
-        "medium": "Medium",
-        "low": "Low"
-      },
+      "search": "Search models",
+      "noMatch": "No model matches.",
+      "recommended": "Recommended",
+      "inUse": "In use",
+      "onThisPc": "On this PC",
+      "speed": "Speed",
+      "mb": "{size} MB",
+      "builtIn": "Built in",
       "stt": {
-        "level": "How well KIVO listens",
-        "recommended": "The best balance of accuracy and speed for this PC.",
-        "high": "The most accurate. Uses more of your PC.",
-        "medium": "Quicker, a little less accurate.",
-        "low": "The lightest, for smaller PCs.",
-        "testHint": "KIVO plays itself a sentence and checks what it hears.",
+        "list": "Speech-to-text models",
+        "accuracy": "Accuracy",
+        "testHint": "Test it: KIVO plays itself a sentence and checks what the model hears.",
         "ready": "KIVO listens with {name}."
       },
       "tts": {
-        "level": "How KIVO sounds",
-        "recommended": "A natural, human-sounding voice.",
-        "high": "A natural, human-sounding voice.",
-        "medium": "A natural voice that starts talking quickly.",
-        "low": "Your system’s built-in voices. The lightest.",
-        "testHint": "It says a sentence out loud, so you can hear it.",
+        "list": "Text-to-speech models",
+        "accuracy": "Natural",
+        "testHint": "Test it: the model says a sentence out loud.",
         "ready": "KIVO speaks with {name}."
       },
-      "builtIn": "Built into your system",
       "size": "{size} MB · {license}",
       "download": "Download",
-      "downloadHint": "Downloads once and stays on this PC.",
+      "downloadHint": "downloads once and stays on this PC",
       "bytes": "{done} of {total} MB",
-      "speed": "{speed} MB/s",
+      "speedRate": "{speed} MB/s",
       "secondsLeft": "{count, plural, one {about # second left} other {about # seconds left}}",
       "minutesLeft": "{count, plural, one {about # minute left} other {about # minutes left}}",
       "pauseAt": "Pause the download ({percent, number, ::percent})",
@@ -1019,12 +1004,9 @@
       "spoke": "Did you hear it? If not, check your speaker.",
       "useThis": "Use this",
       "switching": "Switching…",
-      "chooseVoice": "Choose a voice",
-      "later": "Set up later",
-      "myself": "Other models",
       "newVoices": "{count, plural, one {# new voice is} other {# new voices are}} ready to download (about 2 MB).",
       "getVoices": "Download",
-      "inUse": "In use"
+      "later": "Set up later"
     },
     "voice": {
       "title": "Teach KIVO your voice",
@@ -1043,7 +1025,36 @@
       "connected": "Connected",
       "signIn": "Sign in",
       "free": "Free",
-      "keysLater": "Have an API key? Add it later on the Brains page (advanced)."
+      "keysLater": "Have an API key? Add it later on the Brains page (advanced).",
+      "suggested": "Suggested",
+      "working": "Working…",
+      "disconnect": "Disconnect",
+      "ways": "How to connect",
+      "way": {
+        "signIn": "Sign in",
+        "local": "On this PC",
+        "key": "API key"
+      },
+      "wayHint": {
+        "signIn": "No keys: sign in to OpenRouter, or use an AI app on this PC with its own sign-in.",
+        "local": "Models running on this PC. Private and free, and they work offline.",
+        "key": "Use your own account with a service. Keys are tested, then kept in Windows Credential Manager."
+      },
+      "notInstalled": "Not on this PC yet",
+      "needsSignIn": "On this PC · needs you to sign in",
+      "onThisPc": "On this PC {version}",
+      "install": "Install",
+      "noLocal": "No local model server is running. Start Ollama or LM Studio, or add one by its address.",
+      "runningHere": "{count, plural, =0 {Running on this PC} one {Running on this PC · # model} other {Running on this PC · # models}}",
+      "serverUrl": "Server address",
+      "addServer": "Add",
+      "keySaved": "Key saved",
+      "keyHint": "Your own API key",
+      "addKey": "Add key",
+      "keyPlaceholder": "{name} API key",
+      "apiKey": "{name} API key",
+      "testAndSave": "Test and save",
+      "checking": "Checking this PC…"
     },
     "stepOf": "{phase} · {n} of {total}",
     "why": "Why these choices",
@@ -1125,6 +1136,31 @@
       "play": "Play a sound",
       "playAgain": "Play again",
       "notHeard": "Didn’t hear anything? Turn the volume up, or pick another speaker above."
+    },
+    "flow": {
+      "label": "How KIVO answers you: it listens, thinks, then speaks",
+      "listen": "Listen",
+      "brain": "Think",
+      "speak": "Speak",
+      "ask": "“Turn on the lights”",
+      "answer": "“Done, lights on.”",
+      "explain": {
+        "listen": "Speech-to-text turns what you say into words KIVO can act on.",
+        "brain": "A brain works out what you mean and what to do. Simple commands don’t need one.",
+        "speak": "Text-to-speech reads KIVO’s answer out loud, in the voice you choose."
+      }
+    },
+    "voices": {
+      "title": "Choose a voice",
+      "sub": "Press play to hear each one. You can change it anytime on the Voice page.",
+      "kind": "Kind of voice",
+      "female": "Female",
+      "male": "Male",
+      "other": "Other",
+      "none": "{name} has one voice, so there’s nothing to choose.",
+      "noneOfKind": "No voices of this kind yet.",
+      "more": "More voices",
+      "notHere": "Download first"
     }
   },
   "enroll": {
@@ -1747,7 +1783,25 @@
     "ownKey": "Your own API key",
     "noKey": "No key yet",
     "realtimeProfile": "Realtime conversation",
-    "realtimeProfileHint": "Voice requests on this profile open a live speech-to-speech conversation (needs Realtime voice on)."
+    "realtimeProfileHint": "Voice requests on this profile open a live speech-to-speech conversation (needs Realtime voice on).",
+    "active": {
+      "none": "Connect a brain below, then choose the one KIVO uses.",
+      "title": "KIVO thinks with",
+      "chosen": "The brain that answers your questions",
+      "auto": "KIVO picks the best connected brain for each request",
+      "brain": "Brain",
+      "automatic": "Automatic",
+      "model": "Model",
+      "reasoning": "Reasoning",
+      "reasoningTip": "How long the model thinks before it answers. Higher is smarter on hard questions, but slower and costs more.",
+      "level": {
+        "default": "Default",
+        "off": "Off",
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High"
+      }
+    }
   },
   "persona": {
     "calm": "Calm",
@@ -2814,6 +2868,7 @@
     "wakeTip": "Only for its name, on this PC. Nothing is recorded or sent until you say “Hey Kivo”. Turning it on downloads a small listener (about 20 MB).",
     "ptt": "Push-to-talk",
     "pttHint": "Hold the keys while you speak. Works well in noisy rooms.",
-    "oneStays": "At least one stays on, so you can always reach KIVO."
+    "oneStays": "At least one stays on, so you can always reach KIVO.",
+    "pttChange": "Click the keys to change them."
   }
 }

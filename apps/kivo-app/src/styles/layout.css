@@ -678,154 +678,430 @@
 .k-onboarding__result {
   margin-top: 12px;
 }
-/* "How do you call KIVO?": the Island playing a request, and the user's own try (UX §4). */
-.k-onboarding__demo {
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  min-height: 150px;
-  margin: 2px 0 16px;
+/* ═════════ Setup's Listen → Think → Speak pages (UX §4) ═════════ */
+
+/* The moving picture above them: a face speaks, words travel to the brain, the answer travels
+   to the speaker. The page's stage is lit. Transform and opacity only; one 6 s loop. */
+.k-flow {
+  margin: 0 0 22px;
 }
-.k-onboarding__try {
+.k-flow__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  padding: 18px 20px 14px;
+  border-radius: var(--r-l);
+  background: var(--group);
+  box-shadow: 0 0 0 1px var(--border);
+}
+.k-flow__node {
+  flex: none;
+  width: 72px;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
-  margin-top: 14px;
+  opacity: 0.45;
+  transition: opacity var(--t-slow);
 }
-.k-onboarding__try-title {
-  font-weight: 600;
+.k-flow__node.is-on {
+  opacity: 1;
 }
-.k-onboarding__try-hint {
-  color: var(--text-2);
-  font-size: 13px;
-  margin: 0;
-}
-.k-onboarding__try-line {
-  margin: 0;
-}
-/* Listen → Think → Speak: where setup is, above those three pages. */
-.k-pipe {
-  display: flex;
-  align-items: center;
-  gap: 26px;
-  list-style: none;
-  margin: 0 0 18px;
-  padding: 0;
-}
-.k-pipe__stage {
+.k-flow__art {
   position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 26px;
-  padding: 0 11px;
-  border-radius: 13px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-3);
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
   background: var(--fill);
+  color: var(--text-2);
 }
-.k-pipe__stage svg {
-  width: 13px;
-  height: 13px;
+.k-flow__node.is-on .k-flow__art {
+  background: var(--acc-soft);
+  color: var(--acc-text);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--acc) 12%, transparent);
 }
-/* The line to the next stage, in the gap. */
-.k-pipe__stage:not(:last-child)::after {
-  content: "";
+.k-flow__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+.k-flow__node.is-on .k-flow__label {
+  color: var(--text);
+}
+.k-flow__face {
+  width: 34px;
+  height: 34px;
+}
+.k-flow__face circle:first-child {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+}
+.k-flow__eye {
+  fill: currentColor;
+}
+.k-flow__mouth {
+  fill: currentColor;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: k-flow-talk 6s ease-in-out infinite;
+}
+@keyframes k-flow-talk {
+  0%,
+  26%,
+  100% {
+    transform: scaleY(0.35);
+  }
+  4%,
+  12%,
+  20% {
+    transform: scaleY(1);
+  }
+  8%,
+  16% {
+    transform: scaleY(0.5);
+  }
+}
+.k-flow__brain svg,
+.k-flow__speaker svg {
+  width: 22px;
+  height: 22px;
+}
+.k-flow__brain {
+  display: grid;
+  animation: k-flow-think 6s ease-in-out infinite;
+}
+@keyframes k-flow-think {
+  0%,
+  38%,
+  62%,
+  100% {
+    transform: scale(1);
+  }
+  46%,
+  54% {
+    transform: scale(1.14);
+  }
+}
+/* Sound: two arcs that ripple out while their side is talking. */
+.k-flow__waves {
   position: absolute;
-  inset-inline-start: calc(100% + 5px);
-  top: 50%;
-  width: 16px;
+  inset: 0;
+  pointer-events: none;
+}
+.k-flow__waves i {
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  opacity: 0;
+}
+.k-flow__waves--out i {
+  animation: k-flow-ripple-out 6s ease-out infinite;
+}
+.k-flow__waves--speak i {
+  animation: k-flow-ripple-speak 6s ease-out infinite;
+}
+.k-flow__waves i:nth-child(2) {
+  animation-delay: 0.35s;
+}
+@keyframes k-flow-ripple-out {
+  0% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  12%,
+  100% {
+    opacity: 0;
+    transform: scale(1.35);
+  }
+}
+@keyframes k-flow-ripple-speak {
+  0%,
+  78% {
+    opacity: 0;
+    transform: scale(1);
+  }
+  80% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  94%,
+  100% {
+    opacity: 0;
+    transform: scale(1.35);
+  }
+}
+/* The link between two nodes: a line, and the words travelling along it. */
+.k-flow__link {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 52px;
+}
+.k-flow__line {
+  position: absolute;
+  top: 26px;
+  inset-inline: 6px;
   height: 1.5px;
   border-radius: 1px;
   background: var(--border);
 }
-.k-pipe__stage.is-done::after {
-  background: var(--green);
+.k-flow__bubble {
+  position: absolute;
+  top: 14px;
+  inset-inline-start: 0;
+  max-width: 100%;
+  padding: 3px 9px;
+  border-radius: 11px;
+  font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: var(--win);
+  color: var(--text);
+  box-shadow:
+    0 0 0 1px var(--border),
+    0 2px 6px -2px rgba(0, 0, 0, 0.15);
+  opacity: 0;
 }
-.k-pipe__stage.is-on {
-  color: var(--on-acc);
-  background: var(--acc);
+.k-flow__bubble--ask {
+  animation: k-flow-ask 6s ease-in-out infinite;
 }
-.k-pipe__stage.is-done {
+.k-flow__bubble--answer {
+  animation: k-flow-answer 6s ease-in-out infinite;
+}
+@keyframes k-flow-ask {
+  0%,
+  14% {
+    opacity: 0;
+    transform: translateX(0);
+  }
+  20% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  36% {
+    opacity: 1;
+    transform: translateX(12%);
+  }
+  42%,
+  100% {
+    opacity: 0;
+    transform: translateX(18%);
+  }
+}
+@keyframes k-flow-answer {
+  0%,
+  56% {
+    opacity: 0;
+    transform: translateX(0);
+  }
+  62% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  76% {
+    opacity: 1;
+    transform: translateX(12%);
+  }
+  82%,
+  100% {
+    opacity: 0;
+    transform: translateX(18%);
+  }
+}
+.k-flow__caption {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--text-2);
+  text-align: center;
+}
+
+/* Small tags beside a name: Recommended, In use, On this PC, Free. */
+.k-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--fill-2);
+  color: var(--text-2);
+}
+.k-chip--accent {
+  background: var(--acc-soft);
+  color: var(--acc-text);
+}
+.k-chip--good {
+  background: color-mix(in srgb, var(--green) 14%, transparent);
   color: var(--green-text);
 }
 
-/* The Listen and Speak pages: the level, one card for the model, then (Speak) the voices. */
-.k-slot {
+/* The model picker: a search field and a scrolling list in one grouped box. */
+.k-picker {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-}
-.k-slot .k-seg {
-  width: 100%;
-}
-.k-slot .k-seg__item {
-  flex: 1;
-}
-.k-slot__about {
-  margin: -2px 0 2px;
-  font-size: 13px;
-  color: var(--text-2);
-}
-/* The chosen model as one row: what it is, and the next thing to do on the right. */
-.k-model {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.k-model--empty {
-  align-items: center;
-  padding: 18px;
-}
-.k-model__row {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 14px 16px;
   border-radius: var(--r-l);
   background: var(--group);
   box-shadow:
     0 0 0 1px var(--border),
     var(--shadow);
+  overflow: hidden;
 }
-.k-model__icon {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 11px;
+.k-picker__search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--sep);
+  color: var(--text-3);
+}
+.k-picker__search svg {
+  width: 15px;
+  height: 15px;
+}
+.k-picker__search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13.5px;
+}
+.k-picker__list {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  max-height: 340px;
+  overflow-y: auto;
+}
+.k-picker__empty {
+  padding: 18px;
+  text-align: center;
+  color: var(--text-3);
+  font-size: 13px;
+}
+.k-picker__item {
+  border-radius: var(--r-m);
+  transition: background var(--t-fast);
+}
+.k-picker__item + .k-picker__item {
+  margin-top: 2px;
+}
+.k-picker__item.is-on {
   background: var(--acc-soft);
-  color: var(--acc-text);
-  transition:
-    background var(--t-base),
-    color var(--t-base);
 }
-.k-model__icon.is-ready {
-  background: color-mix(in srgb, var(--green) 16%, transparent);
-  color: var(--green-text);
+.k-picker__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: var(--r-m);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
 }
-.k-model__icon svg {
-  width: 19px;
-  height: 19px;
+.k-picker__item:not(.is-on) .k-picker__row:hover {
+  background: var(--fill);
 }
-.k-model__name {
+.k-picker__radio {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px var(--border);
+  background: var(--win);
+  transition: box-shadow var(--t-fast);
+}
+.k-picker__item.is-on .k-picker__radio {
+  box-shadow:
+    inset 0 0 0 5px var(--acc),
+    inset 0 0 0 16px #fff;
+}
+.k-picker__main {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
+  gap: 5px;
+}
+.k-picker__name {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.k-picker__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+.k-picker__size {
+  margin-inline-start: auto;
+  font-variant-numeric: tabular-nums;
+}
+/* Speed and accuracy: five small bars. */
+.k-bars {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.k-bars__cells {
+  display: inline-flex;
   gap: 2px;
 }
-.k-model__name b {
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+.k-bars__cells i {
+  width: 10px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--fill-2);
 }
-.k-model__name span {
+.k-bars__cells i.is-on {
+  background: var(--acc);
+}
+/* The chosen model's next step, under its row. */
+.k-model {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px 12px 40px;
+}
+.k-model__line {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin: 0;
   font-size: 12.5px;
-  color: var(--text-3);
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.k-model__line svg {
+  width: 14px;
+  height: 14px;
+}
+.k-model__line.is-good {
+  color: var(--green-text);
+}
+.k-model__line.is-bad {
+  color: var(--orange-text);
 }
 .k-model__action {
   flex: none;
@@ -833,17 +1109,16 @@
   align-items: center;
   min-height: 32px;
 }
-.k-model__done {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--green-text);
+.k-model__link {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--acc-text);
+  font: inherit;
+  cursor: pointer;
 }
-.k-model__done svg {
-  width: 15px;
-  height: 15px;
+.k-model__link:hover {
+  text-decoration: underline;
 }
 /* The download ring: press it to pause (the pause glyph sits in the middle). */
 .k-model__ring {
@@ -889,75 +1164,35 @@
     transform: rotate(270deg);
   }
 }
-.k-model__line {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 10px;
-  margin: 0;
-  padding-inline: 4px;
-  font-size: 12.5px;
-  color: var(--text-2);
-  font-variant-numeric: tabular-nums;
-}
-.k-model__line.is-good {
-  color: var(--green-text);
-}
-.k-model__line.is-bad {
-  color: var(--orange-text);
-}
-.k-model__link {
-  border: 0;
-  padding: 0;
-  background: none;
-  color: var(--acc-text);
-  font: inherit;
-  cursor: pointer;
-}
-.k-model__link:hover {
-  text-decoration: underline;
-}
-.k-slot__more {
-  align-self: center;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  border: 0;
-  background: none;
-  color: var(--text-3);
-  font: inherit;
-  font-size: 12.5px;
-  cursor: pointer;
-}
-.k-slot__more:hover {
-  color: var(--text);
-}
-.k-slot__more svg {
-  width: 14px;
-  height: 14px;
-}
 
-/* Voices as tiles: the name and accent to pick it, a play button to hear it. */
+/* The Voice page: Female / Male / Other, then voices by accent as tiles. */
 .k-voices {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-top: 6px;
+  gap: 14px;
+}
+.k-voices > .k-seg {
+  align-self: flex-start;
+}
+.k-voices__group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 .k-voices__title {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  margin: 8px 0 0;
+  margin: 4px 0 0;
   font-size: 13px;
   font-weight: 600;
+  color: var(--text-2);
 }
 .k-voices__title span {
   font-size: 12px;
   font-weight: 400;
   color: var(--text-3);
 }
-/* New voices for the installed model: one quiet row with its download. */
 .k-voices__new {
   display: flex;
   align-items: center;
@@ -975,33 +1210,44 @@
 .k-voices__new > span {
   flex: 1;
 }
-.k-voices__grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+/* Voices in grouped lists, like macOS: a radio, the name, and a play button on the right. */
+.k-voices__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-radius: var(--r-l);
+  background: var(--group);
+  box-shadow: 0 0 0 1px var(--border);
+  overflow: hidden;
 }
 .k-voice {
   display: flex;
   align-items: center;
-  border-radius: var(--r-m);
-  background: var(--group);
-  box-shadow: 0 0 0 1px var(--border);
-  transition: box-shadow var(--t-fast);
+  gap: 8px;
+  padding-inline-end: 10px;
+}
+.k-voice + .k-voice {
+  border-top: 1px solid var(--sep);
 }
 .k-voice.is-on {
-  box-shadow: 0 0 0 2px var(--acc);
+  background: var(--acc-soft);
 }
 .k-voice.is-off {
-  opacity: 0.5;
+  opacity: 0.55;
+}
+.k-voice.is-on .k-picker__radio {
+  box-shadow:
+    inset 0 0 0 5px var(--acc),
+    inset 0 0 0 16px #fff;
 }
 .k-voice__pick {
   flex: 1;
   min-width: 0;
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 1px;
-  padding: 10px 4px 10px 12px;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 8px 4px 8px 14px;
   border: 0;
   background: none;
   color: inherit;
@@ -1016,17 +1262,12 @@
   font-size: 13.5px;
   font-weight: 600;
 }
-.k-voice__pick span {
-  font-size: 11.5px;
-  color: var(--text-3);
-}
 .k-voice__play {
   flex: none;
   display: grid;
   place-items: center;
   width: 30px;
   height: 30px;
-  margin-inline-end: 8px;
   border: 0;
   border-radius: 50%;
   background: var(--fill);
@@ -1039,6 +1280,295 @@
 .k-voice__play svg {
   width: 13px;
   height: 13px;
+}
+
+/* The Think page: the active brain, then the ways to connect one. */
+.k-think {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.k-think > .k-seg {
+  align-self: flex-start;
+}
+.k-think__hint {
+  margin: -6px 0 0;
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+.k-think__list,
+.k-think__inner {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.k-think__list {
+  border-radius: var(--r-l);
+  background: var(--group);
+  box-shadow: 0 0 0 1px var(--border);
+  overflow: hidden;
+}
+.k-think__list > li + li {
+  border-top: 1px solid var(--sep);
+}
+.k-think__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+}
+.k-think__row--form .k-field,
+.k-think__row--form input {
+  flex: 1;
+}
+.k-think__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.k-think__text b {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.k-think__text span {
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+.k-think__end {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.k-think__empty {
+  padding: 16px;
+  font-size: 13px;
+  color: var(--text-3);
+}
+.k-think__key {
+  display: flex;
+  gap: 8px;
+  padding: 0 14px 12px 60px;
+}
+.k-think__key > :first-child {
+  flex: 1;
+}
+
+/* The active brain: which one answers, its model and reasoning. */
+.k-active {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--r-l);
+  background: var(--group);
+  box-shadow:
+    0 0 0 1px var(--border),
+    var(--shadow);
+}
+.k-active--empty {
+  margin: 0;
+  padding: 14px 16px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.k-active__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+}
+.k-active__row + .k-active__row {
+  border-top: 1px solid var(--sep);
+}
+.k-active__row--sub {
+  padding-inline-start: 60px;
+}
+.k-active__auto {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--acc-soft);
+  color: var(--acc-text);
+  font-weight: 700;
+}
+.k-active__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.k-active__text b {
+  font-size: 14px;
+}
+.k-active__text span {
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+.k-active__label {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+/* How you call KIVO: two tiles side by side. */
+.k-ways {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.k-way {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border-radius: var(--r-l);
+  background: var(--group);
+  box-shadow: 0 0 0 1px var(--border);
+  transition: box-shadow var(--t-base);
+}
+.k-way.is-on {
+  box-shadow:
+    0 0 0 1.5px color-mix(in srgb, var(--acc) 55%, transparent),
+    var(--shadow);
+}
+.k-way p {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+.k-way__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.k-way__head b {
+  font-size: 14.5px;
+}
+.k-way__foot {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.k-way .k-term {
+  align-self: flex-start;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+.k-way__art {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 64px;
+  border-radius: var(--r-m);
+  background: var(--fill);
+}
+/* "Hey Kivo": a quiet waveform, alive while it's on. */
+.k-way__art--wave {
+  gap: 4px;
+}
+.k-way__art--wave i {
+  width: 4px;
+  height: 22px;
+  border-radius: 2px;
+  background: var(--text-3);
+  transform: scaleY(0.35);
+}
+.k-way.is-on .k-way__art--wave i {
+  background: var(--acc);
+  animation: k-way-wave 1.4s ease-in-out infinite;
+}
+.k-way__art--wave i:nth-child(2) {
+  animation-delay: 0.1s;
+}
+.k-way__art--wave i:nth-child(3) {
+  animation-delay: 0.2s;
+}
+.k-way__art--wave i:nth-child(4) {
+  animation-delay: 0.3s;
+}
+.k-way__art--wave i:nth-child(5) {
+  animation-delay: 0.2s;
+}
+.k-way__art--wave i:nth-child(6) {
+  animation-delay: 0.1s;
+}
+@keyframes k-way-wave {
+  0%,
+  100% {
+    transform: scaleY(0.35);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+/* Try it now: one round mic button and what KIVO heard and said. */
+.k-try-now {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 14px;
+  padding: 14px 16px;
+  border-radius: var(--r-l);
+  background: var(--fill);
+}
+.k-try-now__mic {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--acc);
+  color: var(--on-acc);
+  cursor: pointer;
+  transition: transform var(--t-fast);
+}
+.k-try-now__mic:hover:not(:disabled) {
+  transform: scale(1.05);
+}
+.k-try-now__mic svg {
+  width: 20px;
+  height: 20px;
+}
+.k-try-now__mic.is-listening {
+  animation: k-try-pulse 1.2s ease-in-out infinite;
+}
+@keyframes k-try-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--acc) 45%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 8px color-mix(in srgb, var(--acc) 0%, transparent);
+  }
+}
+.k-try-now__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.k-try-now__text b {
+  color: var(--text);
+  font-size: 14px;
+}
+.k-try-now__text em {
+  font-style: normal;
+  font-weight: 600;
+  color: var(--text);
 }
 /* Welcome follows the app’s theme (light, dark or the system’s), with a soft glow of the accent
    behind the Island. */

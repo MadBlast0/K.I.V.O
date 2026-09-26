@@ -51,9 +51,14 @@ export interface BrainView {
 export type ProfilePrivacy = "cloud" | "localPreferred" | "strictPrivate";
 export type Tier = "default" | "fast" | "smart" | "cheap" | "coding";
 
+/** How hard a model thinks before it answers (`kivo_brain::reasoning::Effort`). */
+export type Effort = "off" | "low" | "medium" | "high";
+
 export interface ModelRef {
   provider: string;
   model: string;
+  /** The user's reasoning level; absent is the model's own default. */
+  reasoning?: Effort;
 }
 
 export interface Profile {
@@ -76,6 +81,8 @@ export interface BrainsList {
   connected: BrainView[];
   profiles: Profile[];
   defaultProfile: string;
+  /** The brain KIVO uses (the default profile's choice); null is Automatic. */
+  active: ModelRef | null;
   persona: string;
   customPersona: string;
   cliAgentsOn: boolean;

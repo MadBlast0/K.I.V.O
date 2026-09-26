@@ -7,7 +7,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Method, type CapabilityItem } from "../../ipc/generated";
 import { useRuntime } from "../../ipc/runtime";
-import { Explain, Group, Note, Row, ShortcutRecorder, Switch, useToast } from "../ui";
+import { cn } from "../../lib/cn";
+import { Explain, Note, ShortcutRecorder, Switch, useToast } from "../ui";
 import { enable, useWakeWords } from "./WakeWords";
 
 const DEFAULT_KEYS = ["Ctrl", "Space"];
@@ -73,7 +74,8 @@ export function useCallWays(): CallWays {
   };
 }
 
-/** The two switches, as one group. */
+/** The two ways, as two tiles side by side: what each is, its switch, and for push-to-talk its
+ * keys (press them to change). */
 export function CallKivo({ ways }: { ways: CallWays }) {
   const { t } = useTranslation();
   const { wake, ptt, keys } = ways;
@@ -83,29 +85,32 @@ export function CallKivo({ ways }: { ways: CallWays }) {
   const pttLocked = ptt && !wake;
   return (
     <>
-      <Group>
-        <Row
-          icon="wave"
-          title={t("callKivo.wake")}
-          subtitle={
-            <>
-              {t("callKivo.wakeHint")} <Explain tip={t("callKivo.wakeTip")}>{t("callKivo.wakeTerm")}</Explain>
-            </>
-          }
-          end={<Switch label={t("callKivo.wake")} checked={wake} disabled={wakeLocked} onChange={ways.setWake} />}
-        />
-        <Row
-          icon="keyboard"
-          title={t("callKivo.ptt")}
-          subtitle={t("callKivo.pttHint")}
-          end={
-            <>
-              {ptt && <ShortcutRecorder value={keys} onChange={ways.setKeys} />}
-              <Switch label={t("callKivo.ptt")} checked={ptt} disabled={pttLocked} onChange={ways.setPtt} />
-            </>
-          }
-        />
-      </Group>
+      <div className="k-ways">
+        <section className={cn("k-way", wake && "is-on")} aria-label={t("callKivo.wake")}>
+          <div className="k-way__art k-way__art--wave" aria-hidden>
+            {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+              <i key={i} />
+            ))}
+          </div>
+          <div className="k-way__head">
+            <b>{t("callKivo.wake")}</b>
+            <Switch label={t("callKivo.wake")} checked={wake} disabled={wakeLocked} onChange={ways.setWake} />
+          </div>
+          <p>{t("callKivo.wakeHint")}</p>
+          <Explain tip={t("callKivo.wakeTip")}>{t("callKivo.wakeTerm")}</Explain>
+        </section>
+        <section className={cn("k-way", ptt && "is-on")} aria-label={t("callKivo.ptt")}>
+          <div className="k-way__art k-way__art--keys">
+            <ShortcutRecorder value={keys} onChange={ways.setKeys} />
+          </div>
+          <div className="k-way__head">
+            <b>{t("callKivo.ptt")}</b>
+            <Switch label={t("callKivo.ptt")} checked={ptt} disabled={pttLocked} onChange={ways.setPtt} />
+          </div>
+          <p>{t("callKivo.pttHint")}</p>
+          <span className="k-way__foot">{t("callKivo.pttChange")}</span>
+        </section>
+      </div>
       {(wakeLocked || pttLocked) && <Note>{t("callKivo.oneStays")}</Note>}
     </>
   );

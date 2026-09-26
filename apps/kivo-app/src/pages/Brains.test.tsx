@@ -62,6 +62,7 @@ const list: BrainsList = {
     },
   ],
   defaultProfile: "default",
+  active: null,
   persona: "calm",
   customPersona: "",
   cliAgentsOn: false,
@@ -199,10 +200,20 @@ runtime.request = (method: string, params?: unknown) => {
       return Promise.resolve({ context: { "live-fields": ["local time", "language"], "compact-at": 100 } });
     case "brains.setKey":
       return Promise.resolve({ health: { state: "ready" } });
+    case "brains.setActive":
+      return Promise.resolve({
+        ...list,
+        active: { provider: "ollama", model: "llama3.2", ...(hasReasoning(params) ? { reasoning: "low" } : {}) },
+      });
+    case "brains.reasoning":
+      return Promise.resolve(["off", "low", "medium", "high"]);
     default:
       return Promise.resolve(null);
   }
 };
+
+const hasReasoning = (params: unknown) =>
+  typeof params === "object" && params !== null && "reasoning" in params && params.reasoning !== null;
 
 const { Brains } = await import("./Brains");
 
@@ -265,6 +276,26 @@ describe("Brains (UX-22)", () => {
     await settle();
     expect(calls).toContainEqual({ method: "brains.setKey", params: { id: "anthropic", key: "sk-ant-secret" } });
     expect(screen.getByLabelText<HTMLInputElement>("API key").value).toBe("");
+  });
+
+  it("chooses the brain KIVO uses, its model and how hard it thinks (owner, 2026-09-26)", async () => {
+    await mount();
+    expect(await screen.findByText("KIVO thinks with")).toBeTruthy();
+    fireEvent.click(screen.getByRole("combobox", { name: "Brain" }));
+    await settle();
+    fireEvent.keyDown(screen.getByRole("option", { name: "Ollama" }), { key: "Enter" });
+    await settle();
+    expect(calls).toContainEqual({
+      method: "brains.setActive",
+      params: { provider: "ollama", model: "llama3.2", reasoning: null },
+    });
+    // The model takes reasoning levels: they show, and one is chosen.
+    fireEvent.click(await screen.findByRole("button", { name: "Low" }));
+    await settle();
+    expect(calls).toContainEqual({
+      method: "brains.setActive",
+      params: { provider: "ollama", model: "llama3.2", reasoning: "low" },
+    });
   });
 
   it("switches the default profile", async () => {

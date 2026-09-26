@@ -256,7 +256,7 @@ impl VoiceRpc {
             .map(|v| VoiceItem {
                 id: v.id,
                 name: v.name,
-                style: String::new(),
+                style: v.gender,
                 languages: vec![v.language],
                 character: String::new(),
                 ready: true,
@@ -301,6 +301,8 @@ impl VoiceRpc {
                             })
                             .collect()
                     },
+                    speed: e.speed,
+                    accuracy: e.accuracy,
                     measured: e.measured.map(measured_item),
                     model: e.engine.model,
                     license: e.engine.license,

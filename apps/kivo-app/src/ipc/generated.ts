@@ -518,6 +518,11 @@ ready: boolean,
  */
 fitsLanguage: boolean, voices: Array<VoiceItem>, 
 /**
+ * KIVO's estimates, 0–100, for the pickers' bars: speed, and accuracy (a recognizer) or
+ * naturalness (a voice).
+ */
+speed: number, accuracy: number, 
+/**
  * KIVO's measurement on this PC; `None` reads "Not benchmarked by KIVO".
  */
 measured: MeasuredItem | null, };

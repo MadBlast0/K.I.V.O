@@ -32,6 +32,8 @@ const choices: SpeechChoices = {
       ready: true,
       fitsLanguage: true,
       voices: [],
+      speed: 80,
+      accuracy: 80,
       measured: null,
     },
     {
@@ -51,6 +53,8 @@ const choices: SpeechChoices = {
       ready: true,
       fitsLanguage: true,
       voices: [{ id: "zira", name: "Microsoft Zira", style: "", languages: ["en-US"], character: "", ready: true }],
+      speed: 80,
+      accuracy: 80,
       measured: null,
     },
   ],
@@ -197,8 +201,46 @@ runtime.request = (method: string, params?: unknown) => {
       return Promise.resolve([]);
     case "voiceId.status":
       return Promise.resolve({ enrolled: false, prompts: ["Hey Kivo"], recorded: [false], embeddings: 0 });
+    case "brains.catalog":
+      return Promise.resolve({
+        brains: [
+          {
+            id: "openrouter",
+            name: "OpenRouter",
+            kind: "api",
+            privacy: "cloud",
+            signIn: "oAuth",
+            free: "Free models",
+            baseUrl: "",
+            names: [],
+          },
+          {
+            id: "gemini-cli",
+            name: "Gemini CLI",
+            kind: "cli",
+            privacy: "cloud",
+            signIn: "cliLogin",
+            free: "Free with a Google account",
+            baseUrl: "",
+            names: [],
+          },
+          {
+            id: "anthropic",
+            name: "Anthropic",
+            kind: "api",
+            privacy: "cloud",
+            signIn: "apiKey",
+            free: null,
+            baseUrl: "",
+            names: [],
+          },
+        ],
+        cli: [],
+      });
+    case "brains.setKey":
+      return Promise.resolve({ health: { state: "ready" } });
     case "brains.list":
-      return Promise.resolve({ connected: [], profiles: [], defaultProfile: "default" });
+      return Promise.resolve({ connected: [], profiles: [], defaultProfile: "default", active: null });
     case "brains.refresh":
       return Promise.resolve(
         sectionOf(params) === "cli"
@@ -279,7 +321,7 @@ describe("Onboarding (UX-33–36, UX-60)", () => {
 
     // First the microphone and speaker: the system's by default, each tested.
     expect(await screen.findByText("Your microphone and speaker")).toBeTruthy();
-    expect(screen.getByText("Voice · 1 of 4")).toBeTruthy();
+    expect(screen.getByText("Voice · 1 of 5")).toBeTruthy();
     expect(screen.getAllByText("System default · USB Microphone").length).toBeGreaterThan(0);
     expect(await violations()).toEqual([]);
     fireEvent.click(screen.getByRole("button", { name: "Test" }));
@@ -290,33 +332,46 @@ describe("Onboarding (UX-33–36, UX-60)", () => {
     expect(calls).toContainEqual({ method: "sounds.preview", params: { set: "soft" } });
     await next();
 
-    // Then Listen → Think → Speak, one page each. Listen: the levels and the model's card, in use
-    // here already.
+    // Then Listen → Think → Speak, one page each, under the picture of what each part does.
+    // Listen: the models that fit, with speed and accuracy; the one in use is chosen.
     expect(await screen.findByText("How KIVO listens")).toBeTruthy();
-    expect(screen.getByRole("list", { name: "Setup of KIVO’s voice" })).toBeTruthy();
-    for (const name of ["Recommended", "High", "Medium", "Low"]) {
-      expect(screen.getByRole("button", { name })).toBeTruthy();
-    }
+    expect(screen.getByRole("figure", { name: /How KIVO answers you/ })).toBeTruthy();
+    expect(screen.getByRole("searchbox", { name: "Search models" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Speed: 4 / 5" })).toBeTruthy();
+    expect(screen.getByText("Recommended")).toBeTruthy();
     expect(await screen.findByText("KIVO listens with Moonshine Base.")).toBeTruthy();
     expect(await violations()).toEqual([]);
     await next();
 
-    // Think (UX-34): what's on this PC, free options marked; nothing is connected unasked.
+    // Think (UX-34): every way to connect a brain; nothing is connected unasked; the one setup
+    // suggests for this PC is marked, with why.
     expect(await screen.findByText("How KIVO thinks")).toBeTruthy();
     expect(await screen.findByText("Gemini CLI")).toBeTruthy();
-    expect(screen.getByText("Ollama")).toBeTruthy();
-    expect(screen.getAllByText("Free").length).toBeGreaterThanOrEqual(2);
-    // The one setup recommends for this PC (UX-36), with why.
-    expect(screen.getByText("Recommended")).toBeTruthy();
+    expect(screen.getByText("OpenRouter")).toBeTruthy();
+    expect(screen.getByText("Suggested")).toBeTruthy();
     expect(screen.getByText("Gemini CLI is installed and signed in.")).toBeTruthy();
     expect(calls.some((c) => c.method === "brains.connect")).toBe(false);
     expect(await violations()).toEqual([]);
-    fireEvent.click(screen.getAllByRole("button", { name: "Use" })[1]);
+    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+    await settle();
+    expect(calls).toContainEqual({ method: "brains.connect", params: { id: "gemini-cli" } });
+    // On this PC: the local server found running.
+    fireEvent.click(screen.getByRole("button", { name: "On this PC" }));
+    await settle();
+    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
     await settle();
     expect(calls).toContainEqual({
       method: "brains.connect",
       params: { id: "ollama", baseUrl: "http://127.0.0.1:11434/v1" },
     });
+    // API key: typed here, tested before it's saved.
+    fireEvent.click(screen.getByRole("button", { name: "API key" }));
+    await settle();
+    fireEvent.click(screen.getByRole("button", { name: "Add key" }));
+    fireEvent.change(screen.getByLabelText("Anthropic API key"), { target: { value: "sk-ant-1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Test and save" }));
+    await settle();
+    expect(calls).toContainEqual({ method: "brains.setKey", params: { id: "anthropic", key: "sk-ant-1" } });
     // The recommended profile and privacy were preselected once.
     expect(calls).toContainEqual({
       method: "settings.set",
@@ -324,11 +379,17 @@ describe("Onboarding (UX-33–36, UX-60)", () => {
     });
     await next();
 
-    // Speak: the voice model in use, then its voices as tiles.
+    // Speak: the voice model in use.
     expect(await screen.findByText("How KIVO speaks")).toBeTruthy();
     expect(await screen.findByText("KIVO speaks with Windows voices.")).toBeTruthy();
-    expect(screen.getByText("Choose a voice")).toBeTruthy();
-    expect(screen.getByText("Microsoft Zira")).toBeTruthy();
+    expect(await violations()).toEqual([]);
+    await next();
+
+    // Its voices, on their own page, by kind.
+    expect(await screen.findByText("Choose a voice")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^Other/ }));
+    await settle();
+    expect(screen.getByRole("button", { name: "Microsoft Zira" })).toBeTruthy();
     expect(await violations()).toEqual([]);
     await next();
 
@@ -417,7 +478,13 @@ describe("Onboarding (UX-33–36, UX-60)", () => {
     await mount();
     fireEvent.click(screen.getByRole("button", { name: "Get started" }));
     await settle();
-    for (const page of ["Your microphone and speaker", "How KIVO listens", "How KIVO thinks", "How KIVO speaks"]) {
+    for (const page of [
+      "Your microphone and speaker",
+      "How KIVO listens",
+      "How KIVO thinks",
+      "How KIVO speaks",
+      "Choose a voice",
+    ]) {
       await screen.findByText(page);
       await next();
     }
@@ -433,10 +500,7 @@ describe("Onboarding (UX-33–36, UX-60)", () => {
     expect(calls).toContainEqual({ method: "capabilities.set", params: { capability: "push-to-talk", on: false } });
     expect(screen.getByText("At least one stays on, so you can always reach KIVO.")).toBeTruthy();
     expect(screen.getByRole("switch", { name: "Say “Hey Kivo”" }).hasAttribute("data-disabled")).toBe(true);
-    // The try only mentions "Hey Kivo" now.
-    expect(screen.getByText(/^Say “Hey Kivo, what time is it\?”/)).toBeTruthy();
-    // The Island plays a request, and the try follows KIVO listening.
-    expect(document.querySelector(".k-onboarding__demo .k-island")).toBeTruthy();
+    // The try follows KIVO listening.
     expect(screen.getByText("Try it now")).toBeTruthy();
     expect(screen.getByText("Listening… say “What time is it?”")).toBeTruthy();
     runtime.link = { status: "connected", runtimeVersion: "0.0.0", snapshot: { mode: "auto" }, message: null };
@@ -456,14 +520,16 @@ describe("Onboarding (UX-33–36, UX-60)", () => {
       // Not ready yet: Continue waits.
       expect(screen.getByRole("button", { name: "Continue" })).toHaveProperty("disabled", true);
       // Download: size and licence up front; nothing downloads until the button.
-      expect(await screen.findByText("135 MB · MIT")).toBeTruthy();
+      expect(await screen.findByText("135 MB")).toBeTruthy();
       expect(calls.some((c) => c.method === "models.install")).toBe(false);
+      fireEvent.click(screen.getByRole("button", { name: "Moonshine Base" }));
+      await settle();
       fireEvent.click(screen.getByRole("button", { name: "Download" }));
       await settle();
       expect(calls).toContainEqual({ method: "models.install", params: { id: "moonshine-base-en" } });
-      // Downloaded (the runtime reports it; another level re-reads the list here).
+      // Downloaded (the runtime reports it; typing in the search re-reads the list here).
       stt.ready = true;
-      fireEvent.click(screen.getByRole("button", { name: "High" }));
+      fireEvent.change(screen.getByRole("searchbox", { name: "Search models" }), { target: { value: "moon" } });
       await settle();
       // Test: loaded in a separate worker; what it heard is shown; nothing chosen yet.
       fireEvent.click(screen.getByRole("button", { name: "Test" }));
@@ -530,6 +596,7 @@ describe("Onboarding (UX-33–36, UX-60)", () => {
       "How KIVO listens",
       "How KIVO thinks",
       "How KIVO speaks",
+      "Choose a voice",
       "How do you call KIVO?",
     ]) {
       await screen.findByText(page);

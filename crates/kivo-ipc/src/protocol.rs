@@ -938,6 +938,10 @@ pub struct SpeechEngineItem {
     /// It handles the primary language (VOICE-48).
     pub fits_language: bool,
     pub voices: Vec<VoiceItem>,
+    /// KIVO's estimates, 0–100, for the pickers' bars: speed, and accuracy (a recognizer) or
+    /// naturalness (a voice).
+    pub speed: u8,
+    pub accuracy: u8,
     /// KIVO's measurement on this PC; `None` reads "Not benchmarked by KIVO".
     pub measured: Option<MeasuredItem>,
 }

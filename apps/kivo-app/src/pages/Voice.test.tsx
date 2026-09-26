@@ -57,6 +57,8 @@ function engine(e: Partial<SpeechEngineItem> & Pick<SpeechEngineItem, "id" | "na
     ready: false,
     fitsLanguage: true,
     voices: [],
+    speed: 80,
+    accuracy: 80,
     measured: null,
     ...e,
   };

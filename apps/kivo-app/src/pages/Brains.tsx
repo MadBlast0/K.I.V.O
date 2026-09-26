@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ContextSettings } from "../components/brains/ContextSettings";
+import { ActiveBrain } from "../components/brains/ActiveBrain";
 import { PageHeader } from "../components/layout/Shell";
 import {
   Alert,
@@ -204,6 +205,9 @@ function BrainsTab() {
         </Button>
       </div>
       {!list.cloudOn && <Alert kind="info" title={t("brains.cloudOff")} />}
+
+      {/* The one that answers: any connected brain, its model and reasoning level. */}
+      <ActiveBrain list={list} onChange={setList} />
 
       <Section title={t("brains.connected")} />
       {list.connected.length === 0 ? (

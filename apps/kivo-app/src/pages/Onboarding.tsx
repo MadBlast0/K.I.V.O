@@ -15,14 +15,15 @@ import { Island } from "../components/island/Island";
 import { Enrollment } from "../components/voice/Enrollment";
 import { CallKivo, useCallWays } from "../components/voice/CallKivo";
 import { useSpeech } from "../components/voice/useSpeech";
-import { Button, Group, Monogram, Pill, Row, Section, Spinner, useToast } from "../components/ui";
+import { Button, useToast } from "../components/ui";
 import { DevicesStep } from "../components/onboarding/Devices";
-import { Pipeline, SlotSetup, slotReady } from "../components/onboarding/SpeechSetup";
-import { AppsStep, LookStep, ModeStep, Reasons, StartupStep, TryStep, useAdvice } from "../components/onboarding/steps";
-import { IslandDemo, TryItNow } from "../components/onboarding/TryVoice";
-import { brainColor, monogram, type BrainsList, type DiscoverySection } from "../ipc/brains";
+import { ModelPicker, VoicePicker, slotReady } from "../components/onboarding/SpeechSetup";
+import { ThinkStep } from "../components/onboarding/ThinkStep";
+import { VoiceFlow, type FlowStage } from "../components/onboarding/VoiceFlow";
+import { AppsStep, LookStep, ModeStep, StartupStep, TryStep, useAdvice } from "../components/onboarding/steps";
+import { TryItNow } from "../components/onboarding/TryVoice";
 import { Icon } from "../icons";
-import { Method, type SetupAdvice } from "../ipc/generated";
+import { Method } from "../ipc/generated";
 import { useRuntime } from "../ipc/runtime";
 
 const STEPS = [
@@ -31,6 +32,7 @@ const STEPS = [
   "listen",
   "brain",
   "speak",
+  "voices",
   "activation",
   "voice",
   "apps",
@@ -49,6 +51,7 @@ const PHASE_OF: Record<Step, number> = {
   listen: 1,
   brain: 1,
   speak: 1,
+  voices: 1,
   activation: 2,
   voice: 2,
   apps: 3,
@@ -59,10 +62,11 @@ const PHASE_OF: Record<Step, number> = {
 };
 const OPTIONAL: ReadonlySet<Step> = new Set<Step>(["voice", "brain", "apps"]);
 /** The pages that show Listen → Think → Speak. */
-const PIPELINE: Partial<Record<Step, "listen" | "brain" | "speak">> = {
+const PIPELINE: Partial<Record<Step, FlowStage>> = {
   listen: "listen",
   brain: "brain",
   speak: "speak",
+  voices: "speak",
 };
 
 function Header({ step }: { step: Step }) {
@@ -93,7 +97,7 @@ function Screen({ step, children }: { step: Step; children: ReactNode }) {
     <>
       {/* Listen → Think → Speak says where setup is on those pages; the others count steps. */}
       {PIPELINE[step] ? (
-        <Pipeline at={PIPELINE[step]} />
+        <VoiceFlow at={PIPELINE[step]} />
       ) : (
         <div className="k-onboarding__eyebrow">
           {inPhase.length > 1
@@ -139,113 +143,8 @@ function Activation() {
   const ways = useCallWays();
   return (
     <>
-      <IslandDemo />
       <CallKivo ways={ways} />
       <TryItNow ways={ways} />
-    </>
-  );
-}
-
-/** Step 6 (UX-34): connect a brain — what's already on this PC first, then OpenRouter's sign-in;
- * free options marked (CONV-08). Nothing is connected without a click (DISC-03). */
-function ConnectBrain({ advice }: { advice: SetupAdvice | null }) {
-  const { t } = useTranslation();
-  const { link, request } = useRuntime();
-  const toast = useToast();
-  const connected = link?.status === "connected";
-  const [found, setFound] = useState<DiscoverySection["items"] | null>(null);
-  const [brains, setBrains] = useState<BrainsList | null>(null);
-  const fail = (e: unknown) => toast(e instanceof Error ? e.message : String(e));
-  const load = () => {
-    void request<BrainsList>(Method.brainsList)
-      .then(setBrains)
-      .catch(() => {});
-  };
-  useEffect(() => {
-    if (!connected) return;
-    load();
-    // Look now: setup is when the user most wants to see what's here.
-    void Promise.all(
-      ["cli", "local"].map((section) =>
-        request<DiscoverySection>(Method.brainsRefresh, { section })
-          .then((s) => s.items)
-          .catch(() => []),
-      ),
-    ).then((lists) => setFound(lists.flat()));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, when connected
-  }, [connected]);
-  const isConnected = (id: string) => brains?.connected.some((b) => b.id === id) ?? false;
-  // The one setup suggests for this PC (UX-36).
-  const suggested = (id: string) =>
-    advice?.brain === id && !isConnected(id) ? <Pill tone="accent">{t("permissions.recommended")}</Pill> : null;
-  const use = (id: string, baseUrl?: string) =>
-    request(Method.brainsConnect, { id, ...(baseUrl ? { baseUrl } : {}) })
-      .then(load)
-      .catch(fail);
-  return (
-    <>
-      <Section title={t("onboarding.brain.found")} />
-      {found === null ? (
-        <Spinner label={t("onboarding.brain.searching")} />
-      ) : found.length === 0 ? (
-        <p className="k-note">{t("onboarding.brain.nothingFound")}</p>
-      ) : (
-        <Group>
-          {found.map((i) => {
-            const name = i.data.name ?? i.id;
-            const free = i.data.free ?? (i.data.url ? t("onboarding.brain.free") : null);
-            return (
-              <Row
-                key={i.id}
-                lead={<Monogram text={monogram(name)} color={brainColor(i.id)} />}
-                title={name}
-                subtitle={free ?? undefined}
-                end={
-                  <>
-                    {suggested(i.id)}
-                    {free && <Pill tone="success">{t("onboarding.brain.free")}</Pill>}
-                    {isConnected(i.id) ? (
-                      <Pill tone="success">{t("onboarding.brain.connected")}</Pill>
-                    ) : i.data.signedIn === false ? (
-                      <Button size="sm" onClick={() => void request(Method.brainsSignIn, { id: i.id }).catch(fail)}>
-                        {t("onboarding.brain.signIn")}
-                      </Button>
-                    ) : i.data.needsAdapter ? null : (
-                      <Button size="sm" variant="primary" onClick={() => void use(i.id, i.data.url)}>
-                        {t("onboarding.brain.use")}
-                      </Button>
-                    )}
-                  </>
-                }
-              />
-            );
-          })}
-        </Group>
-      )}
-      <Group>
-        <Row
-          lead={<Monogram text={monogram("Open Router")} color={brainColor("openrouter")} />}
-          title={t("onboarding.brain.openRouter")}
-          subtitle={t("onboarding.brain.openRouterHint")}
-          end={
-            isConnected("openrouter") ? (
-              <Pill tone="success">{t("onboarding.brain.connected")}</Pill>
-            ) : (
-              <>
-                {suggested("openrouter")}
-                <Button
-                  size="sm"
-                  onClick={() => void request(Method.brainsSignIn, { id: "openrouter" }).then(load).catch(fail)}
-                >
-                  {t("onboarding.brain.connect")}
-                </Button>
-              </>
-            )
-          }
-        />
-      </Group>
-      <Reasons advice={advice && { ...advice, reasons: advice.reasons.slice(0, 1) }} />
-      <p className="k-note">{t("onboarding.brain.keysLater")}</p>
     </>
   );
 }
@@ -299,11 +198,12 @@ export function Onboarding({ onFinish }: { onFinish: (then?: string) => void }) 
 
   const body: Record<Exclude<Step, "welcome">, ReactNode> = {
     devices: <DevicesStep />,
-    listen: <SlotSetup slot="stt" speech={speech} />,
-    speak: <SlotSetup slot="tts" speech={speech} />,
+    listen: <ModelPicker slot="stt" speech={speech} />,
+    speak: <ModelPicker slot="tts" speech={speech} />,
+    voices: <VoicePicker speech={speech} />,
     activation: <Activation />,
     voice: <Enrollment onDone={() => go(1)} />,
-    brain: <ConnectBrain advice={advice} />,
+    brain: <ThinkStep advice={advice} />,
     apps: <AppsStep onAfter={setAfter} />,
     mode: <ModeStep advice={advice} />,
     look: <LookStep />,

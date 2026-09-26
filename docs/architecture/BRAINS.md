@@ -103,6 +103,15 @@ Profile { id, name, primary: ProviderModelRef, fallbacks: [ProviderModelRef],
 ```
 
 - **Built-in profiles:** Default, Fast, Smart, Coding, Private, Offline, Cheap.
+- **The active brain (owner, 2026-09-26):** any number of brains can be connected (API services,
+  CLI agents, local servers); the user picks the one KIVO uses (the default profile's `primary`:
+  a connected brain, its model, and a reasoning level) or Automatic (routing below). Setup's
+  Think page and the top of the Brains page show the same chooser (`brains.setActive`).
+- **Reasoning level:** a `ModelRef` carries `reasoning: Off | Low | Medium | High` (none = the
+  model's default), offered only for models that take one (`kivo_brain::reasoning::levels`) and
+  sent in each API's words: OpenAI `reasoning_effort` (Off = `minimal` on GPT-5), OpenRouter
+  `reasoning`, Anthropic extended thinking (2k / 8k / 24k budgets, the signed thinking blocks
+  sent back through the tool loop), Gemini `thinkingBudget` (Pro can't turn it off).
 - **Routing is deterministic and explainable.** It evaluates rules in order:
   1. the explicit user choice ("use Claude for this");
   2. the task class (coding → Coding profile);
@@ -277,3 +286,4 @@ Status marks and the build protocol: [docs/README.md](../README.md).
 - [x] **BRAIN-36** · M3 · Limits with scope, period, amount, warning thresholds, at-limit action and per-task caps; the default is "track only" (§9) → done: limits by scope, period (local reset day), amount, warnings and at-limit action (ask on the card, cheaper profile, local only, block) plus task caps; default track only · verified: `a_spending_limit_can_block_cloud_requests`, limit tests (2026-09-23)
 - [x] **BRAIN-37** · M7 · Usage page: charts by day, provider, feature and routine; top expensive tasks; CSV export; a live "≈ $0.12" in the card when enabled (§9) → done: Usage page with today/period totals, charts by day (AI and speech), by provider, feature and routine, the most expensive tasks and turns, CSV export saved to Downloads (`usage.export` with `save`), and the card's live cost (`brains.show-cost`) · verified: `Usage.test.tsx` (3), `brain_turns::the_control_centers_brain_requests` usage and export asserts (2026-09-24)
 - [x] **BRAIN-38** · M3 · Personas Calm (default), Friendly, Witty and Custom; guardrails keep confirmations, errors and status reports neutral; set per user profile and overridable per brain profile (§10) → done: Calm (default), Friendly, Witty and Custom with guardrails after the style; chosen on the Voice page, overridable per profile · verified: persona tests, Voice page test (2026-09-23)
+- [x] **BRAIN-39** · M8 · The active brain and its reasoning level: connect several brains, choose the one KIVO uses with its model and reasoning level, or Automatic; each API gets the level in its own words (§5; owner 2026-09-26) → done: `ModelRef.reasoning`, `kivo_brain::reasoning` (levels per family, OpenAI/OpenRouter/Anthropic/Gemini request fields), Anthropic's signed thinking kept through the tool loop (`Part::Thinking`), `brains.setActive` / `brains.reasoning`, `ActiveBrain` in setup's Think page and on the Brains page · verified: `the_reasoning_level_reaches_each_api_in_its_words`, `anthropics_thinking_is_collected_with_its_signature`, `each_family_takes_the_levels_its_api_has`, `a_profile_with_a_chosen_brain_uses_it_and_cheap_prefers_free`, `brain_turns::the_control_centers_brain_requests` (active brain), `Brains.test.tsx` (2026-09-26); the levels of CLI agents' models are open (the agents' own options)

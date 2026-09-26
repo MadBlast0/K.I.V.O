@@ -1,19 +1,18 @@
 /**
- * Setup's Listen and Speak pages (UX §4, UX-60), with Think (the brain) between them: KIVO hears
- * you, thinks, and answers, one page each. A page is one calm column: a level for this PC
- * (Recommended, High, Medium, Low, from the recommendation's priorities) and the model it picks
- * as one row with the next thing to do on the right:
+ * Setup's Listen, Speak and Voice pages (UX §4, UX-60), with Think (the brain) between Listen and
+ * Speak: KIVO hears you, thinks, and answers.
  *
- * - Download: size and licence up front, nothing until the button. While it downloads, a ring
- *   (which pauses it) and a line with MB of MB, speed and time left, over the model and the
- *   models it needs together; then "Installing" while the files are checked and unpacked.
- * - Test (`voice.test`): loaded in a separate worker; a recognizer shows what it heard of
- *   KIVO's test sentence, a voice says it aloud. Nothing is chosen yet.
- * - Use this (`voice.switch`, which checks once more and swaps it in safely), then In use.
- *
- * Speak then shows the voices as tiles, everyday and Anime. Other models are a link away.
+ * - Listen and Speak are one model picker each (owner, 2026-09-26, like Handy's): a searchable,
+ *   scrollable list of the models that fit this PC and language, each with speed and accuracy
+ *   (for voices, naturalness) bars, its size, and tags: Recommended for this PC, In use, On this
+ *   PC. The chosen model opens to its one next step: Download (size and licence up front; a ring
+ *   that pauses it, with MB of MB, speed and time left over the model and the models it needs;
+ *   "Installing" while its files are checked), Test (`voice.test`, a separate worker: what a
+ *   recognizer heard, or a voice speaking), then Use this (`voice.switch`).
+ * - Voice is its own page: the voices of the engine KIVO speaks with, by Female, Male and Other,
+ *   grouped by accent and language (Japanese-accented English among them), each playable.
  */
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Method,
@@ -25,18 +24,8 @@ import {
 import { useRuntime } from "../../ipc/runtime";
 import { Icon } from "../../icons";
 import { cn } from "../../lib/cn";
-import { Button, Explain, Segmented, Spinner, useToast } from "../ui";
-import { SpeechChooser } from "../voice/SpeechChooser";
+import { Button, Segmented, Spinner, useToast } from "../ui";
 import { working, type Slot, type Speech } from "../voice/useSpeech";
-
-/** The levels and what each asks the recommendation for (`kivo_voice::recommend::Priority`). */
-const LEVELS = [
-  { id: "recommended", priority: "balanced" },
-  { id: "high", priority: "accuracy" },
-  { id: "medium", priority: "speed" },
-  { id: "low", priority: "resources" },
-] as const;
-type Level = (typeof LEVELS)[number]["id"];
 
 /** What `voice.test` found. */
 interface Tested {
@@ -55,93 +44,109 @@ export function slotReady(speech: Speech, slot: Slot): boolean {
   return (choices.engines.find((e) => e.id === id)?.ready ?? false) && !working(progress[slot]);
 }
 
-/** Listen → Think → Speak, with where setup is. */
-export function Pipeline({ at }: { at: "listen" | "brain" | "speak" }) {
-  const { t } = useTranslation();
-  const stages = [
-    { id: "listen", icon: "mic" },
-    { id: "brain", icon: "brain" },
-    { id: "speak", icon: "volume" },
-  ] as const;
-  const index = stages.findIndex((s) => s.id === at);
+/** This PC's recommendation (the balanced one). */
+function useRecommendation(): RecommendationItem | null {
+  const { link, request } = useRuntime();
+  const connected = link?.status === "connected";
+  const [plan, setPlan] = useState<RecommendationItem | null>(null);
+  useEffect(() => {
+    if (!connected) return;
+    void request<RecommendationItem>(Method.voiceRecommend)
+      .then(setPlan)
+      .catch(() => {});
+  }, [connected, request]);
+  return plan;
+}
+
+/** Five small bars, like Handy's: a 0–100 score at a glance. */
+function Bars({ label, value }: { label: string; value: number }) {
+  const filled = Math.max(1, Math.round(value / 20));
   return (
-    <ol className="k-pipe" aria-label={t("onboarding.pipeline.label")}>
-      {stages.map((s, i) => (
-        <li
-          key={s.id}
-          className={cn("k-pipe__stage", i < index && "is-done", i === index && "is-on")}
-          aria-current={i === index ? "step" : undefined}
-        >
-          <Icon name={i < index ? "check" : s.icon} />
-          {t(`onboarding.pipeline.${s.id}`)}
-        </li>
-      ))}
-    </ol>
+    <span className="k-bars" role="img" aria-label={`${label}: ${filled} / 5`}>
+      <span className="k-bars__label">{label}</span>
+      <span className="k-bars__cells" aria-hidden>
+        {[0, 1, 2, 3, 4].map((i) => (
+          <i key={i} className={cn(i < filled && "is-on")} />
+        ))}
+      </span>
+    </span>
   );
 }
 
-/** The recommendation for each level, as the runtime gives it for this PC. */
-function usePlans() {
-  const { link, request } = useRuntime();
-  const connected = link?.status === "connected";
-  const [plans, setPlans] = useState<Partial<Record<Level, RecommendationItem>>>({});
-  useEffect(() => {
-    if (!connected) return;
-    for (const l of LEVELS) {
-      void request<RecommendationItem>(Method.voiceRecommend, { priority: l.priority })
-        .then((r) => setPlans((all) => ({ ...all, [l.id]: r })))
-        .catch(() => {});
-    }
-  }, [connected, request]);
-  return plans;
-}
-
-/** One page: the level and the model's card; on Speak, the voices once it's in use. */
-export function SlotSetup({ slot, speech }: { slot: Slot; speech: Speech }) {
+/** The Listen or Speak page's model list. */
+export function ModelPicker({ slot, speech }: { slot: Slot; speech: Speech }) {
   const { t } = useTranslation();
-  const plans = usePlans();
-  const [level, setLevel] = useState<Level>("recommended");
-  const [others, setOthers] = useState(false);
+  const plan = useRecommendation();
+  const [query, setQuery] = useState("");
+  const [picked, setPicked] = useState<string | null>(null);
   const choices = speech.choices;
+  const recommended = slot === "stt" ? plan?.sttEngine : plan?.ttsEngine;
+  const current = slot === "stt" ? choices?.stt : choices?.tts;
+  // Models for this language that run on this PC, the likely choices first.
+  const engines = useMemo(() => {
+    const all = (choices?.engines ?? []).filter((e) => e.slot === slot && e.fitsLanguage && e.privacy !== "cloud");
+    const rank = (e: SpeechEngineItem) => [e.id !== recommended, e.id !== current, !e.ready, -e.accuracy];
+    return all.toSorted((a, b) => {
+      const [x, y] = [rank(a), rank(b)];
+      for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] < y[i] ? -1 : 1;
+      return 0;
+    });
+  }, [choices, slot, recommended, current]);
   if (!choices) return <Spinner label={t("onboarding.speech.loading")} />;
-  const plan = plans[level];
-  const id = slot === "stt" ? plan?.sttEngine : plan?.ttsEngine;
-  const engine = choices.engines.find((e) => e.id === id);
+  const shown = engines.filter((e) => e.name.toLowerCase().includes(query.trim().toLowerCase()));
+  const readyCurrent = engines.find((e) => e.id === current && e.ready);
+  const selected = picked ?? readyCurrent?.id ?? recommended ?? engines[0]?.id;
 
   return (
-    <div className="k-slot">
-      <Segmented<Level>
-        label={t(`onboarding.speech.${slot}.level`)}
-        value={level}
-        onChange={setLevel}
-        options={LEVELS.map((l) => ({ value: l.id, label: t(`onboarding.speech.level.${l.id}`) }))}
-      />
-      <p className="k-slot__about">
-        {t(`onboarding.speech.${slot}.${level}`)}
-        {slot === "stt" && level === "recommended" && plan && (
-          <>
-            {" "}
-            <Explain tip={plan.reason}>{t("onboarding.speech.why")}</Explain>
-          </>
-        )}
-      </p>
-
-      {engine ? (
-        // Keyed by engine: another level starts its card afresh.
-        <ModelRow key={engine.id} slot={slot} engine={engine} speech={speech} />
-      ) : (
-        <div className="k-model k-model--empty">
-          <Spinner label={t("onboarding.speech.checking")} />
-        </div>
-      )}
-
-      {slot === "tts" && slotReady(speech, "tts") && <VoiceGrid speech={speech} />}
-
-      <button type="button" className="k-slot__more" onClick={() => setOthers((o) => !o)}>
-        {t("onboarding.speech.myself")}
-        <Icon name={others ? "up" : "chevronDown"} />
-      </button>
-      {others && <SpeechChooser slot={slot} speech={speech} />}
+    <div className="k-picker">
+      <label className="k-picker__search">
+        <Icon name="search" />
+        <input
+          type="search"
+          value={query}
+          placeholder={t("onboarding.speech.search")}
+          aria-label={t("onboarding.speech.search")}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      </label>
+      <ul className="k-picker__list" aria-label={t(`onboarding.speech.${slot}.list`)}>
+        {shown.length === 0 && <li className="k-picker__empty">{t("onboarding.speech.noMatch")}</li>}
+        {shown.map((e) => {
+          const on = e.id === selected;
+          const inUse = e.id === current && e.ready;
+          return (
+            <li key={e.id} className={cn("k-picker__item", on && "is-on")}>
+              <button
+                type="button"
+                className="k-picker__row"
+                aria-pressed={on}
+                aria-label={e.name}
+                onClick={() => setPicked(e.id)}
+              >
+                <span className="k-picker__radio" aria-hidden />
+                <span className="k-picker__main">
+                  <span className="k-picker__name">
+                    {e.name}
+                    {e.id === recommended && (
+                      <span className="k-chip k-chip--accent">{t("onboarding.speech.recommended")}</span>
+                    )}
+                    {inUse && <span className="k-chip k-chip--good">{t("onboarding.speech.inUse")}</span>}
+                    {!inUse && e.ready && e.model && <span className="k-chip">{t("onboarding.speech.onThisPc")}</span>}
+                  </span>
+                  <span className="k-picker__meta">
+                    <Bars label={t("onboarding.speech.speed")} value={e.speed} />
+                    <Bars label={t(`onboarding.speech.${slot}.accuracy`)} value={e.accuracy} />
+                    <span className="k-picker__size">
+                      {e.model ? t("onboarding.speech.mb", { size: e.downloadMb }) : t("onboarding.speech.builtIn")}
+                    </span>
+                  </span>
+                </span>
+              </button>
+              {on && <ModelAction key={e.id} slot={slot} engine={e} speech={speech} />}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
@@ -208,10 +213,9 @@ function Ring({ percent, busy = false }: { percent: number; busy?: boolean }) {
   );
 }
 
-/** The chosen model as one row, App Store–style: what it is, and on the right the one thing to do
- * next (Download → a ring while it downloads, which pauses it → Test → Use this → In use); the
- * line under it says how it's going. */
-function ModelRow({ slot, engine, speech }: { slot: Slot; engine: SpeechEngineItem; speech: Speech }) {
+/** The chosen model's next step, under its row: a line saying how it's going and the one thing
+ * to do (Download → a ring while it downloads, which pauses it → Test → Use this → In use). */
+function ModelAction({ slot, engine, speech }: { slot: Slot; engine: SpeechEngineItem; speech: Speech }) {
   const { t, i18n } = useTranslation();
   const { request } = useRuntime();
   const toast = useToast();
@@ -243,7 +247,7 @@ function ModelRow({ slot, engine, speech }: { slot: Slot; engine: SpeechEngineIt
       voice: slot === "tts" ? choices.ttsVoice || null : null,
     })
       .then(setResult)
-      // A failure shows under the row, from its `failed` stage.
+      // A failure shows here, from its `failed` stage.
       .catch(() => {});
   };
   const use = () => {
@@ -254,17 +258,10 @@ function ModelRow({ slot, engine, speech }: { slot: Slot; engine: SpeechEngineIt
     });
   };
 
-  // The action on the right, and the line under the row.
-  let action: ReactNode;
-  let line: ReactNode = null;
+  let action: ReactNode = null;
+  let line: ReactNode;
   let tone: "plain" | "good" | "bad" = "plain";
   if (inUse) {
-    action = (
-      <span className="k-model__done">
-        <Icon name="check" />
-        {t("onboarding.speech.inUse")}
-      </span>
-    );
     line = t(`onboarding.speech.${slot}.ready`, { name: engine.name });
     tone = "good";
   } else if (!engine.ready) {
@@ -293,7 +290,7 @@ function ModelRow({ slot, engine, speech }: { slot: Slot; engine: SpeechEngineIt
             total: mb.format(download.total / 1e6),
           })}
           {download.speed !== null &&
-            ` · ${t("onboarding.speech.speed", { speed: rate.format(download.speed / 1e6) })}`}
+            ` · ${t("onboarding.speech.speedRate", { speed: rate.format(download.speed / 1e6) })}`}
           {download.left !== null && ` · ${leftText(t, download.left)}`}
           <button type="button" className="k-model__link" onClick={() => act(Method.modelsCancel)}>
             {t("onboarding.speech.cancel")}
@@ -326,7 +323,10 @@ function ModelRow({ slot, engine, speech }: { slot: Slot; engine: SpeechEngineIt
         line = download.failed || t("onboarding.speech.downloadFailed");
         tone = "bad";
       } else {
-        line = t("onboarding.speech.downloadHint");
+        line =
+          t("onboarding.speech.size", { size: engine.downloadMb, license: engine.license }) +
+          (engine.commercialUse ? "" : ` · ${t("speech.personalUseTitle")}`) +
+          ` · ${t("onboarding.speech.downloadHint")}`;
       }
     }
   } else if (testing || switching) {
@@ -367,24 +367,11 @@ function ModelRow({ slot, engine, speech }: { slot: Slot; engine: SpeechEngineIt
 
   return (
     <div className="k-model">
-      <div className="k-model__row">
-        <span className={cn("k-model__icon", inUse && "is-ready")} aria-hidden>
-          <Icon name={slot === "stt" ? "mic" : "volume"} />
-        </span>
-        <div className="k-model__name">
-          <b>{engine.name}</b>
-          <span>
-            {engine.model
-              ? t("onboarding.speech.size", { size: engine.downloadMb, license: engine.license })
-              : t("onboarding.speech.builtIn")}
-            {!engine.commercialUse && ` · ${t("speech.personalUseTitle")}`}
-          </span>
-        </div>
-        <div className="k-model__action">{action}</div>
-      </div>
       <p className={cn("k-model__line", tone === "good" && "is-good", tone === "bad" && "is-bad")} role="status">
+        {tone === "good" && <Icon name="check" />}
         {line}
       </p>
+      {action && <div className="k-model__action">{action}</div>}
     </div>
   );
 }
@@ -396,20 +383,52 @@ function leftText(t: (key: string, options?: Record<string, unknown>) => string,
     : t("onboarding.speech.minutesLeft", { count: Math.round(seconds / 60) });
 }
 
-/** The voices of the engine KIVO speaks with, as tiles: everyday ones, then Anime. Voices whose
- * files aren't here yet (added after the model was installed) come with one small download. */
-function VoiceGrid({ speech }: { speech: Speech }) {
-  const { t } = useTranslation();
+type Kind = "female" | "male" | "other";
+
+const kindOf = (v: VoiceItem): Kind => (v.style === "female" ? "female" : v.style === "male" ? "male" : "other");
+
+/** "Heart (American, female)" → "American"; otherwise the voice's language in words. */
+function accentOf(v: VoiceItem, language: (code: string) => string): string {
+  const inside = /\(([^,)]*)/.exec(v.name)?.[1];
+  if (inside) return inside;
+  const code = v.languages[0];
+  return code && code !== "*" ? language(code) : "";
+}
+
+/** The Voice page: the voices of the engine KIVO speaks with, by Female, Male and Other, grouped
+ * by accent and language, each playable; voices whose files aren't here yet come with one small
+ * download. */
+export function VoicePicker({ speech }: { speech: Speech }) {
+  const { t, i18n } = useTranslation();
   const { request } = useRuntime();
   const toast = useToast();
   const [playing, setPlaying] = useState<string | null>(null);
   const { choices } = speech;
   const engine = choices?.engines.find((e) => e.id === choices.tts);
-  if (!choices || !engine || engine.voices.length === 0) return null;
+  const selected = choices?.ttsVoice || engine?.voices[0]?.id;
+  const [kind, setKind] = useState<Kind>(() => {
+    const now = engine?.voices.find((v) => v.id === selected);
+    return now ? kindOf(now) : "female";
+  });
+  if (!choices || !engine) return <Spinner label={t("onboarding.speech.loading")} />;
+  if (engine.voices.length === 0) return <p className="k-note">{t("onboarding.voices.none", { name: engine.name })}</p>;
+
+  const names = new Intl.DisplayNames([i18n.language], { type: "language" });
+  const language = (code: string) => names.of(code) ?? code;
   const model = speech.models.find((m) => m.id === engine.model);
   const missing = engine.voices.filter((v) => !v.ready);
   const fetching = model?.state === "downloading";
-  const selected = choices.ttsVoice || engine.voices[0]?.id;
+  const counts: Record<Kind, number> = { female: 0, male: 0, other: 0 };
+  for (const v of engine.voices) counts[kindOf(v)] += 1;
+  // By accent and language, Anime (Japanese-accented English) last.
+  const groups = new Map<string, VoiceItem[]>();
+  for (const v of engine.voices.filter((x) => kindOf(x) === kind)) {
+    const label = v.character === "anime" ? t("speech.anime") : accentOf(v, language) || t("onboarding.voices.more");
+    groups.set(label, [...(groups.get(label) ?? []), v]);
+  }
+  const ordered = [...groups.entries()].toSorted(([a], [b]) =>
+    a === t("speech.anime") ? 1 : b === t("speech.anime") ? -1 : a.localeCompare(b),
+  );
   const play = (voice: string) => {
     setPlaying(voice);
     speech
@@ -417,36 +436,18 @@ function VoiceGrid({ speech }: { speech: Speech }) {
       .catch((e: unknown) => toast(message(e)))
       .finally(() => setPlaying(null));
   };
-  const tile = (v: VoiceItem) => {
-    const on = v.id === selected;
-    return (
-      <div key={v.id} className={cn("k-voice", on && "is-on", !v.ready && "is-off")}>
-        <button
-          type="button"
-          className="k-voice__pick"
-          disabled={!v.ready}
-          aria-pressed={on}
-          onClick={() => void speech.pickVoice(v.id).catch((e: unknown) => toast(message(e)))}
-        >
-          <b>{v.name.replace(/\s*\(.*\)$/, "")}</b>
-          <span>{[v.style && t(`speech.style.${v.style}`), accent(v.name)].filter(Boolean).join(" · ")}</span>
-        </button>
-        <button
-          type="button"
-          className="k-voice__play"
-          aria-label={t("speech.preview", { name: v.name })}
-          disabled={!v.ready || playing !== null}
-          onClick={() => play(v.id)}
-        >
-          {playing === v.id ? <Spinner label={t("speech.preview", { name: v.name })} /> : <Icon name="play" />}
-        </button>
-      </div>
-    );
-  };
-  const everyday = engine.voices.filter((v) => v.character !== "anime");
-  const anime = engine.voices.filter((v) => v.character === "anime");
+
   return (
     <div className="k-voices">
+      <Segmented<Kind>
+        label={t("onboarding.voices.kind")}
+        value={kind}
+        onChange={setKind}
+        options={(["female", "male", "other"] as const).map((k) => ({
+          value: k,
+          label: `${t(`onboarding.voices.${k}`)} ${counts[k] > 0 ? counts[k] : ""}`.trim(),
+        }))}
+      />
       {missing.length > 0 && model && (
         <div className="k-voices__new">
           <Icon name="download" />
@@ -462,23 +463,50 @@ function VoiceGrid({ speech }: { speech: Speech }) {
           </Button>
         </div>
       )}
-      <h3 className="k-voices__title">{t("onboarding.speech.chooseVoice")}</h3>
-      <div className="k-voices__grid">{everyday.map(tile)}</div>
-      {anime.length > 0 && (
-        <>
+      {ordered.length === 0 && <p className="k-note">{t("onboarding.voices.noneOfKind")}</p>}
+      {ordered.map(([label, voices]) => (
+        <section key={label} className="k-voices__group" aria-label={label}>
           <h3 className="k-voices__title">
-            {t("speech.anime")}
-            <span>{t("speech.animeHint")}</span>
+            {label}
+            {label === t("speech.anime") && <span>{t("speech.animeHint")}</span>}
           </h3>
-          <div className="k-voices__grid">{anime.map(tile)}</div>
-        </>
-      )}
+          <ul className="k-voices__list">
+            {voices.map((v) => {
+              const on = v.id === selected;
+              return (
+                <li key={v.id} className={cn("k-voice", on && "is-on", !v.ready && "is-off")}>
+                  <button
+                    type="button"
+                    className="k-voice__pick"
+                    disabled={!v.ready}
+                    aria-pressed={on}
+                    aria-label={v.name}
+                    onClick={() => void speech.pickVoice(v.id).catch((e: unknown) => toast(message(e)))}
+                  >
+                    <span className="k-picker__radio" aria-hidden />
+                    <b>{v.name.replace(/\s*\(.*\)$/, "")}</b>
+                    {on && <span className="k-chip k-chip--good">{t("onboarding.speech.inUse")}</span>}
+                    {!v.ready && <span className="k-chip">{t("onboarding.voices.notHere")}</span>}
+                  </button>
+                  <button
+                    type="button"
+                    className="k-voice__play"
+                    aria-label={t("speech.preview", { name: v.name })}
+                    disabled={!v.ready || playing !== null}
+                    onClick={() => play(v.id)}
+                  >
+                    {playing === v.id ? (
+                      <Spinner label={t("speech.preview", { name: v.name })} />
+                    ) : (
+                      <Icon name="play" />
+                    )}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ))}
     </div>
   );
-}
-
-/** "Heart (American, female)" → "American". */
-function accent(name: string): string {
-  const inside = /\(([^,)]*)/.exec(name)?.[1] ?? "";
-  return inside;
 }
