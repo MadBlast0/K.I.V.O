@@ -12,6 +12,7 @@ import { islandPreset } from "../island/presets";
 import { Button, useToast } from "../ui";
 import { Method, type TurnView } from "../../ipc/generated";
 import { useRuntime } from "../../ipc/runtime";
+import type { CallWays } from "../voice/CallKivo";
 
 /** How long each frame of the demo stays (listening, the first words, the whole request, thinking,
  * the answer). */
@@ -59,7 +60,7 @@ export function IslandDemo() {
 }
 
 /** "Try it now": the user's own request, followed live. */
-export function TryItNow({ keys }: { keys: string[] | null }) {
+export function TryItNow({ ways }: { ways: CallWays }) {
   const { t } = useTranslation();
   const { link, request } = useRuntime();
   const toast = useToast();
@@ -79,7 +80,17 @@ export function TryItNow({ keys }: { keys: string[] | null }) {
     <div className="k-tile k-onboarding__try" role="status" aria-live="polite">
       <div className="k-onboarding__try-title">{t("onboarding.activation.tryTitle")}</div>
       <p className="k-onboarding__try-hint">
-        {t("onboarding.activation.tryHint", { keys: (keys ?? ["Ctrl", "Space"]).join(" + ") })}
+        {/* Only the ways that are on: "Hey Kivo", the keys, or both. */}
+        {t(
+          ways.wake && ways.ptt
+            ? "onboarding.activation.tryHint"
+            : ways.wake
+              ? "onboarding.activation.tryHintWake"
+              : "onboarding.activation.tryHintKeys",
+          {
+            keys: ways.keys.join(" + "),
+          },
+        )}
       </p>
       {listening ? (
         <p className="k-onboarding__try-line">{t("onboarding.activation.tryListening")}</p>

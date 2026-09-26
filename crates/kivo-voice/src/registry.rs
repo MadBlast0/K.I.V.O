@@ -60,6 +60,9 @@ pub struct VoiceOption {
     pub style: String,
     /// BCP-47 primary tags; `*` for every language the engine speaks.
     pub languages: Vec<String>,
+    /// `anime` for the Anime voices (a Japanese accent), empty for everyday ones.
+    #[serde(default)]
+    pub character: String,
 }
 
 /// KIVO's own measurement of an engine on this PC (`kivo-bench stt`/`tts`, or "Benchmark this
@@ -211,6 +214,11 @@ pub fn registry() -> Vec<RegistryEntry> {
             name: kokoro::voice_name(id),
             style: style_of(id.chars().nth(1)),
             languages: vec!["en".into()],
+            character: if kokoro::is_anime(id) {
+                "anime".into()
+            } else {
+                String::new()
+            },
         })
         .collect();
     all.push(kokoro);
@@ -224,6 +232,7 @@ pub fn registry() -> Vec<RegistryEntry> {
             name: supertonic::voice_name(id),
             style: style_of(id.chars().next().map(|c| c.to_ascii_lowercase())),
             languages: vec!["*".into()],
+            character: String::new(),
         })
         .collect();
     all.push(supertonic);
@@ -245,6 +254,7 @@ pub fn registry() -> Vec<RegistryEntry> {
                 name: v.name,
                 style: String::new(),
                 languages: vec![v.language],
+                character: String::new(),
             })
             .collect();
         all.push(entry);

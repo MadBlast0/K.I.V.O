@@ -4,6 +4,7 @@
  * every choice is saved at once and can be changed on the same screen or later in Settings.
  */
 import { useReducedMotionConfig } from "motion/react";
+import { useCallWays } from "../voice/CallKivo";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Island, IslandSpin, type IslandModel } from "../island/Island";
@@ -29,7 +30,7 @@ import {
 import { brainColor, monogram } from "../../ipc/brains";
 import { Method, type ConnectorView, type PermissionMode, type SetupAdvice } from "../../ipc/generated";
 import { useRuntime } from "../../ipc/runtime";
-import { bool, oneOf, strings } from "../../lib/settings";
+import { bool, oneOf } from "../../lib/settings";
 import { useTheme } from "../../lib/theme";
 import { message, useConfig } from "../../pages/settings/useConfig";
 
@@ -398,8 +399,7 @@ export function StartupStep({ advice }: { advice: SetupAdvice | null }) {
 export function TryStep() {
   const { t, i18n } = useTranslation();
   const reduce = useReducedMotionConfig() ?? false;
-  const { get } = useConfig();
-  const keys = strings(get("voice", "push-to-talk"));
+  const ways = useCallWays();
   const [model, setModel] = useState<IslandModel | null>(null);
   const timers = useRef<number[]>([]);
   useEffect(() => () => timers.current.forEach((id) => window.clearTimeout(id)), []);
@@ -450,9 +450,11 @@ export function TryStep() {
         <Button icon="play" onClick={play}>
           {t("onboarding.try.show")}
         </Button>
-        <span>
-          {t("onboarding.try.orPress")} <Keys keys={keys.length ? keys : ["Ctrl", "Space"]} />
-        </span>
+        {ways.ptt && (
+          <span>
+            {t("onboarding.try.orPress")} <Keys keys={ways.keys} />
+          </span>
+        )}
       </div>
     </>
   );

@@ -942,6 +942,8 @@ pub struct VoiceItem {
     /// `female`, `male` or empty.
     pub style: String,
     pub languages: Vec<String>,
+    /// `anime` for the Anime voices, empty for everyday ones.
+    pub character: String,
 }
 
 /// KIVO's own benchmark of an engine on this PC.

@@ -7,7 +7,14 @@
  */
 import { useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import type { BenchmarkReply, ProfileItem, SpeechEngineItem, VoiceItem } from "../../ipc/generated";
+import {
+  Method,
+  type BenchmarkReply,
+  type ProfileItem,
+  type SpeechEngineItem,
+  type VoiceItem,
+} from "../../ipc/generated";
+import { useRuntime } from "../../ipc/runtime";
 import {
   Alert,
   Button,
@@ -138,7 +145,7 @@ export function BenchmarkResult({ slot, reply }: { slot: Slot; reply: BenchmarkR
 }
 
 /** A switch in progress, or why it failed, under the card it is about. */
-function Progress({ speech, slot, engine }: { speech: Speech; slot: Slot; engine: string }) {
+export function Progress({ speech, slot, engine }: { speech: Speech; slot: Slot; engine: string }) {
   const { t } = useTranslation();
   const p = speech.progress[slot];
   if (!p || p.engine !== engine) return null;
@@ -343,11 +350,15 @@ export function SpeechChooser({ slot, speech, children }: { slot: Slot; speech: 
  * voice are separate choices). */
 export function VoiceList({ speech }: { speech: Speech }) {
   const { t, i18n } = useTranslation();
+  const { request } = useRuntime();
   const toast = useToast();
   const [playing, setPlaying] = useState<string | null>(null);
   const { choices } = speech;
   const engine = choices?.engines.find((e) => e.id === choices.tts);
   if (!choices || !engine || engine.voices.length === 0 || !engine.ready) return null;
+  // Voices added to the model after it was installed (the Anime ones) come with its update.
+  const model = speech.models.find((m) => m.id === engine.model);
+  const outdated = model?.state === "updateAvailable" || model?.state === "downloading";
   const language = (v: VoiceItem) =>
     v.languages.includes("*")
       ? t("speech.anyLanguage")
@@ -360,40 +371,71 @@ export function VoiceList({ speech }: { speech: Speech }) {
       .catch((e: unknown) => toast(message(e)))
       .finally(() => setPlaying(null));
   };
+  const row = (v: VoiceItem, here: boolean) => (
+    <Row
+      key={v.id}
+      lead={
+        <IconButton
+          icon="play"
+          label={t("speech.preview", { name: v.name })}
+          onClick={() => preview(v.id)}
+          disabled={playing !== null || !here}
+        />
+      }
+      title={v.name}
+      subtitle={[v.style && t(`speech.style.${v.style}`), language(v)].filter(Boolean).join(" · ")}
+      end={
+        v.id === selected ? (
+          <Tag tone="success">{t("speech.inUse")}</Tag>
+        ) : (
+          <Button
+            size="sm"
+            disabled={!here}
+            onClick={() => {
+              speech.pickVoice(v.id).catch((e: unknown) => toast(message(e)));
+            }}
+          >
+            {t("speech.use")}
+          </Button>
+        )
+      }
+    />
+  );
+  const everyday = engine.voices.filter((v) => v.character !== "anime");
+  const anime = engine.voices.filter((v) => v.character === "anime");
   return (
     <>
       <Section title={t("speech.voices")} aside={t("speech.voicesHint")} />
-      <Group>
-        {engine.voices.map((v) => (
-          <Row
-            key={v.id}
-            lead={
-              <IconButton
-                icon="play"
-                label={t("speech.preview", { name: v.name })}
-                onClick={() => preview(v.id)}
-                disabled={playing !== null}
+      <Group>{everyday.map((v) => row(v, true))}</Group>
+      {anime.length > 0 && (
+        <>
+          <Section title={t("speech.anime")} aside={t("speech.animeHint")} />
+          <Group>
+            {outdated && model && (
+              <Row
+                icon="download"
+                title={t("speech.getAnime")}
+                subtitle={t("speech.getAnimeHint")}
+                end={
+                  model.state === "downloading" ? (
+                    <Spinner label={t("speech.stage.downloading")} />
+                  ) : (
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        void request(Method.modelsInstall, { id: model.id }).catch((e: unknown) => toast(message(e)))
+                      }
+                    >
+                      {t("speech.getAnimeButton")}
+                    </Button>
+                  )
+                }
               />
-            }
-            title={v.name}
-            subtitle={[v.style && t(`speech.style.${v.style}`), language(v)].filter(Boolean).join(" · ")}
-            end={
-              v.id === selected ? (
-                <Tag tone="success">{t("speech.inUse")}</Tag>
-              ) : (
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    speech.pickVoice(v.id).catch((e: unknown) => toast(message(e)));
-                  }}
-                >
-                  {t("speech.use")}
-                </Button>
-              )
-            }
-          />
-        ))}
-      </Group>
+            )}
+            {anime.map((v) => row(v, !outdated))}
+          </Group>
+        </>
+      )}
     </>
   );
 }

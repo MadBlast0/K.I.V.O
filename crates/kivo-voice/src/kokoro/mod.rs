@@ -29,8 +29,23 @@ const STYLE_WIDTH: usize = 256;
 /// The most phonemes one pass takes (the model's context, less the two pads).
 const MAX_PHONEMES: usize = 510;
 pub const DEFAULT_VOICE: &str = "af_heart";
-/// The voices KIVO downloads with the model.
-pub const VOICES: [&str; 5] = ["af_heart", "af_bella", "am_michael", "bf_emma", "bm_george"];
+/// The voices KIVO downloads with the model: five English ones, then the Anime ones (Kokoro's
+/// Japanese voices reading English through KIVO's English phonemizer, so with a Japanese accent).
+pub const VOICES: [&str; 8] = [
+    "af_heart",
+    "af_bella",
+    "am_michael",
+    "bf_emma",
+    "bm_george",
+    "jf_alpha",
+    "jf_tebukuro",
+    "jm_kumo",
+];
+
+/// One of the Anime voices (a Japanese voice).
+pub fn is_anime(id: &str) -> bool {
+    id.starts_with('j')
+}
 
 pub fn info() -> EngineInfo {
     EngineInfo {
@@ -57,6 +72,7 @@ pub fn voice_name(id: &str) -> String {
     let accent = match prefix.chars().next() {
         Some('a') => "American",
         Some('b') => "British",
+        Some('j') => "Japanese accent",
         _ => "",
     };
     let gender = match prefix.chars().nth(1) {
@@ -396,6 +412,8 @@ mod tests {
     fn voice_names_read_well() {
         assert_eq!(voice_name("af_heart"), "Heart (American, female)");
         assert_eq!(voice_name("bm_george"), "George (British, male)");
+        assert_eq!(voice_name("jf_alpha"), "Alpha (Japanese accent, female)");
+        assert!(is_anime("jm_kumo") && !is_anime("am_michael"));
     }
 
     /// Runs the real model when the Kokoro download is on this PC (like the Moonshine test).

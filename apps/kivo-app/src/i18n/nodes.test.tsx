@@ -6,7 +6,7 @@ import { withNodes } from "./nodes";
 describe("withNodes", () => {
   it("places elements where the translation puts their placeholders", () => {
     const { container } = render(
-      <p>{withNodes(i18n.t.bind(i18n), "home.hint", { ptt: <kbd>PTT</kbd>, type: <kbd>TYPE</kbd> })}</p>,
+      <p>{withNodes(i18n.t.bind(i18n), "home.hintKeys", { ptt: <kbd>PTT</kbd>, type: <kbd>TYPE</kbd> })}</p>,
     );
     expect(container.textContent).toBe("Hold PTT to talk · TYPE to type");
     expect(container.querySelectorAll("kbd")).toHaveLength(2);

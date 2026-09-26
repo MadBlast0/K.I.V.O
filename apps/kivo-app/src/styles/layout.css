@@ -392,6 +392,8 @@
   border-radius: 50%;
   background: radial-gradient(circle at 35% 30%, #fff 0 12%, #9ad3ff 32%, #3a6dff 72%, #1b1f6b);
   box-shadow: 0 0 24px rgba(120, 170, 255, 0.7);
+  /* Its own layer: the animations below move it without repainting the page. */
+  will-change: transform;
   transition:
     opacity 200ms var(--ease-out),
     filter 200ms var(--ease-out),
@@ -407,14 +409,91 @@
   opacity: 0;
   transition: opacity 400ms var(--ease-out);
 }
-/* Listening or speaking: the orb grows and brightens once and holds. No endless loop: the Island
-   already animates, and a looping animation here redrew the page on every display refresh (165
-   times a second on high-refresh laptops; kivo-bench overlay). */
-.k-home__orb.is-live > span {
-  transform: scale(1.08);
+/* A halo that follows KIVO's state. Only transform and opacity move (the compositor draws them),
+   and a hidden window pauses them; reduced motion stills them (base.css). */
+.k-home__orb {
+  position: relative;
 }
-.k-home__orb.is-live > span::after {
+.k-home__orb::before {
+  content: "";
+  position: absolute;
+  inset: -10px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(90, 134, 255, 0.28), transparent 68%);
+  opacity: 0;
+  transition: opacity 400ms var(--ease-out);
+  pointer-events: none;
+}
+/* Waiting: a slow breath, barely there. */
+.k-home__orb.is-idle > span {
+  animation: k-orb-breathe 5.5s ease-in-out infinite;
+}
+@keyframes k-orb-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.045);
+  }
+}
+/* Listening: brighter, and it swells with the voice (--level, 0–1). */
+.k-home__orb.is-listening > span {
+  transform: scale(calc(1.06 + var(--level, 0) * 0.22));
+  transition: transform 90ms linear;
+}
+.k-home__orb.is-listening > span::after,
+.k-home__orb.is-speaking > span::after {
   opacity: 1;
+}
+.k-home__orb.is-listening::before {
+  opacity: calc(0.45 + var(--level, 0) * 0.55);
+  transform: scale(calc(1 + var(--level, 0) * 0.25));
+  transition:
+    opacity 90ms linear,
+    transform 90ms linear;
+}
+/* Thinking: the glow turns slowly around it. */
+.k-home__orb.is-thinking > span {
+  animation: k-orb-think 1.6s linear infinite;
+}
+.k-home__orb.is-thinking::before {
+  opacity: 0.6;
+}
+@keyframes k-orb-think {
+  from {
+    transform: rotate(0deg) scale(1.04);
+  }
+  to {
+    transform: rotate(360deg) scale(1.04);
+  }
+}
+/* Speaking: a gentle pulse, like talking. */
+.k-home__orb.is-speaking > span {
+  animation: k-orb-speak 0.9s ease-in-out infinite;
+}
+.k-home__orb.is-speaking::before {
+  animation: k-orb-halo 0.9s ease-in-out infinite;
+}
+@keyframes k-orb-speak {
+  0%,
+  100% {
+    transform: scale(1.06);
+  }
+  50% {
+    transform: scale(1.14);
+  }
+}
+@keyframes k-orb-halo {
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.12);
+  }
 }
 .k-home__orb.is-dim > span {
   filter: grayscale(1);
@@ -625,9 +704,42 @@
 .k-onboarding__try-line {
   margin: 0;
 }
+/* The speech step: what a preset uses, its action and each model's way to ready. */
+.k-setup__uses {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.k-setup__action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0 4px;
+}
+.k-setup__done {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-weight: 500;
+  color: var(--green-text);
+}
+.k-setup__ask {
+  margin: 0 0 6px;
+}
+.k-setup__ok {
+  color: var(--green-text);
+}
+.k-setup__bad {
+  color: var(--orange-text);
+}
+/* Welcome follows the app’s theme (light, dark or the system’s), with a soft glow of the accent
+   behind the Island. */
 .k-onboarding--welcome {
-  background: #000;
-  color: #fff;
+  /* Over the window's own background (Mica or solid), like the title bar above it. */
+  background: radial-gradient(ellipse 46% 38% at 50% 40%, var(--acc-soft), transparent 72%);
+  color: var(--text);
 }
 .k-onboarding__welcome {
   position: relative;
@@ -647,14 +759,16 @@
   margin: 28px 0 10px;
 }
 .k-onboarding__welcome p {
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--text-2);
   font-size: 15.5px;
   max-width: 460px;
   margin: 0 0 30px;
 }
 .k-onboarding__welcome .k-btn--primary {
-  background: #fff;
-  color: #000;
+  min-width: 160px;
+  height: 38px;
+  border-radius: 19px;
+  font-size: 14px;
 }
 .k-onboarding__welcome .k-island {
   box-shadow:
@@ -670,7 +784,7 @@
   flex-wrap: wrap;
   gap: 18px;
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-3);
 }
 .k-onboarding__fine > span {
   display: inline-flex;

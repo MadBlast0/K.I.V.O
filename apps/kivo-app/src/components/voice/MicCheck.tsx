@@ -1,10 +1,11 @@
 /**
- * The microphone check (UX-33 step 2): KIVO records one sentence through its own listener, the bars
- * follow the live level, and the result says whether it heard the user clearly.
+ * The microphone check (UX-33 step 2): KIVO records one sentence through its own listener (the
+ * microphone chosen beside it), the bars follow the live level, and the result says whether it
+ * heard the user clearly.
  */
 import { isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Method } from "../../ipc/generated";
 import { useRuntime } from "../../ipc/runtime";
@@ -48,7 +49,8 @@ export function LiveLevel({ level, bars = 14 }: { level: number; bars?: number }
   );
 }
 
-export function MicCheck({ onResult }: { onResult?: (ok: boolean) => void }) {
+/** `children`: rows shown above the test in the same group (the microphone picker). */
+export function MicCheck({ onResult, children }: { onResult?: (ok: boolean) => void; children?: ReactNode }) {
   const { t } = useTranslation();
   const { request } = useRuntime();
   const [state, setState] = useState<"idle" | "listening" | "good" | "quiet" | "failed">("idle");
@@ -73,7 +75,7 @@ export function MicCheck({ onResult }: { onResult?: (ok: boolean) => void }) {
   return (
     <>
       <Group>
-        <Row icon="mic" title={t("onboarding.mic.device")} subtitle={t("onboarding.mic.deviceHint")} />
+        {children}
         <Row
           icon="wave"
           title={t("onboarding.mic.level")}

@@ -24,6 +24,7 @@ import {
   useToast,
 } from "../components/ui";
 import { AdvancedVoice, Personality, SpeechSummary, Vocabulary } from "../components/voice/Details";
+import { CallKivo, useCallWays } from "../components/voice/CallKivo";
 import { Enrollment, SpeakerMode } from "../components/voice/Enrollment";
 import { CloudEngines } from "../components/voice/CloudEngines";
 import { DownloadDialog, useMegabytes } from "../components/voice/DownloadDialog";
@@ -266,6 +267,7 @@ function Models() {
 export function Voice() {
   const { t } = useTranslation();
   const speech = useSpeech();
+  const ways = useCallWays();
   const [choosing, setChoosing] = useState(false);
 
   if (!speech.connected) {
@@ -280,6 +282,8 @@ export function Voice() {
   return (
     <>
       <PageHeader title={t("nav.voice")} subtitle={t("voice.subtitle")} />
+      <Section title={t("callKivo.title")} />
+      <CallKivo ways={ways} />
       <SpeechSummary speech={speech} onChange={() => setChoosing((c) => !c)} />
       {choosing && (
         <>

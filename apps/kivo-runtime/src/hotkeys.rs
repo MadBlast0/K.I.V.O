@@ -104,6 +104,13 @@ async fn handle(
     }
 }
 
+/// Push-to-talk is on (the capability, CAPABILITIES §1): its keys are bound only then.
+fn push_to_talk_on(config: &kivo_core::KivoConfig) -> bool {
+    config
+        .capabilities
+        .enabled(kivo_core::Capability::PushToTalk)
+}
+
 /// Binds push-to-talk; when another app also uses the keys, KIVO still takes them first (the
 /// keyboard-hook fallback) and says so, so the user can pick others (VOICE-41).
 fn bind_push_to_talk(core: &Core, hotkeys: &dyn Hotkeys, chord: &Chord) {
@@ -134,8 +141,15 @@ pub async fn run(
             return;
         }
     };
-    let mut push_to_talk = Chord(keys);
-    bind_push_to_talk(&core, &hotkeys, &push_to_talk);
+    // Push-to-talk's keys while it's on; empty while it's off (UX §4).
+    let mut push_to_talk = Chord(if push_to_talk_on(&core.config()) {
+        keys
+    } else {
+        Vec::new()
+    });
+    if !push_to_talk.0.is_empty() {
+        bind_push_to_talk(&core, &hotkeys, &push_to_talk);
+    }
     let mut mode_keys = Chord(core.config().permissions.mode_shortcut.clone());
     rebind(
         &hotkeys,
@@ -208,11 +222,17 @@ pub async fn run(
             changed = settings.changed() => {
                 if changed.is_err() { break }
                 let voice = core.config().voice;
-                let wanted = Chord(voice.push_to_talk.clone());
-                if wanted != push_to_talk && !wanted.0.is_empty() {
+                let wanted = Chord(if push_to_talk_on(&core.config()) {
+                    voice.push_to_talk.clone()
+                } else {
+                    Vec::new()
+                });
+                if wanted != push_to_talk {
                     let _ = hotkeys.unregister(PUSH_TO_TALK);
                     core.set_hotkey_conflict(None);
-                    bind_push_to_talk(&core, &hotkeys, &wanted);
+                    if !wanted.0.is_empty() {
+                        bind_push_to_talk(&core, &hotkeys, &wanted);
+                    }
                     push_to_talk = wanted;
                 }
                 let wanted = Chord(voice.type_to_kivo.clone());

@@ -80,7 +80,7 @@ const choices: SpeechChoices = {
       name: "Kokoro",
       slot: "tts",
       license: "Apache-2.0",
-      voices: [{ id: "af_heart", name: "Heart (American, female)", style: "female", languages: ["en"] }],
+      voices: [{ id: "af_heart", name: "Heart (American, female)", style: "female", languages: ["en"], character: "" }],
     }),
     engine({ id: "supertonic-3", name: "Supertonic 3", slot: "tts", license: "OpenRAIL-M", languages: ["en", "es"] }),
     engine({ id: "deepgram-flux", name: "Deepgram Flux", slot: "stt", privacy: "cloud", model: null, ready: false }),

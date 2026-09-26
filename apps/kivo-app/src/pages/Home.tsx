@@ -1,9 +1,12 @@
 /**
- * Home (UX §3, UX-19, plan §81): KIVO's status at a glance, the controls that act on it (Talk,
- * Pause listening, the permission mode) and what it did recently. Everything shown comes from the
- * runtime and refreshes when the runtime reports a change. Running lists the tasks at work (UX-19).
+ * Home (UX §3, UX-19, plan §81): KIVO's status at a glance, kept calm. The orb breathes softly
+ * while KIVO waits and comes alive while it listens (following the voice), thinks and speaks;
+ * the line under it says how to call KIVO, as the user set it up ("Hey Kivo", the keys, or both).
+ * Below: the permission mode, Resume when listening is paused, Stop everything while KIVO works,
+ * the tasks at work (UX-19) and what it did recently. Everything comes from the runtime and
+ * refreshes when it reports a change.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Alert,
@@ -20,26 +23,15 @@ import {
 } from "../components/ui";
 import { Method, type ActivityItem, type PermissionMode, type SpeechStatus } from "../ipc/generated";
 import { withNodes } from "../i18n/nodes";
+import { useCallWays } from "../components/voice/CallKivo";
+import { useMicLevel } from "../components/voice/MicCheck";
 import { useRuntime, useRuntimeEvents } from "../ipc/runtime";
 import { entries } from "../lib/activity";
 import { cn } from "../lib/cn";
 import { modes, viewLink } from "../lib/session";
 import { currentStep, useTasks } from "./Tasks";
 
-interface Shortcuts {
-  pushToTalk: string[];
-  typeToKivo: string[];
-}
-
-const DEFAULT_KEYS: Shortcuts = { pushToTalk: ["Ctrl", "Space"], typeToKivo: ["Ctrl", "Shift", "Space"] };
-
-/** The shortcuts from the settings' `voice` section. */
-function shortcutsOf(voice: Record<string, unknown>): Shortcuts {
-  return {
-    pushToTalk: keysOr(voice["push-to-talk"], DEFAULT_KEYS.pushToTalk),
-    typeToKivo: keysOr(voice["type-to-kivo"], DEFAULT_KEYS.typeToKivo),
-  };
-}
+const DEFAULT_TYPE_KEYS = ["Ctrl", "Shift", "Space"];
 
 function keysOr(value: unknown, fallback: string[]): string[] {
   return Array.isArray(value) && value.every((k) => typeof k === "string") ? value : fallback;
@@ -105,7 +97,8 @@ export function Home({
   };
 
   const snapshot = link?.status === "connected" ? link.snapshot : null;
-  const [keys, setKeys] = useState<Shortcuts>(DEFAULT_KEYS);
+  const ways = useCallWays();
+  const [typeKeys, setTypeKeys] = useState<string[]>(DEFAULT_TYPE_KEYS);
   const session = view.session;
   const mode = snapshot?.mode;
   const connected = !!snapshot;
@@ -118,19 +111,13 @@ export function Home({
   }, [connected, request]);
   useEffect(loadRecent, [loadRecent]);
 
-  // The shortcuts as set, for the hint and the rebind prompt.
+  // The type-to-KIVO keys, for the hint.
   useEffect(() => {
     if (!connected) return;
     void request<{ voice: Record<string, unknown> }>(Method.settingsGet)
-      .then((settings) => setKeys(shortcutsOf(settings.voice)))
+      .then((settings) => setTypeKeys(keysOr(settings.voice["type-to-kivo"], DEFAULT_TYPE_KEYS)))
       .catch(() => {});
   }, [connected, request]);
-
-  const rebind = (next: string[]) =>
-    run(async () => {
-      await request(Method.settingsSet, { voice: { "push-to-talk": next } });
-      setKeys((current) => ({ ...current, pushToTalk: next }));
-    });
   useRuntimeEvents((event) => {
     if (event.group === "turn") loadRecent();
   });
@@ -140,14 +127,32 @@ export function Home({
     if (next === "bypass") onOpenPermissions();
     else run(() => request(Method.permissionsSetMode, { mode: next }));
   };
-  const animated = session === "listening" || session === "speaking" || session === "followUp";
+  // The orb's state: listening follows the voice's level; thinking and speaking have their own
+  // motion; otherwise it breathes softly (paused with the window hidden, off with reduced motion).
+  const listening = session === "listening" || session === "followUp";
+  const level = useMicLevel(listening);
+  // The voice's level reaches the orb's CSS (--level) without re-rendering the page's styles.
+  const orbRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    orbRef.current?.style.setProperty("--level", String(Math.min(1, level * 1.6)));
+  }, [level]);
+  const orb = listening
+    ? "is-listening"
+    : session === "speaking"
+      ? "is-speaking"
+      : session === "thinking" || session === "acting"
+        ? "is-thinking"
+        : "is-idle";
+  const ptt = <Keys keys={ways.keys} />;
+  const hint = ways.wake && ways.ptt ? "home.hintBoth" : ways.wake ? "home.hintWake" : "home.hintKeys";
   const time = new Intl.DateTimeFormat(i18n.language, { hour: "2-digit", minute: "2-digit" });
   const shown = entries(recent).slice(0, RECENT);
 
   return (
     <div className="k-home">
       <div
-        className={cn("k-home__orb", animated && "is-live", (view.tone !== "ok" || session === "paused") && "is-dim")}
+        className={cn("k-home__orb", orb, (view.tone !== "ok" || session === "paused") && "is-dim")}
+        ref={orbRef}
         aria-hidden
       >
         <span />
@@ -157,41 +162,18 @@ export function Home({
       </h2>
       <p className="k-home__detail">
         {connected ? (
-          <span className="k-home__hint">
-            {withNodes(t, "home.hint", {
-              ptt: <Keys keys={keys.pushToTalk} />,
-              type: <Keys keys={keys.typeToKivo} />,
-            })}
-          </span>
+          <span className="k-home__hint">{withNodes(t, hint, { ptt, type: <Keys keys={typeKeys} /> })}</span>
         ) : (
           view.detail
         )}
       </p>
 
       <div className="k-home__actions">
-        {connected && (
-          <Button
-            variant="primary"
-            icon="mic"
-            disabled={busy || session !== "idle" || snapshot.speech.state !== "ready"}
-            onClick={() => run(() => request(Method.sessionTalk))}
-          >
-            {t("home.talk")}
-          </Button>
-        )}
-        {session === "paused" ? (
+        {session === "paused" && (
           <Button icon="play" disabled={busy} onClick={() => run(() => request(Method.sessionResume))}>
             {t("home.resume")}
           </Button>
-        ) : session !== null ? (
-          <Button
-            icon="pause"
-            disabled={busy || !(session === "idle" || session === "followUp")}
-            onClick={() => run(() => request(Method.sessionPause))}
-          >
-            {t("home.pause")}
-          </Button>
-        ) : null}
+        )}
         {session !== null && session !== "idle" && session !== "paused" && (
           // The emergency stop (SEC-25): the turn, KIVO's voice and (from M5) tasks.
           <Button variant="stop" icon="stop" onClick={() => run(() => request(Method.sessionStopEverything))}>
@@ -220,7 +202,7 @@ export function Home({
             <Alert kind="warning" title={t("home.hotkeyTaken", { keys: snapshot.hotkeyConflict })}>
               <div className="k-home__rebind">
                 {t("home.hotkeyRebind")}
-                <ShortcutRecorder value={keys.pushToTalk} onChange={rebind} />
+                <ShortcutRecorder value={ways.keys} onChange={ways.setKeys} />
               </div>
             </Alert>
           )}
@@ -272,7 +254,7 @@ export function Home({
             }
           />
           {shown.length === 0 ? (
-            <Note>{withNodes(t, "home.nothingYet", { ptt: <Keys keys={["Ctrl", "Space"]} /> })}</Note>
+            <Note>{withNodes(t, ways.ptt ? "home.nothingYet" : "home.nothingYetWake", { ptt })}</Note>
           ) : (
             <Group>
               {shown.map((e) => (

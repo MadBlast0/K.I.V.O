@@ -341,6 +341,12 @@ impl Infer {
         self.engines.send_replace(engines);
     }
 
+    /// Loads the engines again if they are loaded: a model's files changed under them (an update
+    /// that brought new voices).
+    pub fn reload(&self) {
+        self.engines.send_modify(|_| {});
+    }
+
     /// The engines the settings choose. If they are loaded, they are reloaded as configured.
     /// The engines configured now (diagnostics and tests).
     pub fn configured(&self) -> Engines {

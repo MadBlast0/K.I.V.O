@@ -84,6 +84,24 @@ impl Wake {
         self.edited.notify_one();
     }
 
+    /// Whether a wake word can start KIVO with `config` (microphone listening on, the keyword
+    /// model here and a word enabled), counting `without` as off: push-to-talk may be off only
+    /// then (UX §4). A pause doesn't count; it ends.
+    pub fn can_wake(&self, config: &kivo_core::KivoConfig, without: Option<&str>) -> bool {
+        config.capabilities.enabled(Capability::MicListening)
+            && self.models.installed_dir(KEYWORD_SPOTTER).is_some()
+            && self
+                .db
+                .lock()
+                .ok()
+                .and_then(|db| db.wake_words().ok())
+                .is_some_and(|words| {
+                    words
+                        .iter()
+                        .any(|w| w.enabled && Some(w.id.as_str()) != without)
+                })
+    }
+
     /// What the listener should listen for now, if anything.
     pub fn plan(&self) -> Option<HandsFree> {
         let config = self.core.config();

@@ -102,6 +102,19 @@ export function Tooltip({ content, children }: { content: ReactNode; children: R
   );
 }
 
+/** A word that may be new to someone who hasn't used AI before ("speech-to-text", "brain"),
+ * underlined with dots, with a plain explanation on hover or keyboard focus. */
+export function Explain({ tip, children }: { tip: ReactNode; children: ReactNode }) {
+  return (
+    <Tooltip content={tip}>
+      {/* A button, so the explanation is reachable from the keyboard too. */}
+      <button type="button" className="k-term">
+        {children}
+      </button>
+    </Tooltip>
+  );
+}
+
 /* ───────── Dialog ───────── */
 export interface DialogProps {
   open?: boolean;

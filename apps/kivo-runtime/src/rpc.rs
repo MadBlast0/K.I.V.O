@@ -195,11 +195,18 @@ impl Handler for Rpc {
             {
                 return result;
             }
-            if let Some(voice) = voice
+            if let Some(voice) = &voice
                 && let Some(result) = voice.call(&name, params.clone()).await
             {
                 return result;
             }
+            // One way to call KIVO always stays (UX §4): push-to-talk goes off only while a wake
+            // word can start KIVO, and the microphone listening a wake word needs stays on while
+            // push-to-talk is off. Every preset keeps push-to-talk on.
+            let can_wake = |config: &kivo_core::KivoConfig| {
+                config.capabilities.enabled(Capability::PushToTalk)
+                    || voice.as_ref().is_some_and(|v| v.can_wake(config))
+            };
             let refused = |e: crate::core::Refused| RpcError::new(RpcError::REFUSED, e.0);
             let refuse = |message: String| RpcError::new(RpcError::REFUSED, message);
             match name.as_str() {
@@ -322,6 +329,11 @@ impl Handler for Rpc {
                         on: bool,
                     }
                     let Params { capability, on } = parse(params)?;
+                    let mut after = core.config();
+                    after.capabilities.set(capability, on);
+                    if !can_wake(&after) {
+                        return Err(refuse(kivo_core::text::t("voice.oneWayToCall")));
+                    }
                     let mut changed = false;
                     core.update_config(|config| {
                         changed = config.capabilities.set(capability, on);
@@ -491,6 +503,9 @@ impl Handler for Rpc {
                                 .join("; "),
                         )
                     })?;
+                    if !can_wake(&config) {
+                        return Err(refuse(kivo_core::text::t("voice.oneWayToCall")));
+                    }
                     let saved = core.update_config(|c| *c = config);
                     models.apply_engines(&saved);
                     engine.settings_changed(&saved);
@@ -655,6 +670,16 @@ mod tests {
         .await
         .unwrap();
         assert!(core.config().capabilities.enabled(Capability::Shell));
+        // Push-to-talk stays on while no wake word can start KIVO (none here): one way to call
+        // KIVO always stays (UX §4).
+        let off = call(
+            &rpc,
+            method::CAPABILITIES_SET,
+            json!({"capability": "push-to-talk", "on": false}),
+        )
+        .await;
+        assert_eq!(off.unwrap_err().code, RpcError::REFUSED);
+        assert!(core.config().capabilities.enabled(Capability::PushToTalk));
         // Unknown capabilities and missing fields are refused.
         assert!(
             call(

@@ -242,6 +242,24 @@ export function GeneralTab() {
           }
         />
         <Row
+          icon="compass"
+          title={t("settings.general.setupAgain")}
+          subtitle={t("settings.general.setupAgainHint")}
+          end={
+            <Button
+              size="sm"
+              onClick={() =>
+                void request(Method.settingsSet, { general: { onboarded: false } })
+                  // The app opens on setup when it isn't done.
+                  .then(() => window.location.reload())
+                  .catch((e: unknown) => toast(message(e)))
+              }
+            >
+              {t("settings.general.setupAgainButton")}
+            </Button>
+          }
+        />
+        <Row
           icon="refresh"
           title={t("settings.general.reset")}
           subtitle={t("settings.general.resetHint")}

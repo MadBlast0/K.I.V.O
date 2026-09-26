@@ -40,7 +40,7 @@ export interface WakeWord {
   falseAlarmTest: { minutes: number; falseAlarms: number } | null;
 }
 
-interface WakeList {
+export interface WakeList {
   words: WakeWord[];
   modelInstalled: boolean;
   listening: boolean;
@@ -73,7 +73,7 @@ const MAX_ENABLED = 5;
 const TONE: Record<Quality, Tone> = { good: "success", fair: "warning", risky: "danger" };
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-function useWakeWords() {
+export function useWakeWords() {
   const { link, request } = useRuntime();
   const connected = link?.status === "connected";
   const [list, setList] = useState<WakeList | null>(null);
@@ -92,31 +92,15 @@ function useWakeWords() {
 
 /** Turns a word on: the keyword model downloads if it isn't here, and hands-free listening turns
  * on (the Microphone listening capability). */
-async function enable(request: <T>(m: Method, p?: unknown) => Promise<T>, list: WakeList, id: string, on: boolean) {
+export async function enable(
+  request: <T>(m: Method, p?: unknown) => Promise<T>,
+  list: WakeList,
+  id: string,
+  on: boolean,
+) {
   if (on && !list.modelInstalled) await request(Method.modelsInstall, { id: KEYWORD_MODEL });
   await request(Method.wakeSet, { id, enabled: on });
   if (on && !list.listening) await request(Method.capabilitiesSet, { capability: "mic-listening", on: true });
-}
-
-/** "Hey Kivo" on or off (onboarding step 3). */
-export function HeyKivoSwitch() {
-  const { t } = useTranslation();
-  const toast = useToast();
-  const { list, load, request } = useWakeWords();
-  const word = list?.words.find((w) => w.builtIn);
-  if (!list || !word) return null;
-  const on = word.enabled && list.listening;
-  return (
-    <Switch
-      label={t("wake.heyKivo")}
-      checked={on}
-      onChange={(v) => {
-        enable(request, list, word.id, v)
-          .catch((e: unknown) => toast(message(e)))
-          .finally(load);
-      }}
-    />
-  );
 }
 
 function concernText(t: (k: string, o?: Record<string, unknown>) => string, c: Concern) {

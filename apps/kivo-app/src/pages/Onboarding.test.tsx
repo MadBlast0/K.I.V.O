@@ -49,7 +49,7 @@ const choices: SpeechChoices = {
       model: null,
       ready: true,
       fitsLanguage: true,
-      voices: [{ id: "zira", name: "Microsoft Zira", style: "", languages: ["en-US"] }],
+      voices: [{ id: "zira", name: "Microsoft Zira", style: "", languages: ["en-US"], character: "" }],
       measured: null,
     },
   ],
@@ -112,6 +112,21 @@ vi.mock("../ipc/runtime", () => ({
   useRuntimeEvents: () => {},
 }));
 
+// "Hey Kivo" as the runtime has it, and push-to-talk (tests change them).
+const heyKivo = {
+  id: "hey-kivo",
+  phrase: "Hey Kivo",
+  phonetic: null,
+  enabled: false,
+  builtIn: true,
+  sensitivity: 0.8,
+  samples: [],
+  quality: "good",
+  falseAlarmTest: null,
+};
+let wake = { words: [heyKivo], modelInstalled: false, listening: false };
+let ptt = true;
+
 const sectionOf = (params: unknown) =>
   typeof params === "object" && params !== null && "section" in params ? String(params.section) : "";
 
@@ -131,7 +146,7 @@ runtime.request = (method: string, params?: unknown) => {
         voice: { "push-to-talk": ["Ctrl", "Space"] },
         general: { "keep-running-on-close": true },
         overlay: { position: "top-center" },
-        sounds: { enabled: true },
+        sounds: { enabled: true, set: "soft" },
         performance: { profile: "auto" },
         privacy: { mode: "cloud" },
       });
@@ -145,7 +160,19 @@ runtime.request = (method: string, params?: unknown) => {
     case "browser.status":
       return Promise.resolve({ connected: false, extensionId: "x", folder: "C:\\KIVO\\extension" });
     case "wake.list":
-      return Promise.resolve({ words: [], modelInstalled: false, listening: false });
+      return Promise.resolve(wake);
+    case "voice.devices":
+      return Promise.resolve({
+        inputs: [{ id: "mic-1", name: "USB Microphone", isDefault: true }],
+        outputs: [{ id: "spk-1", name: "Speakers", isDefault: true }],
+      });
+    case "capabilities.get":
+      return Promise.resolve([
+        { capability: "push-to-talk", label: "Push-to-talk", enabled: ptt, default: true, badges: [], lastUsed: null },
+      ]);
+    case "capabilities.set":
+      ptt = typeof params === "object" && params !== null && "on" in params && params.on === true;
+      return Promise.resolve([]);
     case "voiceId.status":
       return Promise.resolve({ enrolled: false, prompts: ["Hey Kivo"], recorded: [false], embeddings: 0 });
     case "brains.list":
@@ -217,35 +244,45 @@ async function next() {
 describe("Onboarding (UX-33–36, UX-60)", () => {
   beforeEach(() => {
     calls.length = 0;
+    wake = { words: [{ ...heyKivo }], modelInstalled: false, listening: false };
+    ptt = true;
   });
 
-  it("walks all eleven steps, then Finish marks setup done", async () => {
+  it("walks every step, then Finish marks setup done", async () => {
     const onFinish = await mount();
     expect(screen.getByText("Talk to your PC.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Get started" }));
     await settle();
 
-    expect(await screen.findByText("Check your microphone")).toBeTruthy();
-    expect(screen.getByText("Voice · 1 of 5")).toBeTruthy();
+    // First the microphone and speaker: the system's by default, each tested.
+    expect(await screen.findByText("Your microphone and speaker")).toBeTruthy();
+    expect(screen.getByText("Voice · 1 of 4")).toBeTruthy();
+    expect(screen.getAllByText("System default · USB Microphone").length).toBeGreaterThan(0);
     expect(await violations()).toEqual([]);
     fireEvent.click(screen.getByRole("button", { name: "Test" }));
     await settle();
     expect(screen.getByText("Sounds good")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Play a sound" }));
+    await settle();
+    expect(calls).toContainEqual({ method: "sounds.preview", params: { set: "soft" } });
     await next();
 
-    expect(await screen.findByText("How do you call KIVO?")).toBeTruthy();
-    await next();
-
-    expect(await screen.findByText("How KIVO hears and speaks")).toBeTruthy();
-    expect(await violations()).toEqual([]);
-    expect(screen.getByText("Recommended for your PC")).toBeTruthy();
+    // Then how KIVO hears and speaks: four presets, the one for this PC in use already.
+    expect(await screen.findByText("Choose how KIVO hears and speaks")).toBeTruthy();
+    for (const name of ["Recommended", "High", "Medium", "Low"]) {
+      expect(screen.getByRole("radio", { name: new RegExp(`^${name}`) })).toBeTruthy();
+    }
     expect(screen.getByText("This is a mid-range PC.")).toBeTruthy();
+    expect(screen.getByText("All set: KIVO can hear and speak.")).toBeTruthy();
     expect(screen.getByText("Microsoft Zira")).toBeTruthy();
+    expect(await violations()).toEqual([]);
     await next();
 
-    expect(await screen.findByText("Your setup")).toBeTruthy();
-    expect(screen.getByText(/Moonshine Base · Local/)).toBeTruthy();
-    expect(screen.getByText(/up to 4 cores/)).toBeTruthy();
+    // Then how to call KIVO, with a first try.
+    expect(await screen.findByText("How do you call KIVO?")).toBeTruthy();
+    expect(screen.getByRole("switch", { name: "Say “Hey Kivo”" })).toBeTruthy();
+    expect(screen.getByRole("switch", { name: "Push-to-talk" })).toBeTruthy();
+    expect(await violations()).toEqual([]);
     await next();
 
     expect(await screen.findByText("Teach KIVO your voice")).toBeTruthy();
@@ -338,7 +375,8 @@ describe("Onboarding (UX-33–36, UX-60)", () => {
     expect(onFinish).toHaveBeenCalledWith("extensions/mcp");
   }, 20_000);
 
-  it("shows how calling KIVO looks, lists Hey Kivo first and follows a live try (owner, 2026-09-26)", async () => {
+  it("shows how calling KIVO looks, keeps one way on and follows a live try (owner, 2026-09-26)", async () => {
+    wake = { words: [{ ...heyKivo, enabled: true }], modelInstalled: true, listening: true };
     runtime.link = {
       status: "connected",
       runtimeVersion: "0.0.0",
@@ -349,11 +387,21 @@ describe("Onboarding (UX-33–36, UX-60)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Get started" }));
     await settle();
     await next();
+    await next();
     expect(await screen.findByText("How do you call KIVO?")).toBeTruthy();
-    // "Hey Kivo" comes before "Hold to talk".
-    const wake = screen.getByText("“Hey Kivo”");
-    const hold = screen.getByText("Hold to talk");
-    expect(wake.compareDocumentPosition(hold) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // "Hey Kivo" comes before push-to-talk, and both are on.
+    const heyKivoSwitch = screen.getByRole("switch", { name: "Say “Hey Kivo”" });
+    const pttSwitch = screen.getByRole("switch", { name: "Push-to-talk" });
+    expect(heyKivoSwitch.compareDocumentPosition(pttSwitch) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByText("At least one stays on, so you can always reach KIVO.")).toBeNull();
+    // Push-to-talk off: "Hey Kivo" is now the only way, so it can't be switched off.
+    fireEvent.click(pttSwitch);
+    await settle();
+    expect(calls).toContainEqual({ method: "capabilities.set", params: { capability: "push-to-talk", on: false } });
+    expect(screen.getByText("At least one stays on, so you can always reach KIVO.")).toBeTruthy();
+    expect(screen.getByRole("switch", { name: "Say “Hey Kivo”" }).hasAttribute("data-disabled")).toBe(true);
+    // The try only mentions "Hey Kivo" now.
+    expect(screen.getByText(/^Say “Hey Kivo, what time is it\?”/)).toBeTruthy();
     // The Island plays a request, and the try follows KIVO listening.
     expect(document.querySelector(".k-onboarding__demo .k-island")).toBeTruthy();
     expect(screen.getByText("Try it now")).toBeTruthy();
@@ -361,7 +409,7 @@ describe("Onboarding (UX-33–36, UX-60)", () => {
     runtime.link = { status: "connected", runtimeVersion: "0.0.0", snapshot: { mode: "auto" }, message: null };
   });
 
-  it("asks before downloading the recommended models that are missing", async () => {
+  it("asks before downloading, and waits for both models before Continue", async () => {
     const stt = choices.engines[0];
     stt.ready = false;
     try {
@@ -369,16 +417,21 @@ describe("Onboarding (UX-33–36, UX-60)", () => {
       fireEvent.click(screen.getByRole("button", { name: "Get started" }));
       await settle();
       await next();
-      await next();
-      expect(await screen.findByText("How KIVO hears and speaks")).toBeTruthy();
-      fireEvent.click(screen.getByRole("button", { name: "Use recommended" }));
+      expect(await screen.findByText("Choose how KIVO hears and speaks")).toBeTruthy();
+      // Not ready yet: Continue waits.
+      expect(screen.getByRole("button", { name: "Continue" })).toHaveProperty("disabled", true);
+      expect(screen.getAllByText(/135 MB to download/).length).toBeGreaterThan(0);
+      fireEvent.click(screen.getByRole("button", { name: "Download and set up" }));
       await settle();
       expect(screen.getByText("Download what’s recommended?")).toBeTruthy();
       expect(screen.getByText(/135 MB · MIT/)).toBeTruthy();
       expect(calls.some((c) => c.method === "voice.switch")).toBe(false);
       fireEvent.click(screen.getByRole("button", { name: "Download and use" }));
       await settle();
-      expect(calls.some((c) => c.method === "voice.switch")).toBe(true);
+      expect(calls).toContainEqual({
+        method: "voice.switch",
+        params: { slot: "stt", engine: "moonshine-base-en", voice: null },
+      });
     } finally {
       stt.ready = true;
     }
@@ -395,14 +448,12 @@ describe("Onboarding (UX-33–36, UX-60)", () => {
     await mount();
     fireEvent.click(screen.getByRole("button", { name: "Get started" }));
     await settle();
-    // Through the four steps before "Your voice", one at a time.
-    await screen.findByText("Check your microphone");
+    // Through the three steps before "Your voice", one at a time.
+    await screen.findByText("Your microphone and speaker");
+    await next();
+    await screen.findByText("Choose how KIVO hears and speaks");
     await next();
     await screen.findByText("How do you call KIVO?");
-    await next();
-    await screen.findByText("How KIVO hears and speaks");
-    await next();
-    await screen.findByText("Your setup");
     await next();
     const start = await screen.findByRole("button", { name: "Start" });
     expect(start).toHaveProperty("disabled", true);

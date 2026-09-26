@@ -1,22 +1,23 @@
 /**
- * First-launch setup (UX §4, UX-33–35, UX-60): eleven short screens in five phases. Welcome; Voice —
- * check the microphone, how you call KIVO, how it hears and speaks (recommended for this PC, with
- * the other profiles a click away), a summary, and optionally the owner's voice; Brain — connect a
- * brain (sign-in without keys, free options marked) and apps and tools; Control — the permission
- * mode, look & feel, startup; Ready — Try it. One decision per screen, the recommended answer
- * preselected from this PC (UX-36); Finish (or skipping from Welcome's fine print) marks setup
- * done and opens the Control Center.
+ * First-launch setup (UX §4, UX-33–35, UX-60): short screens in five phases, in the order someone
+ * new needs them. Welcome; Voice — the microphone and speaker (picked and tested), how KIVO hears
+ * and speaks (a preset for this PC, downloaded with consent, loaded and tested before Continue),
+ * how you call KIVO ("Hey Kivo", push-to-talk, and a first try), and optionally the owner's voice;
+ * Brain — connect a brain and apps; Control — the permission mode, look & feel, startup; Ready —
+ * Try it. One decision per screen, the recommended answer preselected from this PC (UX-36), plain
+ * words with the technical ones explained on hover. Finish (or skipping from Welcome's fine print)
+ * marks setup done and opens the Control Center.
  */
 import { AnimatePresence, motion, useReducedMotionConfig } from "motion/react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Island } from "../components/island/Island";
 import { Enrollment } from "../components/voice/Enrollment";
-import { MicCheck } from "../components/voice/MicCheck";
-import { Recommended, SpeechChooser, VoiceList } from "../components/voice/SpeechChooser";
-import { useSpeech, type Speech } from "../components/voice/useSpeech";
-import { HeyKivoSwitch } from "../components/voice/WakeWords";
-import { Button, Group, Monogram, Pill, Row, Section, ShortcutRecorder, Spinner, useToast } from "../components/ui";
+import { CallKivo, useCallWays } from "../components/voice/CallKivo";
+import { useSpeech } from "../components/voice/useSpeech";
+import { Button, Group, Monogram, Pill, Row, Section, Spinner, useToast } from "../components/ui";
+import { DevicesStep } from "../components/onboarding/Devices";
+import { SpeechSetup, speechReady } from "../components/onboarding/SpeechSetup";
 import { AppsStep, LookStep, ModeStep, Reasons, StartupStep, TryStep, useAdvice } from "../components/onboarding/steps";
 import { IslandDemo, TryItNow } from "../components/onboarding/TryVoice";
 import { brainColor, monogram, type BrainsList, type DiscoverySection } from "../ipc/brains";
@@ -26,10 +27,9 @@ import { useRuntime } from "../ipc/runtime";
 
 const STEPS = [
   "welcome",
-  "mic",
-  "activation",
+  "devices",
   "speech",
-  "summary",
+  "activation",
   "voice",
   "brain",
   "apps",
@@ -43,10 +43,9 @@ type Step = (typeof STEPS)[number];
 const PHASES = ["welcome", "voice", "brain", "control", "ready"] as const;
 const PHASE_OF: Record<Step, number> = {
   welcome: 0,
-  mic: 1,
-  activation: 1,
+  devices: 1,
   speech: 1,
-  summary: 1,
+  activation: 1,
   voice: 1,
   brain: 2,
   apps: 2,
@@ -123,68 +122,12 @@ function Welcome({ onStart, onSkip }: { onStart: () => void; onSkip: () => void 
 }
 
 function Activation() {
-  const { t } = useTranslation();
-  const { link, request } = useRuntime();
-  const toast = useToast();
-  const [keys, setKeys] = useState<string[] | null>(null);
-  const connected = link?.status === "connected";
-  useEffect(() => {
-    if (!connected) return;
-    void request<{ voice: Record<string, unknown> }>(Method.settingsGet)
-      .then((s) => {
-        const v = s.voice["push-to-talk"];
-        setKeys(Array.isArray(v) ? v.map(String) : ["Ctrl", "Space"]);
-      })
-      .catch(() => {});
-  }, [connected, request]);
-  const save = (next: string[]) =>
-    request(Method.settingsSet, { voice: { "push-to-talk": next } })
-      .then(() => setKeys(next))
-      .catch((e: unknown) => toast(e instanceof Error ? e.message : String(e)));
+  const ways = useCallWays();
   return (
     <>
       <IslandDemo />
-      <Group>
-        <Row
-          icon="mic"
-          title={t("onboarding.activation.wake")}
-          subtitle={t("onboarding.activation.wakeHint")}
-          end={<HeyKivoSwitch />}
-        />
-        <Row
-          icon="keyboard"
-          title={t("onboarding.activation.hold")}
-          subtitle={t("onboarding.activation.holdHint")}
-          end={keys && <ShortcutRecorder value={keys} onChange={(k) => void save(k)} />}
-        />
-      </Group>
-      <TryItNow keys={keys} />
-      <p className="k-note">{t("onboarding.activation.note")}</p>
-    </>
-  );
-}
-
-function Speaking({ speech }: { speech: Speech }) {
-  const { t } = useTranslation();
-  const [others, setOthers] = useState(false);
-  return (
-    <>
-      <Recommended speech={speech} />
-      <div className="k-speech__actions">
-        <Button size="sm" variant="plain" onClick={() => setOthers((o) => !o)}>
-          {others ? t("onboarding.speech.fewer") : t("onboarding.speech.others")}
-        </Button>
-      </div>
-      {others && (
-        <>
-          <Section title={t("speech.sttTitle")} />
-          <SpeechChooser slot="stt" speech={speech} />
-          <Section title={t("speech.ttsTitle")} />
-          <SpeechChooser slot="tts" speech={speech} />
-        </>
-      )}
-      <VoiceList speech={speech} />
-      <p className="k-note">{t("onboarding.speech.background")}</p>
+      <CallKivo ways={ways} />
+      <TryItNow ways={ways} />
     </>
   );
 }
@@ -293,48 +236,6 @@ function ConnectBrain({ advice }: { advice: SetupAdvice | null }) {
   );
 }
 
-/** The confirm step (UX-60): what KIVO will use, in words. */
-function Summary({ speech }: { speech: Speech }) {
-  const { t } = useTranslation();
-  const { choices, recommendation } = speech;
-  if (!choices) return null;
-  const engine = (id: string) => choices.engines.find((e) => e.id === id);
-  const stt = engine(choices.stt);
-  const tts = engine(choices.tts);
-  const voice = tts?.voices.find((v) => v.id === choices.ttsVoice) ?? tts?.voices[0];
-  return (
-    <Group>
-      <Row
-        icon="mic"
-        title={t("onboarding.summary.understanding")}
-        subtitle={
-          stt
-            ? `${stt.name} · ${t(`speech.privacy.${stt.privacy}`)}${stt.ready ? "" : ` · ${t("onboarding.summary.downloading")}`}`
-            : t("onboarding.summary.none")
-        }
-      />
-      <Row
-        icon="volume"
-        title={t("onboarding.summary.speaking")}
-        subtitle={tts ? [tts.name, voice?.name].filter(Boolean).join(" · ") : t("onboarding.summary.none")}
-      />
-      <Row icon="brain" title={t("onboarding.summary.ai")} subtitle={t("onboarding.summary.aiLater")} />
-      <Row
-        icon="performance"
-        title={t("onboarding.summary.resources")}
-        subtitle={
-          recommendation
-            ? t("onboarding.summary.resourcesLine", {
-                tier: t(`onboarding.summary.tier.${recommendation.tier}`),
-                threads: recommendation.threads,
-              })
-            : t("onboarding.summary.none")
-        }
-      />
-    </Group>
-  );
-}
-
 export function Onboarding({ onFinish }: { onFinish: (then?: string) => void }) {
   const { t } = useTranslation();
   const { request } = useRuntime();
@@ -359,6 +260,10 @@ export function Onboarding({ onFinish }: { onFinish: (then?: string) => void }) 
   const [direction, setDirection] = useState(1);
   const step: Step = STEPS[index] ?? "welcome";
   const last = index === STEPS.length - 1;
+  // KIVO has to hear and speak before the steps that use it: Continue waits until both models
+  // are here, loaded and tested; after a failure, "Set up later" is the way on.
+  const blocked = step === "speech" && !speechReady(speech);
+  const speechFailed = (["stt", "tts"] as const).some((slot) => speech.progress[slot]?.stage === "failed");
 
   const finish = () =>
     request(Method.settingsSet, { general: { onboarded: true } })
@@ -378,10 +283,9 @@ export function Onboarding({ onFinish }: { onFinish: (then?: string) => void }) 
   }
 
   const body: Record<Exclude<Step, "welcome">, ReactNode> = {
-    mic: <MicCheck />,
+    devices: <DevicesStep />,
+    speech: <SpeechSetup speech={speech} />,
     activation: <Activation />,
-    speech: <Speaking speech={speech} />,
-    summary: <Summary speech={speech} />,
     voice: <Enrollment onDone={() => go(1)} />,
     brain: <ConnectBrain advice={advice} />,
     apps: <AppsStep onAfter={setAfter} />,
@@ -414,12 +318,12 @@ export function Onboarding({ onFinish }: { onFinish: (then?: string) => void }) 
           {t("onboarding.back")}
         </Button>
         <span className="k-onboarding__spacer" />
-        {OPTIONAL.has(step) && (
+        {(OPTIONAL.has(step) || (step === "speech" && speechFailed)) && (
           <Button variant="plain" onClick={() => (last ? void finish() : go(1))}>
-            {t("onboarding.skip")}
+            {step === "speech" ? t("onboarding.speech.later") : t("onboarding.skip")}
           </Button>
         )}
-        <Button variant="primary" onClick={() => (last ? void finish() : go(1))}>
+        <Button variant="primary" disabled={blocked} onClick={() => (last ? void finish() : go(1))}>
           {last ? t("onboarding.finish") : t("onboarding.continue")}
         </Button>
       </div>

@@ -794,7 +794,8 @@ fn smart_turn() -> ModelManifest {
     }
 }
 
-/// Kokoro-82M (Apache-2.0): the quantized ONNX model, five voices, and misaki's US dictionaries
+/// Kokoro-82M (Apache-2.0): the ONNX model, five English voices and three Japanese ones (Anime),
+/// and misaki's US dictionaries
 /// (Apache-2.0) for KIVO's phonemizer (VOICE-09).
 fn kokoro() -> ModelManifest {
     const MODEL: &str = "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/1939ad2a8e416c0acfeecc08a694d14ef25f2231";
@@ -828,6 +829,10 @@ fn kokoro() -> ModelManifest {
             voice("am_michael", "1d1f21dd8da39c30705cd4c75d039d265e9bc4a2a93ed09bc9e1b1225eb95ba1"),
             voice("bf_emma", "669fe0647f9dd04fcab92f1439a40eeb4c8b4ab1f82e4996fe3d918ce4a63b73"),
             voice("bm_george", "c4b235a4c1f2cd3b939fed08b899ce9385638b763f7b73a59616c4fc9bd6c9bc"),
+            // Anime: Kokoro's Japanese voices reading English, with their accent.
+            voice("jf_alpha", "56b479360aad9f367aeb8cef908f9201cf48b4555e488c5f4590c9dfcd978bb6"),
+            voice("jf_tebukuro", "29c6c0561b4288d59639677bebe7533c919743d5ea68d0d2ae992644beea6696"),
+            voice("jm_kumo", "09e959d239724c734d65661f06f14cdabcddfd476bfaaad905a937099ae9e64f"),
             ModelFile {
                 name: "us_gold.json".into(),
                 url: format!("{MISAKI}/us_gold.json"),
@@ -1017,7 +1022,9 @@ impl ModelStore {
     }
 
     /// Installs the catalog's version of a model that is already installed: the new files are
-    /// downloaded beside it and swapped in when complete.
+    /// downloaded beside it and swapped in when complete. Files the new version shares with the
+    /// installed one (same name and checksum) are copied, not downloaded again: new voices for a
+    /// voice model are a small download.
     pub fn update(
         &self,
         manifest: &ModelManifest,
@@ -1025,6 +1032,35 @@ impl ModelStore {
         cancel: &CancellationToken,
         progress: &mut dyn FnMut(Progress),
     ) -> Result<InstalledModel, ModelError> {
+        if let Some(installed) = self.installed(&manifest.id) {
+            let partial = self.partial_dir(&manifest.id);
+            for file in &manifest.files {
+                let same = installed
+                    .manifest
+                    .files
+                    .iter()
+                    .any(|f| f.name == file.name && f.sha256 == file.sha256);
+                if !same {
+                    continue;
+                }
+                // An archive is kept as its unpacked members; a plain file as itself.
+                let names: Vec<&str> = if file.unpack.is_empty() {
+                    vec![file.name.as_str()]
+                } else {
+                    file.unpack.iter().map(|u| u.to.as_str()).collect()
+                };
+                for name in names {
+                    let target = partial.join(name);
+                    if target.is_file() {
+                        continue;
+                    }
+                    if let Some(parent) = target.parent() {
+                        fs::create_dir_all(parent)?;
+                    }
+                    fs::copy(installed.dir.join(name), &target)?;
+                }
+            }
+        }
         self.install_files(manifest, fetcher, cancel, progress)
     }
 
@@ -1385,6 +1421,28 @@ mod tests {
             vec![8; 4000]
         );
         assert!(!store.update_available(&updated, &newer));
+        // New voices for an installed model: only the new file downloads; the rest is copied.
+        let voices: [(&str, &[u8]); 3] = [
+            ("a.onnx", &[8; 4000]),
+            ("b.bin", &[9; 3000]),
+            ("voices/new.bin", &[5; 700]),
+        ];
+        let with_voices = manifest(&voices);
+        let only_new: [(&str, &[u8]); 1] = [("voices/new.bin", &[5; 700])];
+        let mut fetched = 0;
+        let topped = store
+            .update(
+                &with_voices,
+                &server(&only_new, None),
+                &CancellationToken::new(),
+                &mut |p| fetched = p.done,
+            )
+            .unwrap();
+        assert_eq!(topped.bytes, 7700);
+        assert_eq!(
+            fetched, 7700,
+            "the shared files count as done without a download"
+        );
         // Cancel: an unfinished download is dropped.
         let other = ModelManifest {
             id: "other".into(),

@@ -637,6 +637,7 @@
     "helloFailed": "Windows Hello didn’t confirm it, so KIVO won’t do it."
   },
   "voice": {
+    "oneWayToCall": "Keep at least one way to call KIVO: “Hey Kivo” or push-to-talk.",
     "removeActive": "KIVO listens with this model and no other can take over. Download another one first, or confirm removing it.",
     "fallbackTts": "{from} stopped working, so KIVO is using the Windows voices for now. Your choice is kept.",
     "fallbackStt": "{from} stopped working, so KIVO is listening with {to} for now. Your choice is kept.",

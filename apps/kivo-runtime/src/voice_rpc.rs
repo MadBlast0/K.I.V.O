@@ -258,6 +258,7 @@ impl VoiceRpc {
                 name: v.name,
                 style: String::new(),
                 languages: vec![v.language],
+                character: String::new(),
             })
             .collect();
         let engines = self
@@ -288,6 +289,7 @@ impl VoiceRpc {
                             name: v.name,
                             style: v.style,
                             languages: v.languages,
+                            character: v.character,
                         })
                         .collect()
                 },
@@ -775,6 +777,15 @@ impl VoiceRpc {
                     Ok(p) => p,
                     Err(e) => return Some(Err(e)),
                 };
+                let config = self.core.config();
+                if p.enabled == Some(false)
+                    && !config
+                        .capabilities
+                        .enabled(kivo_core::Capability::PushToTalk)
+                    && !self.wake.can_wake(&config, Some(&p.id))
+                {
+                    return Some(Err(refuse(text::t("voice.oneWayToCall"))));
+                }
                 let db = lock(&self.db);
                 let result = p
                     .enabled
@@ -1156,6 +1167,13 @@ fn speech_budget() -> SpeechBudget {
         cancel_ms: t::CANCEL_MS,
         word_error_rate: t::WORD_ERROR_RATE,
         noisy_word_error_rate: t::NOISY_WORD_ERROR_RATE,
+    }
+}
+
+impl VoiceRpc {
+    /// Whether a wake word can start KIVO with `config`: push-to-talk may be off only then.
+    pub fn can_wake(&self, config: &kivo_core::KivoConfig) -> bool {
+        self.wake.can_wake(config, None)
     }
 }
 

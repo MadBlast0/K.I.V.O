@@ -21,6 +21,7 @@ export const SETTINGS_INDEX: ReadonlyArray<SettingEntry> = [
   { tab: "general", label: "settings.general.startWithWindows", icon: "power", keywords: "startup autostart login" },
   { tab: "general", label: "settings.general.keepRunning", icon: "tray", keywords: "close tray background" },
   { tab: "general", label: "settings.general.trayIcon", icon: "tray", keywords: "notification area" },
+  { tab: "general", label: "settings.general.setupAgain", icon: "compass", keywords: "onboarding first run welcome" },
   { tab: "general", label: "settings.general.lowMemory", icon: "cpu", keywords: "ram light slow" },
   { tab: "general", label: "settings.general.spoken", icon: "mic", keywords: "language speak" },
   { tab: "general", label: "settings.general.format", icon: "clock", keywords: "date time number region" },

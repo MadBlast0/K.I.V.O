@@ -522,7 +522,11 @@ export type VoiceItem = { id: string, name: string,
 /**
  * `female`, `male` or empty.
  */
-style: string, languages: Array<string>, };
+style: string, languages: Array<string>, 
+/**
+ * `anime` for the Anime voices, empty for everyday ones.
+ */
+character: string, };
 
 export type MeasuredItem = { realTimeFactor: number | null, latencyMs: number | null, wordErrorRate: number | null, 
 /**

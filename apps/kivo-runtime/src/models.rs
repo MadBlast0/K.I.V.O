@@ -627,6 +627,10 @@ impl Models {
                     tracing::info!(model = id, bytes = installed.bytes, "model installed");
                     models.changed(&id, None, true);
                     models.apply_engines(&models.core.config());
+                    if update {
+                        // The loaded engine still has the old files' contents (its voices).
+                        models.infer.reload();
+                    }
                 }
                 Err(e) => {
                     tracing::error!(%e, model = id, "the model download failed");

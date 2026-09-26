@@ -233,7 +233,11 @@ pub fn recommend(s: &SystemSnapshot, needs: &Needs<'_>) -> Recommendation {
             usable(e, EngineSlot::Tts) && fast_enough(e) && e.engine.id != system && e.has(profile)
         })
     };
-    let tts_engine = if light && needs.priority != Priority::Voice {
+    // A natural voice whenever the PC has room for one (owner, 2026-09-26): asking for speed
+    // keeps it (Kokoro starts speaking quickly); a small PC, or asking to use as little of the
+    // PC as possible, gets the Windows voices.
+    let spare = tier == Tier::Low || needs.priority == Priority::Resources;
+    let tts_engine = if spare && needs.priority != Priority::Voice {
         system
     } else if let Some(natural) = voice(Profile::Natural) {
         natural.id()

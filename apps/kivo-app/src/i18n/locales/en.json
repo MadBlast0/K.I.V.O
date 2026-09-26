@@ -122,12 +122,13 @@
     "talkLive": "Talk live"
   },
   "home": {
-    "talk": "Talk",
     "pause": "Pause listening",
     "resume": "Resume listening",
     "start": "Start KIVO",
     "mode": "Permission mode",
-    "hint": "Hold {ptt} to talk · {type} to type",
+    "hintBoth": "Say “Hey Kivo” or hold {ptt} · {type} to type",
+    "hintWake": "Say “Hey Kivo” · {type} to type",
+    "hintKeys": "Hold {ptt} to talk · {type} to type",
     "downloading": "Getting speech recognition ready · {percent, number, ::percent scale/0.01}",
     "missing": "Choose how KIVO understands you: pick a speech model on the Voice page and it downloads in the background.",
     "chooseModel": "Choose a speech model",
@@ -137,6 +138,7 @@
     "recent": "Recent",
     "activity": "Activity",
     "nothingYet": "Nothing yet. Hold {ptt} and say “open Chrome”.",
+    "nothingYetWake": "Nothing yet. Say “Hey Kivo, open Chrome”.",
     "version": "KIVO {version}",
     "incompatible": "Quit KIVO from the tray, then open it again.",
     "stopEverything": "Stop everything",
@@ -894,7 +896,12 @@
       "testing": "Testing…",
       "testAndSave": "Test and save",
       "saved": "{name} is ready to use"
-    }
+    },
+    "anime": "Anime",
+    "animeHint": "Japanese-accented voices with a playful anime feel.",
+    "getAnime": "Get the anime voices",
+    "getAnimeHint": "A small download (about 2 MB) added to Kokoro.",
+    "getAnimeButton": "Download"
   },
   "onboarding": {
     "setUp": "Set up KIVO",
@@ -921,10 +928,8 @@
     "mic": {
       "title": "Check your microphone",
       "sub": "Press Test and say anything. The bars should move.",
-      "device": "Microphone",
-      "deviceHint": "The one Windows uses by default",
-      "level": "Level",
-      "levelHint": "Speak at a normal volume",
+      "level": "Test your microphone",
+      "levelHint": "Press Test and say anything, like “Hello KIVO”",
       "speakNow": "Listening… say anything",
       "test": "Test",
       "again": "Test again",
@@ -936,12 +941,7 @@
     },
     "activation": {
       "title": "How do you call KIVO?",
-      "sub": "Use either, or both.",
-      "hold": "Hold to talk",
-      "holdHint": "Hold while you speak. Works in noisy rooms.",
-      "wake": "“Hey Kivo”",
-      "wakeHint": "Hands-free. Listening happens on this PC; nothing is sent until you say it.",
-      "note": "Turning on “Hey Kivo” downloads its small listener (about 20 MB) from its publisher.",
+      "sub": "Say “Hey Kivo”, hold a shortcut, or keep both. Here’s what it looks like:",
       "demoSay": "What time is it?",
       "demoAnswer": "It’s 9:41 AM.",
       "tryTitle": "Try it now",
@@ -949,31 +949,47 @@
       "tryListening": "Listening… say “What time is it?”",
       "tryHeard": "KIVO heard:",
       "trySaid": "KIVO said:",
-      "tryButton": "Start listening"
+      "tryButton": "Start listening",
+      "tryHintWake": "Say “Hey Kivo, what time is it?”. You’ll see what KIVO heard here, and the Island at the top of the screen.",
+      "tryHintKeys": "Hold {keys} and say “What time is it?”. You’ll see what KIVO heard here, and the Island at the top of the screen."
     },
     "speech": {
-      "title": "How KIVO hears and speaks",
-      "sub": "The recommended choice for your PC is ready to use. The other options are one click away.",
-      "others": "See other options",
-      "fewer": "Hide other options",
-      "background": "Downloads happen in the background; you can carry on."
-    },
-    "summary": {
-      "title": "Your setup",
-      "sub": "What KIVO will use. Change any of it later on the Voice page.",
-      "understanding": "Understanding",
-      "speaking": "Speaking",
-      "ai": "AI",
-      "aiLater": "Connect a brain next, or later on the Brains page. Commands like “mute” never need one.",
-      "resources": "Resources",
-      "resourcesLine": "{tier} · speech uses up to {threads, plural, one {# core} other {# cores}}",
-      "tier": {
-        "low": "A lighter PC",
-        "mid": "A mid-range PC",
-        "high": "A fast PC"
+      "title": "Choose how KIVO hears and speaks",
+      "sub": "KIVO runs its voice on your PC, so it works offline and stays private. Pick a setup; the first one suits your PC.",
+      "loading": "Looking at your PC…",
+      "checking": "Checking…",
+      "preset": {
+        "recommended": "Recommended",
+        "high": "High",
+        "medium": "Medium",
+        "low": "Low"
       },
-      "downloading": "downloading",
-      "none": "Not chosen yet"
+      "presetHint": {
+        "recommended": "The best balance for this PC.",
+        "high": "The most accurate listening and a natural voice. Uses more of your PC.",
+        "medium": "Quick answers and a natural voice, with lighter listening.",
+        "low": "Uses the least of your PC. Speaks with your system’s built-in voices."
+      },
+      "forThisPc": "For this PC",
+      "uses": "Listens with {stt} · speaks with {tts}",
+      "toDownload": "{size} MB to download",
+      "onThisPc": "already on this PC",
+      "setUp": "Use this setup",
+      "downloadAndSetUp": "Download and set up",
+      "allSet": "All set: KIVO can hear and speak.",
+      "slot": {
+        "stt": "Listening · {name}",
+        "tts": "Speaking · {name}"
+      },
+      "failedTitle": "That didn’t work",
+      "failedBody": "KIVO kept what worked before. Try again, pick another setup above, or restart KIVO if it keeps failing.",
+      "retry": "Try again",
+      "later": "Set up later",
+      "myself": "Choose the models myself",
+      "sttTerm": "What is speech-to-text?",
+      "sttTip": "The model that turns what you say into text KIVO can act on. It runs on your PC.",
+      "ttsTerm": "What is text-to-speech?",
+      "ttsTip": "The model that reads KIVO’s answers out loud. Pick the voice you like below."
     },
     "voice": {
       "title": "Teach KIVO your voice",
@@ -1053,12 +1069,27 @@
     },
     "try": {
       "title": "You’re all set",
-      "sub": "Say “Hey Kivo, what time is it?”, or watch it here.",
+      "sub": "Ask KIVO “What time is it?”, or watch it here first.",
       "show": "Show me",
       "orPress": "Or hold",
       "partial": "Hey Kivo, what",
       "question": "What time is it?",
       "answer": "It’s {time}."
+    },
+    "devices": {
+      "title": "Your microphone and speaker",
+      "sub": "KIVO listens through a microphone and talks through your speakers or headphones. Your system’s choice is used unless you pick another.",
+      "microphone": "Microphone",
+      "listensWith": "KIVO listens with",
+      "speaker": "Speaker or headphones",
+      "talksThrough": "KIVO talks through",
+      "systemDefault": "System default",
+      "systemDefaultNamed": "System default · {name}",
+      "testSpeaker": "Test your speaker",
+      "testSpeakerHint": "Plays KIVO’s sounds",
+      "play": "Play a sound",
+      "playAgain": "Play again",
+      "notHeard": "Didn’t hear anything? Turn the volume up, or pick another speaker above."
     }
   },
   "enroll": {
@@ -1391,6 +1422,9 @@
       "importHint": "Restore from a file, for example on a new PC",
       "importButton": "Import",
       "imported": "Imported: {routines, plural, one {# routine} other {# routines}}, {notes, plural, one {# note} other {# notes}}{skipped, plural, =0 {} other { (# routines left out: they clash)}}. Routines ask before running until you save them here.",
+      "setupAgain": "Run setup again",
+      "setupAgainHint": "Walk through first-time setup again, with this PC’s recommendations.",
+      "setupAgainButton": "Run setup",
       "reset": "Reset all settings",
       "resetHint": "Your memory, conversations and connected brains are kept",
       "resetButton": "Reset",
@@ -2736,5 +2770,15 @@
     "noNotes": "Updated from {from}.",
     "releaseNotes": "Release notes",
     "gotIt": "Got it"
+  },
+  "callKivo": {
+    "title": "How you call KIVO",
+    "wake": "Say “Hey Kivo”",
+    "wakeHint": "Hands-free: KIVO wakes when it hears its name.",
+    "wakeTerm": "Is it always listening?",
+    "wakeTip": "Only for its name, on this PC. Nothing is recorded or sent until you say “Hey Kivo”. Turning it on downloads a small listener (about 20 MB).",
+    "ptt": "Push-to-talk",
+    "pttHint": "Hold the keys while you speak. Works well in noisy rooms.",
+    "oneStays": "At least one stays on, so you can always reach KIVO."
   }
 }

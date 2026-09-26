@@ -110,17 +110,23 @@ Navigation (updated 2026-09-21; 13 items, with tabs inside pages):
 
 ## 4. Onboarding (plan §129–133)
 
-Updated 2026-09-21: **11 steps in 5 phases**, one decision per screen, with the recommended
-choice preselected. The source of truth is [the mockup](../design/mockups/kivo-app.html) →
-Onboarding.
+Updated 2026-09-26 (owner): **11 screens in 5 phases**, in the order a new user needs them, one
+decision per screen, with the recommended choice preselected, plain words, and the technical ones
+explained on hover (`Explain`). The screens follow the app's theme (Light / Dark / System).
 
 | Phase | Steps |
 |---|---|
-| Welcome | 1 Welcome (black screen; the Island demonstrates itself) |
-| Voice | 2 Microphone check · 3 How you call KIVO (Ctrl+Space, "Hey Kivo") · 4 Hearing & speaking (engine + voice, background download) · 5 Your voice (optional enrollment, with consent) |
+| Welcome | 1 Welcome (the app's theme, an accent glow; the Island demonstrates itself) |
+| Voice | 2 Microphone and speaker (each follows the system default until one is picked; a microphone test with live bars and a speaker test) · 3 How KIVO hears and speaks (presets Recommended / High / Medium / Low from this PC's recommendation, each naming its two models and what must download; anything missing is listed with size and licence and downloads only on the user's yes; each model is downloaded, loaded and tested before **Continue** unlocks; a failure says why, with Try again, another preset, or "Set up later"; the models can be picked by hand; then the voice, everyday or Anime) · 4 How you call KIVO ("Hey Kivo" and push-to-talk, each switchable, at least one always on; the Island plays a request; "Try it now" follows the user's first request) · 5 Your voice (optional enrollment, with consent) |
 | Brain | 6 Connect a brain (optional; sign-in, free options marked) · 7 Connect your apps and tools (optional; connectors, extension, MCP, skills) |
 | Control | 8 Permission mode · 9 Look & feel (theme, accent, Island position, chimes) · 10 Startup ("Open KIVO when Windows starts", keep running) |
 | Ready | 11 Try it (live Island demo) → **Finish opens the Control Center** |
+
+**Ways to call KIVO (owner, 2026-09-26):** "Hey Kivo" (any enabled wake word, with microphone
+listening and the keyword model) and push-to-talk (the Push-to-talk capability; its keys are
+bound only while it is on). At least one stays on: the runtime refuses to switch off the last one
+(`voice.oneWayToCall`), and the UI locks that switch with the reason beside it. Onboarding step 4
+and Voice → How you call KIVO show the same two switches.
 
 ## 5. Settings (defaults)
 
@@ -266,7 +272,7 @@ real runtime data over IPC, not mockup data.
 **Control Center (§3)**
 
 - [x] **UX-18** · M7 · Navigation: 13 items in the §3 groups with in-page tabs, plus Settings (§3) → done: the sidebar's 13 items in the §3 groups plus Settings, each page with its in-page tabs (Brains/Context, Extensions, Permissions, Settings), all opening from the palette too · verified: the e2e walk of every page (`e2e/app.e2e.ts`), page tests (2026-09-24)
-- [x] **UX-19** · M1 · Home: status orb and state ("Listening for Hey Kivo" once the wake word exists, VOICE-13), Talk / Pause listening / mode picker, Recent list (Running joins with tasks, UX-24) (mockup → done: `pages/Home.tsx`: status orb, state title and detail, Talk, Pause/Resume listening, Stop everything while busy, the permission-mode picker, Recent (from Activity, refreshed on pushed events), the speech-model and hotkey notes with the rebind prompt, Start KIVO when disconnected · verified: accessibility audit of Home, live (2026-09-23)
+- [x] **UX-19** · M1 · Home: status orb and state ("Listening for Hey Kivo" once the wake word exists, VOICE-13), Talk / Pause listening / mode picker, Recent list (Running joins with tasks, UX-24) (mockup → done: `pages/Home.tsx`: status orb (breathing while waiting, following the voice while listening, turning while thinking, pulsing while speaking), state title and the ways to call KIVO that are on, Resume while paused, Stop everything while busy, the permission-mode picker (Talk and Pause left Home on 2026-09-26, owner: KIVO is called by voice or keys; Pause stays in the tray, Ctrl+K and the jump list), Recent (from Activity, refreshed on pushed events), the speech-model and hotkey notes with the rebind prompt, Start KIVO when disconnected · verified: accessibility audit of Home, live (2026-09-23)
 - [x] **UX-20** · M1 · Activity: timeline of turns, tool calls and results from the Activity table (mockup → done: `pages/Activity.tsx`: the timeline of turns (transcript, tool calls with status, replies, stops, crashes) from the `activity` table and the audit view, refreshed on pushed events · verified: `lib/activity` tests, accessibility audit of Activity, live (2026-09-22)
 - [x] **UX-21** · M3 · Chat: threads list, conversation with brain switcher and permission-mode picker (SEC-04), attachments, tool activity, cancel, context meter, Compact now (mockup → Chat; CONVERSATION §0–1) → done: `pages/Chat.tsx`: threads (pinned, recent, voice, search), conversation with the brain chip and reason, context meter, cost, live steps and inline decisions, composer with brain switcher, permission-mode picker, attachments, mic, Stop; menu: rename, pin, Compact now, delete · verified: `Chat.test.tsx` incl. accessibility audit (2026-09-23)
 - [x] **UX-22** · M3 · Brains page (Brains / Context tabs): providers with found-on-this-PC, add/test/remove, profiles, free options labelled (mockup → Brains) → done: `pages/Brains.tsx` (Brains / Context tabs): connected with health, found on this PC with Refresh and New, not installed with the command, add (OpenRouter, key, custom), test, sign in, remove, profiles, free labels · verified: `Brains.test.tsx` incl. accessibility audits (2026-09-23)
