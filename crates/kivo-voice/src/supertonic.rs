@@ -8,7 +8,7 @@
 use crate::engine::{Accel, EngineInfo, EngineKind, EngineSlot, ResourceEstimate};
 use crate::error::{VoiceError, VoiceResult};
 use crate::traits::{AudioSink, TtsEngine, VoiceInfo};
-use ort::session::Session;
+use ort::session::{RunOptions, Session};
 use ort::value::Tensor;
 use serde::Deserialize;
 use std::path::Path;
@@ -166,7 +166,25 @@ impl Supertonic {
         self.config.ae.sample_rate
     }
 
-    fn synthesize(&mut self, text: &str, voice: &str) -> VoiceResult<Vec<f32>> {
+    /// One chunk of speech; a cancel stops the model run in progress (`interrupt`), so KIVO goes
+    /// quiet within VOICE §10's 100 ms instead of after the chunk's last pass.
+    fn synthesize(
+        &mut self,
+        text: &str,
+        voice: &str,
+        cancel: &CancellationToken,
+    ) -> VoiceResult<Vec<f32>> {
+        crate::interrupt::interruptible(cancel, |options| {
+            self.synthesize_with(text, voice, options)
+        })
+    }
+
+    fn synthesize_with(
+        &mut self,
+        text: &str,
+        voice: &str,
+        options: &RunOptions,
+    ) -> VoiceResult<Vec<f32>> {
         let style = self
             .styles
             .iter()
@@ -186,21 +204,27 @@ impl Supertonic {
         let mask_t = tensor(&[1, 1, n], mask.clone())?;
         let dp_t = tensor(&style.dp.0, style.dp.1.clone())?;
         let seconds = {
-            let out = self.duration.run(ort::inputs![
+            let out = self.duration.run_with_options(
+                ort::inputs![
                 "text_ids" => ids_t.clone(),
                 "style_dp" => dp_t,
                 "text_mask" => mask_t.clone(),
-            ])?;
+                ],
+                options,
+            )?;
             let (_, d) = out["duration"].try_extract_tensor::<f32>()?;
             d.first().copied().unwrap_or(0.0) / (SPEED * self.speed)
         };
         let ttl_t = tensor(&style.ttl.0, style.ttl.1.clone())?;
         let (emb_shape, emb) = {
-            let out = self.encoder.run(ort::inputs![
+            let out = self.encoder.run_with_options(
+                ort::inputs![
                 "text_ids" => ids_t,
                 "style_ttl" => ttl_t.clone(),
                 "text_mask" => mask_t.clone(),
-            ])?;
+                ],
+                options,
+            )?;
             let (shape, data) = out["text_emb"].try_extract_tensor::<f32>()?;
             (
                 shape
@@ -225,7 +249,8 @@ impl Supertonic {
         let latent_mask = vec![1.0_f32; frames];
         #[allow(clippy::cast_precision_loss, reason = "a handful of steps")]
         for step in 0..STEPS {
-            let out = self.estimator.run(ort::inputs![
+            let out = self.estimator.run_with_options(
+                ort::inputs![
                 "noisy_latent" => tensor(&[1, dim, frames], latent.clone())?,
                 "text_emb" => tensor(&emb_shape, emb.clone())?,
                 "style_ttl" => ttl_t.clone(),
@@ -233,14 +258,17 @@ impl Supertonic {
                 "text_mask" => mask_t.clone(),
                 "current_step" => tensor(&[1], vec![step as f32])?,
                 "total_step" => tensor(&[1], vec![STEPS as f32])?,
-            ])?;
+                ],
+                options,
+            )?;
             let (_, next) = out["denoised_latent"].try_extract_tensor::<f32>()?;
             latent.clear();
             latent.extend_from_slice(next);
         }
-        let out = self
-            .vocoder
-            .run(ort::inputs!["latent" => tensor(&[1, dim, frames], latent)?])?;
+        let out = self.vocoder.run_with_options(
+            ort::inputs!["latent" => tensor(&[1, dim, frames], latent)?],
+            options,
+        )?;
         let (_, wav) = out["wav_tts"].try_extract_tensor::<f32>()?;
         Ok(wav[..wav_len.min(wav.len())].to_vec())
     }
@@ -284,7 +312,7 @@ impl TtsEngine for Supertonic {
             if cancel.is_cancelled() {
                 return Err(VoiceError::Cancelled);
             }
-            let audio = self.synthesize(chunk, &voice)?;
+            let audio = self.synthesize(chunk, &voice, cancel)?;
             if cancel.is_cancelled() {
                 return Err(VoiceError::Cancelled);
             }
@@ -612,6 +640,49 @@ mod tests {
         })
         .unwrap();
         assert!(samples > 44_100 * 5, "{samples}");
+    }
+
+    /// A cancel stops a long sentence mid-run within VOICE §10's 100 ms (it waited 3.6 s for the
+    /// chunk's last pass before), and the engine speaks normally afterwards.
+    #[test]
+    fn a_cancel_stops_a_long_sentence_at_once_when_the_model_is_here() {
+        let Some(dir) = std::env::var_os("KIVO_SUPERTONIC_DIR").map(std::path::PathBuf::from)
+        else {
+            eprintln!("KIVO_SUPERTONIC_DIR not set; skipping");
+            return;
+        };
+        let mut tts = Supertonic::load(&dir, 4, "en").unwrap();
+        let long = "This is one long sentence that goes on and on, about the weather, the \
+            mountains, the rivers, the trains that run between the cities, and everything else \
+            anyone could think of saying before the listener finally loses patience with it";
+        let cancel = CancellationToken::new();
+        let stop = cancel.clone();
+        let cancelled_at = std::sync::Arc::new(std::sync::Mutex::new(None));
+        let at = std::sync::Arc::clone(&cancelled_at);
+        let canceller = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(400));
+            *at.lock().unwrap() = Some(std::time::Instant::now());
+            stop.cancel();
+        });
+        let result = tts.speak(long, None, &cancel, &mut |_, _| Ok(()));
+        let returned = std::time::Instant::now();
+        canceller.join().unwrap();
+        assert!(matches!(result, Err(VoiceError::Cancelled)), "{result:?}");
+        let took = returned - cancelled_at.lock().unwrap().unwrap();
+        eprintln!("cancel → return {took:?}");
+        assert!(took < std::time::Duration::from_millis(100), "{took:?}");
+        let mut samples = 0;
+        tts.speak(
+            "Still here.",
+            None,
+            &CancellationToken::new(),
+            &mut |pcm, _| {
+                samples += pcm.len();
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert!(samples > 0);
     }
 
     fn tts_rate() -> u32 {

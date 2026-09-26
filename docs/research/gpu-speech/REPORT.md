@@ -9,7 +9,7 @@ TTS.cpp) with a GPU backend chosen per machine. DirectML is not used for local m
 
 | Machine | Default | Also selectable | Notes |
 |---|---|---|---|
-| NVIDIA GPU (Windows, Linux) | **CUDA** | Vulkan, CPU | Fastest on NVIDIA. Needs the CUDA runtime DLLs (cudart, cuBLAS), downloaded on demand like a model (≈0.5–1 GB), not in the installer |
+| NVIDIA GPU (Windows, Linux) | **CUDA** | Vulkan, CPU | Fastest on NVIDIA. Needs NVIDIA's cuBLAS DLLs (the worker links the CUDA runtime statically; the driver brings the rest), downloaded on demand like a model (≈0.5–1 GB), not in the installer |
 | AMD or Intel GPU (Windows, Linux) | **Vulkan** | CPU | Works on every vendor through the driver's Vulkan loader |
 | Mac (Apple silicon) | **Metal** | Vulkan (MoltenVK), CPU | Metal is Apple's GPU API; macOS builds are planned, untested here (no Mac) |
 | No usable GPU, battery, game in front, GPU busy | **CPU** | — | The GPU policy (PLAN-09) already moves speech off the GPU in these cases |
@@ -51,9 +51,9 @@ recognition.
 ## Order of work (VOICE-50)
 
 1. ~~Remove DirectML~~ (done 2026-09-25, below).
-2. The backend setting and detection above; the CUDA worker and its on-demand runtime download
-   (speech recognition: whisper.cpp).
-3. Give Supertonic interruptible runs (its cancel takes 3.6 s).
+2. ~~The backend setting and detection; the CUDA worker and its on-demand runtime download~~
+   (built 2026-09-26, below).
+3. ~~Give Supertonic interruptible runs~~ (built 2026-09-26).
 4. A GGML voice once a runtime runs on Windows' GPUs (TTS.cpp with Vulkan/CUDA, or another):
    measure first audio, real-time factor and cancel (≤ 100 ms) against Kokoro on the processor.
 5. Look at transcribe-rs and Handy's model manager for patterns worth reusing.
@@ -67,7 +67,9 @@ names, notices, build and release files):
 - `ort`'s `directml` feature is off, so no KIVO code can reach DirectML. pyke's ONNX Runtime
   downloads have no plain build for Windows x64 (the smallest is `directml`, `ort-sys`'s
   `dist.tsv`), so that library still carries DirectML's provider unused; dropping it too would
-  mean building ONNX Runtime from source. Every ONNX engine was re-tested after the change.
+  mean building ONNX Runtime from source. Supertonic's model tests and kivo-voice's unit tests pass
+  on the new build; the other ONNX engines' model tests are still to run (their models were deleted
+  from the test PC).
 - `crates/kivo-voice/src/accel.rs` deleted; its CPU half is `onnx.rs` (`onnx::session`), which all
   eleven ONNX engines now use instead of their own copies of the same builder.
 - `Accel::DirectMl`, `Parakeet::load_on`, `Whisper::load_on`, the DirectML Parakeet test, the
@@ -77,17 +79,22 @@ names, notices, build and release files):
   whisper.cpp isn't built); DXGI adapter listing (GPU detection); `Recovery::Cpu` (any backend).
   No DirectML DLL was ever bundled, and the notices had no DirectML entry.
 
-## Still to change with the backend setting (step 3)
+## Backend setting and CUDA (2026-09-26)
 
-| Where | Change |
+What was built (DECISIONS "VOICE-50: GPU backends"):
+
+| Where | What |
 |---|---|
-| `crates/kivo-ipc/src/infer.rs` `ModelLoad.gpu`, runtime `infer.rs` `Engines.gpu`, `models.rs`, `gpu.rs` `choose()` | Today a **DXGI** adapter index that whisper.cpp only reads as "use a GPU": whisper.cpp then takes **Vulkan device 0**, and Vulkan lists cards in another order than DXGI, so a laptop can run on its integrated GPU. Pass the backend and that backend's device (matched by name or LUID) |
-| `crates/kivo-voice/src/engine.rs` | Add `Accel::Metal` |
-| `crates/kivo-voice/src/registry.rs` `gpu_first` | Any GPU backend (CUDA, Vulkan, Metal), not only Vulkan |
-| `apps/kivo-app/src/components/voice/Details.tsx` (Advanced) | Devices are shown raw (`vulkan`, `cpu`); give them `en.json` labels |
-| Settings → Performance, `en.json` `gpuSpeech*` | The Graphics backend picker; the switch covers voices too once they move to the GPU |
-| `.github/workflows/release.yml` | The CUDA Toolkit for the `kivo-infer-cuda` build |
-| `crates/kivo-voice/src/kokoro/mod.rs`, `interrupt.rs`, `crates/kivo-store/src/models.rs` | ONNX Kokoro and its manifest once a GGML voice replaces it, with a store migration; `interrupt.rs` stays while an ONNX voice does |
+| `kivo-core` config | `performance.graphics-backend`: auto / cuda / vulkan / metal / processor; `gpu_allowed()` |
+| `kivo-platform` | `GpuInfo` gains the vendor (PCI id) and the driver version (DXGI); `nvidia_driver()` |
+| `kivo-ipc` | `GpuTarget { backend, device }` replaces the DXGI adapter index; `InferWelcome.backend` |
+| `kivo-voice` | Features `vulkan` / `cuda` / `metal` over `whisper-cpp`; `BUILT_GPU`; the card found by name among ggml's GPU devices (`gpu_devices`, `same_card`); `Accel::Metal`, `Accel::is_gpu`; Supertonic's interruptible runs |
+| `kivo-store` | `.zip` unpacking; the `cuda-runtime-13` pack (`GpuRuntime`) from NVIDIA's redistributables |
+| `apps/kivo-infer-cuda` | The worker's source built with CUDA |
+| `kivo-runtime` | `gpu::target` / `backend_for` / `options`; the CUDA worker chosen per backend, NVIDIA's DLLs on its PATH, restart on change; `Recovery::Vulkan`; the pack offered only with an NVIDIA card; `performance.status` → `graphics` |
+| UI | Settings → Performance → Graphics backend and GPU acceleration for NVIDIA (licence first, the shared `DownloadDialog`); Voice → Advanced names devices |
+| Release | release.yml installs the pinned CUDA Toolkit, builds, signs and publishes `kivo-infer-cuda-x64.exe`, and compiles its address and hash into the runtime; `pnpm build:cuda` for development |
 
-Finish each step with `cargo clippy --workspace --all-targets` (zero warnings), `pnpm lint`, and a
-search for each removed name returning nothing.
+Still open: GPU voices (step 4), the macOS platform layer that would give Metal a GPU list,
+transcribe-rs / Handy (step 5), and whisper.cpp's stop on the processor (~950 ms: its CPU backend
+checks the flag only between large steps; 4.7 ms on CUDA).

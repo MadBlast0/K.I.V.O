@@ -8,7 +8,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button, Group, Meta, Note, Row, Section, Select, Stat, Switch, Tag, type Tone } from "../../components/ui";
-import { Method } from "../../ipc/generated";
+import { DownloadDialog, useMegabytes } from "../../components/voice/DownloadDialog";
+import { Method, type ModelItem } from "../../ipc/generated";
 import { useRuntime } from "../../ipc/runtime";
 import { oneOf } from "../../lib/settings";
 import { useConfig } from "./useConfig";
@@ -23,6 +24,19 @@ const PROFILES: ReadonlyArray<Profile> = [
   "gaming",
   "custom",
 ];
+
+/** Settings → Performance → Graphics backend (VOICE-50). */
+type Backend = "auto" | "cuda" | "vulkan" | "metal" | "processor";
+const BACKENDS: ReadonlyArray<Backend> = ["auto", "cuda", "vulkan", "metal", "processor"];
+
+interface Graphics {
+  /** The choices this PC has. */
+  options: Backend[];
+  /** Where speech recognition runs now; `null` on the processor. */
+  running: { backend: "cuda" | "vulkan" | "metal"; device: string } | null;
+  /** NVIDIA's CUDA libraries; `null` without an NVIDIA card. */
+  cuda: { model: string; installed: boolean; ready: boolean; driverTooOld: boolean } | null;
+}
 
 interface Status {
   cpuPercent: number;
@@ -53,6 +67,7 @@ interface Status {
     };
   };
   models: { id: string; name: string; kind: string; residency: string | null; diskBytes: number }[];
+  graphics?: Graphics;
 }
 
 const RESIDENCY_TONE: Record<string, Tone> = { active: "success", warm: "success", warming: "warning" };
@@ -64,11 +79,21 @@ export function PerformanceTab() {
   const [status, setStatus] = useState<Status | null>(null);
   const [busy, setBusy] = useState(false);
   const connected = link?.status === "connected";
+  // NVIDIA's CUDA libraries as the model manager lists them (their download state, VOICE-50).
+  const [cudaModel, setCudaModel] = useState<ModelItem | null>(null);
   const load = useCallback(
     () =>
       connected
         ? request<Status>(Method.performanceStatus)
-            .then(setStatus)
+            .then((s) => {
+              setStatus(s);
+              const id = s.graphics?.cuda?.model;
+              return id
+                ? request<ModelItem[]>(Method.modelsList).then((list) =>
+                    setCudaModel(list.find((m) => m.id === id) ?? null),
+                  )
+                : undefined;
+            })
             .catch(() => {})
         : Promise.resolve(),
     [connected, request],
@@ -83,6 +108,32 @@ export function PerformanceTab() {
     setBusy(true);
     void load().finally(() => setBusy(false));
   };
+
+  // The graphics backend (VOICE-50) and NVIDIA's CUDA libraries, downloaded only after their
+  // licence is shown.
+  const gpuOn = get("performance", "gpu-speech") !== false;
+  const backend = oneOf(get("performance", "graphics-backend"), BACKENDS) ?? "auto";
+  const graphics = status?.graphics;
+  const [offer, setOffer] = useState<ModelItem | null>(null);
+  const size = useMegabytes();
+  const download = (model: ModelItem) => {
+    setOffer(null);
+    void request(Method.modelsInstall, { id: model.id })
+      .then(load)
+      .catch(() => {});
+  };
+  const cuda = graphics?.cuda;
+  const cudaLine = !cuda
+    ? ""
+    : cuda.driverTooOld
+      ? t("settings.performance.cudaDriver")
+      : cuda.ready
+        ? t("settings.performance.cudaReady")
+        : cuda.installed
+          ? t("settings.performance.cudaNoWorker")
+          : cudaModel?.downloading != null
+            ? t("settings.performance.cudaDownloading", { percent: cudaModel.downloading })
+            : t("settings.performance.cudaHint", { size: size(cudaModel?.size ?? 0) });
 
   const ms = (v: number | null) =>
     v === null
@@ -127,7 +178,52 @@ export function PerformanceTab() {
             />
           }
         />
+        {gpuOn && (
+          <Row
+            icon="cpu"
+            title={t("settings.performance.backend")}
+            subtitle={[
+              t(`settings.performance.backendHints.${backend}`),
+              graphics?.running
+                ? t("settings.performance.runningOn", {
+                    device: graphics.running.device,
+                    backend: t(`settings.performance.backends.${graphics.running.backend}`),
+                  })
+                : graphics && t("settings.performance.runningCpu"),
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+            end={
+              <Select<Backend>
+                label={t("settings.performance.backend")}
+                value={backend}
+                onChange={(v) => set("performance", { "graphics-backend": v })}
+                items={(graphics?.options ?? ["auto", "processor"]).map((value) => ({
+                  value,
+                  label: t(`settings.performance.backends.${value}`),
+                }))}
+              />
+            }
+          />
+        )}
+        {gpuOn && cuda && (backend === "auto" || backend === "cuda") && (
+          <Row
+            icon="download"
+            title={t("settings.performance.cuda")}
+            subtitle={cudaLine}
+            end={
+              !cuda.installed && cudaModel?.downloading == null && !cuda.driverTooOld && cudaModel ? (
+                <Button size="sm" icon="download" onClick={() => setOffer(cudaModel)}>
+                  {t("settings.performance.cudaDownload")}
+                </Button>
+              ) : cuda.ready ? (
+                <Tag tone="success">{t("settings.performance.backends.cuda")}</Tag>
+              ) : undefined
+            }
+          />
+        )}
       </Group>
+      <DownloadDialog model={offer} onClose={() => setOffer(null)} onDownload={download} />
 
       <Section
         title={t("settings.performance.now")}

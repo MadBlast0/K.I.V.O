@@ -8,15 +8,19 @@ license.workspace = true
 publish = false
 
 [features]
-# whisper.cpp on the GPU (Vulkan): only the speech worker enables it (it needs the Vulkan SDK and
-# CMake to build).
+# whisper.cpp: only the speech workers enable it (CMake to build). `whisper-cpp` alone runs on the
+# processor; each GPU backend adds its SDK to the build: Vulkan (`pnpm build-tools`), CUDA (the CUDA
+# Toolkit, for `kivo-infer-cuda`), Metal (macOS). VOICE-50.
 whisper-cpp = ["dep:whisper-rs"]
+vulkan = ["whisper-cpp", "whisper-rs/vulkan"]
+cuda = ["whisper-cpp", "whisper-rs/cuda"]
+metal = ["whisper-cpp", "whisper-rs/metal"]
 
 [dependencies]
 kivo-platform.workspace = true
 ort.workspace = true
 # MIT/Unlicense; whisper.cpp is MIT.
-whisper-rs = { version = "0.16.0", features = ["vulkan"], optional = true }
+whisper-rs = { version = "0.16.0", features = ["raw-api"], optional = true }
 realfft.workspace = true
 unicode-normalization.workspace = true
 base64.workspace = true

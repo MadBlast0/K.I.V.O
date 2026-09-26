@@ -870,7 +870,7 @@ pub struct GrantItem {
 pub struct ModelItem {
     pub id: String,
     pub name: String,
-    /// `stt`, `tts`, `vad`, `wake`, `embedding`.
+    /// `stt`, `tts`, `vad`, `wake`, `embedding`, `speaker`, `gpuRuntime` (VOICE-50).
     pub kind: String,
     pub license: String,
     pub attribution: String,

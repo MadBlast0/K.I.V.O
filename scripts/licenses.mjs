@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Writes the libraries KIVO ships and their licences, for Settings → About (UX-31): every Rust
-// crate the three programs (kivo-runtime, kivo-app, kivo-infer) are built from, following normal
-// and build dependencies only, and every npm package in the app's production dependencies.
+// crate the programs (kivo-runtime, kivo-app, kivo-infer and its CUDA build, kivo-infer-cuda) are
+// built from, following normal and build dependencies only, and every npm package in the app's
+// production dependencies.
 // Model licences come from the model manifest at run time.
 //
 // It also writes THIRD_PARTY_NOTICES.txt (DIST-16) beside the Tauri config, for the installer and
@@ -17,7 +18,7 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const out = join(root, "apps", "kivo-app", "src", "generated", "licenses.json");
-const SHIPPED = ["kivo-runtime", "kivo-app", "kivo-infer"];
+const SHIPPED = ["kivo-runtime", "kivo-app", "kivo-infer", "kivo-infer-cuda"];
 
 const meta = JSON.parse(
   execFileSync("cargo", ["metadata", "--format-version", "1", "--locked"], {

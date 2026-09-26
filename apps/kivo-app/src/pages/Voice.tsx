@@ -7,7 +7,7 @@
  * downloads (download, pause, cancel, remove, set as default, update), and the advanced view
  * (VOICE-49). Lists update from the runtime's pushed events.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "../components/layout/Shell";
 import {
@@ -26,6 +26,7 @@ import {
 import { AdvancedVoice, Personality, SpeechSummary, Vocabulary } from "../components/voice/Details";
 import { Enrollment, SpeakerMode } from "../components/voice/Enrollment";
 import { CloudEngines } from "../components/voice/CloudEngines";
+import { DownloadDialog, useMegabytes } from "../components/voice/DownloadDialog";
 import { Recommended, SpeechChooser, VoiceList } from "../components/voice/SpeechChooser";
 import { useSpeech } from "../components/voice/useSpeech";
 import { WakeWords } from "../components/voice/WakeWords";
@@ -176,7 +177,7 @@ function ModelEnd({
 }
 
 function Models() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { link, request } = useRuntime();
   const toast = useToast();
   const connected = link?.status === "connected";
@@ -199,9 +200,7 @@ function Models() {
 
   const fail = (e: unknown) => toast(e instanceof Error ? e.message : String(e));
   const act = (method: Method, id: string) => void request(method, { id }).then(load).catch(fail);
-  const download = () => {
-    if (!offer) return;
-    const model = offer;
+  const download = (model: ModelItem) => {
     setOffer(null);
     void request(Method.modelsInstall, { id: model.id }).catch(fail);
   };
@@ -213,16 +212,7 @@ function Models() {
     void request(Method.modelsRemove, { id: model.id, confirmed: true }).catch(fail);
   };
 
-  const megabytes = useMemo(
-    () =>
-      new Intl.NumberFormat(i18n.language, {
-        style: "unit",
-        unit: "megabyte",
-        maximumFractionDigits: 0,
-      }),
-    [i18n.language],
-  );
-  const size = (bytes: number) => megabytes.format(Math.max(1, Math.round(bytes / 1_000_000)));
+  const size = useMegabytes();
 
   return (
     <>
@@ -245,32 +235,7 @@ function Models() {
         ))}
       </Group>
 
-      <Dialog
-        open={offer !== null}
-        onOpenChange={(open) => !open && setOffer(null)}
-        title={offer ? t("voice.downloadTitle", { name: offer.name }) : ""}
-        description={offer ? t("voice.downloadSize", { size: size(offer.size) }) : ""}
-        footer={
-          <>
-            <DialogClose>
-              <Button>{t("voice.cancel")}</Button>
-            </DialogClose>
-            <Button variant="primary" icon="download" onClick={download}>
-              {t("voice.download")}
-            </Button>
-          </>
-        }
-      >
-        {offer && (
-          <div className="k-licence">
-            <p>
-              <b>{t("voice.license")}</b> {offer.license}
-            </p>
-            <p>{offer.attribution}</p>
-            <p className="k-licence__source">{offer.source}</p>
-          </div>
-        )}
-      </Dialog>
+      <DownloadDialog model={offer} onClose={() => setOffer(null)} onDownload={download} />
 
       <Dialog
         open={removing !== null}

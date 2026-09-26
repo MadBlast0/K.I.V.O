@@ -2,10 +2,12 @@
 //! app or quiet time is active. Used for engine recommendations, the benchmark fingerprint and
 //! proactive-speech rules.
 
-use kivo_platform::{GpuInfo, PlatformError, PlatformResult, SystemInfo, SystemSnapshot};
+use kivo_platform::{
+    GpuInfo, GpuVendor, PlatformError, PlatformResult, SystemInfo, SystemSnapshot,
+};
 use windows::Win32::Foundation::FILETIME;
 use windows::Win32::Graphics::Dxgi::{
-    CreateDXGIFactory1, DXGI_ADAPTER_DESC1, DXGI_ADAPTER_FLAG_SOFTWARE, IDXGIFactory1,
+    CreateDXGIFactory1, DXGI_ADAPTER_DESC1, DXGI_ADAPTER_FLAG_SOFTWARE, IDXGIDevice, IDXGIFactory1,
 };
 use windows::Win32::System::Power::{GetSystemPowerStatus, SYSTEM_POWER_STATUS};
 use windows::Win32::System::Registry::{HKEY_LOCAL_MACHINE, RRF_RT_REG_SZ, RegGetValueW};
@@ -17,7 +19,7 @@ use windows::Win32::UI::Shell::{
     QUNS_BUSY, QUNS_PRESENTATION_MODE, QUNS_QUIET_TIME, QUNS_RUNNING_D3D_FULL_SCREEN,
     SHQueryUserNotificationState,
 };
-use windows::core::w;
+use windows::core::{Interface, w};
 
 pub struct WindowsSystemInfo;
 
@@ -388,9 +390,27 @@ fn gpus() -> Vec<GpuInfo> {
                     .iter()
                     .position(|&c| c == 0)
                     .unwrap_or(desc.Description.len());
+                // The user-mode driver's version, four 16-bit parts (`32.0.16.1692`).
+                let driver_version =
+                    adapter
+                        .CheckInterfaceSupport(&IDXGIDevice::IID)
+                        .ok()
+                        .map(|v| {
+                            #[allow(clippy::cast_sign_loss, reason = "a packed version")]
+                            let v = v as u64;
+                            format!(
+                                "{}.{}.{}.{}",
+                                v >> 48,
+                                (v >> 32) & 0xFFFF,
+                                (v >> 16) & 0xFFFF,
+                                v & 0xFFFF
+                            )
+                        });
                 out.push(GpuInfo {
                     name: String::from_utf16_lossy(&desc.Description[..len]),
                     vram_mb: (desc.DedicatedVideoMemory / (1024 * 1024)) as u64,
+                    vendor: GpuVendor::from_pci(desc.VendorId),
+                    driver_version,
                 });
             }
         }
@@ -480,6 +500,14 @@ mod tests {
         assert!(snap.logical_cpus >= 1);
         assert!(snap.ram_mb >= 1024, "any supported PC has at least 1 GB");
         assert!(snap.gpus.iter().all(|g| !g.name.is_empty()));
+        // Every card reports its driver; an NVIDIA one's number reads as NVIDIA writes it (VOICE-50).
+        assert!(snap.gpus.iter().all(|g| g.driver_version.is_some()));
+        for g in snap.gpus.iter().filter(|g| g.vendor == GpuVendor::Nvidia) {
+            assert!(
+                g.nvidia_driver().is_some_and(|(major, _)| major >= 300),
+                "{g:?}"
+            );
+        }
         if let Some(p) = snap.battery_percent {
             assert!(p <= 100);
         }

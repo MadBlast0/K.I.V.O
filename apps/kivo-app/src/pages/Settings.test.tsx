@@ -104,6 +104,11 @@ runtime.request = (method: string, params?: unknown) => {
           stages: { stt: 260, brain: 540, tool: 85, tts: 310, total: 2400 },
         },
         models: [{ id: "moonshine-base", name: "Moonshine", kind: "stt", residency: "warm", diskBytes: 199229440 }],
+        graphics: {
+          options: ["auto", "cuda", "vulkan", "processor"],
+          running: { backend: "vulkan", device: "NVIDIA GeForce RTX 3060 Laptop GPU" },
+          cuda: { model: "cuda-runtime-13", installed: false, ready: false, driverTooOld: false },
+        },
       });
     case "diagnostics.run":
       return Promise.resolve([
@@ -123,6 +128,17 @@ runtime.request = (method: string, params?: unknown) => {
     case "models.list":
       return Promise.resolve([
         { id: "kokoro", name: "Kokoro", license: "Apache-2.0", attribution: "hexgrad", source: "Hugging Face" },
+        {
+          id: "cuda-runtime-13",
+          name: "GPU acceleration for NVIDIA (CUDA)",
+          kind: "gpuRuntime",
+          license: "NVIDIA CUDA Toolkit EULA (redistributable components)",
+          attribution: "cuBLAS is NVIDIA's redistributable CUDA library.",
+          source: "https://developer.download.nvidia.com/compute/cuda/redist/",
+          size: 423_620_712,
+          installed: false,
+          downloading: null,
+        },
       ]);
     default:
       return Promise.resolve(null);
@@ -401,6 +417,39 @@ describe("Settings → Performance and Diagnostics", () => {
     fireEvent.click(gpu);
     await settle();
     expect(set({ performance: { "gpu-speech": false } })).toBe(true);
+  });
+
+  it("offers only the graphics backends this PC has and says where recognition runs (VOICE-50)", async () => {
+    page("performance");
+    await settle();
+    await settle();
+    expect(screen.getByText(/Speech recognition runs on NVIDIA GeForce RTX 3060 Laptop GPU \(Vulkan\)/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("combobox", { name: "Graphics backend" }));
+    await settle();
+    const options = (await screen.findAllByRole("option")).map((o) => o.textContent);
+    expect(options).toEqual(["Automatic", "CUDA (NVIDIA)", "Vulkan", "Processor only"]);
+    const processor = screen.getByRole("option", { name: "Processor only" });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 450));
+    });
+    fireEvent.keyDown(processor, { key: "Enter" });
+    await settle();
+    expect(set({ performance: { "graphics-backend": "processor" } })).toBe(true);
+  });
+
+  it("downloads NVIDIA's CUDA libraries only after showing their licence (VOICE-50)", async () => {
+    page("performance");
+    await settle();
+    await settle();
+    expect(screen.getByText(/NVIDIA’s CUDA libraries, about 424 MB/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Download" }));
+    await settle();
+    expect(calls.some((c) => c.method === "models.install")).toBe(false);
+    expect(screen.getByText("NVIDIA CUDA Toolkit EULA (redistributable components)")).toBeTruthy();
+    const dialog = screen.getByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Download" }));
+    await settle();
+    expect(calls).toContainEqual({ method: "models.install", params: { id: "cuda-runtime-13" } });
   });
 
   it("runs the checks and sends a problem to the page that fixes it", async () => {

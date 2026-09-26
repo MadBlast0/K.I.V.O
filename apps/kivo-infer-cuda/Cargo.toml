@@ -1,0 +1,42 @@
+[package]
+name = "kivo-infer-cuda"
+description = "The speech worker built with whisper.cpp's CUDA backend for NVIDIA cards (VOICE-50); the same source as kivo-infer."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+# One source for both workers: this crate only builds it with CUDA instead of Vulkan.
+[[bin]]
+name = "kivo-infer-cuda"
+path = "../kivo-infer/src/main.rs"
+
+[features]
+# `cargo build -p kivo-infer-cuda --features cuda` needs NVIDIA's CUDA Toolkit (CUDA_PATH) and runs
+# with NVIDIA's runtime libraries on its PATH (the CUDA pack). Without the feature it is a plain
+# build of the worker, so workspace builds don't need the toolkit.
+cuda = ["kivo-voice/cuda"]
+
+[dependencies]
+kivo-ipc.workspace = true
+kivo-platform.workspace = true
+kivo-voice = { path = "../../crates/kivo-voice" }
+serde.workspace = true
+serde_json.workspace = true
+tokio = { workspace = true, features = ["rt", "io-std", "io-util", "sync", "macros"] }
+tokio-util.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+kivo-platform-windows = { path = "../../crates/kivo-platform-windows" }
+
+[target.'cfg(all(windows, target_arch = "x86_64"))'.dependencies]
+kivo-voice = { path = "../../crates/kivo-voice", features = ["whisper-cpp"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+kivo-voice = { path = "../../crates/kivo-voice", features = ["whisper-cpp"] }
+
+[lints]
+workspace = true

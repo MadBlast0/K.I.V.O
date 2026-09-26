@@ -9,7 +9,7 @@
 //! `KIVO_BENCH_STT_ENGINES` (comma-separated: moonshine, parakeet, whisper, and whisper.cpp's
 //! whisper-cpp-small, whisper-cpp-turbo, whisper-cpp-base-en from `models/whisper-cpp`) picks engines,
 //! `KIVO_BENCH_STT_UTTERANCES` the subset size (default 40) and `KIVO_BENCH_STT_GPU` a graphics
-//! card for the engines that can use one.
+//! card, by its name ("NVIDIA GeForce RTX 3060 Laptop GPU"), for the engines that can use one.
 
 use super::data::{self, Utterance};
 use super::wer::Tally;
@@ -207,9 +207,9 @@ async fn transcribe(
 
 pub struct Stt {
     rt: tokio::runtime::Runtime,
-    /// `KIVO_BENCH_STT_GPU=<adapter>`: GPU-capable engines run on that graphics card, as KIVO's
-    /// GPU policy puts them (PLAN-09).
-    gpu: Option<u32>,
+    /// `KIVO_BENCH_STT_GPU=<card name>`: GPU-capable engines run on that graphics card through the
+    /// worker's Vulkan backend, as KIVO's GPU policy puts them (PLAN-09, VOICE-50).
+    gpu: Option<kivo_ipc::infer::GpuTarget>,
     worker: PathBuf,
     engines: Vec<Engine>,
     utterances: Vec<Utterance>,
@@ -263,7 +263,11 @@ impl Stt {
             .map_err(|e| e.to_string())?;
         let gpu = std::env::var("KIVO_BENCH_STT_GPU")
             .ok()
-            .and_then(|g| g.parse().ok());
+            .filter(|g| !g.trim().is_empty())
+            .map(|device| kivo_ipc::infer::GpuTarget {
+                backend: kivo_ipc::infer::GpuBackend::Vulkan,
+                device,
+            });
         Ok(Self {
             rt,
             gpu,
@@ -307,7 +311,7 @@ impl Stt {
                 threads: usize::try_from(THREADS).unwrap_or(4),
                 language: "en".into(),
                 cloud: std::collections::BTreeMap::new(),
-                gpu: self.gpu,
+                gpu: self.gpu.clone(),
             });
             let ready = infer.wait_ready(Duration::from_secs(180)).await;
             let load_ms = t.elapsed().as_secs_f64() * 1000.0;

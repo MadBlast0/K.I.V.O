@@ -19,6 +19,9 @@ remains for IT.
 
 - `KIVO.exe` (Tauri);
 - `kivo-runtime.exe` and `kivo-infer.exe` (sidecars via `externalBin`);
+- not `kivo-infer-cuda.exe`: the CUDA worker (VOICE-50) is a release asset, downloaded with
+  NVIDIA's cuBLAS libraries (from NVIDIA, about 424 MB) only when the user chooses GPU
+  acceleration for NVIDIA (Settings → Performance or Voice → Models);
 - the WebView2 bootstrapper (Windows 10);
 - sounds, icons and the default intent grammar.
 

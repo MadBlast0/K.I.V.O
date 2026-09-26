@@ -4,10 +4,13 @@
 //! manifest so the UI can show them before a download.
 
 use crate::core::Core;
-use crate::infer::{Engines, Infer};
+use crate::infer::{CudaWorker, Engines, Infer};
 use kivo_core::KivoConfig;
+use kivo_ipc::infer::GpuTarget;
 use kivo_ipc::protocol::{ModelItem, SpeechStatus};
-use kivo_store::models::{HttpFetcher, ModelKind, ModelManifest, ModelStore, Progress, catalog};
+use kivo_store::models::{
+    CUDA_RUNTIME, CUDA_WORKER, HttpFetcher, ModelKind, ModelManifest, ModelStore, Progress, catalog,
+};
 use kivo_voice::EngineSlot;
 use kivo_voice::recommend::{Needs, Priority, Recommendation};
 use kivo_voice::registry::RegistryEntry;
@@ -41,7 +44,10 @@ pub struct Models {
     /// Where the cloud speech services' keys are (Credential Manager; VOICE-10/11).
     secrets: Mutex<Option<Arc<dyn kivo_platform::Secrets>>>,
     /// The profile and GPU choice the engines were last configured with.
-    applied: Mutex<Option<(crate::profiles::Resolved, Option<u32>)>>,
+    applied: Mutex<Option<(crate::profiles::Resolved, Option<GpuTarget>)>>,
+    /// The PC's graphics cards, read once (cards don't come and go while KIVO runs): the CUDA pack
+    /// is offered only with an NVIDIA card, and the Graphics backend setting lists what they allow.
+    gpus: std::sync::OnceLock<Vec<kivo_platform::GpuInfo>>,
 }
 
 impl Models {
@@ -59,6 +65,7 @@ impl Models {
             errors: Mutex::default(),
             secrets: Mutex::new(None),
             applied: Mutex::new(None),
+            gpus: std::sync::OnceLock::new(),
         }
     }
 
@@ -111,23 +118,86 @@ impl Models {
         stt: Option<&str>,
         machine: Option<&kivo_platform::SystemSnapshot>,
         gpu_load: Option<u8>,
-    ) -> (crate::profiles::Resolved, Option<u32>) {
+    ) -> (crate::profiles::Resolved, Option<GpuTarget>) {
         let resolved = crate::profiles::resolve(config, machine);
         let on_gpu_now = self.infer.configured().gpu.is_some();
         let gpu = match (stt, machine) {
             (Some(id), Some(m))
-                if resolved.gpu && config.performance.gpu_speech && crate::gpu::can_use_gpu(id) =>
+                if resolved.gpu
+                    && config.performance.gpu_allowed()
+                    && crate::gpu::can_use_gpu(id) =>
             {
-                crate::gpu::choose(resolved.profile, m, gpu_load, on_gpu_now)
+                crate::gpu::target(
+                    config.performance.graphics_backend,
+                    resolved.profile,
+                    m,
+                    gpu_load,
+                    on_gpu_now,
+                    self.cuda_worker().is_some(),
+                )
             }
             _ => None,
         };
         (resolved, gpu)
     }
 
+    /// The CUDA worker and NVIDIA's runtime libraries (VOICE-50), once the CUDA pack is installed:
+    /// the worker from the pack (a release build), else the one beside the runtime (a development
+    /// build, `cargo build -p kivo-infer-cuda --features cuda`).
+    pub fn cuda_worker(&self) -> Option<CudaWorker> {
+        let libraries = self.store.installed(CUDA_RUNTIME)?.dir;
+        let beside = std::env::current_exe()
+            .ok()
+            .and_then(|exe| exe.parent().map(|dir| dir.join(CUDA_WORKER)));
+        let program = [Some(libraries.join(CUDA_WORKER)), beside]
+            .into_iter()
+            .flatten()
+            .find(|p| p.is_file())?;
+        Some(CudaWorker { program, libraries })
+    }
+
+    /// The PC's graphics cards (empty until the system is known).
+    fn gpus(&self) -> &[kivo_platform::GpuInfo] {
+        if let Some(gpus) = self.gpus.get() {
+            return gpus;
+        }
+        let Some(system) = lock(&self.system).clone() else {
+            return &[];
+        };
+        self.gpus
+            .get_or_init(|| system.snapshot().map(|m| m.gpus).unwrap_or_default())
+    }
+
+    fn has_nvidia(&self) -> bool {
+        self.gpus()
+            .iter()
+            .any(|g| g.vendor == kivo_platform::GpuVendor::Nvidia)
+    }
+
+    /// Settings → Performance → Graphics backend (VOICE-50): the choices this PC has, where the
+    /// recognizer runs now, and whether CUDA is installed.
+    pub fn graphics(&self) -> serde_json::Value {
+        let nvidia = self.has_nvidia();
+        let old_driver = self
+            .gpus()
+            .iter()
+            .filter_map(kivo_platform::GpuInfo::nvidia_driver)
+            .all(|(major, _)| major < crate::gpu::CUDA_MIN_DRIVER);
+        serde_json::json!({
+            "options": crate::gpu::options(self.gpus()),
+            "running": self.infer.effective_gpu(),
+            "cuda": nvidia.then(|| serde_json::json!({
+                "model": CUDA_RUNTIME,
+                "installed": self.store.installed(CUDA_RUNTIME).is_some(),
+                "ready": self.cuda_worker().is_some(),
+                "driverTooOld": old_driver,
+            })),
+        })
+    }
+
     /// Where engine `id` would run now: the graphics card the GPU policy gives it, or `None`
     /// for the processor (test workers and benchmarks run it there too).
-    pub fn gpu_for(&self, id: &str, config: &KivoConfig) -> Option<u32> {
+    pub fn gpu_for(&self, id: &str, config: &KivoConfig) -> Option<GpuTarget> {
         if !crate::gpu::can_use_gpu(id) {
             return None;
         }
@@ -144,7 +214,7 @@ impl Models {
 
     /// The profile in effect right now (the Performance page).
     pub fn effective_profile(&self, config: &KivoConfig) -> kivo_core::config::PerformanceProfile {
-        lock(&self.applied).map_or_else(
+        lock(&self.applied).as_ref().map_or_else(
             || crate::profiles::resolve(config, None).profile,
             |(r, _)| r.profile,
         )
@@ -335,7 +405,7 @@ impl Models {
         kivo_voice::recommend::recommend(
             machine,
             &Needs {
-                gpu_speech: config.performance.gpu_speech,
+                gpu_speech: config.performance.gpu_allowed(),
                 language: &config.general.language,
                 local_only: !speech_may_leave(config),
                 priority,
@@ -396,12 +466,14 @@ impl Models {
     /// Everything KIVO can install, with what is already here (DIST-13).
     pub fn list(&self) -> Vec<ModelItem> {
         let config = self.core.config();
+        let nvidia = self.has_nvidia();
         let downloads = self
             .downloads
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         catalog()
             .into_iter()
+            .filter(|m| m.kind != ModelKind::GpuRuntime || nvidia)
             .map(|m| {
                 let installed = self.store.installed(&m.id);
                 #[allow(clippy::cast_possible_truncation, reason = "0–100")]
@@ -635,7 +707,21 @@ impl Models {
         {
             cancel.cancel();
         }
-        self.store.remove(id).map_err(|e| e.to_string())?;
+        if id == CUDA_RUNTIME {
+            // The CUDA worker holds the pack's libraries open: switch to the other worker first,
+            // then remove them once it has let go (a few seconds at most).
+            self.infer.set_cuda(None);
+            let mut tries = 0;
+            while let Err(e) = self.store.remove(id) {
+                tries += 1;
+                if tries > 50 {
+                    return Err(e.to_string());
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+        } else {
+            self.store.remove(id).map_err(|e| e.to_string())?;
+        }
         self.changed(id, None, false);
         self.apply_engines(&self.core.config());
         Ok(())
@@ -728,8 +814,9 @@ impl Models {
             machine,
             gpu_load,
         );
-        let (resolved, gpu) = decided;
+        let (resolved, gpu) = decided.clone();
         *lock(&self.applied) = Some(decided);
+        self.infer.set_cuda(self.cuda_worker());
         let warm_minutes = resolved.warm_minutes;
         self.infer.configure(
             Engines {
@@ -869,8 +956,30 @@ pub fn warm_minutes(config: &KivoConfig) -> u64 {
 mod tests {
     use super::*;
 
+    #[cfg(all(windows, target_arch = "x86_64"))]
+    /// Marks model `id` installed (a manifest with no files), plus `extra` files in its folder.
+    fn fake_install(dir: &std::path::Path, id: &str, extra: &[&str]) {
+        let mut manifest = kivo_store::models::catalog()
+            .into_iter()
+            .find(|m| m.id == id)
+            .unwrap();
+        manifest.files.clear();
+        let folder = dir.join(id);
+        std::fs::create_dir_all(&folder).unwrap();
+        std::fs::write(
+            folder.join("manifest.json"),
+            serde_json::to_vec(&manifest).unwrap(),
+        )
+        .unwrap();
+        for name in extra {
+            std::fs::write(folder.join(name), b"").unwrap();
+        }
+    }
+
     #[test]
+    #[cfg(all(windows, target_arch = "x86_64"))]
     fn the_recognizer_leaves_the_gpu_for_games_and_busy_gpus() {
+        use kivo_ipc::infer::GpuBackend;
         let dir = tempfile::tempdir().unwrap();
         let core = Arc::new(Core::with_config(KivoConfig::default(), None));
         let (infer, _events, _sender) = Infer::new(dir.path().join("no-worker.exe"));
@@ -879,37 +988,41 @@ mod tests {
             Arc::clone(&core),
             infer.clone(),
         ));
-        // Parakeet "installed" (a manifest with no files).
-        let mut manifest = kivo_store::models::catalog()
-            .into_iter()
-            .find(|m| m.id == kivo_voice::parakeet::MODEL_ID)
-            .unwrap();
-        manifest.files.clear();
-        let folder = dir.path().join(kivo_voice::parakeet::MODEL_ID);
-        std::fs::create_dir_all(&folder).unwrap();
-        std::fs::write(
-            folder.join("manifest.json"),
-            serde_json::to_vec(&manifest).unwrap(),
-        )
-        .unwrap();
+        const WHISPER: &str = "whisper-cpp-small";
+        fake_install(dir.path(), WHISPER, &[]);
         let system = Arc::new(kivo_testkit::FakeSystemInfo::default());
-        system.snapshot.lock().unwrap().gpus = vec![kivo_platform::GpuInfo {
-            name: "RTX".into(),
-            vram_mb: 6_144,
-        }];
+        let rtx = "NVIDIA GeForce RTX 3060 Laptop GPU";
+        system.snapshot.lock().unwrap().gpus = vec![
+            kivo_platform::GpuInfo {
+                name: "AMD Radeon(TM) Graphics".into(),
+                vram_mb: 512,
+                vendor: kivo_platform::GpuVendor::Amd,
+                driver_version: None,
+            },
+            kivo_platform::GpuInfo {
+                name: rtx.into(),
+                vram_mb: 6_144,
+                vendor: kivo_platform::GpuVendor::Nvidia,
+                driver_version: Some("32.0.16.1692".into()),
+            },
+        ];
         *system.gpu_load.lock().unwrap() = Some(5);
         models.set_system(system.clone());
-        core.update_config(|c| c.voice.stt_engine = kivo_voice::parakeet::MODEL_ID.into());
+        core.update_config(|c| c.voice.stt_engine = WHISPER.into());
         models.apply_engines(&core.config());
-        assert_eq!(
-            infer.configured().stt.unwrap().0,
-            kivo_voice::parakeet::MODEL_ID
-        );
+        assert_eq!(infer.configured().stt.unwrap().0, WHISPER);
+        let on = |backend| {
+            Some(GpuTarget {
+                backend,
+                device: rtx.into(),
+            })
+        };
         assert_eq!(
             infer.configured().gpu,
-            Some(0),
-            "on the GPU while it's free"
+            on(GpuBackend::Vulkan),
+            "the NVIDIA card, not the integrated one listed first; Vulkan until CUDA is installed"
         );
+        assert_eq!(infer.cuda(), None);
         // Something else keeps the GPU busy: off it (VOICE-35).
         *system.gpu_load.lock().unwrap() = Some(80);
         assert!(models.recheck_gpu(&core.config()));
@@ -919,7 +1032,35 @@ mod tests {
         assert!(!models.recheck_gpu(&core.config()));
         *system.gpu_load.lock().unwrap() = Some(10);
         assert!(models.recheck_gpu(&core.config()));
-        assert_eq!(infer.configured().gpu, Some(0));
+        assert_eq!(infer.configured().gpu, on(GpuBackend::Vulkan));
+        // The CUDA pack arrives (with its worker): CUDA on the same card, from that worker.
+        fake_install(dir.path(), CUDA_RUNTIME, &[CUDA_WORKER]);
+        models.apply_engines(&core.config());
+        assert_eq!(infer.configured().gpu, on(GpuBackend::Cuda));
+        let cuda = infer.cuda().unwrap();
+        assert_eq!(
+            cuda.program,
+            dir.path().join(CUDA_RUNTIME).join(CUDA_WORKER)
+        );
+        assert_eq!(cuda.libraries, dir.path().join(CUDA_RUNTIME));
+        // The user picks Vulkan, then Processor only.
+        core.update_config(|c| {
+            c.performance.graphics_backend = kivo_core::config::GraphicsBackend::Vulkan;
+        });
+        models.apply_engines(&core.config());
+        assert_eq!(infer.configured().gpu, on(GpuBackend::Vulkan));
+        core.update_config(|c| {
+            c.performance.graphics_backend = kivo_core::config::GraphicsBackend::Processor;
+        });
+        models.apply_engines(&core.config());
+        assert_eq!(infer.configured().gpu, None);
+        core.update_config(|c| {
+            c.performance.graphics_backend = kivo_core::config::GraphicsBackend::Auto;
+        });
+        // Removing the pack lets go of the CUDA worker first.
+        models.remove(CUDA_RUNTIME, true).unwrap();
+        assert_eq!(infer.cuda(), None);
+        assert_eq!(infer.configured().gpu, on(GpuBackend::Vulkan));
         // The Gaming profile: off the GPU whatever it's doing.
         core.update_config(|c| {
             c.performance.profile = kivo_core::config::PerformanceProfile::Gaming

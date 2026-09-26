@@ -22,6 +22,8 @@ pub enum ModelKind {
     Embedding,
     /// Recognizing the owner's voice (VOICE §5).
     Speaker,
+    /// Libraries a GPU backend needs (NVIDIA's CUDA runtime, VOICE-50); not a model itself.
+    GpuRuntime,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -33,7 +35,7 @@ pub struct ModelFile {
     pub size: u64,
     /// Lower-case hex sha256.
     pub sha256: String,
-    /// For a `.tar.bz2` archive: the members to keep, and the file names they get. The archive
+    /// For an archive (`.zip` or `.tar.bz2`): the members to keep, and the file names they get. The archive
     /// itself is deleted once they are out.
     #[serde(default)]
     pub unpack: Vec<Unpack>,
@@ -93,8 +95,15 @@ pub fn catalog() -> Vec<ModelManifest> {
         chatterbox(),
     ]);
     // Only where the speech worker has whisper.cpp (`kivo_voice::whisper_cpp::AVAILABLE`).
-    if cfg!(all(windows, target_arch = "x86_64")) {
+    if cfg!(any(
+        all(windows, target_arch = "x86_64"),
+        target_os = "macos"
+    )) {
         all.extend(WHISPER_CPP.iter().map(whisper_cpp));
+    }
+    // CUDA for NVIDIA cards, where KIVO has a CUDA worker.
+    if cfg!(all(windows, target_arch = "x86_64")) {
+        all.push(cuda_runtime());
     }
     all
 }
@@ -127,6 +136,64 @@ const WHISPER_CPP: [(&str, &str, &str, u64, &str, bool); 3] = [
         true,
     ),
 ];
+
+/// NVIDIA's CUDA libraries for `kivo-infer-cuda` (VOICE-50): the redistributable cuBLAS, straight
+/// from NVIDIA at CUDA 13.4.1 (`redistrib_13.4.1.json` pins the archive's SHA-256). The worker links
+/// the CUDA runtime statically and the driver brings the rest (`nvcuda.dll`), so cuBLAS is all it
+/// loads (measured: it runs with only `cublas64_13.dll` and `cublasLt64_13.dll` beside it). Downloaded only when the user chooses it, never in the installer. CUDA 13 needs an
+/// NVIDIA driver of 580 or newer and a Turing (RTX 20) or newer card; older ones use Vulkan.
+pub const CUDA_RUNTIME: &str = "cuda-runtime-13";
+/// The CUDA worker's file name, beside the runtime in a development build or in the pack.
+pub const CUDA_WORKER: &str = "kivo-infer-cuda.exe";
+
+fn cuda_runtime() -> ModelManifest {
+    const REDIST: &str = "https://developer.download.nvidia.com/compute/cuda/redist";
+    const CUBLAS: &str = "libcublas-windows-x86_64-13.7.0.27-archive";
+    let dll = |archive: &str, name: &str| Unpack {
+        from: format!("{archive}/bin/x64/{name}"),
+        to: name.into(),
+    };
+    let mut files = vec![ModelFile {
+        name: format!("{CUBLAS}.zip"),
+        url: format!("{REDIST}/libcublas/windows-x86_64/{CUBLAS}.zip"),
+        size: 423_620_712,
+        sha256: "fff93984ee8a85dd8568e4b9000f9e3ef7153f0f73b176756bcbad3c6622d1f0".into(),
+        unpack: vec![
+            dll(CUBLAS, "cublas64_13.dll"),
+            dll(CUBLAS, "cublasLt64_13.dll"),
+            Unpack {
+                from: format!("{CUBLAS}/LICENSE"),
+                to: "LICENSE-cublas.txt".into(),
+            },
+        ],
+    }];
+    // A release build names its own CUDA worker, published with the release (release.yml); a
+    // development build runs the one `cargo build -p kivo-infer-cuda` put beside the runtime.
+    if let (Some(url), Some(sha256), Some(size)) = (
+        option_env!("KIVO_CUDA_WORKER_URL"),
+        option_env!("KIVO_CUDA_WORKER_SHA256"),
+        option_env!("KIVO_CUDA_WORKER_SIZE").and_then(|s| s.parse().ok()),
+    ) {
+        files.push(ModelFile {
+            name: CUDA_WORKER.into(),
+            url: url.into(),
+            size,
+            sha256: sha256.to_ascii_lowercase(),
+            unpack: Vec::new(),
+        });
+    }
+    ModelManifest {
+        id: CUDA_RUNTIME.into(),
+        name: "GPU acceleration for NVIDIA (CUDA)".into(),
+        kind: ModelKind::GpuRuntime,
+        license: "NVIDIA CUDA Toolkit EULA (redistributable components)".into(),
+        attribution: "cuBLAS is NVIDIA's redistributable CUDA library, downloaded from NVIDIA under the CUDA Toolkit End User License Agreement (https://docs.nvidia.com/cuda/eula/). Needs an NVIDIA driver of 580 or newer.".into(),
+        source: format!("{REDIST}/"),
+        languages: Vec::new(),
+        requires: Vec::new(),
+        files,
+    }
+}
 
 fn whisper_cpp(
     &(id, name, file, size, sha256, english_only): &(&str, &str, &str, u64, &str, bool),
@@ -1040,23 +1107,17 @@ impl ModelStore {
     }
 }
 
-/// Takes the listed members out of a verified `.tar.bz2` archive into `dir`.
+/// Takes the listed members out of a verified archive into `dir`: a `.zip` (NVIDIA's CUDA runtime,
+/// VOICE-50) or a `.tar.bz2` (sherpa-onnx's models).
 fn unpack(archive: &Path, members: &[Unpack], dir: &Path) -> Result<(), ModelError> {
-    let reader = bzip2::read::BzDecoder::new(io::BufReader::new(File::open(archive)?));
-    let mut tar = tar::Archive::new(reader);
-    let mut found = 0;
-    for entry in tar.entries()? {
-        let mut entry = entry?;
-        let path = entry.path()?.to_string_lossy().replace('\\', "/");
-        if let Some(member) = members.iter().find(|m| m.from == path) {
-            let target = dir.join(&member.to);
-            if let Some(parent) = target.parent() {
-                fs::create_dir_all(parent)?;
-            }
-            io::copy(&mut entry, &mut File::create(&target)?)?;
-            found += 1;
-        }
-    }
+    let found = if archive
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("zip"))
+    {
+        unpack_zip(archive, members, dir)?
+    } else {
+        unpack_tar_bz2(archive, members, dir)?
+    };
     if found != members.len() {
         return Err(ModelError::Corrupt {
             file: archive
@@ -1066,6 +1127,45 @@ fn unpack(archive: &Path, members: &[Unpack], dir: &Path) -> Result<(), ModelErr
         });
     }
     Ok(())
+}
+
+/// Writes `from` to `dir/to`, creating its folder.
+fn extract(from: &mut impl Read, dir: &Path, to: &str) -> io::Result<()> {
+    let target = dir.join(to);
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    io::copy(from, &mut File::create(&target)?)?;
+    Ok(())
+}
+
+fn unpack_zip(archive: &Path, members: &[Unpack], dir: &Path) -> Result<usize, ModelError> {
+    let mut zip =
+        zip::ZipArchive::new(io::BufReader::new(File::open(archive)?)).map_err(io::Error::other)?;
+    let mut found = 0;
+    for member in members {
+        let Ok(mut entry) = zip.by_name(&member.from) else {
+            continue;
+        };
+        extract(&mut entry, dir, &member.to)?;
+        found += 1;
+    }
+    Ok(found)
+}
+
+fn unpack_tar_bz2(archive: &Path, members: &[Unpack], dir: &Path) -> Result<usize, ModelError> {
+    let reader = bzip2::read::BzDecoder::new(io::BufReader::new(File::open(archive)?));
+    let mut tar = tar::Archive::new(reader);
+    let mut found = 0;
+    for entry in tar.entries()? {
+        let mut entry = entry?;
+        let path = entry.path()?.to_string_lossy().replace('\\', "/");
+        if let Some(member) = members.iter().find(|m| m.from == path) {
+            extract(&mut entry, dir, &member.to)?;
+            found += 1;
+        }
+    }
+    Ok(found)
 }
 
 /// Downloads one file into `part`, resuming from its current length, then checks its hash.
@@ -1350,6 +1450,102 @@ mod tests {
         let mut bz = bzip2::write::BzEncoder::new(Vec::new(), bzip2::Compression::fast());
         bz.write_all(&raw).unwrap();
         bz.finish().unwrap()
+    }
+
+    /// NVIDIA's CUDA runtime comes as `.zip` archives (VOICE-50): the listed DLLs come out under
+    /// their own names and the archive goes.
+    #[test]
+    fn zip_archives_are_unpacked_like_tar_ones() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = ModelStore::new(tmp.path().to_path_buf());
+        let mut zip = zip::ZipWriter::new(io::Cursor::new(Vec::new()));
+        let options = zip::write::SimpleFileOptions::default();
+        for (path, data) in [
+            ("pkg-archive/bin/x64/cublas64_13.dll", &[5_u8; 4000][..]),
+            ("pkg-archive/include/cuda.h", b"// header"),
+        ] {
+            zip.start_file(path, options).unwrap();
+            zip.write_all(data).unwrap();
+        }
+        let archive = zip.finish().unwrap().into_inner();
+        let files: [(&str, &[u8]); 1] = [("pkg-archive.zip", &archive)];
+        let mut m = manifest(&files);
+        m.files[0].unpack = vec![Unpack {
+            from: "pkg-archive/bin/x64/cublas64_13.dll".into(),
+            to: "cublas64_13.dll".into(),
+        }];
+        let installed = store
+            .install(
+                &m,
+                &server(&files, None),
+                &CancellationToken::new(),
+                &mut |_| {},
+            )
+            .unwrap();
+        assert_eq!(
+            fs::read(installed.dir.join("cublas64_13.dll")).unwrap(),
+            [5; 4000]
+        );
+        assert!(!installed.dir.join("pkg-archive.zip").exists());
+        assert!(!installed.dir.join("include").exists());
+    }
+
+    /// With `KIVO_TEST_REAL_CUDA_PACK=<folder>`: downloads the real CUDA pack from NVIDIA (about
+    /// 424 MB) into that folder and checks each library came out whole (VOICE-50). Off by default.
+    #[test]
+    #[cfg(all(windows, target_arch = "x86_64"))]
+    fn installs_the_real_cuda_pack_from_nvidia_when_asked() {
+        let Some(root) = std::env::var_os("KIVO_TEST_REAL_CUDA_PACK").map(PathBuf::from) else {
+            eprintln!("KIVO_TEST_REAL_CUDA_PACK isn't set; skipping");
+            return;
+        };
+        let store = ModelStore::new(root);
+        let cuda = catalog()
+            .into_iter()
+            .find(|m| m.id == CUDA_RUNTIME)
+            .unwrap();
+        let installed = store
+            .install(
+                &cuda,
+                &HttpFetcher::new(),
+                &CancellationToken::new(),
+                &mut |_| {},
+            )
+            .unwrap();
+        for file in cuda.files.iter().flat_map(|f| &f.unpack) {
+            let path = installed.dir.join(&file.to);
+            assert!(
+                fs::metadata(&path).is_ok_and(|m| m.len() > 0),
+                "{}",
+                path.display()
+            );
+        }
+        eprintln!("the CUDA pack is in {}", installed.dir.display());
+    }
+
+    /// The CUDA pack is pinned to NVIDIA's own archives and asks before it downloads.
+    #[test]
+    #[cfg(all(windows, target_arch = "x86_64"))]
+    fn the_cuda_runtime_comes_from_nvidia_pinned() {
+        let cuda = catalog()
+            .into_iter()
+            .find(|m| m.id == CUDA_RUNTIME)
+            .unwrap();
+        assert_eq!(cuda.kind, ModelKind::GpuRuntime);
+        assert!(cuda.files.iter().all(|f| {
+            f.url
+                .starts_with("https://developer.download.nvidia.com/compute/cuda/redist/")
+                || f.name == CUDA_WORKER
+        }));
+        let dlls: Vec<&str> = cuda
+            .files
+            .iter()
+            .flat_map(|f| f.unpack.iter().map(|u| u.to.as_str()))
+            .collect();
+        for dll in ["cublas64_13.dll", "cublasLt64_13.dll"] {
+            assert!(dlls.contains(&dll), "{dll}");
+        }
+        assert!(cuda.files.iter().all(|f| f.sha256.len() == 64));
     }
 
     #[test]

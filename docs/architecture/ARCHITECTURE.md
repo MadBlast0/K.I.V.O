@@ -48,7 +48,7 @@ Decisions are recorded in [../DECISIONS.md](../DECISIONS.md).
 |---|---|---|---|
 | **kivo-runtime** | The product core, and the only authority for state. Owns the mic, speaker, tray, event bus, routing, tools, permissions, tasks, store and secrets access | Always running while KIVO is "on" | Restarted by the next launch or autostart; crash dumps plus a report on the next start |
 | **kivo-app** | The Tauri UI shell: the overlay window (preloaded, hidden) and the Control Center window (created on demand). **No business logic and no secrets** | Launched by the runtime; can restart without stopping KIVO | The runtime relaunches it with backoff |
-| **kivo-infer** | Model inference worker(s): STT, TTS, local embeddings, and optionally an embedded local LLM. Same binary, run as a subcommand | Started on demand and kept warm per residency policy (plan §93) | The runtime restarts it; the current turn fails gracefully ("I lost my voice engine, retrying") |
+| **kivo-infer** | Model inference worker(s): STT, TTS, local embeddings, and optionally an embedded local LLM. Same binary, run as a subcommand; `kivo-infer-cuda` is the same source built with CUDA for NVIDIA cards, started instead when the graphics backend is CUDA (VOICE-50) | Started on demand and kept warm per residency policy (plan §93) | The runtime restarts it; the current turn fails gracefully ("I lost my voice engine, retrying") |
 | CLI agents | External brains over ACP / Codex App Server | Per session or task | Isolated; errors are normalized by the adapter |
 | Tool children | Shell commands and helper processes | Per tool call | Run inside a Windows **Job Object** (kill-on-close, memory and CPU limits) |
 
@@ -245,7 +245,8 @@ K.I.V.O/
 │  └─ kivo-testkit/           # fakes (fake brain, fake audio, fake platform)
 ├─ apps/
 │  ├─ kivo-runtime/           # bin: the runtime
-│  ├─ kivo-infer/             # bin: inference worker
+│  ├─ kivo-infer/             # bin: inference worker (whisper.cpp on Vulkan / Metal)
+│  ├─ kivo-infer-cuda/        # bin: the same worker built with CUDA (NVIDIA, VOICE-50)
 │  ├─ kivo-app/               # Tauri app: src-tauri/ (Rust shell) + src/ (React UI)
 │  └─ kivo-bench/             # bin: benchmark harness
 ├─ extensions/browser/        # Chromium/Firefox extension (native messaging)

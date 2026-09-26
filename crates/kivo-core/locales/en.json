@@ -1040,6 +1040,7 @@
   "recovery": {
     "restart": "KIVO’s speech engine stopped unexpectedly and was started again.",
     "cpu": "KIVO’s speech engine stopped while using the graphics card. It runs on the processor for now.",
+    "vulkan": "KIVO’s NVIDIA acceleration (CUDA) stopped working. Speech recognition uses the graphics card through Vulkan for now.",
     "fallback": "KIVO’s speech engine keeps stopping with {engine}, so another engine stands in for now.",
     "stopped": "KIVO’s speech engine keeps stopping, so KIVO stopped restarting it. Change the speech engine or run the checks in Diagnostics.",
     "stoppedTitle": "Speech is paused"

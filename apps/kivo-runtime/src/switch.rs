@@ -372,7 +372,7 @@ impl Switcher {
     ) -> Result<Probe, String> {
         let config = self.core.config();
         Probe::start(
-            self.engine.infer.program().to_path_buf(),
+            &self.engine.infer,
             slot,
             id,
             dir,
@@ -591,7 +591,7 @@ fn heard_enough(said: &str, heard: &str) -> bool {
 
 /// Where a test worker runs its engine.
 struct Place {
-    gpu: Option<u32>,
+    gpu: Option<kivo_ipc::infer::GpuTarget>,
     threads: usize,
 }
 
@@ -605,7 +605,7 @@ struct Probe {
 
 impl Probe {
     async fn start(
-        program: PathBuf,
+        parent: &Infer,
         slot: InferSlot,
         id: &str,
         dir: Option<PathBuf>,
@@ -613,7 +613,7 @@ impl Probe {
         cloud: Option<kivo_ipc::infer::CloudLoad>,
         place: Place,
     ) -> Result<Self, String> {
-        let (infer, events, sender) = Infer::new(program);
+        let (infer, events, sender) = parent.probe();
         let stop = CancellationToken::new();
         let task = tokio::spawn(infer::supervise(infer.clone(), sender, stop.clone()));
         let mut probe = Self {

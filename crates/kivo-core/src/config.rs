@@ -761,6 +761,16 @@ pub struct Performance {
     /// Speech recognition runs on the graphics card first (owner, DECISIONS "Local models on the
     /// GPU first"), on the processor when the card isn't available or this is off.
     pub gpu_speech: bool,
+    /// How local models use the graphics card when `gpu_speech` is on (VOICE-50).
+    pub graphics_backend: GraphicsBackend,
+}
+
+impl Performance {
+    /// Whether local models may use the graphics card: the switch is on and the backend isn't
+    /// Processor only (VOICE-50).
+    pub fn gpu_allowed(&self) -> bool {
+        self.gpu_speech && self.graphics_backend != GraphicsBackend::Processor
+    }
 }
 
 impl Default for Performance {
@@ -771,8 +781,24 @@ impl Default for Performance {
             tts_warm_minutes: 10,
             speech_threads: 0,
             gpu_speech: true,
+            graphics_backend: GraphicsBackend::Auto,
         }
     }
+}
+
+/// Settings → Performance → Graphics backend (VOICE-50): Automatic picks CUDA on NVIDIA once its
+/// runtime is installed (Vulkan until then), Vulkan on AMD and Intel, Metal on a Mac; a choice the
+/// PC can't use falls back to Automatic's.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum GraphicsBackend {
+    #[default]
+    Auto,
+    Cuda,
+    Vulkan,
+    Metal,
+    /// Local models run on the processor and RAM only.
+    Processor,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

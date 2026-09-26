@@ -2764,6 +2764,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "kivo-infer-cuda"
+version = "0.0.0"
+dependencies = [
+ "kivo-ipc",
+ "kivo-platform",
+ "kivo-platform-windows",
+ "kivo-voice",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "kivo-intent"
 version = "0.0.0"
 dependencies = [
@@ -2936,6 +2952,7 @@ dependencies = [
  "tracing-appender",
  "tracing-subscriber",
  "ureq 3.4.2",
+ "zip",
 ]
 
 [[package]]

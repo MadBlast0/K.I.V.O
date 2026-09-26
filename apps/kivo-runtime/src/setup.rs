@@ -129,6 +129,7 @@ mod tests {
                 vec![GpuInfo {
                     name: "GPU".into(),
                     vram_mb: vram_gb * 1024,
+                    ..GpuInfo::default()
                 }]
             } else {
                 Vec::new()

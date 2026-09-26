@@ -136,7 +136,7 @@ Onboarding.
 | Permissions | Mode (Auto) · grants list · per-tool overrides · emergency stop hotkey |
 | Privacy | Mode (Cloud) · data classes · conversation retention (30 days) · debug transcripts (off) |
 | Memory | On (explicit only) · list/edit/delete · export |
-| Performance | Profile (auto: Battery / Balanced / Performance / Gaming) · model residency timers |
+| Performance | Profile (auto: Battery / Balanced / Performance / Gaming) · model residency timers · speech on the graphics card · Graphics backend (Automatic / CUDA / Vulkan / Metal / Processor only, VOICE-50) with GPU acceleration for NVIDIA |
 | Accessibility | Screen-reader announcements (on) · captions for spoken replies (on) · high contrast (follow Windows) · warn if overlay and sounds are both off |
 
 ## 6. Companion styles

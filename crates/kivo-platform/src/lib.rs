@@ -45,8 +45,8 @@ pub use shell::{
 };
 pub use speech::{SpeechSynth, SynthAudio, SystemVoice};
 pub use system::{
-    Attention, Autostart, GpuInfo, MediaAction, Network, NowPlaying, PowerAction, Presence,
-    ProcessUsage, SystemControl, SystemInfo, SystemSnapshot, ThreadQos, VolumeState,
+    Attention, Autostart, GpuInfo, GpuVendor, MediaAction, Network, NowPlaying, PowerAction,
+    Presence, ProcessUsage, SystemControl, SystemInfo, SystemSnapshot, ThreadQos, VolumeState,
 };
 pub use trust::CodeTrust;
 pub use types::{DeviceId, Point, Rect, WindowId};

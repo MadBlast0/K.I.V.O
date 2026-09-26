@@ -301,7 +301,7 @@ impl VoiceRpc {
         let profiles = [kivo_voice::EngineSlot::Stt, kivo_voice::EngineSlot::Tts]
             .into_iter()
             .flat_map(|slot| {
-                kivo_voice::registry::profiles(slot, &language, config.performance.gpu_speech)
+                kivo_voice::registry::profiles(slot, &language, config.performance.gpu_allowed())
             })
             .map(|c| ProfileItem {
                 slot: c.slot,

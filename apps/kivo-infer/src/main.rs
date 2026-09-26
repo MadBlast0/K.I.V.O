@@ -138,6 +138,7 @@ async fn handle(
                 protocol: INFER_PROTOCOL,
                 version: env!("CARGO_PKG_VERSION").into(),
                 pid: std::process::id(),
+                backend: gpu_backend(),
             })
         }
         method::MODEL_LOAD => {
@@ -207,4 +208,17 @@ fn to_value<T: serde::Serialize>(value: &T) -> Result<Value, RpcError> {
 /// A user-safe failure from an engine thread.
 pub fn engine_error(message: impl Into<String>) -> RpcError {
     RpcError::new(RpcError::ENGINE, message)
+}
+
+/// The GPU backend this worker's whisper.cpp was built with (VOICE-50): Vulkan in `kivo-infer` on
+/// Windows, CUDA in `kivo-infer-cuda`, Metal on a Mac, none elsewhere.
+fn gpu_backend() -> Option<kivo_ipc::infer::GpuBackend> {
+    use kivo_ipc::infer::GpuBackend;
+    use kivo_voice::Accel;
+    match kivo_voice::whisper_cpp::BUILT_GPU {
+        Some(Accel::Cuda) => Some(GpuBackend::Cuda),
+        Some(Accel::Vulkan) => Some(GpuBackend::Vulkan),
+        Some(Accel::Metal) => Some(GpuBackend::Metal),
+        _ => None,
+    }
 }

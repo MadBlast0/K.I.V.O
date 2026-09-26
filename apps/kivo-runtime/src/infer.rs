@@ -3,9 +3,9 @@
 //! if it crashes, and fails the turn in progress with a spoken message instead of taking KIVO down.
 
 use kivo_ipc::infer::{
-    INFER_PROTOCOL, InferHello, InferSlot, InferWelcome, ModelLoad, ModelState, ModelUnload,
-    Residency, SttAudio, SttFinal, SttPartial, SttStart, TtsAudio, TtsDone, TtsSpeak, UtteranceId,
-    encode_pcm, method,
+    GpuBackend, GpuTarget, INFER_PROTOCOL, InferHello, InferSlot, InferWelcome, ModelLoad,
+    ModelState, ModelUnload, Residency, SttAudio, SttFinal, SttPartial, SttStart, TtsAudio,
+    TtsDone, TtsSpeak, UtteranceId, encode_pcm, method,
 };
 use kivo_ipc::{Incoming, Peer};
 use serde_json::{Value, json};
@@ -38,6 +38,9 @@ pub enum Recovery {
     /// It crashed on the graphics card: the recognizer runs on the processor from now on this
     /// session (a driver problem is the likeliest cause).
     Cpu,
+    /// It crashed on CUDA: the recognizer uses the same card through Vulkan from now on this
+    /// session (VOICE-50).
+    Vulkan,
     /// It keeps crashing: this engine is set aside for the session and its stand-in used.
     Fallback(String),
     /// It keeps crashing with nothing left to change: no more restarts until the speech settings
@@ -50,6 +53,7 @@ impl Recovery {
         match self {
             Self::Restart => "restart",
             Self::Cpu => "cpu",
+            Self::Vulkan => "vulkan",
             Self::Fallback(_) => "fallback",
             Self::Stopped => "stopped",
         }
@@ -62,8 +66,10 @@ pub fn recovery(
     engines: &Engines,
     failed: &std::collections::HashSet<String>,
 ) -> Recovery {
-    if engines.gpu.is_some() {
-        return Recovery::Cpu;
+    match engines.gpu.as_ref().map(|g| g.backend) {
+        Some(GpuBackend::Cuda) => return Recovery::Vulkan,
+        Some(_) => return Recovery::Cpu,
+        None => {}
     }
     if quick >= STOP_AFTER {
         return Recovery::Stopped;
@@ -148,8 +154,9 @@ pub struct Engines {
     pub language: String,
     /// Keys and addresses for the cloud engines among these, by engine id (VOICE-10/11).
     pub cloud: std::collections::BTreeMap<String, kivo_ipc::infer::CloudLoad>,
-    /// The graphics card the speech recognizer may run on (PLAN-09); `None` for the processor.
-    pub gpu: Option<u32>,
+    /// The graphics card and backend the speech recognizer may run on (PLAN-09, VOICE-50); `None`
+    /// for the processor.
+    pub gpu: Option<GpuTarget>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -186,6 +193,18 @@ pub struct Infer {
     /// The worker crashed on the graphics card: the recognizer stays on the processor this session
     /// (PLAN-12).
     gpu_off: Arc<std::sync::atomic::AtomicBool>,
+    /// The CUDA worker crashed: CUDA targets use Vulkan this session (VOICE-50).
+    cuda_off: Arc<std::sync::atomic::AtomicBool>,
+    /// The CUDA worker, once its runtime is installed (VOICE-50).
+    cuda: Arc<Mutex<Option<CudaWorker>>>,
+}
+
+/// The speech worker built with CUDA and the folder holding NVIDIA's runtime libraries, which go
+/// on its `PATH` (VOICE-50).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CudaWorker {
+    pub program: PathBuf,
+    pub libraries: PathBuf,
 }
 
 impl Infer {
@@ -212,15 +231,12 @@ impl Infer {
                 failed: Arc::default(),
                 speed: Arc::new(Mutex::new(100)),
                 gpu_off: Arc::default(),
+                cuda_off: Arc::default(),
+                cuda: Arc::default(),
             },
             rx,
             tx,
         )
-    }
-
-    /// The worker program, for a second worker that tries an engine out (VOICE-45).
-    pub fn program(&self) -> &std::path::Path {
-        &self.program
     }
 
     /// Whether the recognizer was taken off the graphics card after a crash there (PLAN-12).
@@ -228,10 +244,65 @@ impl Infer {
         self.gpu_off.load(Ordering::Relaxed)
     }
 
+    /// Sets the CUDA worker (once its runtime is installed) or takes it away; a running CUDA worker
+    /// is replaced by the other one at once (VOICE-50).
+    pub fn set_cuda(&self, cuda: Option<CudaWorker>) {
+        let changed = {
+            let mut current = lock(&self.cuda);
+            let changed = *current != cuda;
+            *current = cuda;
+            changed
+        };
+        if changed {
+            // Wakes the supervisor, which starts the worker the engines now call for.
+            self.engines.send_modify(|_| {});
+        }
+    }
+
+    pub fn cuda(&self) -> Option<CudaWorker> {
+        lock(&self.cuda).clone()
+    }
+
+    /// The worker program for `engines` and the folder its libraries come from: the CUDA worker
+    /// for a CUDA target when there is one, else the usual worker (which runs a CUDA target on its
+    /// own GPU backend).
+    fn launch_for(&self, engines: &Engines) -> (PathBuf, Option<PathBuf>) {
+        match (engines.gpu.as_ref().map(|g| g.backend), self.cuda()) {
+            (Some(GpuBackend::Cuda), Some(cuda)) => (cuda.program, Some(cuda.libraries)),
+            _ => (self.program.clone(), None),
+        }
+    }
+
+    /// A second handle for a worker that tries an engine out (VOICE-45), with this one's CUDA
+    /// worker.
+    pub fn probe(
+        &self,
+    ) -> (
+        Self,
+        mpsc::UnboundedReceiver<InferEvent>,
+        mpsc::UnboundedSender<InferEvent>,
+    ) {
+        let (probe, events, sender) = Self::new(self.program.clone());
+        probe.set_cuda(self.cuda());
+        (probe, events, sender)
+    }
+
+    /// Where the recognizer runs now (the Performance page): the configured target, after any
+    /// crash moved it (off CUDA, or off the card).
+    pub fn effective_gpu(&self) -> Option<GpuTarget> {
+        self.safe(self.configured()).gpu
+    }
+
     /// The engines as they may run now: off the graphics card after a crash there.
     fn safe(&self, mut engines: Engines) -> Engines {
         if self.gpu_off() {
             engines.gpu = None;
+        }
+        if self.cuda_off.load(Ordering::Relaxed)
+            && let Some(gpu) = &mut engines.gpu
+            && gpu.backend == GpuBackend::Cuda
+        {
+            gpu.backend = GpuBackend::Vulkan;
         }
         engines
     }
@@ -497,6 +568,7 @@ pub async fn supervise(
                 });
                 match &then {
                     Recovery::Cpu => infer.gpu_off.store(true, Ordering::Relaxed),
+                    Recovery::Vulkan => infer.cuda_off.store(true, Ordering::Relaxed),
                     Recovery::Fallback(id) => {
                         lock(&infer.failed).insert(id.clone());
                     }
@@ -533,7 +605,9 @@ async fn run_worker(
     shutdown: &CancellationToken,
     engines_rx: &mut watch::Receiver<Engines>,
 ) -> Result<(), String> {
-    let mut child = spawn(&infer.program)?;
+    let wanted = infer.safe(engines_rx.borrow_and_update().clone());
+    let launch = infer.launch_for(&wanted);
+    let mut child = spawn(&launch.0, launch.1.as_deref())?;
     let stdin = child.stdin.take().ok_or("no stdin")?;
     let stdout = child.stdout.take().ok_or("no stdout")?;
     if let Some(stderr) = child.stderr.take() {
@@ -560,14 +634,18 @@ async fn run_worker(
     tracing::info!(
         version = welcome.version,
         pid = welcome.pid,
+        backend = ?welcome.backend,
         "speech worker started"
     );
+    if launch.1.is_some() && welcome.backend != Some(GpuBackend::Cuda) {
+        // A CUDA worker that isn't one (a development build made without `--features cuda`).
+        tracing::warn!(backend = ?welcome.backend, "the CUDA worker wasn't built with CUDA");
+    }
     infer.pid.store(welcome.pid, Ordering::Relaxed);
     *infer
         .peer
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(peer.clone());
-    let wanted = infer.safe(engines_rx.borrow_and_update().clone());
     load_engines(&peer, &wanted, &infer.failed, events).await?;
     infer.ready.send_replace(true);
 
@@ -585,6 +663,11 @@ async fn run_worker(
                 let engines = infer.safe(engines_rx.borrow_and_update().clone());
                 if engines.stt.is_none() && engines.tts.is_none() {
                     // Nothing to hold: the worker process goes away until it is needed again.
+                    let _ = ask_to_stop(&peer).await;
+                    break Ok(());
+                }
+                if infer.launch_for(&engines) != launch {
+                    // Another worker program (CUDA in or out): the supervisor starts it next.
                     let _ = ask_to_stop(&peer).await;
                     break Ok(());
                 }
@@ -609,8 +692,18 @@ async fn run_worker(
     result
 }
 
-fn spawn(program: &std::path::Path) -> Result<Child, String> {
+/// Starts `program`; `libraries` (NVIDIA's CUDA runtime) goes first on its `PATH`, where Windows
+/// looks for the DLLs it loads.
+fn spawn(program: &std::path::Path, libraries: Option<&std::path::Path>) -> Result<Child, String> {
     let mut command = Command::new(program);
+    if let Some(libraries) = libraries {
+        let path = std::env::var_os("PATH").unwrap_or_default();
+        let joined = std::env::join_paths(
+            std::iter::once(libraries.to_path_buf()).chain(std::env::split_paths(&path)),
+        )
+        .map_err(|e| e.to_string())?;
+        command.env("PATH", joined);
+    }
     command
         .arg("serve")
         .stdin(Stdio::piped())
@@ -644,7 +737,9 @@ async fn load_engines(
             threads,
             language: Some(language.clone()),
             cloud: engines.cloud.get(engine).cloned(),
-            gpu: (slot == InferSlot::Stt).then_some(engines.gpu).flatten(),
+            gpu: (slot == InferSlot::Stt)
+                .then(|| engines.gpu.clone())
+                .flatten(),
         });
         async move { peer.request(method::MODEL_LOAD, params).await }
     };
@@ -772,10 +867,18 @@ mod tests {
             stt: Some(("parakeet-tdt-0.6b-v3".into(), PathBuf::from("p"))),
             stt_fallback: Some(("moonshine-base".into(), PathBuf::from("m"))),
             tts: Some(("kokoro-82m".into(), None)),
-            gpu: Some(0),
+            gpu: Some(GpuTarget {
+                backend: GpuBackend::Cuda,
+                device: "RTX".into(),
+            }),
             ..Engines::default()
         };
         let mut failed = std::collections::HashSet::new();
+        // A crash on CUDA tries Vulkan on the same card; one on Vulkan, the processor.
+        assert_eq!(recovery(1, &engines, &failed), Recovery::Vulkan);
+        if let Some(gpu) = &mut engines.gpu {
+            gpu.backend = GpuBackend::Vulkan;
+        }
         assert_eq!(recovery(1, &engines, &failed), Recovery::Cpu);
         engines.gpu = None;
         assert_eq!(recovery(1, &engines, &failed), Recovery::Restart);
@@ -802,6 +905,121 @@ mod tests {
             recovery(3, &alone, &std::collections::HashSet::new()),
             Recovery::Restart
         );
+    }
+
+    /// The CUDA worker runs a CUDA target, with NVIDIA's libraries on its PATH; without one, or
+    /// after it crashed, the usual worker runs the card through Vulkan (VOICE-50).
+    #[test]
+    fn a_cuda_target_starts_the_cuda_worker_when_there_is_one() {
+        let (infer, _events, _tx) = Infer::new(PathBuf::from("kivo-infer"));
+        let cuda = Engines {
+            gpu: Some(GpuTarget {
+                backend: GpuBackend::Cuda,
+                device: "RTX".into(),
+            }),
+            ..Engines::default()
+        };
+        assert_eq!(infer.launch_for(&cuda), (PathBuf::from("kivo-infer"), None));
+        infer.set_cuda(Some(CudaWorker {
+            program: PathBuf::from("pack/kivo-infer-cuda.exe"),
+            libraries: PathBuf::from("pack"),
+        }));
+        assert_eq!(
+            infer.launch_for(&cuda),
+            (
+                PathBuf::from("pack/kivo-infer-cuda.exe"),
+                Some(PathBuf::from("pack"))
+            )
+        );
+        let (probe, _e, _s) = infer.probe();
+        assert_eq!(probe.cuda(), infer.cuda(), "a test worker uses it too");
+        let vulkan = Engines {
+            gpu: Some(GpuTarget {
+                backend: GpuBackend::Vulkan,
+                device: "RTX".into(),
+            }),
+            ..Engines::default()
+        };
+        assert_eq!(infer.launch_for(&vulkan).0, PathBuf::from("kivo-infer"));
+        // After a crash on CUDA: Vulkan on the same card.
+        infer.cuda_off.store(true, Ordering::Relaxed);
+        let safe = infer.safe(cuda);
+        assert_eq!(
+            safe.gpu.as_ref().map(|g| g.backend),
+            Some(GpuBackend::Vulkan)
+        );
+        assert_eq!(infer.launch_for(&safe).0, PathBuf::from("kivo-infer"));
+    }
+
+    /// With the CUDA worker built (`pnpm build:cuda`), the CUDA pack installed (`KIVO_CUDA_PACK`,
+    /// the folder with NVIDIA's DLLs) and whisper.cpp's base.en model (`KIVO_WHISPER_CPP_DIR`, a
+    /// recording in `KIVO_WHISPER_CPP_WAV`): a CUDA target starts the CUDA worker with the pack on
+    /// its PATH, and it transcribes on the NVIDIA card (`KIVO_CUDA_DEVICE`, default any "NVIDIA")
+    /// (VOICE-50).
+    #[tokio::test]
+    #[cfg(all(windows, target_arch = "x86_64"))]
+    async fn a_cuda_target_transcribes_on_the_cuda_worker_when_it_is_here() {
+        let var = |name| std::env::var_os(name).map(PathBuf::from);
+        let (Some(pack), Some(models), Some(wav)) = (
+            var("KIVO_CUDA_PACK"),
+            var("KIVO_WHISPER_CPP_DIR"),
+            var("KIVO_WHISPER_CPP_WAV"),
+        ) else {
+            eprintln!(
+                "KIVO_CUDA_PACK / KIVO_WHISPER_CPP_DIR / KIVO_WHISPER_CPP_WAV not set; skipping"
+            );
+            return;
+        };
+        // The test runs from target\debug\deps; the worker is in target\debug.
+        let program = std::env::current_exe()
+            .ok()
+            .and_then(|exe| {
+                exe.parent()?
+                    .parent()
+                    .map(|d| d.join("kivo-infer-cuda.exe"))
+            })
+            .filter(|p| p.is_file());
+        let Some(program) = program else {
+            eprintln!("kivo-infer-cuda isn't built (pnpm build:cuda); skipping");
+            return;
+        };
+        let device = std::env::var("KIVO_CUDA_DEVICE").unwrap_or_else(|_| "NVIDIA".into());
+        let (infer, _events, sender) = Infer::new(PathBuf::from("no-usual-worker.exe"));
+        infer.set_cuda(Some(CudaWorker {
+            program,
+            libraries: pack,
+        }));
+        let stop = CancellationToken::new();
+        let task = tokio::spawn(supervise(infer.clone(), sender, stop.clone()));
+        infer.set_engines(Engines {
+            stt: Some(("whisper-cpp-base-en".into(), models)),
+            threads: 4,
+            language: "en".into(),
+            gpu: Some(GpuTarget {
+                backend: GpuBackend::Cuda,
+                device,
+            }),
+            ..Engines::default()
+        });
+        assert!(
+            infer.wait_ready(Duration::from_secs(120)).await,
+            "the CUDA worker started and loaded the model"
+        );
+        let audio = kivo_voice::utterance::wav_samples(&std::fs::read(wav).unwrap());
+        let id = infer.next_utterance();
+        infer.start_stt(id, "en", Vec::new()).await.unwrap();
+        for piece in audio.chunks(1_280) {
+            infer.send_audio(id, piece).unwrap();
+        }
+        let heard = infer.finish_stt(id).await.unwrap();
+        eprintln!("CUDA worker: {:?} in {} ms", heard.text, heard.millis);
+        assert!(
+            heard.text.to_lowercase().contains("country"),
+            "{}",
+            heard.text
+        );
+        stop.cancel();
+        let _ = tokio::time::timeout(Duration::from_secs(5), task).await;
     }
 
     #[tokio::test]

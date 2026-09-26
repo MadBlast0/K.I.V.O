@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "packageManager": "pnpm@11.27.1",
   "scripts": {
-    "dev": "node scripts/build-tools.mjs --quiet && cargo build -p kivo-runtime -p kivo-infer && pnpm --filter kivo-app tauri dev",
+    "dev": "node scripts/build-tools.mjs --quiet && cargo build -p kivo-runtime -p kivo-infer && node scripts/cuda-worker.mjs --quiet && pnpm --filter kivo-app tauri dev",
     "dev:e2e": "node scripts/dev-e2e.mjs",
     "ui": "pnpm --filter kivo-app dev",
     "sidecars": "node scripts/sidecars.mjs",
@@ -21,6 +21,7 @@
     "invariants": "node scripts/invariants.mjs",
     "bench:gate": "node scripts/bench-gate.mjs",
     "bench:glow": "node scripts/bench-glow.mjs",
-    "build-tools": "node scripts/build-tools.mjs"
+    "build-tools": "node scripts/build-tools.mjs",
+    "build:cuda": "node scripts/cuda-worker.mjs"
   }
 }

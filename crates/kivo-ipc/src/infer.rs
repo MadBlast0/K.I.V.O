@@ -45,6 +45,28 @@ pub struct InferWelcome {
     pub protocol: u16,
     pub version: String,
     pub pid: u32,
+    /// The graphics-card backend this worker was built with (VOICE-50); `None` for a processor-only
+    /// build. The runtime starts the worker whose backend it chose, and checks it here.
+    #[serde(default)]
+    pub backend: Option<GpuBackend>,
+}
+
+/// A GPU backend a speech worker can be built with (VOICE-50).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum GpuBackend {
+    Cuda,
+    Vulkan,
+    Metal,
+}
+
+/// Where a GPU-capable model runs: the backend and the card, by the name the system gives it
+/// (DXGI on Windows). The worker finds that card among its backend's devices.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GpuTarget {
+    pub backend: GpuBackend,
+    pub device: String,
 }
 
 /// Which engine slot a model fills in the worker.
@@ -70,10 +92,10 @@ pub struct ModelLoad {
     /// For a cloud engine: the user's key (from Credential Manager) and where to reach it.
     #[serde(default)]
     pub cloud: Option<CloudLoad>,
-    /// The graphics card (DXGI adapter) the GPU policy gives a GPU-capable recognizer (PLAN-09);
-    /// otherwise the processor.
+    /// The graphics card and backend the GPU policy gives a GPU-capable recognizer (PLAN-09,
+    /// VOICE-50); otherwise the processor.
     #[serde(default)]
-    pub gpu: Option<u32>,
+    pub gpu: Option<GpuTarget>,
 }
 
 /// How the worker reaches a cloud speech service (VOICE-10/11). The key travels only over the

@@ -93,6 +93,20 @@ jobs:
           "VULKAN_SDK=C:\VulkanSDK\$version" >> $env:GITHUB_ENV
           # libclang for whisper-rs's bindings: the runner image ships LLVM.
           "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
+      # VOICE-50: the CUDA worker (kivo-infer-cuda, x64) builds against NVIDIA's CUDA Toolkit: its
+      # installer, pinned and checked (since CUDA 13.1 it carries no display driver).
+      - name: CUDA Toolkit
+        if: matrix.arch == 'x64'
+        shell: pwsh
+        run: |
+          $exe = Join-Path $env:RUNNER_TEMP 'cuda.exe'
+          Invoke-WebRequest 'https://developer.download.nvidia.com/compute/cuda/13.4.1/local_installers/cuda_13.4.1_windows_x86_64.exe' -OutFile $exe
+          $sha = (Get-FileHash $exe -Algorithm SHA256).Hash
+          if ($sha -ne '632A5912995473CEA77B24788715B8D94DB17A94CFEA102A12F72C3614FE8C7E') { throw "CUDA Toolkit checksum: $sha" }
+          Start-Process $exe -ArgumentList '-s' -Wait
+          # Visual Studio's CUDA build rules read the versioned variable too.
+          "CUDA_PATH=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.4" >> $env:GITHUB_ENV
+          "CUDA_PATH_V13_4=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.4" >> $env:GITHUB_ENV
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -129,6 +143,23 @@ jobs:
           }
           "TAURI_CONFIGS=$(($configs | ForEach-Object { "--config $_" }) -join ' ')" >> $env:GITHUB_ENV
 
+      # VOICE-50: the CUDA worker, published beside the installers (never in them) and downloaded
+      # with NVIDIA's runtime when a user chooses it. Signed before it is hashed; the runtime built
+      # next compiles its address, size and SHA-256 into the CUDA pack's manifest.
+      - name: CUDA worker
+        if: matrix.arch == 'x64'
+        shell: pwsh
+        run: |
+          cargo build --release --locked -p kivo-infer-cuda --features cuda --target $env:TARGET
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item "target/$env:TARGET/release/kivo-infer-cuda.exe" dist/kivo-infer-cuda-x64.exe
+          if ($env:KIVO_SIGNED -eq '1') { pwsh -NoProfile -File scripts/sign.ps1 dist/kivo-infer-cuda-x64.exe }
+          $file = Get-Item dist/kivo-infer-cuda-x64.exe
+          '{0}: {1:N1} MB' -f $file.Name, ($file.Length / 1MB)
+          "KIVO_CUDA_WORKER_URL=https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:GITHUB_REF_NAME/kivo-infer-cuda-x64.exe" >> $env:GITHUB_ENV
+          "KIVO_CUDA_WORKER_SHA256=$((Get-FileHash $file -Algorithm SHA256).Hash)" >> $env:GITHUB_ENV
+          "KIVO_CUDA_WORKER_SIZE=$($file.Length)" >> $env:GITHUB_ENV
+
       # RELEASE.md §2 step 3: kivo-runtime and kivo-infer into src-tauri/binaries/<name>-<triple>,
       # after the configuration above so the runtime is built with the updater key and publisher.
       - name: Build the sidecars
@@ -160,7 +191,7 @@ jobs:
         run: |
           $release = "target/$env:TARGET/release"
           $files = @("$release/KIVO.exe") +
-            (Get-ChildItem "apps/kivo-app/src-tauri/binaries/*.exe").FullName +
+            (Get-ChildItem "apps/kivo-app/src-tauri/binaries/*.exe", "dist/kivo-infer-cuda-*.exe" -ErrorAction SilentlyContinue).FullName +
             (Get-ChildItem "$release/bundle/nsis/*-setup.exe", "$release/bundle/msi/*.msi").FullName
           foreach ($f in $files) {
             $s = Get-AuthenticodeSignature $f
@@ -249,7 +280,7 @@ jobs:
         run: |
           cargo install cargo-cyclonedx --locked
           mkdir -p sbom
-          for p in kivo-runtime kivo-infer kivo-app; do
+          for p in kivo-runtime kivo-infer kivo-infer-cuda kivo-app; do
             dir=$(cargo metadata --format-version 1 --no-deps | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const m=JSON.parse(s);console.log(require('path').dirname(m.packages.find(x=>x.name==='$p').manifest_path))})")
             (cd "$dir" && cargo cyclonedx --format json --override-filename "$p.cdx")
             mv "$dir/$p.cdx.json" "sbom/$p.cdx.json"

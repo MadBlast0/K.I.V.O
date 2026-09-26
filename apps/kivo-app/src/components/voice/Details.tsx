@@ -315,6 +315,9 @@ interface Advanced {
   modelsFolder: string;
 }
 
+/** Where an engine can run, as the runtime names it (`kivo_voice::Accel`, VOICE-50). */
+const DEVICES: ReadonlySet<string> = new Set(["cpu", "vulkan", "cuda", "metal", "npu"]);
+
 interface EngineDetail {
   engine: string;
   name: string | null;
@@ -354,7 +357,10 @@ export function AdvancedVoice() {
       subtitle={[
         `${t("voice.advanced.engine")} ${e.engine}`,
         e.model && `${t("voice.advanced.model")} ${e.model}`,
-        e.devices && `${t("voice.advanced.device")} ${e.devices.join(", ")}`,
+        e.devices &&
+          `${t("voice.advanced.device")} ${e.devices
+            .map((d) => (DEVICES.has(d) ? t(`voice.advanced.devices.${d}`) : d))
+            .join(", ")}`,
         e.path ?? t("voice.advanced.noPath"),
       ]
         .filter(Boolean)

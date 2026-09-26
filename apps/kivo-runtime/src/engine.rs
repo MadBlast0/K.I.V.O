@@ -2563,6 +2563,7 @@ impl Engine {
         let detail = match recovery {
             Recovery::Restart => text::t("recovery.restart"),
             Recovery::Cpu => text::t("recovery.cpu"),
+            Recovery::Vulkan => text::t("recovery.vulkan"),
             Recovery::Fallback(id) => text::tf("recovery.fallback", &[("engine", &name(id))]),
             Recovery::Stopped => text::t("recovery.stopped"),
         };

@@ -365,6 +365,8 @@ describe("Voice page", () => {
     fireEvent.click(screen.getByRole("switch", { name: "Show advanced" }));
     await settle();
     expect(screen.getByText(/Speech uses 4 of 16 processor threads/)).toBeTruthy();
+    // Devices by name, not the runtime's ids (VOICE-50).
+    expect(screen.getAllByText(/runs on Processor/).length).toBeGreaterThan(0);
     expect(screen.getByText("moonshine-tiny-en")).toBeTruthy();
     expect(await violations()).toEqual([]);
   });

@@ -127,6 +127,7 @@ Update this section as milestones land.
 |---|---|
 | Run the desktop app with hot reload | `preview.bat` (or `pnpm dev`; it builds `kivo-runtime` and `kivo-infer` first, and the app starts the runtime). Quit KIVO from the tray or Ctrl+K to stop the runtime too |
 | Fetch the GPU speech engine's build tools (Vulkan SDK parts, libclang; no admin; `pnpm dev`/`pnpm build` run it) | `pnpm build-tools` |
+| Build the CUDA speech worker (`kivo-infer-cuda`, NVIDIA; needs the CUDA Toolkit, `CUDA_PATH`; `pnpm dev` runs it when the toolkit is there) | `pnpm build:cuda` |
 | Run the runtime, which launches and supervises the app | `cargo run -p kivo-runtime` (`-- --no-app` for the runtime alone) |
 | UI only, in a browser (port 1420) | `pnpm ui` |
 | Typecheck UI | `pnpm typecheck` |

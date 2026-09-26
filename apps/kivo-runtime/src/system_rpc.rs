@@ -364,7 +364,9 @@ impl SystemRpc {
             "memoryMb": sampled.1 / (1024 * 1024),
             "processes": sampled.2,
             // The recognizer runs on the graphics card when the GPU policy put it there (PLAN-09).
-            "gpu": self.engine.infer.configured().gpu.is_some(),
+            "gpu": self.engine.infer.effective_gpu().is_some(),
+            // Settings → Performance → Graphics backend (VOICE-50).
+            "graphics": self.models.graphics(),
             "gpuPercent": sampled.3.load,
             "gpuMemoryMb": sampled.3.kivo_bytes.map(|b| b / (1024 * 1024)),
             "vramMb": sampled.3.vram_mb,

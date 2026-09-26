@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/*", "apps/kivo-runtime", "apps/kivo-infer", "apps/kivo-bench", "apps/kivo-app/src-tauri", "testenv/app", "testenv/mcp"]
+members = ["crates/*", "apps/kivo-runtime", "apps/kivo-infer", "apps/kivo-infer-cuda", "apps/kivo-bench", "apps/kivo-app/src-tauri", "testenv/app", "testenv/mcp"]
 
 [workspace.package]
 version = "0.0.0"

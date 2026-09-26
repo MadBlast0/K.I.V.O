@@ -450,7 +450,7 @@ sessionOnly: boolean, };
 
 export type ModelItem = { id: string, name: string, 
 /**
- * `stt`, `tts`, `vad`, `wake`, `embedding`.
+ * `stt`, `tts`, `vad`, `wake`, `embedding`, `speaker`, `gpuRuntime` (VOICE-50).
  */
 kind: string, license: string, attribution: string, source: string, languages: Array<string>, 
 /**

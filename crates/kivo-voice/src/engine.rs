@@ -32,10 +32,18 @@ pub enum EngineKind {
 #[serde(rename_all = "camelCase")]
 pub enum Accel {
     Cpu,
-    /// whisper.cpp's GPU backend.
+    /// whisper.cpp's GPU backends (VOICE-50): Vulkan on any vendor, CUDA on NVIDIA, Metal on a Mac.
     Vulkan,
     Cuda,
+    Metal,
     Npu,
+}
+
+impl Accel {
+    /// A graphics-card backend (not the processor or an NPU).
+    pub fn is_gpu(self) -> bool {
+        matches!(self, Self::Vulkan | Self::Cuda | Self::Metal)
+    }
 }
 
 /// Rough cost of keeping the engine loaded and running it.

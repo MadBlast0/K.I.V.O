@@ -3,11 +3,58 @@
 use crate::error::PlatformResult;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GpuInfo {
     pub name: String,
     pub vram_mb: u64,
+    #[serde(default)]
+    pub vendor: GpuVendor,
+    /// The driver's version as Windows reports it (`32.0.16.1692`), when known.
+    #[serde(default)]
+    pub driver_version: Option<String>,
+}
+
+/// Who made a graphics card; it decides the GPU backend (VOICE-50).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum GpuVendor {
+    Nvidia,
+    Amd,
+    Intel,
+    Apple,
+    #[default]
+    Other,
+}
+
+impl GpuVendor {
+    /// From a PCI vendor id.
+    pub fn from_pci(id: u32) -> Self {
+        match id {
+            0x10DE => Self::Nvidia,
+            0x1002 | 0x1022 => Self::Amd,
+            0x8086 => Self::Intel,
+            0x106B => Self::Apple,
+            _ => Self::Other,
+        }
+    }
+}
+
+impl GpuInfo {
+    /// NVIDIA's own driver number (major, minor), e.g. `(616, 92)` from Windows' `32.0.16.1692`:
+    /// the last digit of the third part and the whole fourth part.
+    pub fn nvidia_driver(&self) -> Option<(u32, u32)> {
+        if self.vendor != GpuVendor::Nvidia {
+            return None;
+        }
+        let parts: Vec<&str> = self.driver_version.as_deref()?.split('.').collect();
+        let [_, _, third, fourth] = parts.as_slice() else {
+            return None;
+        };
+        let digits = format!("{}{fourth:0>4}", third.chars().last()?);
+        let number: u32 = digits.parse().ok()?;
+        Some((number / 100, number % 100))
+    }
 }
 
 /// A point-in-time view of the machine.
@@ -176,4 +223,30 @@ pub trait Autostart: Send + Sync {
     fn set(&self, enabled: bool, command: &str) -> PlatformResult<()>;
     /// The command registered now, if any.
     fn current(&self) -> PlatformResult<Option<String>>;
+}
+
+#[cfg(test)]
+mod gpu_tests {
+    use super::*;
+
+    #[test]
+    fn nvidia_driver_numbers_come_from_the_windows_version() {
+        let gpu = |vendor, version: &str| GpuInfo {
+            vendor,
+            driver_version: Some(version.into()),
+            ..GpuInfo::default()
+        };
+        assert_eq!(
+            gpu(GpuVendor::Nvidia, "32.0.16.1692").nvidia_driver(),
+            Some((616, 92))
+        );
+        assert_eq!(
+            gpu(GpuVendor::Nvidia, "32.0.15.8005").nvidia_driver(),
+            Some((580, 5))
+        );
+        assert_eq!(gpu(GpuVendor::Amd, "32.0.16.1692").nvidia_driver(), None);
+        assert_eq!(gpu(GpuVendor::Nvidia, "junk").nvidia_driver(), None);
+        assert_eq!(GpuVendor::from_pci(0x10DE), GpuVendor::Nvidia);
+        assert_eq!(GpuVendor::from_pci(0x8086), GpuVendor::Intel);
+    }
 }

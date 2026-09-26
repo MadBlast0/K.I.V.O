@@ -114,8 +114,8 @@ fn run(rx: &mpsc::Receiver<Command>, peer: &Peer, tokens: &Tokens) {
                             )
                         })
                         .map(|e| Box::new(e) as Box<dyn SttEngine>),
-                    // whisper.cpp: on the graphics card through Vulkan when the policy gives it one.
-                    #[cfg(all(windows, target_arch = "x86_64"))]
+                    // whisper.cpp: on the card the GPU policy chose, through this worker's backend.
+                    #[cfg(any(all(windows, target_arch = "x86_64"), target_os = "macos"))]
                     (id, Some(dir)) if kivo_voice::whisper_cpp::variant(id).is_some() => {
                         kivo_voice::whisper_cpp::variant(id)
                             .ok_or_else(|| VoiceError::Unavailable(id.to_owned()))
@@ -124,7 +124,7 @@ fn run(rx: &mpsc::Receiver<Command>, peer: &Peer, tokens: &Tokens) {
                                     Path::new(dir),
                                     v,
                                     load.threads.max(1),
-                                    load.gpu.is_some(),
+                                    load.gpu.as_ref().map(|g| g.device.as_str()),
                                 )
                             })
                             .map(|e| Box::new(e) as Box<dyn SttEngine>)

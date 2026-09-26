@@ -55,7 +55,10 @@ draft release and generates the updater JSON:
 1. Checkout, then set up the Rust toolchain from `rust-toolchain.toml`, with the target.
 2. Restore the cargo and pnpm caches.
 3. **Build the sidecars** (`kivo-runtime`, `kivo-infer`) for the target and copy them to
-   `src-tauri/binaries/<name>-<target-triple>`, which is Tauri's `externalBin` convention.
+   `src-tauri/binaries/<name>-<target-triple>`, which is Tauri's `externalBin` convention. On
+   x64, first build the CUDA worker (`kivo-infer-cuda --features cuda`, against the pinned CUDA
+   Toolkit), sign it, and publish it as the `kivo-infer-cuda-x64.exe` asset; its address, size and
+   SHA-256 are compiled into the runtime's CUDA pack manifest (VOICE-50).
 4. Run `tauri-action`, with `TAURI_SIGNING_PRIVATE_KEY` + password (the updater minisign key)
    from secrets.
 5. **Platform signing**, once available:

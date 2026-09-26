@@ -263,6 +263,7 @@ mod tests {
                 .then(|| GpuInfo {
                     name: "GPU".into(),
                     vram_mb: vram_gb * 1024,
+                    ..GpuInfo::default()
                 })
                 .into_iter()
                 .collect(),
