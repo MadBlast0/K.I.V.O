@@ -37,7 +37,11 @@ const BELOW_TITLE: f64 = 4.0;
 /// Only a title bar this close to the monitor's top edge is under the Island.
 const TITLE_REACH: f64 = 120.0;
 
-#[derive(Default)]
+/// The Island's state. Its lock is never held while a window or monitor is asked anything: those
+/// calls wait for the main thread, which may itself be waiting for this lock (the Island's
+/// commands and window events run there), and the app would hang. Code decides under the lock,
+/// releases it, then acts on a snapshot.
+#[derive(Clone, Default)]
 struct State {
     shown: bool,
     /// Bumped on every change, so a pending hide is dropped when the Island comes back first.
@@ -173,31 +177,35 @@ pub fn apply(
     title_bar_bottom: Option<i32>,
     point: Option<(i32, i32, u32, u32)>,
 ) {
-    let state = app.state::<Overlay>();
-    let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
-    let was_listening = listening(guard.session);
-    guard.session = session;
-    guard.turn = turn && session.is_some();
-    let moved = (anchor.is_some() && anchor != guard.anchor)
-        || placement != guard.placement
-        || title_bar_bottom != guard.title_bar_bottom
-        || point != guard.point
-        || was_listening != listening(session);
-    if anchor.is_some() {
-        guard.anchor = anchor;
-    }
-    guard.placement = placement;
-    guard.title_bar_bottom = title_bar_bottom;
-    guard.point = point;
-    update(app, &mut guard);
-    // The request's window is known a moment after the Island appears, and the Island moves
-    // below a title bar only while listening: place it again when either changes.
-    if moved
-        && guard.shown
-        && !guard.dragging
+    let (shown, replace) = {
+        let state = app.state::<Overlay>();
+        let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        let was_listening = listening(guard.session);
+        guard.session = session;
+        guard.turn = turn && session.is_some();
+        let moved = (anchor.is_some() && anchor != guard.anchor)
+            || placement != guard.placement
+            || title_bar_bottom != guard.title_bar_bottom
+            || point != guard.point
+            || was_listening != listening(session);
+        if anchor.is_some() {
+            guard.anchor = anchor;
+        }
+        guard.placement = placement;
+        guard.title_bar_bottom = title_bar_bottom;
+        guard.point = point;
+        let shown = update(app, &mut guard);
+        // The request's window is known a moment after the Island appears, and the Island moves
+        // below a title bar only while listening: place it again when either changes.
+        let replace = (shown.is_none() && moved && guard.shown && !guard.dragging)
+            .then(|| guard.clone());
+        (shown, replace)
+    };
+    reveal(app, shown);
+    if let Some(state) = replace
         && let Some(window) = app.get_webview_window(LABEL)
     {
-        place(app, &window, &guard);
+        place(app, &window, &state);
     }
 }
 
@@ -236,12 +244,7 @@ pub fn start_typing(app: &AppHandle) {
 
 /// The Island may take keyboard focus until it gives it back (`overlay_typing_done`).
 fn take_focus(app: &AppHandle) {
-    {
-        let state = app.state::<Overlay>();
-        let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
-        guard.typing = true;
-        update(app, &mut guard);
-    }
+    change(app, |s| s.typing = true);
     if let Some(window) = app.get_webview_window(LABEL) {
         let _ = window.set_focusable(true);
         let _ = window.set_ignore_cursor_events(false);
@@ -260,12 +263,7 @@ pub fn overlay_focus(window: tauri::WebviewWindow) {
 
 /// The Island asks to go back to never taking focus (typing finished or was cancelled).
 fn stop_typing(app: &AppHandle) {
-    {
-        let state = app.state::<Overlay>();
-        let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
-        guard.typing = false;
-        update(app, &mut guard);
-    }
+    change(app, |s| s.typing = false);
     if let Some(window) = app.get_webview_window(LABEL) {
         let _ = window.set_focusable(false);
     }
@@ -273,24 +271,18 @@ fn stop_typing(app: &AppHandle) {
 
 /// The permission mode changed: show the Island's notice for a moment.
 pub fn notice(app: &AppHandle) {
-    {
-        let state = app.state::<Overlay>();
-        let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
-        guard.noticing = true;
-        update(app, &mut guard);
-    }
+    change(app, |s| s.noticing = true);
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(NOTICE).await;
-        let state = app.state::<Overlay>();
-        let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
-        guard.noticing = false;
-        update(&app, &mut guard);
+        change(&app, |s| s.noticing = false);
     });
 }
 
-/// Shows the window if there is something to show, else hides it after the exit animation.
-fn update(app: &AppHandle, state: &mut State) {
+/// Decides whether the window should show (called under the lock): returns a snapshot to show it
+/// with (`reveal`, after the lock is released), or schedules the hide after the exit animation.
+#[must_use]
+fn update(app: &AppHandle, state: &mut State) -> Option<State> {
     let active = state
         .session
         .is_some_and(|s| !matches!(s, SessionState::Idle | SessionState::Paused));
@@ -303,21 +295,46 @@ fn update(app: &AppHandle, state: &mut State) {
     if visible {
         if !state.shown {
             state.shown = true;
-            show(app, state);
+            return Some(state.clone());
         }
     } else if state.shown {
         let expected = state.generation;
         let app = app.clone();
         tauri::async_runtime::spawn(async move {
             tokio::time::sleep(HIDE_AFTER).await;
-            let overlay = app.state::<Overlay>();
-            let mut guard = overlay.0.lock().unwrap_or_else(|e| e.into_inner());
-            if guard.generation == expected && guard.shown {
-                guard.shown = false;
+            let still_hiding = {
+                let overlay = app.state::<Overlay>();
+                let mut guard = overlay.0.lock().unwrap_or_else(|e| e.into_inner());
+                let hiding = guard.generation == expected && guard.shown;
+                if hiding {
+                    guard.shown = false;
+                }
+                hiding
+            };
+            if still_hiding {
                 hide(&app);
             }
         });
     }
+    None
+}
+
+/// Shows the window `update` decided to show, outside the lock.
+fn reveal(app: &AppHandle, shown: Option<State>) {
+    if let Some(state) = shown {
+        show(app, &state);
+    }
+}
+
+/// Changes the state under the lock, then shows the window if that made it visible.
+fn change(app: &AppHandle, edit: impl FnOnce(&mut State)) {
+    let shown = {
+        let overlay = app.state::<Overlay>();
+        let mut guard = overlay.0.lock().unwrap_or_else(|e| e.into_inner());
+        edit(&mut guard);
+        update(app, &mut guard)
+    };
+    reveal(app, shown);
 }
 
 fn show(app: &AppHandle, state: &State) {
@@ -530,11 +547,7 @@ pub fn overlay_hover(window: tauri::WebviewWindow, hovering: bool) {
     if window.label() != LABEL {
         return;
     }
-    let app = window.app_handle();
-    let state = app.state::<Overlay>();
-    let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
-    guard.hovering = hovering;
-    update(app, &mut guard);
+    change(window.app_handle(), |s| s.hovering = hovering);
 }
 
 /// The Island's text field closed: it no longer takes focus.
