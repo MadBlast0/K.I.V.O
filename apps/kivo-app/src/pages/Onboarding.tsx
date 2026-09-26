@@ -18,6 +18,7 @@ import { useSpeech, type Speech } from "../components/voice/useSpeech";
 import { HeyKivoSwitch } from "../components/voice/WakeWords";
 import { Button, Group, Monogram, Pill, Row, Section, ShortcutRecorder, Spinner, useToast } from "../components/ui";
 import { AppsStep, LookStep, ModeStep, Reasons, StartupStep, TryStep, useAdvice } from "../components/onboarding/steps";
+import { IslandDemo, TryItNow } from "../components/onboarding/TryVoice";
 import { brainColor, monogram, type BrainsList, type DiscoverySection } from "../ipc/brains";
 import { Icon } from "../icons";
 import { Method, type SetupAdvice } from "../ipc/generated";
@@ -142,20 +143,22 @@ function Activation() {
       .catch((e: unknown) => toast(e instanceof Error ? e.message : String(e)));
   return (
     <>
+      <IslandDemo />
       <Group>
-        <Row
-          icon="keyboard"
-          title={t("onboarding.activation.hold")}
-          subtitle={t("onboarding.activation.holdHint")}
-          end={keys && <ShortcutRecorder value={keys} onChange={(k) => void save(k)} />}
-        />
         <Row
           icon="mic"
           title={t("onboarding.activation.wake")}
           subtitle={t("onboarding.activation.wakeHint")}
           end={<HeyKivoSwitch />}
         />
+        <Row
+          icon="keyboard"
+          title={t("onboarding.activation.hold")}
+          subtitle={t("onboarding.activation.holdHint")}
+          end={keys && <ShortcutRecorder value={keys} onChange={(k) => void save(k)} />}
+        />
       </Group>
+      <TryItNow keys={keys} />
       <p className="k-note">{t("onboarding.activation.note")}</p>
     </>
   );

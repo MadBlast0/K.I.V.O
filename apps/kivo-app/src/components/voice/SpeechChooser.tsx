@@ -397,13 +397,21 @@ export function VoiceList({ speech }: { speech: Speech }) {
 export function Recommended({ speech, onUse }: { speech: Speech; onUse?: () => void }) {
   const { t } = useTranslation();
   const toast = useToast();
+  // The recommended models that aren't on this PC yet: listed with their size and licence, and
+  // nothing downloads until the user agrees (DIST-13, "Nothing downloads unasked").
+  const [asking, setAsking] = useState<SpeechEngineItem[] | null>(null);
   const { recommendation: r, choices } = speech;
   if (!r || !choices) return null;
   const name = (id: string | null | undefined) => choices.engines.find((e) => e.id === id)?.name ?? "";
+  const missing = [r.sttEngine, r.ttsEngine]
+    .map((id) => choices.engines.find((e) => e.id === id))
+    .filter((e): e is SpeechEngineItem => e !== undefined && !e.ready);
   const use = async () => {
     try {
-      if (r.sttEngine && r.sttEngine !== choices.stt) await speech.choose("stt", r.sttEngine);
-      if (r.ttsEngine !== choices.tts) await speech.choose("tts", r.ttsEngine);
+      // Also when it is already the choice but not on this PC yet (a first launch's default).
+      const needs = (id: string, current: string) => id !== current || missing.some((e) => e.id === id);
+      if (r.sttEngine && needs(r.sttEngine, choices.stt)) await speech.choose("stt", r.sttEngine);
+      if (needs(r.ttsEngine, choices.tts)) await speech.choose("tts", r.ttsEngine);
       onUse?.();
     } catch (e) {
       toast(message(e));
@@ -423,12 +431,47 @@ export function Recommended({ speech, onUse }: { speech: Speech; onUse?: () => v
           size="sm"
           variant="primary"
           onClick={() => {
-            void use();
+            if (missing.length > 0) setAsking(missing);
+            else void use();
           }}
         >
           {t("speech.useRecommended")}
         </Button>
       </div>
+      <Dialog
+        open={asking !== null}
+        onOpenChange={(open) => !open && setAsking(null)}
+        title={t("speech.missingTitle")}
+        description={t("speech.missingBody")}
+        footer={
+          <>
+            <DialogClose>
+              <Button>{t("voice.cancel")}</Button>
+            </DialogClose>
+            <Button
+              variant="primary"
+              icon="download"
+              onClick={() => {
+                setAsking(null);
+                void use();
+              }}
+            >
+              {t("speech.downloadAndUse")}
+            </Button>
+          </>
+        }
+      >
+        {asking && (
+          <div className="k-licence">
+            {asking.map((e) => (
+              <p key={e.id}>
+                <b>{e.name}</b> · {t("speech.missingLine", { size: e.downloadMb, license: e.license })}
+                {!e.commercialUse && ` · ${t("speech.personalUseTitle")}`}
+              </p>
+            ))}
+          </div>
+        )}
+      </Dialog>
     </div>
   );
 }

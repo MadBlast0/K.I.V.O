@@ -297,6 +297,24 @@ mod tests {
     }
 
     #[test]
+    fn the_clock_is_answered_without_a_brain() {
+        for said in [
+            "What time is it?",
+            "what's the time",
+            "Kivo, tell me the time.",
+        ] {
+            assert_eq!(run(said).unwrap().tool, "session.time", "{said}");
+        }
+        for said in [
+            "What's the date?",
+            "what day is it today",
+            "What is today's date?",
+        ] {
+            assert_eq!(run(said).unwrap().tool, "session.date", "{said}");
+        }
+    }
+
+    #[test]
     fn the_m1_journeys_match() {
         let open = run("Open Chrome.").unwrap();
         assert_eq!(open.tool, "apps.launch");

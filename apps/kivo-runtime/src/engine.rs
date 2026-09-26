@@ -1529,6 +1529,23 @@ impl Engine {
                     self.speak_and_finish(&reply).await;
                     return;
                 }
+                // The clock: "what time is it", "what's the date" (a local answer, no brain).
+                if matches!(matched.tool.as_str(), "session.time" | "session.date") {
+                    let now = jiff::Zoned::now();
+                    let reply = if matched.tool == "session.time" {
+                        text::tf(
+                            "clock.time",
+                            &[("time", &now.strftime("%-I:%M %p").to_string())],
+                        )
+                    } else {
+                        text::tf(
+                            "clock.date",
+                            &[("date", &now.strftime("%A, %B %-d").to_string())],
+                        )
+                    };
+                    self.speak_and_finish(&reply).await;
+                    return;
+                }
                 // "What can I say?" (UX-44).
                 if matched.tool == "session.help" {
                     let examples = self.help_examples();

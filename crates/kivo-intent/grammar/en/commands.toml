@@ -307,6 +307,18 @@ patterns = [
 tool = "session.help"
 patterns = ["what can i say", "what can i say here", "help", "what can you do here", "what can i ask", "show me what i can say"]
 
+# The clock (invariant 3: a deterministic answer needs no AI).
+[[command]]
+tool = "session.time"
+patterns = ["what time is it", "what's the time", "what is the time", "tell me the time", "what time is it now", "the time"]
+
+[[command]]
+tool = "session.date"
+patterns = [
+  "what's the date", "what is the date", "what's today's date", "what is today's date", "what day is it",
+  "what day is it today", "what's the date today", "tell me the date",
+]
+
 # Memory (MEM-05): the user asks KIVO to remember or forget something, or what it remembers.
 [[command]]
 tool = "memory.add"

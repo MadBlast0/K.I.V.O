@@ -369,6 +369,9 @@ impl Engine {
                         "policy.capabilityOff",
                         &[("capability", &kivo_core::Capability::CliAgents.label())],
                     )
+                } else if matches!(e, RouteError::NoBrain) && !config.general.onboarded {
+                    // Trying the voice during setup, before the brain step: say what comes next.
+                    text::t("brain.noBrainInSetup")
                 } else {
                     route_message(&e)
                 };

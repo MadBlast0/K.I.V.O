@@ -863,6 +863,9 @@
     "downloadTitle": "Download {name}?",
     "downloadBody": "It downloads once and stays on this PC. KIVO keeps using the current engine until the new one passes a quick test.",
     "downloadAndUse": "Download and use",
+    "missingTitle": "Download what’s recommended?",
+    "missingBody": "These aren’t on this PC yet. KIVO downloads them from their publishers, then tests them before using them.",
+    "missingLine": "{size} MB · {license}",
     "voices": "Voices",
     "voicesHint": "Each says the same sentence when you press play.",
     "preview": "Preview {name}",
@@ -941,7 +944,15 @@
       "holdHint": "Hold while you speak. Works in noisy rooms.",
       "wake": "“Hey Kivo”",
       "wakeHint": "Hands-free. Listening happens on this PC; nothing is sent until you say it.",
-      "note": "Turning on “Hey Kivo” downloads its small listener (about 20 MB) from its publisher."
+      "note": "Turning on “Hey Kivo” downloads its small listener (about 20 MB) from its publisher.",
+      "demoSay": "What time is it?",
+      "demoAnswer": "It’s 9:41 AM.",
+      "tryTitle": "Try it now",
+      "tryHint": "Say “Hey Kivo, what time is it?”, or hold {keys} and say “What time is it?”. You’ll see what KIVO heard here, and the Island at the top of the screen.",
+      "tryListening": "Listening… say “What time is it?”",
+      "tryHeard": "KIVO heard:",
+      "trySaid": "KIVO said:",
+      "tryButton": "Start listening"
     },
     "speech": {
       "title": "How KIVO hears and speaks",

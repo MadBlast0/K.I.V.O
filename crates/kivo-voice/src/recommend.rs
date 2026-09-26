@@ -15,10 +15,11 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Tier {
-    /// 4 cores or fewer, or under 8 GB of memory, no useful GPU.
+    /// 4 cores or fewer, or under 8 GB of memory (as reported: under 7 GiB), no useful GPU.
     Low,
     Mid,
-    /// 12+ threads, 16 GB+, and a GPU with 6 GB+ of its own memory.
+    /// 12+ threads, 16 GB+ (as reported: 15 GiB+), and a GPU with 6 GB+ of its own memory
+    /// (5,500 MB+ reported).
     High,
 }
 
@@ -70,11 +71,18 @@ pub struct Recommendation {
     pub reason: String,
 }
 
+/// Memory as Windows reports it is a little under the size on the box (what the firmware and an
+/// integrated GPU keep): a "16 GB" laptop reports ~15,500 MB and a "6 GB" RTX 3060 5,994 MB. The
+/// tiers compare against these, not the nominal sizes.
+const LOW_RAM_MB: u64 = 7 * 1024;
+const HIGH_RAM_MB: u64 = 15 * 1024;
+const HIGH_VRAM_MB: u64 = 5_500;
+
 pub fn tier(s: &SystemSnapshot) -> Tier {
     let gpu_mb = s.gpus.iter().map(|g| g.vram_mb).max().unwrap_or(0);
-    if s.logical_cpus <= 4 || s.ram_mb < 8 * 1024 {
+    if s.logical_cpus <= 4 || s.ram_mb < LOW_RAM_MB {
         Tier::Low
-    } else if s.logical_cpus >= 12 && s.ram_mb >= 16 * 1000 && gpu_mb >= 6 * 1000 {
+    } else if s.logical_cpus >= 12 && s.ram_mb >= HIGH_RAM_MB && gpu_mb >= HIGH_VRAM_MB {
         Tier::High
     } else {
         Tier::Mid
@@ -316,6 +324,23 @@ mod tests {
         assert_eq!(tier(&pc(8, 4, 0)), Tier::Low, "not enough memory");
         assert_eq!(tier(&pc(8, 16, 0)), Tier::Mid);
         assert_eq!(tier(&pc(16, 16, 6)), Tier::High, "the owner's PC");
+        // What Windows really reports: a "16 GB" laptop with a "6 GB" RTX 3060 (the owner's), and
+        // an "8 GB" laptop. Nominal sizes are never fully reported.
+        let mut real = pc(16, 0, 0);
+        real.ram_mb = 15_556;
+        real.gpus = vec![GpuInfo {
+            name: "NVIDIA GeForce RTX 3060 Laptop GPU".into(),
+            vram_mb: 5_994,
+            ..GpuInfo::default()
+        }];
+        assert_eq!(
+            tier(&real),
+            Tier::High,
+            "the owner's PC as Windows reports it"
+        );
+        let mut eight = pc(8, 0, 0);
+        eight.ram_mb = 7_790;
+        assert_eq!(tier(&eight), Tier::Mid, "an 8 GB laptop isn't a small PC");
     }
 
     #[test]

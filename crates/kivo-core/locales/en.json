@@ -667,6 +667,7 @@
   },
   "brain": {
     "noBrain": "No AI brain is connected yet. You can connect one on the Brains page; some are free.",
+    "noBrainInSetup": "I heard you, but that needs an AI brain. You can connect one in a moment. Until then, try a command like “what time is it”.",
     "needsLocal": "That needs a brain on this PC, and none is running, so I didn’t send it anywhere.",
     "notConnected": "{name} isn’t connected. You can add it on the Brains page.",
     "unavailable": "{name} isn’t available right now. Try again in a moment.",
@@ -807,6 +808,10 @@
     "planNoSteps": "The plan has no steps.",
     "planInvalid": "The plan can’t run: {reason}.",
     "planStarted": "Started {title} ({steps} steps). I’ll tell you when it’s done."
+  },
+  "clock": {
+    "time": "It's {time}.",
+    "date": "Today is {date}."
   },
   "help": {
     "intro": "Here are some things you can say.",

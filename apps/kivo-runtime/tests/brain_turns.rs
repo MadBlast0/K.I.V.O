@@ -1382,3 +1382,43 @@ fn connect_agent_only(r: &Running, node: &std::path::Path) {
         .into(),
     );
 }
+
+/// The clock needs no brain (invariant 3); during setup, a request that does need one says what
+/// comes next instead of pointing at the Brains page (owner, 2026-09-26).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_clock_needs_no_brain_and_setup_explains_a_missing_one() {
+    let _one = ONE_AT_A_TIME.lock().await;
+    let r = start(false);
+    r.rig.engine.say("what time is it").await.expect("accepted");
+    let answer = answered(&r.rig).await.answer.unwrap_or_default();
+    assert!(
+        answer.starts_with("It's ") && (answer.ends_with("AM.") || answer.ends_with("PM.")),
+        "{answer}"
+    );
+    r.rig.core.clear_turn();
+    r.rig.engine.say("what's the date").await.expect("accepted");
+    let answer = answered(&r.rig).await.answer.unwrap_or_default();
+    assert!(answer.starts_with("Today is "), "{answer}");
+    r.rig.core.clear_turn();
+
+    // Setup isn't finished (a new install) and no brain is connected.
+    assert!(!r.rig.core.config().general.onboarded);
+    r.rig
+        .engine
+        .say("write me a poem about rivers")
+        .await
+        .expect("accepted");
+    let answer = answered(&r.rig).await.answer.unwrap_or_default();
+    assert!(answer.contains("connect one in a moment"), "{answer}");
+    r.rig.core.clear_turn();
+    // After setup, the usual answer.
+    r.rig.core.update_config(|c| c.general.onboarded = true);
+    r.rig
+        .engine
+        .say("write me a poem about rivers")
+        .await
+        .expect("accepted");
+    let answer = answered(&r.rig).await.answer.unwrap_or_default();
+    assert!(answer.contains("Brains page"), "{answer}");
+    r.stop().await;
+}

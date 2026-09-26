@@ -197,8 +197,8 @@ pub fn apply(
         let shown = update(app, &mut guard);
         // The request's window is known a moment after the Island appears, and the Island moves
         // below a title bar only while listening: place it again when either changes.
-        let replace = (shown.is_none() && moved && guard.shown && !guard.dragging)
-            .then(|| guard.clone());
+        let replace =
+            (shown.is_none() && moved && guard.shown && !guard.dragging).then(|| guard.clone());
         (shown, replace)
     };
     reveal(app, shown);

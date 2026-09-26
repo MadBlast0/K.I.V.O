@@ -13,6 +13,7 @@ lewton.workspace = true
 kivo-audio = { path = "../../crates/kivo-audio" }
 kivo-brain = { path = "../../crates/kivo-brain" }
 kivo-core.workspace = true
+jiff.workspace = true
 kivo-intent = { path = "../../crates/kivo-intent" }
 kivo-ipc.workspace = true
 kivo-platform.workspace = true

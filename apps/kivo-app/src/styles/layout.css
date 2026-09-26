@@ -599,6 +599,32 @@
 .k-onboarding__result {
   margin-top: 12px;
 }
+/* "How do you call KIVO?": the Island playing a request, and the user's own try (UX §4). */
+.k-onboarding__demo {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 150px;
+  margin: 2px 0 16px;
+}
+.k-onboarding__try {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 14px;
+}
+.k-onboarding__try-title {
+  font-weight: 600;
+}
+.k-onboarding__try-hint {
+  color: var(--text-2);
+  font-size: 13px;
+  margin: 0;
+}
+.k-onboarding__try-line {
+  margin: 0;
+}
 .k-onboarding--welcome {
   background: #000;
   color: #fff;

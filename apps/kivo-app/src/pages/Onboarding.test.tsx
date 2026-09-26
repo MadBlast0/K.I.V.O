@@ -98,10 +98,14 @@ const connector = (id: string, name: string, kind: string, state: string): Conne
   lastUsed: null,
 });
 
-const runtime = vi.hoisted(() => ({
-  link: { status: "connected", runtimeVersion: "0.0.0", snapshot: { mode: "auto" }, message: null },
-  request: (_method: string, _params?: unknown): Promise<unknown> => Promise.resolve(null),
-}));
+const runtime = vi.hoisted(() => {
+  // The runtime's state as tests set it (a session, a turn).
+  const snapshot: Record<string, unknown> = { mode: "auto" };
+  return {
+    link: { status: "connected", runtimeVersion: "0.0.0", snapshot, message: null },
+    request: (_method: string, _params?: unknown): Promise<unknown> => Promise.resolve(null),
+  };
+});
 
 vi.mock("../ipc/runtime", () => ({
   useRuntime: () => runtime,
@@ -333,6 +337,52 @@ describe("Onboarding (UX-33–36, UX-60)", () => {
     // The MCP server the user wanted to add opens next.
     expect(onFinish).toHaveBeenCalledWith("extensions/mcp");
   }, 20_000);
+
+  it("shows how calling KIVO looks, lists Hey Kivo first and follows a live try (owner, 2026-09-26)", async () => {
+    runtime.link = {
+      status: "connected",
+      runtimeVersion: "0.0.0",
+      snapshot: { mode: "auto", session: "listening" },
+      message: null,
+    };
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: "Get started" }));
+    await settle();
+    await next();
+    expect(await screen.findByText("How do you call KIVO?")).toBeTruthy();
+    // "Hey Kivo" comes before "Hold to talk".
+    const wake = screen.getByText("“Hey Kivo”");
+    const hold = screen.getByText("Hold to talk");
+    expect(wake.compareDocumentPosition(hold) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // The Island plays a request, and the try follows KIVO listening.
+    expect(document.querySelector(".k-onboarding__demo .k-island")).toBeTruthy();
+    expect(screen.getByText("Try it now")).toBeTruthy();
+    expect(screen.getByText("Listening… say “What time is it?”")).toBeTruthy();
+    runtime.link = { status: "connected", runtimeVersion: "0.0.0", snapshot: { mode: "auto" }, message: null };
+  });
+
+  it("asks before downloading the recommended models that are missing", async () => {
+    const stt = choices.engines[0];
+    stt.ready = false;
+    try {
+      await mount();
+      fireEvent.click(screen.getByRole("button", { name: "Get started" }));
+      await settle();
+      await next();
+      await next();
+      expect(await screen.findByText("How KIVO hears and speaks")).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: "Use recommended" }));
+      await settle();
+      expect(screen.getByText("Download what’s recommended?")).toBeTruthy();
+      expect(screen.getByText(/135 MB · MIT/)).toBeTruthy();
+      expect(calls.some((c) => c.method === "voice.switch")).toBe(false);
+      fireEvent.click(screen.getByRole("button", { name: "Download and use" }));
+      await settle();
+      expect(calls.some((c) => c.method === "voice.switch")).toBe(true);
+    } finally {
+      stt.ready = true;
+    }
+  });
 
   it("can be skipped from the first screen", async () => {
     const onFinish = await mount();

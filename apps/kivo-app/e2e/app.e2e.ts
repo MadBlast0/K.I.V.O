@@ -14,9 +14,9 @@ const errors: string[] = [];
 
 test.beforeAll(async () => {
   browser = await chromium.connectOverCDP(CDP);
-  // The Control Center, not the Island's overlay window.
+  // The Control Center (index.html), not the Island's overlay or the wake glow's window.
   const pages = browser.contexts().flatMap((c) => c.pages());
-  const main = pages.find((p) => !p.url().includes("overlay"));
+  const main = pages.find((p) => new URL(p.url()).pathname === "/");
   if (!main) throw new Error(`no Control Center window among ${pages.map((p) => p.url()).join(", ")}`);
   page = main;
   page.on("console", (m) => {
