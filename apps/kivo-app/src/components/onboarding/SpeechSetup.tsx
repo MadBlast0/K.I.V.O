@@ -1,15 +1,15 @@
 /**
  * Setup's Listen and Speak pages (UX §4, UX-60), with Think (the brain) between them: KIVO hears
  * you, thinks, and answers, one page each. A page is one calm column: a level for this PC
- * (Recommended, High, Medium, Low, from the recommendation's priorities) and one card for the
- * model it picks, which the user takes through three steps with one button that changes as it
- * goes:
+ * (Recommended, High, Medium, Low, from the recommendation's priorities) and the model it picks
+ * as one row with the next thing to do on the right:
  *
- * 1. Download: size and licence up front, nothing until the button; Pause and Cancel while it
- *    downloads, then Resume or Try again.
- * 2. Test (`voice.test`): loaded in a separate worker; a recognizer shows what it heard of
- *    KIVO's test sentence, a voice says it aloud. Nothing is chosen yet.
- * 3. Use this (`voice.switch`, which checks once more and swaps it in safely).
+ * - Download: size and licence up front, nothing until the button. While it downloads, a ring
+ *   (which pauses it) and a line with MB of MB, speed and time left, over the model and the
+ *   models it needs together; then "Installing" while the files are checked and unpacked.
+ * - Test (`voice.test`): loaded in a separate worker; a recognizer shows what it heard of
+ *   KIVO's test sentence, a voice says it aloud. Nothing is chosen yet.
+ * - Use this (`voice.switch`, which checks once more and swaps it in safely), then In use.
  *
  * Speak then shows the voices as tiles, everyday and Anime. Other models are a link away.
  */
@@ -25,7 +25,7 @@ import {
 import { useRuntime } from "../../ipc/runtime";
 import { Icon } from "../../icons";
 import { cn } from "../../lib/cn";
-import { Button, Explain, Meter, Segmented, Spinner, useToast } from "../ui";
+import { Button, Explain, Segmented, Spinner, useToast } from "../ui";
 import { SpeechChooser } from "../voice/SpeechChooser";
 import { working, type Slot, type Speech } from "../voice/useSpeech";
 
@@ -128,9 +128,9 @@ export function SlotSetup({ slot, speech }: { slot: Slot; speech: Speech }) {
 
       {engine ? (
         // Keyed by engine: another level starts its card afresh.
-        <ModelCard key={engine.id} slot={slot} engine={engine} speech={speech} />
+        <ModelRow key={engine.id} slot={slot} engine={engine} speech={speech} />
       ) : (
-        <div className="k-slot__card k-slot__card--empty">
+        <div className="k-model k-model--empty">
           <Spinner label={t("onboarding.speech.checking")} />
         </div>
       )}
@@ -146,37 +146,94 @@ export function SlotSetup({ slot, speech }: { slot: Slot; speech: Speech }) {
   );
 }
 
-/** The chosen model: what it is, where it is on Download → Test → Use, and the one next action. */
-function ModelCard({ slot, engine, speech }: { slot: Slot; engine: SpeechEngineItem; speech: Speech }) {
-  const { t } = useTranslation();
+/** How a model's download is going: its own files and the models it needs, together, from the
+ * bytes each has written (their `modelChanged` percentages of their sizes), with the speed and
+ * time left over the last few seconds, and whether the files are being checked and unpacked. */
+function useDownload(speech: Speech, engine: SpeechEngineItem) {
+  const main = engine.model ? speech.models.find((m) => m.id === engine.model) : undefined;
+  const parts = (main ? [main.id, ...main.requires] : [])
+    .map((id) => speech.models.find((m) => m.id === id))
+    .filter((m): m is ModelItem => m !== undefined);
+  // The models that weren't here when the download started stay in the total, so it doesn't
+  // shrink as the small ones finish.
+  const [involved, setInvolved] = useState<string[]>([]);
+  const missing = parts.filter((m) => m.state !== "ready" && !involved.includes(m.id)).map((m) => m.id);
+  if (missing.length > 0) setInvolved([...involved, ...missing]);
+  const counted = parts.filter((m) => involved.includes(m.id) || missing.includes(m.id));
+  const total = counted.reduce((sum, m) => sum + m.size, 0);
+  const done = counted.reduce(
+    (sum, m) =>
+      sum +
+      (m.state === "ready" || m.state === "installing" || m.state === "updateAvailable"
+        ? m.size
+        : m.state === "downloading" || m.state === "paused"
+          ? (m.size * (m.downloading ?? 0)) / 100
+          : 0),
+    0,
+  );
+  const active = counted.some((m) => m.state === "downloading" || m.state === "installing");
+  const installing = active && counted.every((m) => m.state !== "downloading");
+  const speeds = counted.map((m) => speech.speeds[m.id]).filter((v): v is number => v !== undefined);
+  const speed = speeds.length > 0 ? speeds.reduce((a, b) => a + b, 0) : null;
+  const left = speed && speed > 0 ? (total - done) / speed : null;
+  return {
+    active,
+    installing,
+    paused: main?.state === "paused",
+    failed: main?.state === "error" ? (main.error ?? "") : null,
+    done,
+    total,
+    percent: total > 0 ? Math.min(100, Math.round((done * 100) / total)) : 0,
+    speed,
+    left,
+  };
+}
+
+/** A ring that fills as a download goes; a spinning arc while its files are checked. */
+function Ring({ percent, busy = false }: { percent: number; busy?: boolean }) {
+  const r = 11;
+  const c = 2 * Math.PI * r;
+  return (
+    <svg className={cn("k-ring", busy && "is-busy")} viewBox="0 0 28 28" aria-hidden>
+      <circle className="k-ring__track" cx="14" cy="14" r={r} />
+      <circle
+        className="k-ring__fill"
+        cx="14"
+        cy="14"
+        r={r}
+        strokeDasharray={c}
+        strokeDashoffset={busy ? c * 0.72 : c * (1 - percent / 100)}
+      />
+    </svg>
+  );
+}
+
+/** The chosen model as one row, App Store–style: what it is, and on the right the one thing to do
+ * next (Download → a ring while it downloads, which pauses it → Test → Use this → In use); the
+ * line under it says how it's going. */
+function ModelRow({ slot, engine, speech }: { slot: Slot; engine: SpeechEngineItem; speech: Speech }) {
+  const { t, i18n } = useTranslation();
   const { request } = useRuntime();
   const toast = useToast();
   const [result, setResult] = useState<Tested | null>(null);
-  // "Use this" was pressed: the switch's own stages belong to the Use step, not to Test.
+  // "Use this" was pressed: the switch's own stages (it checks once more) aren't a new test.
   const [using, setUsing] = useState(false);
+  const download = useDownload(speech, engine);
   const choices = speech.choices;
   if (!choices) return null;
 
-  const model: ModelItem | undefined = engine.model ? speech.models.find((m) => m.id === engine.model) : undefined;
   const progress = speech.progress[slot];
   const stage = progress?.engine === engine.id ? progress.stage : null;
   const failure = stage === "failed" ? (progress?.message ?? null) : null;
   const current = slot === "stt" ? choices.stt : choices.tts;
   const inUse = current === engine.id && engine.ready && !working(progress);
-
-  const percent = model?.downloading ?? 0;
-  const downloading = model?.state === "downloading" || model?.state === "installing";
-  const paused = model?.state === "paused";
-  const downloadFailed = model?.state === "error";
   const testing = !using && (stage === "loading" || stage === "testing");
-  const passed = inUse || (result?.passed ?? false);
+  const passed = result?.passed ?? false;
   const switching = using && !inUse && working(progress);
 
-  // Where it is: 0 download, 1 test, 2 use, 3 done.
-  const at = inUse ? 3 : passed ? 2 : engine.ready ? 1 : 0;
-
-  const act = (method: Method, params: unknown) =>
-    void request(method, params).catch((e: unknown) => toast(message(e)));
+  const mb = new Intl.NumberFormat(i18n.language, { maximumFractionDigits: 0 });
+  const rate = new Intl.NumberFormat(i18n.language, { maximumFractionDigits: 1 });
+  const act = (method: Method) => void request(method, { id: engine.model }).catch((e: unknown) => toast(message(e)));
   const test = () => {
     setResult(null);
     setUsing(false);
@@ -186,7 +243,7 @@ function ModelCard({ slot, engine, speech }: { slot: Slot; engine: SpeechEngineI
       voice: slot === "tts" ? choices.ttsVoice || null : null,
     })
       .then(setResult)
-      // A failure shows on the card, from its `failed` stage.
+      // A failure shows under the row, from its `failed` stage.
       .catch(() => {});
   };
   const use = () => {
@@ -196,140 +253,147 @@ function ModelCard({ slot, engine, speech }: { slot: Slot; engine: SpeechEngineI
       toast(message(e));
     });
   };
-  const size = engine.model
-    ? t("onboarding.speech.size", { size: engine.downloadMb, license: engine.license })
-    : t("onboarding.speech.builtIn");
 
-  // The line under the steps, and the action that comes next.
-  let status: string;
+  // The action on the right, and the line under the row.
+  let action: ReactNode;
+  let line: ReactNode = null;
   let tone: "plain" | "good" | "bad" = "plain";
-  let action: ReactNode = null;
-  if (at === 0) {
-    if (downloading) {
-      status = t("onboarding.speech.downloading", { percent: percent / 100 });
-      action = (
-        <>
-          <Button variant="plain" onClick={() => act(Method.modelsCancel, { id: engine.model })}>
-            {t("onboarding.speech.cancel")}
-          </Button>
-          <Button onClick={() => act(Method.modelsPause, { id: engine.model })}>{t("onboarding.speech.pause")}</Button>
-        </>
-      );
-    } else {
-      status = paused
-        ? t("onboarding.speech.paused", { percent: percent / 100 })
-        : downloadFailed
-          ? (model?.error ?? t("onboarding.speech.downloadFailed"))
-          : t(`onboarding.speech.${slot}.downloadHint`);
-      tone = downloadFailed ? "bad" : "plain";
-      action = (
-        <>
-          {paused && (
-            <Button variant="plain" onClick={() => act(Method.modelsCancel, { id: engine.model })}>
-              {t("onboarding.speech.cancel")}
-            </Button>
-          )}
-          <Button variant="primary" onClick={() => act(Method.modelsInstall, { id: engine.model })}>
-            {paused
-              ? t("onboarding.speech.resume")
-              : downloadFailed
-                ? t("onboarding.speech.retry")
-                : t("onboarding.speech.downloadSize", { size: engine.downloadMb })}
-          </Button>
-        </>
-      );
-    }
-  } else if (at === 1) {
-    if (testing) {
-      status = t(`speech.stage.${stage ?? "loading"}`);
-    } else if (failure) {
-      status = failure;
-      tone = "bad";
-      action = (
-        <Button variant="primary" onClick={test}>
-          {t("onboarding.speech.testAgain")}
-        </Button>
-      );
-    } else if (result && !result.passed) {
-      status = t("onboarding.speech.heardWrong", { heard: result.heard || "…", said: result.said });
-      tone = "bad";
-      action = (
-        <Button variant="primary" onClick={test}>
-          {t("onboarding.speech.testAgain")}
-        </Button>
-      );
-    } else {
-      status = t(`onboarding.speech.${slot}.testHint`);
-      action = (
-        <Button variant="primary" onClick={test}>
-          {t("onboarding.speech.test")}
-        </Button>
-      );
-    }
-  } else if (at === 2) {
-    if (switching) {
-      status = t("onboarding.speech.switching");
-    } else {
-      status = failure
-        ? failure
-        : slot === "stt"
-          ? t("onboarding.speech.heard", { text: result?.heard ?? "" })
-          : t("onboarding.speech.spoke");
-      tone = failure ? "bad" : "good";
-      action = (
-        <>
-          <Button variant="plain" onClick={test}>
-            {t("onboarding.speech.testAgain")}
-          </Button>
-          <Button variant="primary" onClick={use}>
-            {t("onboarding.speech.useThis")}
-          </Button>
-        </>
-      );
-    }
-  } else {
-    status = t(`onboarding.speech.${slot}.ready`, { name: engine.name });
+  if (inUse) {
+    action = (
+      <span className="k-model__done">
+        <Icon name="check" />
+        {t("onboarding.speech.inUse")}
+      </span>
+    );
+    line = t(`onboarding.speech.${slot}.ready`, { name: engine.name });
     tone = "good";
+  } else if (!engine.ready) {
+    if (download.active) {
+      action = download.installing ? (
+        <span className="k-model__ring" role="img" aria-label={t("onboarding.speech.installing")}>
+          <Ring percent={100} busy />
+        </span>
+      ) : (
+        <button
+          type="button"
+          className="k-model__ring"
+          aria-label={t("onboarding.speech.pauseAt", { percent: download.percent / 100 })}
+          onClick={() => act(Method.modelsPause)}
+        >
+          <Ring percent={download.percent} />
+          <Icon name="pause" />
+        </button>
+      );
+      line = download.installing ? (
+        t("onboarding.speech.installing")
+      ) : (
+        <>
+          {t("onboarding.speech.bytes", {
+            done: mb.format(download.done / 1e6),
+            total: mb.format(download.total / 1e6),
+          })}
+          {download.speed !== null &&
+            ` · ${t("onboarding.speech.speed", { speed: rate.format(download.speed / 1e6) })}`}
+          {download.left !== null && ` · ${leftText(t, download.left)}`}
+          <button type="button" className="k-model__link" onClick={() => act(Method.modelsCancel)}>
+            {t("onboarding.speech.cancel")}
+          </button>
+        </>
+      );
+    } else {
+      action = (
+        <Button variant="primary" onClick={() => act(Method.modelsInstall)}>
+          {download.paused
+            ? t("onboarding.speech.resume")
+            : download.failed !== null
+              ? t("onboarding.speech.retry")
+              : t("onboarding.speech.download")}
+        </Button>
+      );
+      if (download.paused) {
+        line = (
+          <>
+            {t("onboarding.speech.paused", {
+              done: mb.format(download.done / 1e6),
+              total: mb.format(download.total / 1e6),
+            })}
+            <button type="button" className="k-model__link" onClick={() => act(Method.modelsCancel)}>
+              {t("onboarding.speech.cancel")}
+            </button>
+          </>
+        );
+      } else if (download.failed !== null) {
+        line = download.failed || t("onboarding.speech.downloadFailed");
+        tone = "bad";
+      } else {
+        line = t("onboarding.speech.downloadHint");
+      }
+    }
+  } else if (testing || switching) {
+    action = <Spinner label={t(`speech.stage.${stage ?? "loading"}`)} />;
+    line = switching ? t("onboarding.speech.switching") : t(`speech.stage.${stage ?? "loading"}`);
+  } else if (passed) {
+    action = (
+      <Button variant="primary" onClick={use}>
+        {t("onboarding.speech.useThis")}
+      </Button>
+    );
+    line = (
+      <>
+        {failure ??
+          (slot === "stt" ? t("onboarding.speech.heard", { text: result?.heard ?? "" }) : t("onboarding.speech.spoke"))}
+        <button type="button" className="k-model__link" onClick={test}>
+          {t("onboarding.speech.testAgain")}
+        </button>
+      </>
+    );
+    tone = failure ? "bad" : "good";
+  } else {
+    action = (
+      <Button variant="primary" onClick={test}>
+        {result || failure ? t("onboarding.speech.testAgain") : t("onboarding.speech.test")}
+      </Button>
+    );
+    if (failure) {
+      line = failure;
+      tone = "bad";
+    } else if (result) {
+      line = t("onboarding.speech.heardWrong", { heard: result.heard || "…", said: result.said });
+      tone = "bad";
+    } else {
+      line = t(`onboarding.speech.${slot}.testHint`);
+    }
   }
-  const busy = downloading || testing || switching;
 
   return (
-    <div className={cn("k-slot__card", at === 3 && "is-ready")}>
-      <div className="k-slot__model">
-        <span className="k-slot__icon" aria-hidden>
-          <Icon name={at === 3 ? "check" : slot === "stt" ? "mic" : "volume"} />
+    <div className="k-model">
+      <div className="k-model__row">
+        <span className={cn("k-model__icon", inUse && "is-ready")} aria-hidden>
+          <Icon name={slot === "stt" ? "mic" : "volume"} />
         </span>
-        <div className="k-slot__name">
+        <div className="k-model__name">
           <b>{engine.name}</b>
           <span>
-            {size}
+            {engine.model
+              ? t("onboarding.speech.size", { size: engine.downloadMb, license: engine.license })
+              : t("onboarding.speech.builtIn")}
             {!engine.commercialUse && ` · ${t("speech.personalUseTitle")}`}
           </span>
         </div>
+        <div className="k-model__action">{action}</div>
       </div>
-
-      <ol className="k-slot__steps" aria-label={t("onboarding.speech.steps")}>
-        {(["download", "test", "use"] as const).map((s, i) => (
-          <li key={s} className={cn("k-slot__step", i < at && "is-done", i === at && "is-on")}>
-            <span className="k-slot__dot" aria-hidden>
-              {i < at ? <Icon name="check" /> : i + 1}
-            </span>
-            {t(`onboarding.speech.step.${s}`)}
-          </li>
-        ))}
-      </ol>
-
-      {downloading && <Meter value={percent} label={t("onboarding.speech.step.download")} />}
-
-      <div className="k-slot__foot">
-        <p className={cn("k-slot__status", tone === "good" && "is-good", tone === "bad" && "is-bad")} role="status">
-          {busy && <Spinner label={status} />}
-          {status}
-        </p>
-        {action && <div className="k-slot__actions">{action}</div>}
-      </div>
+      <p className={cn("k-model__line", tone === "good" && "is-good", tone === "bad" && "is-bad")} role="status">
+        {line}
+      </p>
     </div>
   );
+}
+
+/** "About 20 seconds left", "About 3 minutes left". */
+function leftText(t: (key: string, options?: Record<string, unknown>) => string, seconds: number): string {
+  return seconds < 60
+    ? t("onboarding.speech.secondsLeft", { count: Math.max(1, Math.round(seconds)) })
+    : t("onboarding.speech.minutesLeft", { count: Math.round(seconds / 60) });
 }
 
 /** The voices of the engine KIVO speaks with, as tiles: everyday ones, then Anime. Voices whose

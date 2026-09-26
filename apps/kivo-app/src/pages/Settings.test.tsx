@@ -136,6 +136,7 @@ runtime.request = (method: string, params?: unknown) => {
           attribution: "cuBLAS is NVIDIA's redistributable CUDA library.",
           source: "https://developer.download.nvidia.com/compute/cuda/redist/",
           size: 423_620_712,
+          requires: [],
           installed: false,
           downloading: null,
         },

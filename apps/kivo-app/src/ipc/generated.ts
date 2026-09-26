@@ -456,7 +456,11 @@ kind: string, license: string, attribution: string, source: string, languages: A
 /**
  * Download size in bytes.
  */
-size: number, installed: boolean, diskBytes: number, 
+size: number, 
+/**
+ * Models it needs that install with it (voice activity, end of turn), by id.
+ */
+requires: Array<string>, installed: boolean, diskBytes: number, 
 /**
  * 0–100 while downloading.
  */

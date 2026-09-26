@@ -3,7 +3,7 @@
  * choice (`voice.engines`), this PC's recommendation (`voice.recommend`), and the progress of a
  * switch, which the runtime reports as `engineSwitch` events. Everything refreshes on events.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Method,
   type BenchmarkReply,
@@ -39,6 +39,9 @@ export function useSpeech() {
   const [models, setModels] = useState<ModelItem[]>([]);
   const [recommendation, setRecommendation] = useState<RecommendationItem | null>(null);
   const [progress, setProgress] = useState<Record<Slot, SwitchProgress | null>>({ stt: null, tts: null });
+  // Each downloading model's speed, bytes per second over the last few seconds (setup's line).
+  const [speeds, setSpeeds] = useState<Record<string, number>>({});
+  const samples = useRef<Record<string, Array<[number, number]>>>({});
 
   const load = useCallback(() => {
     if (!connected) return;
@@ -77,9 +80,27 @@ export function useSpeech() {
       if (e.stage === "ready" || e.stage === "failed") load();
     } else if (e.type === "modelChanged") {
       // Each model's own progress (setup's download step).
+      const size = models.find((m) => m.id === e.id)?.size ?? 0;
+      if (e.percent !== null && e.percent < 100 && size > 0) {
+        const now = performance.now();
+        const bytes = (size * e.percent) / 100;
+        const recent = [
+          ...(samples.current[e.id] ?? []).filter(([t]) => now - t < 4000),
+          [now, bytes] as [number, number],
+        ];
+        samples.current[e.id] = recent;
+        const [t0, b0] = recent[0] ?? [now, bytes];
+        if (now - t0 > 800) setSpeeds((all) => ({ ...all, [e.id]: ((bytes - b0) * 1000) / (now - t0) }));
+      } else {
+        delete samples.current[e.id];
+        setSpeeds(({ [e.id]: _gone, ...rest }) => rest);
+      }
+      // At 100% the files are being checked (and unpacked) before the model is installed.
       setModels((all) =>
         all.map((m) =>
-          m.id === e.id && e.percent !== null ? { ...m, downloading: e.percent, state: "downloading" } : m,
+          m.id === e.id && e.percent !== null
+            ? { ...m, downloading: e.percent, state: e.percent >= 100 ? "installing" : "downloading" }
+            : m,
         ),
       );
       // A download for a switch in progress shows its percentage on the card.
@@ -148,6 +169,7 @@ export function useSpeech() {
     connected,
     choices,
     models,
+    speeds,
     recommendation,
     progress,
     choose,

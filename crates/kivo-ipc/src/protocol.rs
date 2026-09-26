@@ -881,6 +881,8 @@ pub struct ModelItem {
     pub languages: Vec<String>,
     /// Download size in bytes.
     pub size: u64,
+    /// Models it needs that install with it (voice activity, end of turn), by id.
+    pub requires: Vec<String>,
     pub installed: bool,
     pub disk_bytes: u64,
     /// 0–100 while downloading.

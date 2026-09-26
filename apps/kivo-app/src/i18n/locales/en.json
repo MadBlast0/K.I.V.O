@@ -984,7 +984,6 @@
         "high": "The most accurate. Uses more of your PC.",
         "medium": "Quicker, a little less accurate.",
         "low": "The lightest, for smaller PCs.",
-        "downloadHint": "Downloads once and stays on this PC.",
         "testHint": "KIVO plays itself a sentence and checks what it hears.",
         "ready": "KIVO listens with {name}."
       },
@@ -994,21 +993,20 @@
         "high": "A natural, human-sounding voice.",
         "medium": "A natural voice that starts talking quickly.",
         "low": "Your system’s built-in voices. The lightest.",
-        "downloadHint": "Downloads once and stays on this PC.",
         "testHint": "It says a sentence out loud, so you can hear it.",
         "ready": "KIVO speaks with {name}."
       },
-      "steps": "Steps",
-      "step": {
-        "download": "Download",
-        "test": "Test",
-        "use": "Use"
-      },
       "builtIn": "Built into your system",
       "size": "{size} MB · {license}",
-      "downloadSize": "Download · {size} MB",
-      "downloading": "Downloading… {percent, number, ::percent}",
-      "paused": "Paused at {percent, number, ::percent}",
+      "download": "Download",
+      "downloadHint": "Downloads once and stays on this PC.",
+      "bytes": "{done} of {total} MB",
+      "speed": "{speed} MB/s",
+      "secondsLeft": "{count, plural, one {about # second left} other {about # seconds left}}",
+      "minutesLeft": "{count, plural, one {about # minute left} other {about # minutes left}}",
+      "pauseAt": "Pause the download ({percent, number, ::percent})",
+      "installing": "Installing… checking the files",
+      "paused": "Paused · {done} of {total} MB",
       "downloadFailed": "The download didn’t finish.",
       "pause": "Pause",
       "resume": "Resume",
@@ -1025,7 +1023,8 @@
       "later": "Set up later",
       "myself": "Other models",
       "newVoices": "{count, plural, one {# new voice is} other {# new voices are}} ready to download (about 2 MB).",
-      "getVoices": "Download"
+      "getVoices": "Download",
+      "inUse": "In use"
     },
     "voice": {
       "title": "Teach KIVO your voice",

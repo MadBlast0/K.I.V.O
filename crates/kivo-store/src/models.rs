@@ -1002,6 +1002,23 @@ impl ModelStore {
         self.partial_dir(id).is_dir()
     }
 
+    /// How much of an unfinished download is on disk, in bytes (a paused download's progress).
+    pub fn partial_bytes(&self, id: &str) -> u64 {
+        fn walk(dir: &Path) -> u64 {
+            fs::read_dir(dir).map_or(0, |entries| {
+                entries
+                    .flatten()
+                    .map(|e| match e.file_type() {
+                        Ok(t) if t.is_dir() => walk(&e.path()),
+                        Ok(_) => e.metadata().map_or(0, |m| m.len()),
+                        Err(_) => 0,
+                    })
+                    .sum()
+            })
+        }
+        walk(&self.partial_dir(id))
+    }
+
     /// Drops an unfinished download (Cancel).
     pub fn discard_partial(&self, id: &str) -> Result<(), ModelError> {
         let dir = self.partial_dir(id);
@@ -1397,6 +1414,8 @@ mod tests {
         });
         assert!(first.is_err());
         assert!(store.has_partial("test-model"), "kept for a resume");
+        let kept = store.partial_bytes("test-model");
+        assert!((900..4000).contains(&kept), "{kept} bytes kept");
         assert!(store.installed("test-model").is_none());
         // Resume: continues with a range request.
         let fake = server(&files, None);

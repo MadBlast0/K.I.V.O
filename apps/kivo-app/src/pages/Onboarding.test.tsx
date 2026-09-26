@@ -127,6 +127,25 @@ const heyKivo = {
 };
 let wake = { words: [heyKivo], modelInstalled: false, listening: false };
 let ptt = true;
+// The models the runtime lists (tests set downloads in progress).
+let modelsList: unknown[] = [];
+const modelItem = (id: string, size: number, state: string, downloading: number | null, requires: string[] = []) => ({
+  id,
+  name: id,
+  kind: "stt",
+  license: "MIT",
+  attribution: "",
+  source: "",
+  languages: ["en"],
+  size,
+  requires,
+  installed: state === "ready",
+  diskBytes: 0,
+  downloading,
+  residency: null,
+  state,
+  inUse: false,
+});
 
 const sectionOf = (params: unknown) =>
   typeof params === "object" && params !== null && "section" in params ? String(params.section) : "";
@@ -139,7 +158,7 @@ runtime.request = (method: string, params?: unknown) => {
     case "voice.recommend":
       return Promise.resolve(recommendation);
     case "models.list":
-      return Promise.resolve([]);
+      return Promise.resolve(modelsList);
     case "voice.test":
       return Promise.resolve({ said: "What time is it", heard: "What time is it", passed: true });
     case "voice.micCheck":
@@ -249,6 +268,7 @@ describe("Onboarding (UX-33–36, UX-60)", () => {
     calls.length = 0;
     wake = { words: [{ ...heyKivo }], modelInstalled: false, listening: false };
     ptt = true;
+    modelsList = [];
   });
 
   it("walks every step, then Finish marks setup done", async () => {
@@ -438,7 +458,7 @@ describe("Onboarding (UX-33–36, UX-60)", () => {
       // Download: size and licence up front; nothing downloads until the button.
       expect(await screen.findByText("135 MB · MIT")).toBeTruthy();
       expect(calls.some((c) => c.method === "models.install")).toBe(false);
-      fireEvent.click(screen.getByRole("button", { name: "Download · 135 MB" }));
+      fireEvent.click(screen.getByRole("button", { name: "Download" }));
       await settle();
       expect(calls).toContainEqual({ method: "models.install", params: { id: "moonshine-base-en" } });
       // Downloaded (the runtime reports it; another level re-reads the list here).
@@ -464,6 +484,32 @@ describe("Onboarding (UX-33–36, UX-60)", () => {
     } finally {
       stt.ready = true;
       choices.stt = "moonshine-base-en";
+    }
+  });
+
+  it("shows a download's progress over the model and what it needs, and pauses it", async () => {
+    const stt = choices.engines[0];
+    stt.ready = false;
+    // Half of the recognizer is here, and the voice-activity model it needs is being installed.
+    modelsList = [
+      modelItem("moonshine-base-en", 130_000_000, "downloading", 50, ["silero-vad"]),
+      modelItem("silero-vad", 20_000_000, "installing", 100),
+    ];
+    try {
+      await mount();
+      fireEvent.click(screen.getByRole("button", { name: "Get started" }));
+      await settle();
+      await next();
+      expect(await screen.findByText("How KIVO listens")).toBeTruthy();
+      expect(await screen.findByText(/^85 of 150 MB/)).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: /^Pause the download/ }));
+      await settle();
+      expect(calls).toContainEqual({ method: "models.pause", params: { id: "moonshine-base-en" } });
+      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+      await settle();
+      expect(calls).toContainEqual({ method: "models.cancel", params: { id: "moonshine-base-en" } });
+    } finally {
+      stt.ready = true;
     }
   });
 

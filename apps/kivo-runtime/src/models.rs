@@ -472,7 +472,7 @@ impl Models {
             .map(|m| {
                 let installed = self.store.installed(&m.id);
                 #[allow(clippy::cast_possible_truncation, reason = "0–100")]
-                let downloading = downloads.get(&m.id).map(|(_, p)| percent(*p));
+                let mut downloading = downloads.get(&m.id).map(|(_, p)| percent(*p));
                 let error = lock(&self.errors).get(&m.id).cloned();
                 let state = match (&installed, downloading) {
                     (_, Some(100)) => "installing",
@@ -483,6 +483,13 @@ impl Models {
                     (None, None) if self.store.has_partial(&m.id) => "paused",
                     (None, None) => "notInstalled",
                 };
+                // A paused download says how far it got.
+                if state == "paused" {
+                    downloading = Some(percent(Progress {
+                        done: self.store.partial_bytes(&m.id),
+                        total: m.download_size(),
+                    }));
+                }
                 let in_use = [&config.voice.stt_engine, &config.voice.tts_engine]
                     .iter()
                     .any(|e| {
@@ -499,6 +506,7 @@ impl Models {
                         .and_then(|v| v.as_str().map(str::to_owned))
                         .unwrap_or_default(),
                     size: m.download_size(),
+                    requires: m.requires.clone(),
                     installed: installed.is_some(),
                     disk_bytes: installed.map_or(0, |i| i.bytes),
                     downloading,
