@@ -128,6 +128,8 @@ struct Running {
     draft_text: Option<String>,
     /// A realtime conversation is open in this turn (BRAIN-33).
     live: bool,
+    /// The final transcript is in: a partial that arrives later is stale and ignored.
+    heard_final: bool,
 }
 
 impl Running {
@@ -158,6 +160,7 @@ impl Running {
             brain_choice: None,
             thread: None,
             attachments: Vec::new(),
+            heard_final: false,
             tainted: Vec::new(),
             offered: Vec::new(),
             cloud_brain: None,
@@ -1351,12 +1354,16 @@ impl Engine {
         let mut turn = lock(&self.turn);
         let Some(running) = turn
             .as_mut()
-            .filter(|t| t.utterance == utterance && !t.answering)
+            .filter(|t| t.utterance == utterance && !t.answering && !t.heard_final)
         else {
             return;
         };
         if !stable {
             running.transcript = text.to_owned();
+            // The end-of-turn check waits past a pause after the name alone (VOICE-33).
+            if let Some(listener) = self.listener() {
+                listener.heard_so_far(utterance, text);
+            }
         }
         if running.spans.contains_key("t3FirstPartial") {
             drop(turn);
@@ -1382,13 +1389,15 @@ impl Engine {
     /// Routes a final transcript and does what it asks (BRAINS §2).
     async fn handle_transcript(self: &Arc<Self>, text: &str) {
         let text = text.trim().to_owned();
+        // First, so a late partial can't replace the final text on the Island.
+        if let Some(running) = lock(&self.turn).as_mut() {
+            running.transcript.clone_from(&text);
+            running.heard_final = true;
+        }
         self.core.update_turn(|view| {
             view.transcript.clone_from(&text);
             view.transcript_final = true;
         });
-        if let Some(running) = lock(&self.turn).as_mut() {
-            running.transcript.clone_from(&text);
-        }
         self.recorder.transcript(&self.turn_key(), &text);
         self.core
             .bus

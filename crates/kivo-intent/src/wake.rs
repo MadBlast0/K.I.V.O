@@ -70,6 +70,15 @@ fn core(word: &str) -> String {
         .collect()
 }
 
+/// Whether `transcript` is only KIVO's name ("Kivo,", "Hey Kivo"): someone who says the name and
+/// pauses before the request hasn't finished, whatever the pause sounds like (VOICE-33).
+pub fn only_the_name(transcript: &str) -> bool {
+    !transcript.trim().is_empty()
+        && !strip_wake_phrase(transcript, "Hey Kivo")
+            .chars()
+            .any(char::is_alphanumeric)
+}
+
 /// `transcript` without the wake phrase (or its tail) at its start. The rest keeps its own
 /// spelling and punctuation.
 pub fn strip_wake_phrase(transcript: &str, phrase: &str) -> String {
@@ -131,6 +140,16 @@ fn after(transcript: &str, at: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_name_alone_is_not_a_request() {
+        for only in ["Kivo.", "Kivo,", "Hey Kivo", "hey, Kivo!", "Kevo", "Keyvo."] {
+            assert!(only_the_name(only), "{only}");
+        }
+        for more in ["Kivo, mute.", "Kivo mute", "mute", "Hey", "", "  "] {
+            assert!(!only_the_name(more), "{more:?}");
+        }
+    }
 
     #[test]
     fn the_whole_phrase_or_its_tail_is_removed() {

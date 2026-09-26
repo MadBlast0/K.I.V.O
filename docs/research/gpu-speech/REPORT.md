@@ -67,9 +67,8 @@ names, notices, build and release files):
 - `ort`'s `directml` feature is off, so no KIVO code can reach DirectML. pyke's ONNX Runtime
   downloads have no plain build for Windows x64 (the smallest is `directml`, `ort-sys`'s
   `dist.tsv`), so that library still carries DirectML's provider unused; dropping it too would
-  mean building ONNX Runtime from source. Supertonic's model tests and kivo-voice's unit tests pass
-  on the new build; the other ONNX engines' model tests are still to run (their models were deleted
-  from the test PC).
+  mean building ONNX Runtime from source. Every ONNX engine's real-model tests pass on the new build
+  (2026-09-26).
 - `crates/kivo-voice/src/accel.rs` deleted; its CPU half is `onnx.rs` (`onnx::session`), which all
   eleven ONNX engines now use instead of their own copies of the same builder.
 - `Accel::DirectMl`, `Parakeet::load_on`, `Whisper::load_on`, the DirectML Parakeet test, the

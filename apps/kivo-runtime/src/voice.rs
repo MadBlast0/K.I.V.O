@@ -193,6 +193,7 @@ pub struct Listener {
     busy: Arc<AtomicBool>,
     hands_free: Arc<AtomicBool>,
     keep_audio: Arc<AtomicBool>,
+    words: Arc<Mutex<Words>>,
     /// The detection thread, joined on shutdown so the process never exits while it is inside
     /// the speech models' native code.
     thread: Mutex<Option<std::thread::JoinHandle<()>>>,
@@ -234,6 +235,19 @@ impl Listener {
         let (sent, done) = tokio::sync::oneshot::channel();
         let _ = self.commands.send(Command::Ready { utterance, sent });
         done
+    }
+
+    /// The recognizer's latest partial transcript of `utterance`: when it is only KIVO's name
+    /// ("Kivo,"), a pause after it isn't the end of the request, whatever the end-of-turn model
+    /// says (VOICE-33).
+    pub fn heard_so_far(&self, utterance: u64, transcript: &str) {
+        *self
+            .words
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Words {
+            utterance,
+            only_the_name: Some(kivo_intent::only_the_name(transcript)),
+        };
     }
 
     /// Ends the utterance (push-to-talk released).
@@ -348,11 +362,13 @@ pub fn start(pipeline: Pipeline) -> Listener {
     let busy = Arc::new(AtomicBool::new(false));
     let hands_free = Arc::new(AtomicBool::new(false));
     let keep_audio = Arc::new(AtomicBool::new(false));
+    let words = Arc::new(Mutex::new(Words::default()));
     let flags = Flags {
         listening: Arc::clone(&listening),
         busy: Arc::clone(&busy),
         hands_free: Arc::clone(&hands_free),
         keep_audio: Arc::clone(&keep_audio),
+        words: Arc::clone(&words),
     };
     let thread = std::thread::Builder::new()
         .name("kivo-detect".into())
@@ -364,6 +380,7 @@ pub fn start(pipeline: Pipeline) -> Listener {
         busy,
         hands_free,
         keep_audio,
+        words,
         thread: Mutex::new(Some(thread)),
     }
 }
@@ -423,6 +440,15 @@ struct Flags {
     busy: Arc<AtomicBool>,
     hands_free: Arc<AtomicBool>,
     keep_audio: Arc<AtomicBool>,
+    words: Arc<Mutex<Words>>,
+}
+
+/// What the recognizer has heard of an utterance so far, for the end-of-turn check (VOICE-33).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct Words {
+    utterance: u64,
+    /// `None` until its first partial transcript.
+    only_the_name: Option<bool>,
 }
 
 /// The user started talking over KIVO (VOICE-31).
@@ -517,6 +543,7 @@ fn run(pipeline: Pipeline, commands: &Receiver<Command>, flags: &Flags) {
         busy,
         hands_free,
         keep_audio,
+        words,
     } = flags;
     let keep = || keep_audio.load(Ordering::Relaxed).then(Vec::new);
     let Pipeline {
@@ -1033,10 +1060,20 @@ fn run(pipeline: Pipeline, commands: &Receiver<Command>, flags: &Flags) {
             };
             if due && !u.turn_done {
                 u.turn_checks += 1;
-                let tail = history.last(RATE * 8);
-                match model.end_probability(&tail, "") {
-                    Ok(p) => u.turn_done = p >= TURN_DONE,
-                    Err(e) => tracing::debug!(detail = e.detail(), "end-of-turn check failed"),
+                // A name and a pause ("Kivo, … mute") sounds finished to the model but isn't a
+                // request yet, and neither is speech not yet transcribed: those wait for more
+                // speech or the longest pause.
+                let heard = *words
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let more_than_the_name =
+                    heard.utterance == u.id && heard.only_the_name == Some(false);
+                if more_than_the_name {
+                    let tail = history.last(RATE * 8);
+                    match model.end_probability(&tail, "") {
+                        Ok(p) => u.turn_done = p >= TURN_DONE,
+                        Err(e) => tracing::debug!(detail = e.detail(), "end-of-turn check failed"),
+                    }
                 }
             }
         }

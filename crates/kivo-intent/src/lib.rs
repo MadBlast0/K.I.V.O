@@ -16,4 +16,4 @@ pub use index::{Index, IndexEntry, Resolved};
 pub use router::{Decision, IntentRouter, Route, RouterMetrics, Stage};
 pub use semantic::{Embedder, Semantic};
 pub use stop::is_stop_request;
-pub use wake::strip_wake_phrase;
+pub use wake::{only_the_name, strip_wake_phrase};

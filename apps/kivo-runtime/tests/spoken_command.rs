@@ -24,6 +24,19 @@ fn worker() -> PathBuf {
     dir.join("kivo-infer.exe")
 }
 
+/// The turns recorded so far, oldest first. Turn ids start at the runtime's start time (unique
+/// across runs), so they are read back rather than assumed.
+fn turn_ids(rig: &Rig) -> Vec<String> {
+    let rows = rig.db.lock().unwrap().activity(None, 200).unwrap();
+    let mut ids: Vec<String> = Vec::new();
+    for id in rows.into_iter().rev().filter_map(|r| r.turn_id) {
+        if !ids.contains(&id) {
+            ids.push(id);
+        }
+    }
+    ids
+}
+
 fn rig(
     clip: Vec<f32>,
     model_dir: PathBuf,
@@ -148,11 +161,12 @@ async fn a_spoken_command_opens_the_app_and_kivo_answers() {
     );
 
     // The timings were kept (ARCH-28): end of speech to the answer is the M1 budget.
+    let first = turn_ids(&rig).remove(0);
     let spans = rig
         .db
         .lock()
         .unwrap()
-        .turn_metrics("t1")
+        .turn_metrics(&first)
         .unwrap()
         .expect("the turn's timings were recorded");
     let at = |span: &str| spans.get(span).and_then(serde_json::Value::as_u64);
@@ -405,7 +419,9 @@ async fn over_a_fullscreen_app_kivo_stays_quiet() {
         rig.core.clear_turn();
     }
     // Neither turn produced spoken audio (t9 is the first audio of a spoken reply).
-    for turn in ["t1", "t2"] {
+    let turns = turn_ids(&rig);
+    assert_eq!(turns.len(), 2, "{turns:?}");
+    for turn in &turns {
         let spans = rig
             .db
             .lock()
@@ -432,7 +448,10 @@ async fn replies_can_be_spoken_by_kokoro() {
                 .and_then(|p| ModelStore::new(p.models()).installed("kokoro-82m"))
                 .map(|m| m.dir)
         })
-        .filter(|d| d.join("model_quantized.onnx").is_file());
+        // fp16 since the switch (DECISIONS "Kokoro in fp16"); older downloads have the 8-bit file.
+        .filter(|d| {
+            d.join("model_fp16.onnx").is_file() || d.join("model_quantized.onnx").is_file()
+        });
     let Some(dir) = dir else {
         eprintln!("Kokoro isn't available here; skipping");
         return;
@@ -453,11 +472,12 @@ async fn replies_can_be_spoken_by_kokoro() {
         rig.core.state().borrow().session == SessionState::Idle
     })
     .await;
+    let first = turn_ids(&rig).remove(0);
     let spans = rig
         .db
         .lock()
         .unwrap()
-        .turn_metrics("t1")
+        .turn_metrics(&first)
         .unwrap()
         .expect("the turn's timings were recorded");
     assert!(
@@ -817,10 +837,16 @@ async fn hey_kivo_wakes_kivo_hands_free_and_a_follow_up_needs_no_wake_word() {
         !first.to_lowercase().contains("kivo"),
         "the wake phrase was removed: {first:?}"
     );
-    until("Chrome to open", Duration::from_secs(40), || {
-        !rig.apps.launched.lock().unwrap().is_empty()
-    })
-    .await;
+    let deadline = Instant::now() + Duration::from_secs(40);
+    while rig.apps.launched.lock().unwrap().is_empty() {
+        if Instant::now() > deadline {
+            for a in rig.recorder.recent(None, 20) {
+                eprintln!("activity: {} | {} | {}", a.kind, a.title, a.status);
+            }
+            panic!("timed out waiting for Chrome to open");
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
     rig.listener.set_hands_free(None);
     rig.core.quit();
     let _ = tokio::time::timeout(Duration::from_secs(5), worker_task).await;

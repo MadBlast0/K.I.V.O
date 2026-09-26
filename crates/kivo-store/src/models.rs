@@ -1523,6 +1523,37 @@ mod tests {
         eprintln!("the CUDA pack is in {}", installed.dir.display());
     }
 
+    /// With `KIVO_TEST_REAL_MODELS=<folder>` and `KIVO_TEST_REAL_MODEL_IDS=<id,id,…>`: installs
+    /// those catalog models into that folder through their real manifests (downloads, hashes,
+    /// archives), for the engines' own model tests. Off by default.
+    #[test]
+    fn installs_real_catalog_models_when_asked() {
+        let (Some(root), Ok(ids)) = (
+            std::env::var_os("KIVO_TEST_REAL_MODELS").map(PathBuf::from),
+            std::env::var("KIVO_TEST_REAL_MODEL_IDS"),
+        ) else {
+            eprintln!("KIVO_TEST_REAL_MODELS / KIVO_TEST_REAL_MODEL_IDS aren't set; skipping");
+            return;
+        };
+        let store = ModelStore::new(root);
+        let catalog = catalog();
+        for id in ids.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+            let manifest = catalog
+                .iter()
+                .find(|m| m.id == id)
+                .unwrap_or_else(|| panic!("no catalog model {id}"));
+            let installed = store
+                .install(
+                    manifest,
+                    &HttpFetcher::new(),
+                    &CancellationToken::new(),
+                    &mut |_| {},
+                )
+                .unwrap_or_else(|e| panic!("{id}: {e}"));
+            eprintln!("{id} is in {}", installed.dir.display());
+        }
+    }
+
     /// The CUDA pack is pinned to NVIDIA's own archives and asks before it downloads.
     #[test]
     #[cfg(all(windows, target_arch = "x86_64"))]
