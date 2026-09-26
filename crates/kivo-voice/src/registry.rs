@@ -279,7 +279,6 @@ pub struct ProfileCard {
     pub other_languages_only: bool,
 }
 
-/// The profiles of `slot` for `language`, each mapped to its engine (VOICE-43).
 /// Runs on the graphics card first (whisper.cpp's Vulkan engines).
 pub fn gpu_first(e: &RegistryEntry) -> bool {
     e.engine.accel.first() == Some(&crate::engine::Accel::Vulkan)

@@ -1,8 +1,8 @@
 //! Speech engines behind provider traits (VOICE §2–3, §9): voice activity detection, speech to
 //! text and text to speech, plus the wake-word, speaker and turn-detection traits that M2 fills
-//! in. Local engines run on ONNX Runtime (`ort`); nothing here links GPL code (DIST-17).
+//! in. Local engines run on ONNX Runtime (`ort`, on the processor) or GGML (whisper.cpp, on the
+//! graphics card); nothing here links GPL code (DIST-17).
 
-pub mod accel;
 pub mod bpe;
 pub mod chatterbox;
 pub mod cloud;
@@ -15,6 +15,7 @@ pub mod kokoro;
 pub mod kws;
 pub mod language;
 pub mod moonshine;
+pub mod onnx;
 pub mod parakeet;
 pub mod recommend;
 pub mod registry;

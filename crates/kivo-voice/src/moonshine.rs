@@ -195,12 +195,7 @@ impl Moonshine {
         {
             return Err(VoiceError::ModelMissing("speech recognition".into()));
         }
-        let session = |file: &str| -> VoiceResult<Session> {
-            Ok(Session::builder()?
-                .with_intra_threads(threads)?
-                .with_inter_threads(1)?
-                .commit_from_file(dir.join(file))?)
-        };
+        let session = |file: &str| crate::onnx::session(&dir.join(file), threads);
         let tokens = std::fs::read_to_string(dir.join("tokens.txt"))
             .map_err(|e| VoiceError::Engine(format!("tokens.txt: {e}")))?;
         let decoder = session("decoder_model_merged.ort")?;

@@ -44,10 +44,7 @@ pub fn info() -> EngineInfo {
 impl SileroVad {
     pub fn load(model: &Path) -> VoiceResult<Self> {
         // One thread: VAD must stay cheap while KIVO listens (VOICE §10: ≤ 2% CPU).
-        let session = Session::builder()?
-            .with_intra_threads(1)?
-            .with_inter_threads(1)?
-            .commit_from_file(model)?;
+        let session = crate::onnx::session(model, 1)?;
         Ok(Self {
             info: info(),
             session,

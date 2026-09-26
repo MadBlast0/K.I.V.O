@@ -82,8 +82,7 @@ pub struct Kokoro {
 }
 
 impl Kokoro {
-    /// Loads on the processor: DirectML can't run Kokoro (its `ConvTranspose` layers fail there,
-    /// in fp16 and fp32; DECISIONS "Local models on the GPU first").
+    /// Loads the model from `dir`, running on `threads` CPU threads.
     pub fn load(dir: &Path, threads: usize) -> VoiceResult<Self> {
         // fp16 is about three times faster on a CPU than the 8-bit file (0.28 vs 0.87 × real
         // time, DECISIONS "Kokoro in fp16"); downloads from before the switch keep working.
@@ -92,9 +91,7 @@ impl Kokoro {
             .map(|name| dir.join(name))
             .find(|p| p.is_file())
             .ok_or_else(|| VoiceError::ModelMissing(ENGINE_ID.into()))?;
-        let session = Session::builder()?
-            .with_intra_threads(threads.max(1))?
-            .commit_from_file(&model)?;
+        let session = crate::onnx::session(&model, threads)?;
         let mut voices = Vec::new();
         let listing = std::fs::read_dir(dir.join("voices"))
             .map_err(|e| VoiceError::Engine(format!("voices: {e}")))?;

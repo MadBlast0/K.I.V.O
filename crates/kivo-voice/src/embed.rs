@@ -146,10 +146,7 @@ impl MiniLm {
             return Err(VoiceError::ModelMissing("sentence embeddings".into()));
         }
         let text = std::fs::read_to_string(vocab).map_err(|e| VoiceError::Engine(e.to_string()))?;
-        let session = Session::builder()?
-            .with_intra_threads(1)?
-            .with_inter_threads(1)?
-            .commit_from_file(model)?;
+        let session = crate::onnx::session(&model, 1)?;
         Ok(Self {
             tokenizer: WordPiece::from_vocab(&text)?,
             session: Mutex::new(session),

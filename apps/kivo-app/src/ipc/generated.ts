@@ -498,7 +498,7 @@ privacy: string, license: string, commercialUse: boolean,
  */
 languages: Array<string>, streaming: boolean, 
 /**
- * `cpu`, `directMl`, `cuda`, `npu`.
+ * `cpu`, `vulkan`, `cuda`, `npu`.
  */
 devices: Array<string>, downloadMb: number, ramMb: number, 
 /**

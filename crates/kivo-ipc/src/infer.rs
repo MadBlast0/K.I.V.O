@@ -70,8 +70,8 @@ pub struct ModelLoad {
     /// For a cloud engine: the user's key (from Credential Manager) and where to reach it.
     #[serde(default)]
     pub cloud: Option<CloudLoad>,
-    /// The graphics card (DXGI adapter) to run on through DirectML, when the GPU policy allows
-    /// it (PLAN-09); otherwise the processor.
+    /// The graphics card (DXGI adapter) the GPU policy gives a GPU-capable recognizer (PLAN-09);
+    /// otherwise the processor.
     #[serde(default)]
     pub gpu: Option<u32>,
 }

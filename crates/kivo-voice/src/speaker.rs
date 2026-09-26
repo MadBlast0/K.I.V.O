@@ -48,10 +48,7 @@ impl CamPlusPlus {
         if !path.is_file() {
             return Err(VoiceError::ModelMissing("voice recognition".into()));
         }
-        let session = Session::builder()?
-            .with_intra_threads(1)?
-            .with_inter_threads(1)?
-            .commit_from_file(path)?;
+        let session = crate::onnx::session(&path, 1)?;
         Ok(Self {
             info: info(),
             session: Mutex::new(session),

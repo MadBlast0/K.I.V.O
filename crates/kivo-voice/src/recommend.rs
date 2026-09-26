@@ -6,7 +6,7 @@
 //! GPU it recommends the recognizer that runs there (DECISIONS "Local models on the GPU first");
 //! off, the processor's recognizers. It only ever proposes: nothing changes until the user chooses.
 
-use crate::engine::{Accel, EngineSlot};
+use crate::engine::EngineSlot;
 use crate::registry::{Privacy, Profile, RegistryEntry};
 use kivo_platform::SystemSnapshot;
 use serde::{Deserialize, Serialize};
@@ -146,12 +146,10 @@ pub fn recommend(s: &SystemSnapshot, needs: &Needs<'_>) -> Recommendation {
         // The graphics card's engines only when speech may use it.
         .filter(|e| prefer_gpu || !crate::registry::gpu_first(e))
         .collect();
-    // With a usable GPU, the recognizers that run on it (Parakeet, Whisper) come first. Without
-    // one, heavy recognizers come first only when accuracy is what the user asked for on a PC with
-    // room for them; otherwise they're for languages nothing lighter covers.
-    let on_gpu = |e: &RegistryEntry| {
-        e.engine.accel.contains(&Accel::DirectMl) || e.engine.accel.contains(&Accel::Vulkan)
-    };
+    // With a usable GPU, the recognizers that run on it (whisper.cpp's) come first. Without one,
+    // heavy recognizers come first only when accuracy is what the user asked for on a PC with room
+    // for them; otherwise they're for languages nothing lighter covers.
+    let on_gpu = crate::registry::gpu_first;
     // Asked for speed: the high-accuracy GPU model (Whisper) is the slow one, so it doesn't count.
     let speed = needs.priority == Priority::Speed;
     let gpu_pick = |e: &RegistryEntry| on_gpu(e) && !(speed && e.has(Profile::HighAccuracy));
@@ -162,8 +160,9 @@ pub fn recommend(s: &SystemSnapshot, needs: &Needs<'_>) -> Recommendation {
         let heavy = e.engine.resources.ram_mb > HEAVY_RAM_MB;
         (
             prefer_gpu && !gpu_pick(e),
-            // whisper.cpp on Vulkan before ONNX on DirectML (measured slower there).
-            prefer_gpu && !crate::registry::gpu_first(e),
+            // The graphics card's engines left out above (its slow one, when speed was asked) still
+            // before the processor's.
+            prefer_gpu && !on_gpu(e),
             // Among the graphics card's engines, the one whose profile the priority asks for.
             prefer_gpu
                 && !e.has(if accurate {

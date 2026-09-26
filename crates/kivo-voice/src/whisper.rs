@@ -47,7 +47,6 @@ pub fn info() -> EngineInfo {
         license: "MIT".into(),
         languages: LANGUAGES.iter().map(|l| (*l).to_owned()).collect(),
         streaming: true,
-        // DirectML crashes on these int8 files (access violation, 2026-09-24): processor only.
         accel: vec![Accel::Cpu],
         resources: ResourceEstimate {
             ram_mb: 1_800,
@@ -167,12 +166,6 @@ pub struct Whisper {
 
 impl Whisper {
     pub fn load(dir: &Path, threads: usize) -> VoiceResult<Self> {
-        Self::load_on(dir, threads, crate::accel::Device::Cpu)
-    }
-
-    /// Loads the model on `device`: the GPU (DirectML) where the runtime's policy allows, else
-    /// the processor.
-    pub fn load_on(dir: &Path, threads: usize, device: crate::accel::Device) -> VoiceResult<Self> {
         let files = [
             "turbo-encoder.int8.onnx",
             "turbo-decoder.int8.onnx",
@@ -181,12 +174,7 @@ impl Whisper {
         if files.iter().any(|f| !dir.join(f).is_file()) {
             return Err(VoiceError::ModelMissing("speech recognition".into()));
         }
-        let mut gpu = false;
-        let mut session = |file: &str| -> VoiceResult<Session> {
-            let (session, on_gpu) = crate::accel::session(&dir.join(file), threads, device)?;
-            gpu |= on_gpu;
-            Ok(session)
-        };
+        let session = |file: &str| crate::onnx::session(&dir.join(file), threads);
         let encoder = session("turbo-encoder.int8.onnx")?;
         let meta = |key: &str| -> Option<String> { encoder.metadata().ok()?.custom(key) };
         let number = |key: &str| -> VoiceResult<i64> {
@@ -222,7 +210,7 @@ impl Whisper {
             }
             tokens[id] = bytes;
         }
-        let mut engine = Self {
+        Ok(Self {
             info: info(),
             mels: size("n_mels").unwrap_or(128),
             layers: size("n_text_layer")?,
@@ -236,12 +224,7 @@ impl Whisper {
             decoder: session("turbo-decoder.int8.onnx")?,
             encoder,
             tokens,
-        };
-        // Where it runs, for the Voice page's details (VOICE §8).
-        if gpu {
-            engine.info.accel = vec![Accel::DirectMl, Accel::Cpu];
-        }
-        Ok(engine)
+        })
     }
 
     fn language_token(&self, language: &str) -> Option<i64> {

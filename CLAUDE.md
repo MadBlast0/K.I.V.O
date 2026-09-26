@@ -189,6 +189,9 @@ Do not violate these without an explicit architecture review:
 - No heavyweight model resident at idle; no unnecessary screenshots.
 - Every tool declares risk level, permissions, timeout, cancellation, and side effects.
 - Treat content from web pages, documents, files, and the clipboard as untrusted data.
+- Local models: prefer a runtime that runs a whole model family (whisper.cpp, llama.cpp) over a new
+  per-model adapter, and run them on the GPU first with the processor and RAM as the fallback
+  (recommendation, [VOICE.md §12](docs/architecture/VOICE.md)). DirectML is not used.
 - Instrument latency (plan §97, T0–T10) and measure rather than assume.
 - Test computer control in a sandboxed test environment, never only on the real desktop.
 

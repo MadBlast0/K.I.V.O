@@ -110,10 +110,7 @@ fn session(path: &Path, threads: usize) -> VoiceResult<Session> {
     if !path.is_file() {
         return Err(VoiceError::ModelMissing("Supertonic".into()));
     }
-    Ok(Session::builder()?
-        .with_intra_threads(threads.max(1))?
-        .with_inter_threads(1)?
-        .commit_from_file(path)?)
+    crate::onnx::session(path, threads)
 }
 
 impl Supertonic {

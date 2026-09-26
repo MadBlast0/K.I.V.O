@@ -32,7 +32,6 @@ pub enum EngineKind {
 #[serde(rename_all = "camelCase")]
 pub enum Accel {
     Cpu,
-    DirectMl,
     /// whisper.cpp's GPU backend.
     Vulkan,
     Cuda,

@@ -1,6 +1,6 @@
 //! The GPU policy (plan §91, PLAN-09, VOICE-35): a speech model that can use the graphics card
-//! (Parakeet through DirectML) runs there first (owner, 2026-09-24), and on the processor
-//! when the card isn't available. It isn't when KIVO would compete with GPU-heavy work: not
+//! (whisper.cpp's) runs there first (owner, 2026-09-24), and on the processor when the card
+//! isn't available. It isn't when KIVO would compete with GPU-heavy work: not
 //! on the Battery or Gaming profiles, not while a fullscreen app (a game, a presentation) is in
 //! front, not on battery unless the Performance profile says so, not on a card without the memory
 //! for it, and not while something else keeps the GPU busy. Moving off the GPU happens at 60 %
@@ -15,11 +15,10 @@ const MIN_VRAM_MB: u64 = kivo_voice::recommend::GPU_MIN_MB;
 const LEAVE_AT: u8 = 60;
 const RETURN_BELOW: u8 = 30;
 
-/// Speech models that can run on the graphics card: whisper.cpp's (Vulkan) and Parakeet
-/// (DirectML). Whisper's ONNX files, Moonshine and Kokoro fail on DirectML and stay on the
-/// processor (DECISIONS "Local models on the GPU first").
+/// Speech models that can run on the graphics card: whisper.cpp's (Vulkan). The ONNX engines run
+/// on the processor (DECISIONS "GGML on Vulkan, no DirectML").
 pub fn can_use_gpu(engine: &str) -> bool {
-    engine == kivo_voice::parakeet::MODEL_ID || kivo_voice::whisper_cpp::variant(engine).is_some()
+    kivo_voice::whisper_cpp::variant(engine).is_some()
 }
 
 /// The DXGI adapter to run on, or `None` for the processor. `on_gpu_now` says where the model is,
@@ -152,8 +151,9 @@ mod tests {
 
     #[test]
     fn only_the_models_that_gain_from_it() {
-        assert!(can_use_gpu("parakeet-tdt-v3") && can_use_gpu("whisper-cpp-small"));
-        // DirectML crashes on these (DECISIONS "Local models on the GPU first").
-        assert!(!can_use_gpu("whisper-large-v3-turbo") && !can_use_gpu("moonshine-base-en"));
+        assert!(can_use_gpu("whisper-cpp-small") && can_use_gpu("whisper-cpp-turbo"));
+        // ONNX engines stay on the processor (DECISIONS "GGML on Vulkan, no DirectML").
+        assert!(!can_use_gpu("parakeet-tdt-v3") && !can_use_gpu("whisper-large-v3-turbo"));
+        assert!(!can_use_gpu("moonshine-base-en"));
     }
 }

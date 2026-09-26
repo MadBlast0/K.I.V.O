@@ -50,7 +50,7 @@ pub fn info() -> EngineInfo {
         license: "CC-BY-4.0".into(),
         languages: LANGUAGES.iter().map(|l| (*l).to_owned()).collect(),
         streaming: true,
-        accel: vec![Accel::Cpu, Accel::DirectMl],
+        accel: vec![Accel::Cpu],
         resources: ResourceEstimate {
             ram_mb: 1_100,
             vram_mb: 0,
@@ -184,12 +184,6 @@ pub struct Parakeet {
 impl Parakeet {
     /// Loads the model from `dir`, running on `threads` CPU threads.
     pub fn load(dir: &Path, threads: usize) -> VoiceResult<Self> {
-        Self::load_on(dir, threads, crate::accel::Device::Cpu)
-    }
-
-    /// Loads the model on `device`: the GPU (DirectML) where the runtime's policy allows, else
-    /// the processor.
-    pub fn load_on(dir: &Path, threads: usize, device: crate::accel::Device) -> VoiceResult<Self> {
         let files = [
             "encoder.int8.onnx",
             "decoder.int8.onnx",
@@ -199,14 +193,8 @@ impl Parakeet {
         if files.iter().any(|f| !dir.join(f).is_file()) {
             return Err(VoiceError::ModelMissing("speech recognition".into()));
         }
-        // Only the encoder, the heavy network, goes to the graphics card. The decoder and joiner
-        // run once per output step, hundreds of tiny calls an utterance, and each GPU call costs
-        // more than the work it does: they stay on the processor.
-        let (encoder, gpu) =
-            crate::accel::session(&dir.join("encoder.int8.onnx"), threads, device)?;
-        let session = |file: &str| -> VoiceResult<Session> {
-            Ok(crate::accel::session(&dir.join(file), threads, crate::accel::Device::Cpu)?.0)
-        };
+        let session = |file: &str| crate::onnx::session(&dir.join(file), threads);
+        let encoder = session("encoder.int8.onnx")?;
         let meta = |key: &str| -> Option<usize> {
             encoder.metadata().ok()?.custom(key)?.trim().parse().ok()
         };
@@ -226,7 +214,7 @@ impl Parakeet {
                 tokens[id] = piece.to_owned();
             }
         }
-        let mut engine = Self {
+        Ok(Self {
             info: info(),
             decoder: session("decoder.int8.onnx")?,
             joiner: session("joiner.int8.onnx")?,
@@ -235,12 +223,7 @@ impl Parakeet {
             blank: vocab,
             layers,
             hidden,
-        };
-        // Where it runs, for the Voice page's details (VOICE §8).
-        if gpu {
-            engine.info.accel = vec![Accel::DirectMl, Accel::Cpu];
-        }
-        Ok(engine)
+        })
     }
 
     /// One step of the prediction network: its output for `token` and the new LSTM state.
@@ -403,37 +386,6 @@ mod tests {
             .transcribe(&audio, &CancellationToken::new())
             .unwrap();
         println!("{text}");
-        assert_eq!(
-            text,
-            "Ask not what your country can do for you. Ask what you can do for your country."
-        );
-    }
-
-    /// On the graphics card through DirectML, where there is one: the same words, and how long
-    /// each took (VOICE-10's Balanced tier, PLAN-09).
-    #[test]
-    fn runs_on_the_gpu_with_directml_where_there_is_one() {
-        let Some(dir) = std::env::var_os("KIVO_PARAKEET_DIR").map(std::path::PathBuf::from) else {
-            eprintln!("KIVO_PARAKEET_DIR isn't set; skipping");
-            return;
-        };
-        let wav = std::fs::read(dir.join("test_wavs/en.wav")).unwrap();
-        let audio = crate::utterance::wav_samples(&wav);
-        let mut gpu = Parakeet::load_on(&dir, 4, crate::accel::Device::Gpu(0)).unwrap();
-        if !gpu.info().accel.contains(&Accel::DirectMl) || gpu.info().accel[0] != Accel::DirectMl {
-            eprintln!("no DirectML GPU here; skipping");
-            return;
-        }
-        let cancel = CancellationToken::new();
-        let _ = gpu.transcribe(&audio, &cancel).unwrap();
-        let started = std::time::Instant::now();
-        let text = gpu.transcribe(&audio, &cancel).unwrap();
-        let on_gpu = started.elapsed();
-        let mut cpu = Parakeet::load(&dir, 4).unwrap();
-        let _ = cpu.transcribe(&audio, &cancel).unwrap();
-        let started = std::time::Instant::now();
-        let _ = cpu.transcribe(&audio, &cancel).unwrap();
-        println!("gpu {on_gpu:?} cpu {:?}", started.elapsed());
         assert_eq!(
             text,
             "Ask not what your country can do for you. Ask what you can do for your country."

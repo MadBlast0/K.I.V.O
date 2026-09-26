@@ -424,7 +424,6 @@ impl Suite for Stt {
             let runtime = match (e, gpu) {
                 (Engine::WhisperCpp(_), true) => "whisper.cpp, Vulkan on the graphics card".into(),
                 (Engine::WhisperCpp(_), false) => format!("whisper.cpp, CPU, {THREADS} threads"),
-                (Engine::Parakeet, true) => "ONNX Runtime, encoder on DirectML".into(),
                 _ => format!("ONNX Runtime, CPU, {THREADS} threads"),
             };
             format!(

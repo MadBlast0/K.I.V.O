@@ -129,13 +129,12 @@ fn run(rx: &mpsc::Receiver<Command>, peer: &Peer, tokens: &Tokens) {
                             })
                             .map(|e| Box::new(e) as Box<dyn SttEngine>)
                     }
-                    // On the processor always: DirectML crashes on Whisper's files.
                     (kivo_voice::whisper::MODEL_ID, Some(dir)) => {
                         kivo_voice::whisper::Whisper::load(Path::new(dir), load.threads.max(1))
                             .map(|e| Box::new(e) as Box<dyn SttEngine>)
                     }
                     (parakeet::MODEL_ID, Some(dir)) => {
-                        Parakeet::load_on(Path::new(dir), load.threads.max(1), device(&load))
+                        Parakeet::load(Path::new(dir), load.threads.max(1))
                             .map(|e| Box::new(e) as Box<dyn SttEngine>)
                     }
                     (other, _) => Err(VoiceError::Unavailable(format!(
@@ -285,12 +284,4 @@ pub fn access(load: &kivo_ipc::infer::CloudLoad) -> kivo_voice::cloud::CloudAcce
         base_url: load.base_url.clone(),
         region: load.region.clone(),
     }
-}
-
-/// Where the runtime's GPU policy says to run (PLAN-09).
-fn device(load: &kivo_ipc::infer::ModelLoad) -> kivo_voice::accel::Device {
-    load.gpu.map_or(
-        kivo_voice::accel::Device::Cpu,
-        kivo_voice::accel::Device::Gpu,
-    )
 }

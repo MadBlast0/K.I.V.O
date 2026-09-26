@@ -36,43 +36,58 @@ power than it saves.
 | [ggml-org/whisper.cpp](https://github.com/ggml-org/whisper.cpp) + [whisper-rs](https://github.com/tazz4843/whisper-rs) | Speech-to-text on CUDA/Vulkan/Metal. **Already in KIVO** (Vulkan) |
 | [cjpais/Handy](https://github.com/cjpais/Handy) (MIT, Tauri + Rust) | Reference for the model download/switch UX and the GPU/CPU choice — the app the owner likes |
 | [cjpais/transcribe-rs](https://github.com/cjpais/transcribe-rs) | Handy's Rust speech-to-text layer (whisper.cpp + Parakeet behind one trait); compare with `kivo-voice` and reuse where simpler |
-| [mmwillet/TTS.cpp](https://github.com/mmwillet/TTS.cpp) | **First choice for text-to-speech on GGML**: Kokoro (and Parler, Dia) as GGUF. Check its Vulkan/CUDA support, licence, first audio and cancel |
-| [ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp) + [llama-cpp-2](https://github.com/utilityai/llama-cpp-rs) | Fallback text-to-speech (OuteTTS) with mature CUDA/Vulkan/Metal backends; also the path for local LLM brains |
+| [mmwillet/TTS.cpp](https://github.com/mmwillet/TTS.cpp) | Text-to-speech on GGML (Kokoro, Parler, Dia, Orpheus). **Not usable yet** (checked 2026-09-25): its README calls it a proof of concept, supported on macOS only (Windows ✗), CUDA ✗, Vulkan planned, Kokoro without Metal, no streaming; MIT, GPL only with eSpeak NG. Watch it |
+| [ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp) + [llama-cpp-2](https://github.com/utilityai/llama-cpp-rs) | The path for local LLM brains. Its `tts` tool is a demo that writes a file (no streaming, no library API), now for Qwen3-TTS 1.7B and Pocket TTS; the OuteTTS model it used to show is CC BY-NC 4.0, so not for KIVO (checked 2026-09-25) |
 
-Nothing above is verified yet beyond whisper.cpp on Vulkan compiling in KIVO (2026-09-25); each
-repository's licence and backend support is checked when VOICE-50 is built.
+Checked 2026-09-25: whisper.cpp on Vulkan builds and runs in KIVO; transcribe-rs is MIT, 0.3 on
+crates.io, ONNX engines (Parakeet, Moonshine, Canary, SenseVoice, …) plus whisper.cpp, each engine
+still code behind its `SpeechModel` trait.
+
+**Voices on the GPU wait for a runtime.** No GGML voice runtime runs on Windows' GPUs today, so
+Kokoro and Supertonic stay on the processor (3.5× and 4× faster than real time there) until one
+does. The target is unchanged: GPU first, the processor and RAM as the fallback, as for speech
+recognition.
 
 ## Order of work (VOICE-50)
 
-1. TTS.cpp: build with Vulkan, run Kokoro GGUF, measure first audio, real-time factor and cancel
-   (budget ≤ 100 ms) against today's Kokoro on the CPU; if it can't do Vulkan, OuteTTS via llama.cpp.
-2. The backend setting and detection above; the CUDA worker and its on-demand runtime download.
-3. Remove Parakeet's DirectML encoder path; give Supertonic interruptible runs (its cancel takes 3.6 s).
-4. Look at transcribe-rs and Handy's model manager for patterns worth reusing.
+1. ~~Remove DirectML~~ (done 2026-09-25, below).
+2. The backend setting and detection above; the CUDA worker and its on-demand runtime download
+   (speech recognition: whisper.cpp).
+3. Give Supertonic interruptible runs (its cancel takes 3.6 s).
+4. A GGML voice once a runtime runs on Windows' GPUs (TTS.cpp with Vulkan/CUDA, or another):
+   measure first audio, real-time factor and cancel (≤ 100 ms) against Kokoro on the processor.
+5. Look at transcribe-rs and Handy's model manager for patterns worth reusing.
 
-## Clean-up when VOICE-50 lands (nothing left behind)
+## DirectML removed (2026-09-25)
 
-Removing DirectML and moving voices to GGML must leave no dead code, files, settings or docs. Found
-by searching the tree on 2026-09-25 (`directml`, `Accel::DirectMl`, `load_on`, `device(`):
+Searched by name (`directml`, `DirectMl`, `dml`, `accel::`, `load_on`, `Device::Gpu`) and by what
+depends on it without naming it (the `ort` feature's binaries, the adapter index, the UI's device
+names, notices, build and release files):
 
-| Where | Remove or change |
+- `ort`'s `directml` feature is off, so no KIVO code can reach DirectML. pyke's ONNX Runtime
+  downloads have no plain build for Windows x64 (the smallest is `directml`, `ort-sys`'s
+  `dist.tsv`), so that library still carries DirectML's provider unused; dropping it too would
+  mean building ONNX Runtime from source. Every ONNX engine was re-tested after the change.
+- `crates/kivo-voice/src/accel.rs` deleted; its CPU half is `onnx.rs` (`onnx::session`), which all
+  eleven ONNX engines now use instead of their own copies of the same builder.
+- `Accel::DirectMl`, `Parakeet::load_on`, `Whisper::load_on`, the DirectML Parakeet test, the
+  worker's `device()`, `can_use_gpu`'s Parakeet case, the recommender's DirectML check, the
+  bench's "encoder on DirectML" row, and the comments and docs that described them.
+- **Kept:** ONNX Whisper, on the CPU (the only High-accuracy and Hindi recognizer on ARM64, where
+  whisper.cpp isn't built); DXGI adapter listing (GPU detection); `Recovery::Cpu` (any backend).
+  No DirectML DLL was ever bundled, and the notices had no DirectML entry.
+
+## Still to change with the backend setting (step 3)
+
+| Where | Change |
 |---|---|
-| `crates/kivo-voice/src/accel.rs` | The DirectML execution-provider setup; delete the file if nothing else is left in it |
-| `crates/kivo-voice/src/engine.rs` | `Accel::DirectMl` (keep `Cpu`, `Vulkan`; add `Cuda`, `Metal`) |
-| `crates/kivo-voice/src/parakeet.rs` | `load_on` / the encoder-on-DirectML path; CPU only (or a GGML port) |
-| `crates/kivo-voice/src/whisper.rs` | Whisper ONNX's leftover accel handling; drop the ONNX Whisper engine entirely if whisper.cpp covers it on CPU too |
-| `crates/kivo-voice/src/kokoro/mod.rs` | ONNX Kokoro once GGML Kokoro replaces it (with its phonemizer only if the GGML engine brings its own); keep `interrupt.rs` only if something still uses ONNX |
-| `crates/kivo-voice/src/supertonic.rs` | Keep (ONNX, CPU) unless a GGML voice covers its 31 languages; give it interruptible runs |
-| `crates/kivo-voice/src/recommend.rs`, `registry.rs` | `on_gpu`'s DirectML test, `Accel::DirectMl` checks; GPU = any GGML backend |
-| `apps/kivo-infer/src/stt.rs` (and `tts.rs`) | `device(&load)` and DirectML branches; backend chosen by the worker build (Vulkan / CUDA / Metal) |
-| `apps/kivo-runtime/src/gpu.rs`, `infer.rs` | `can_use_gpu`'s Parakeet case; pass the chosen backend instead of a DirectML adapter index |
-| `crates/kivo-ipc/src/protocol.rs`, `infer.rs` (+ regenerated `generated.ts`) | DirectML-specific fields; add the backend choice |
-| `crates/kivo-testkit/src/audio.rs`, `apps/kivo-bench/src/speech/stt.rs` | DirectML mentions and the Parakeet-on-GPU run |
-| `crates/kivo-store/src/models.rs` | Manifests of models no engine uses any more (ONNX Kokoro/Whisper if replaced); `kivo-store` migration to forget them on users' PCs |
-| Cargo features | `ort`'s `directml` feature wherever it is enabled; check `cargo deny` / `cargo tree` for crates only DirectML pulled in |
-| Tests | Delete tests of removed paths; don't leave `#[ignore]`d ones behind |
-| Docs | VOICE §11 and DECISIONS "GPU through DirectML" (mark superseded), BENCHMARKS notes, the Voice page's help text, `en.json` strings no longer shown |
+| `crates/kivo-ipc/src/infer.rs` `ModelLoad.gpu`, runtime `infer.rs` `Engines.gpu`, `models.rs`, `gpu.rs` `choose()` | Today a **DXGI** adapter index that whisper.cpp only reads as "use a GPU": whisper.cpp then takes **Vulkan device 0**, and Vulkan lists cards in another order than DXGI, so a laptop can run on its integrated GPU. Pass the backend and that backend's device (matched by name or LUID) |
+| `crates/kivo-voice/src/engine.rs` | Add `Accel::Metal` |
+| `crates/kivo-voice/src/registry.rs` `gpu_first` | Any GPU backend (CUDA, Vulkan, Metal), not only Vulkan |
+| `apps/kivo-app/src/components/voice/Details.tsx` (Advanced) | Devices are shown raw (`vulkan`, `cpu`); give them `en.json` labels |
+| Settings → Performance, `en.json` `gpuSpeech*` | The Graphics backend picker; the switch covers voices too once they move to the GPU |
+| `.github/workflows/release.yml` | The CUDA Toolkit for the `kivo-infer-cuda` build |
+| `crates/kivo-voice/src/kokoro/mod.rs`, `interrupt.rs`, `crates/kivo-store/src/models.rs` | ONNX Kokoro and its manifest once a GGML voice replaces it, with a store migration; `interrupt.rs` stays while an ONNX voice does |
 
-Finish with `cargo clippy --workspace --all-targets` (dead-code warnings must be zero), `pnpm lint`
-(unused exports), `cargo machete` or `cargo udeps` for unused dependencies, and a search for each
-removed name returning nothing.
+Finish each step with `cargo clippy --workspace --all-targets` (zero warnings), `pnpm lint`, and a
+search for each removed name returning nothing.

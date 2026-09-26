@@ -144,12 +144,8 @@ impl Chatterbox {
         {
             return Err(VoiceError::ModelMissing(ENGINE_ID.into()));
         }
-        let session = |name: &str| -> VoiceResult<Session> {
-            Ok(Session::builder()?
-                .with_intra_threads(threads.max(1))?
-                .with_inter_threads(1)?
-                .commit_from_file(onnx.join(format!("{name}_q4.onnx")))?)
-        };
+        let session =
+            |name: &str| crate::onnx::session(&onnx.join(format!("{name}_q4.onnx")), threads);
         let tokenizer = Bpe::from_json(
             &std::fs::read_to_string(dir.join("tokenizer.json"))
                 .map_err(|e| VoiceError::Engine(format!("tokenizer.json: {e}")))?,

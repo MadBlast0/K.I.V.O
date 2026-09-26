@@ -917,7 +917,7 @@ pub struct SpeechEngineItem {
     /// BCP-47 primary tags; `*` for any.
     pub languages: Vec<String>,
     pub streaming: bool,
-    /// `cpu`, `directMl`, `cuda`, `npu`.
+    /// `cpu`, `vulkan`, `cuda`, `npu`.
     pub devices: Vec<String>,
     pub download_mb: u32,
     pub ram_mb: u32,

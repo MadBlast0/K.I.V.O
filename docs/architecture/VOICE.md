@@ -40,7 +40,7 @@ trait TurnDetector     { fn end_probability(&self, audio_tail, transcript) -> f3
 ```
 
 - Every engine declares `EngineInfo { id, kind: Local|Cloud|System, license, languages,
-  streaming, accel: [Cpu, DirectML, Cuda, Npu, …], resource_estimate }`. The Control Center
+  streaming, accel: [Cpu, Vulkan, Cuda, Metal, …], resource_estimate }`. The Control Center
   shows this in the selection screens (plan §24 and §33).
 - Cloud engines go through the privacy check in the router before any audio leaves the device.
 
@@ -55,7 +55,7 @@ trait TurnDetector     { fn end_probability(&self, audio_tail, transcript) -> f3
 | Wake verifier | The speaker check (CAM++) on the whole request; no trained verifier (DECISIONS "No training") | — |
 | Speaker verify | CAM++ (ort) | WeSpeaker ResNet34 |
 | STT: Ultra Fast | Moonshine Base (EN, MIT); Tiny for the Lightweight profile; Base/Tiny for es, ja, zh, ar, uk, vi, ko (non-commercial, §11) | Parakeet TDT v3 int8 (multilingual) |
-| STT: Balanced | Parakeet TDT v3 + DirectML/CUDA | — |
+| STT: Balanced | Parakeet TDT v3 (CPU) | — |
 | STT: Accurate | Whisper large-v3-turbo (whisper.cpp) | Voxtral Realtime, Nemotron Streaming (GPU) |
 | STT: Native | Windows AI Speech (needs package identity; see DISTRIBUTION.md) | Apple SpeechAnalyzer (macOS) |
 | STT: Cloud | Deepgram Flux | AssemblyAI, OpenAI transcribe |
@@ -220,7 +220,7 @@ the brain stay independent: changing one never requires changing another (§2 tr
 | TTS | Expressive | emotional delivery where supported | Chatterbox (§3) |
 
 **Model registry.** Each engine declares `EngineInfo` plus: profile tags, languages, streaming,
-local/cloud/hybrid, execution devices (CPU, DirectML, CUDA), download size, licence, voices
+local/cloud/hybrid, execution devices (CPU, Vulkan, CUDA, Metal), download size, licence, voices
 (for TTS), and **KIVO's own benchmark results** on this PC and the reference tiers. Scores and
 labels (★ ratings, Excellent/Good) come only from KIVO's thresholds applied to measured results
 or clearly labelled qualitative classes; anything unmeasured shows **"Not benchmarked by KIVO"**.
@@ -235,8 +235,9 @@ in Settings → Performance: on a PC with a usable graphics card (≥ 3 GB of it
 battery, not the low tier) it recommends whisper.cpp's Whisper on Vulkan (small for Recommended,
 large-v3-turbo for accuracy), with a light CPU recognizer as its fallback, and the GPU policy
 moves it to the processor while the card isn't available (a game in front, the Gaming or Battery
-profile, a busy GPU). ONNX engines DirectML runs badly or not at all (Moonshine, Whisper's ONNX
-files, Kokoro) and the always-on detectors (VAD, wake word, speaker check) stay on the processor. It explains itself. Never irreversible.
+profile, a busy GPU). ONNX engines run on the processor (DirectML, which ran them slower or not
+at all, is not used: DECISIONS "GGML on Vulkan, no DirectML"), and the always-on detectors (VAD,
+wake word, speaker check) stay there too. It explains itself. Never irreversible.
 
 **Safe switching.** Choosing an engine: check compatibility → download (with the licence shown
 first) → load → validate (microphone test, a transcription or synthesis test) → "Ready — Use it".
@@ -262,6 +263,40 @@ provider) or Hybrid, from the engine's real architecture (VOICE-07 enforces the 
 **Simple and advanced.** Onboarding and the Voice page show profiles; Advanced shows the exact
 engine, model, device, model path, chunk/latency settings, resource limits, fallback and cache.
 
+## 12. Engine adapters: one runtime, many models (recommendation)
+
+A model file is only weights; something must turn audio or text into its inputs, run its decoding
+loop and turn its outputs back. **Prefer a runtime that already does that for a whole model
+family**, so a new model is a registry entry and a download, not new code:
+
+- Ollama and LM Studio run every GGUF language model through one runtime, llama.cpp.
+- Handy runs every Whisper size through whisper.cpp (and ONNX models through transcribe-rs).
+- Qwen publishes its audio models' weights, and runtimes pick them up (llama.cpp's `tts` tool runs
+  Qwen3-TTS as GGUF), so they arrive without per-model code.
+- Cloud services (ElevenLabs, Wispr Flow) keep their stacks private; KIVO reaches cloud speech
+  through `cloud.rs`, one adapter per API.
+
+Local models run on the GPU first, with the processor and RAM as the fallback, the same way
+(DECISIONS "Local models on the GPU first", "GGML on Vulkan, no DirectML"). A new per-model
+adapter is the exception: add one only when no runtime covers a model that is worth having, and
+log why in DECISIONS.
+
+**Today's adapters** (`crates/kivo-voice/src`):
+
+| Adapter | Models | Why it's its own code | What could replace it |
+|---|---|---|---|
+| `whisper_cpp.rs` | every Whisper (GGML) | runtime adapter: whisper.cpp does the work | — (the pattern to follow) |
+| `cloud.rs` | cloud STT/TTS services | one adapter per service API | — |
+| `system_tts.rs` | Windows voices | the OS does the work | — |
+| `moonshine.rs` | 10 Moonshine exports | ONNX; one adapter for the family | transcribe-rs, or a GGML port |
+| `parakeet.rs` | Parakeet TDT v3 | ONNX; no runtime covers it on the GPU | transcribe-rs, or a GGML port |
+| `whisper.rs` | Whisper turbo (ONNX) | ARM64 has no whisper.cpp build | whisper.cpp on ARM64 (CPU), then remove |
+| `kokoro/` | Kokoro + KIVO's phonemizer | no GGML voice runtime on Windows GPUs yet | a GGML voice runtime (VOICE-50), then remove |
+| `supertonic.rs`, `chatterbox.rs` | Supertonic 3, Chatterbox Turbo | ONNX; no runtime runs them | a runtime that does |
+| `silero.rs`, `kws/`, `speaker.rs`, `smart_turn.rs`, `embed.rs` | VAD, wake word, CAM++, Smart Turn, MiniLM | tiny always-on or helper models, kept on the processor (§8) | — |
+
+All ONNX adapters open their sessions through `onnx::session` (processor only).
+
 ## Build checklist
 
 Status marks and the build protocol: [docs/README.md](../README.md). Engine choices marked
@@ -281,7 +316,7 @@ Status marks and the build protocol: [docs/README.md](../README.md). Engine choi
 - [x] **VOICE-07** · M1 · Cloud engines pass the privacy check before any audio leaves the device (§2, SECURITY §6) → done: `kivo_security::privacy::speech_egress`: a cloud speech engine is used only when the privacy mode (Cloud or Custom) and the Cloud AI capability allow it, checked where the runtime picks engines, so no audio or text reaches one otherwise; a refused cloud voice falls back to the Windows voices · verified: `local_engines_always_pass_and_cloud_ones_follow_the_mode`, `the_privacy_mode_never_blocks_local_speech_engines`, `only_cloud_engines_send_data_off_the_device` (2026-09-23)
 - [x] **VOICE-08** · M1 · Default streaming STT engine (the M0 winner among Moonshine v2, Parakeet TDT v3 and Whisper-turbo) running in `kivo-infer`, with partial transcripts shown live (§3) → done: Moonshine Base (MIT) streaming in `kivo-infer` on `ort`, partial transcripts shown live on the Island; it is the provisional default until the deferred M0 comparison runs (DECISIONS "Speech engines on ort", "Benchmarks deferred") · verified: `transcribes_the_sample_recording_when_the_model_is_installed`, the spoken end-to-end test (end of speech → action 40 ms), live (2026-09-23)
 - [x] **VOICE-09** · M1 · TTS: system voices (WinRT SpeechSynthesizer / SAPI 5) and Kokoro-82M (EN via misaki, no espeak), streaming from `kivo-infer` (§3) → done: TTS engines in `kivo-infer`: the Windows voices (WinRT, default) and Kokoro-82M (Apache-2.0, quantized ONNX on `ort`) with KIVO's own English phonemizer (misaki's dictionaries and rules ported to Rust, NRL rules for unknown words, no espeak; DECISIONS "Kokoro's phonemizer"); both stream sentence by sentence; Kokoro downloads through the model manager (model, five voices, dictionaries, sha256-checked) when chosen, and the Windows voices speak meanwhile · verified: phonemizer, number and rule tests, `speaks_a_sentence_when_the_model_is_installed`, `replies_can_be_spoken_by_kokoro` through the real worker (2026-09-23)
-- [x] **VOICE-10** · M8 · More STT tiers: Parakeet (Balanced, DirectML/CUDA), Whisper large-v3-turbo (Accurate), Deepgram Flux, AssemblyAI and OpenAI (Cloud) (§3) → done: Parakeet TDT 0.6B v3 (NeMo features, greedy TDT; DirectML with CPU fallback) as Multilingual, Whisper large-v3-turbo as High accuracy, and cloud recognizers Deepgram Flux, AssemblyAI streaming (WebSockets) and OpenAI transcribe (HTTP), keys in Credential Manager and tested before they're saved, never in model context · verified: `parakeet`/`whisper` tests pin real transcripts with the real models (and a GPU run), `cloud` tests (7) against mock servers speaking each service's protocol; no live cloud call (needs the owner's keys) (2026-09-24)
+- [x] **VOICE-10** · M8 · More STT tiers: Parakeet (Balanced), Whisper large-v3-turbo (Accurate), Deepgram Flux, AssemblyAI and OpenAI (Cloud) (§3) → done: Parakeet TDT 0.6B v3 (NeMo features, greedy TDT; on the CPU since DirectML was removed, 2026-09-25) as Multilingual, Whisper large-v3-turbo as High accuracy, and cloud recognizers Deepgram Flux, AssemblyAI streaming (WebSockets) and OpenAI transcribe (HTTP), keys in Credential Manager and tested before they're saved, never in model context · verified: `parakeet`/`whisper` tests pin real transcripts with the real models, `cloud` tests (7) against mock servers speaking each service's protocol; no live cloud call (needs the owner's keys) (2026-09-24)
 - [x] **VOICE-11** · M8 · More TTS tiers: Supertonic-2 (Instant), Chatterbox (Expressive), Cartesia, ElevenLabs, Azure, OpenAI and Deepgram (Cloud) (§3) → done: Chatterbox Turbo (the publisher's ONNX export) as Expressive, with a Windows voice as its reference; cloud voices Cartesia Sonic, ElevenLabs Flash, Azure Neural (region), OpenAI and Deepgram Aura; the Instant tier is Supertonic 3 (M2), which replaced Supertonic-2 (DECISIONS "M8 build") · verified: `chatterbox` round trip (Parakeet hears "the weather is lovely today"), `cloud` tests against mock servers; no live cloud call (needs the owner's keys) (2026-09-24)
 - [ ] **VOICE-12** · Post · Windows AI Speech STT (needs package identity, DIST-06) and GPL add-ons (Piper, espeak-ng) as separately downloaded components (§3)
 
@@ -347,4 +382,4 @@ Status marks and the build protocol: [docs/README.md](../README.md). Engine choi
 
 **Budgets (§10)**
 
-- [ ] **VOICE-50** · M8 · Local models on the GPU the way desktop dictation apps (Handy) run them: GGML engines on Vulkan with the CPU as fallback, no DirectML. Text-to-speech moves to a GGML voice engine on Vulkan (evaluate TTS.cpp's Kokoro GGUF and OuteTTS through llama.cpp; licence, quality, first audio, cancel ≤ 100 ms); Parakeet's DirectML encoder path is removed (CPU, or a GGML port if one exists); a Graphics backend setting (Automatic: CUDA on NVIDIA, Vulkan on AMD/Intel, Metal on Mac; each selectable, plus Processor only) with the CUDA runtime downloaded on demand; the registry, recommendation and Voice page show the GPU engines first (plan and repositories: `docs/research/gpu-speech/REPORT.md`) (owner, 2026-09-25; DECISIONS "GGML on Vulkan, no DirectML")
+- [~] **VOICE-50** · M8 · Local models on the GPU the way desktop dictation apps (Handy) run them: GGML engines on Vulkan with the CPU as fallback, no DirectML. Text-to-speech moves to a GGML voice engine on Vulkan (evaluate TTS.cpp's Kokoro GGUF and OuteTTS through llama.cpp; licence, quality, first audio, cancel ≤ 100 ms); Parakeet's DirectML encoder path is removed (CPU, or a GGML port if one exists); a Graphics backend setting (Automatic: CUDA on NVIDIA, Vulkan on AMD/Intel, Metal on Mac; each selectable, plus Processor only) with the CUDA runtime downloaded on demand; the registry, recommendation and Voice page show the GPU engines first (plan and repositories: `docs/research/gpu-speech/REPORT.md`) (owner, 2026-09-25; DECISIONS "GGML on Vulkan, no DirectML") → partial: DirectML is removed (the `ort` feature, `accel.rs`, `Accel::DirectMl`, Parakeet's and ONNX Whisper's GPU paths); every ONNX engine runs on the CPU through one `onnx::session` helper (DECISIONS "DirectML removed") · verified: clippy clean, the workspace tests and every model test on the CPU build of ONNX Runtime (2026-09-25); open: GGML voices, the Graphics backend setting, CUDA and Metal

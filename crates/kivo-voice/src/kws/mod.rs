@@ -78,10 +78,7 @@ fn session(path: &Path) -> VoiceResult<Session> {
         return Err(VoiceError::ModelMissing("wake-word".into()));
     }
     // One thread: the spotter listens all the time and must stay cheap (VOICE §10).
-    Ok(Session::builder()?
-        .with_intra_threads(1)?
-        .with_inter_threads(1)?
-        .commit_from_file(path)?)
+    crate::onnx::session(path, 1)
 }
 
 fn meta(session: &Session, key: &str) -> VoiceResult<usize> {
