@@ -259,46 +259,55 @@ impl VoiceRpc {
                 style: String::new(),
                 languages: vec![v.language],
                 character: String::new(),
+                ready: true,
             })
             .collect();
         let engines = self
             .models
             .registry()
             .into_iter()
-            .map(|e| SpeechEngineItem {
-                slot: json_name(&e.engine.slot),
-                profiles: e.profiles.iter().map(json_name).collect(),
-                privacy: json_name(&e.privacy),
-                commercial_use: e.commercial_use,
-                streaming: e.engine.streaming,
-                devices: e.engine.accel.iter().map(json_name).collect(),
-                download_mb: e.engine.resources.disk_mb,
-                ram_mb: e.engine.resources.ram_mb,
-                ready: ready.contains(&e.engine.id),
-                fits_language: e.engine.supports(&language),
-                // Chatterbox speaks in copies of the Windows voices.
-                voices: if e.engine.id == kivo_voice::system_tts::ENGINE_ID
-                    || e.engine.id == kivo_voice::chatterbox::ENGINE_ID
-                {
-                    windows_voices.clone()
-                } else {
-                    e.voices
-                        .into_iter()
-                        .map(|v| VoiceItem {
-                            id: v.id,
-                            name: v.name,
-                            style: v.style,
-                            languages: v.languages,
-                            character: v.character,
-                        })
-                        .collect()
-                },
-                measured: e.measured.map(measured_item),
-                model: e.engine.model,
-                license: e.engine.license,
-                languages: e.engine.languages,
-                name: e.engine.name,
-                id: e.engine.id,
+            .map(|e| {
+                let dir = e
+                    .engine
+                    .model
+                    .as_deref()
+                    .and_then(|m| self.models.installed_dir(m));
+                SpeechEngineItem {
+                    slot: json_name(&e.engine.slot),
+                    profiles: e.profiles.iter().map(json_name).collect(),
+                    privacy: json_name(&e.privacy),
+                    commercial_use: e.commercial_use,
+                    streaming: e.engine.streaming,
+                    devices: e.engine.accel.iter().map(json_name).collect(),
+                    download_mb: e.engine.resources.disk_mb,
+                    ram_mb: e.engine.resources.ram_mb,
+                    ready: ready.contains(&e.engine.id),
+                    fits_language: e.engine.supports(&language),
+                    // Chatterbox speaks in copies of the Windows voices.
+                    voices: if e.engine.id == kivo_voice::system_tts::ENGINE_ID
+                        || e.engine.id == kivo_voice::chatterbox::ENGINE_ID
+                    {
+                        windows_voices.clone()
+                    } else {
+                        e.voices
+                            .into_iter()
+                            .map(|v| VoiceItem {
+                                ready: voice_here(dir.as_deref(), &v.id),
+                                id: v.id,
+                                name: v.name,
+                                style: v.style,
+                                languages: v.languages,
+                                character: v.character,
+                            })
+                            .collect()
+                    },
+                    measured: e.measured.map(measured_item),
+                    model: e.engine.model,
+                    license: e.engine.license,
+                    languages: e.engine.languages,
+                    name: e.engine.name,
+                    id: e.engine.id,
+                }
             })
             .collect();
         let profiles = [kivo_voice::EngineSlot::Stt, kivo_voice::EngineSlot::Tts]
@@ -1196,6 +1205,15 @@ impl VoiceRpc {
     pub fn can_wake(&self, config: &kivo_core::KivoConfig) -> bool {
         self.wake.can_wake(config, None)
     }
+}
+
+/// A voice's files are in its installed model (a model's `voices/<id>.bin`); a model without
+/// per-voice files has every voice.
+fn voice_here(dir: Option<&std::path::Path>, voice: &str) -> bool {
+    dir.is_none_or(|d| {
+        let voices = d.join("voices");
+        !voices.is_dir() || voices.join(format!("{voice}.bin")).is_file()
+    })
 }
 
 fn measured_item(m: kivo_voice::registry::Measured) -> MeasuredItem {

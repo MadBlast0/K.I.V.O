@@ -29,12 +29,13 @@ const STYLE_WIDTH: usize = 256;
 /// The most phonemes one pass takes (the model's context, less the two pads).
 const MAX_PHONEMES: usize = 510;
 pub const DEFAULT_VOICE: &str = "af_heart";
-/// The voices KIVO downloads with the model: five English ones, then the Anime ones (Kokoro's
+/// The voices KIVO downloads with the model: six English ones, then the Anime ones (Kokoro's
 /// Japanese voices reading English through KIVO's English phonemizer, so with a Japanese accent).
-pub const VOICES: [&str; 8] = [
+pub const VOICES: [&str; 9] = [
     "af_heart",
     "af_bella",
     "am_michael",
+    "am_fenrir",
     "bf_emma",
     "bm_george",
     "jf_alpha",

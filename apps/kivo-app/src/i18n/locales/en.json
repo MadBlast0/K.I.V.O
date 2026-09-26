@@ -900,8 +900,8 @@
     },
     "anime": "Anime",
     "animeHint": "Japanese-accented voices with a playful anime feel.",
-    "getAnime": "Get the anime voices",
-    "getAnimeHint": "A small download (about 2 MB) added to Kokoro.",
+    "getAnime": "Get the new voices",
+    "getAnimeHint": "A small download (about 2 MB) added to Kokoro: a new voice and the anime voices.",
     "getAnimeButton": "Download"
   },
   "onboarding": {
@@ -909,7 +909,7 @@
     "phase": {
       "welcome": "Welcome",
       "voice": "Voice",
-      "brain": "Brain",
+      "calling": "Calling",
       "control": "Control",
       "ready": "Ready"
     },
@@ -954,11 +954,24 @@
       "tryHintWake": "Say “Hey Kivo, what time is it?”. You’ll see what KIVO heard here, and the Island at the top of the screen.",
       "tryHintKeys": "Hold {keys} and say “What time is it?”. You’ll see what KIVO heard here, and the Island at the top of the screen."
     },
+    "listen": {
+      "title": "How KIVO listens",
+      "sub": "It turns what you say into words it can act on. It runs on your PC, so it’s private and works offline."
+    },
+    "speak": {
+      "title": "How KIVO speaks",
+      "sub": "It reads KIVO’s answers out loud. Pick how it sounds, then its voice."
+    },
+    "pipeline": {
+      "label": "Setup of KIVO’s voice",
+      "listen": "Listen",
+      "brain": "Think",
+      "speak": "Speak"
+    },
     "speech": {
-      "title": "Choose how KIVO hears and speaks",
-      "sub": "Both run on your PC, so they stay private and work offline. Pick a level, then download, test and use each one.",
       "loading": "Looking at your PC…",
       "checking": "Checking…",
+      "why": "Why?",
       "level": {
         "recommended": "Recommended",
         "high": "High",
@@ -966,61 +979,61 @@
         "low": "Low"
       },
       "stt": {
-        "title": "Listening",
-        "term": "What’s this?",
-        "tip": "Speech-to-text: the model that turns what you say into words KIVO can act on.",
+        "level": "How well KIVO listens",
         "recommended": "The best balance of accuracy and speed for this PC.",
         "high": "The most accurate. Uses more of your PC.",
         "medium": "Quicker, a little less accurate.",
         "low": "The lightest, for smaller PCs.",
-        "testHint": "KIVO plays itself a sentence and checks what the model hears.",
-        "useHint": "KIVO starts listening with it."
+        "downloadHint": "Downloads once and stays on this PC.",
+        "testHint": "KIVO plays itself a sentence and checks what it hears.",
+        "ready": "KIVO listens with {name}."
       },
       "tts": {
-        "title": "Speaking",
-        "term": "What’s this?",
-        "tip": "Text-to-speech: the model that reads KIVO’s answers out loud.",
+        "level": "How KIVO sounds",
         "recommended": "A natural, human-sounding voice.",
         "high": "A natural, human-sounding voice.",
         "medium": "A natural voice that starts talking quickly.",
         "low": "Your system’s built-in voices. The lightest.",
-        "testHint": "The model says a sentence out loud.",
-        "useHint": "KIVO answers with it. You pick the voice next."
+        "downloadHint": "Downloads once and stays on this PC.",
+        "testHint": "It says a sentence out loud, so you can hear it.",
+        "ready": "KIVO speaks with {name}."
       },
-      "download": "Download",
-      "builtIn": "Built into your system, nothing to download",
-      "downloaded": "On this PC · {size} MB",
+      "steps": "Steps",
+      "step": {
+        "download": "Download",
+        "test": "Test",
+        "use": "Use"
+      },
+      "builtIn": "Built into your system",
       "size": "{size} MB · {license}",
-      "downloading": "Downloading · {percent, number, ::percent}",
+      "downloadSize": "Download · {size} MB",
+      "downloading": "Downloading… {percent, number, ::percent}",
       "paused": "Paused at {percent, number, ::percent}",
       "downloadFailed": "The download didn’t finish.",
-      "downloadButton": "Download",
       "pause": "Pause",
       "resume": "Resume",
       "cancel": "Cancel",
       "retry": "Try again",
-      "test": "Load and test",
-      "loadTest": "Load and test",
+      "test": "Test",
       "testAgain": "Test again",
-      "heard": "Heard: “{text}”",
-      "heardWrong": "Heard “{heard}” instead of “{said}”. Test again, or try another level.",
-      "spoke": "You should have heard it speak. Nothing? Check your speaker.",
-      "works": "Tested and working",
-      "use": "Use it",
+      "heard": "Heard “{text}”. It works.",
+      "heardWrong": "Heard “{heard}” instead of “{said}”.",
+      "spoke": "Did you hear it? If not, check your speaker.",
       "useThis": "Use this",
       "switching": "Switching…",
-      "inUse": "In use",
-      "inUseLine": "KIVO is using it",
+      "chooseVoice": "Choose a voice",
       "later": "Set up later",
-      "myself": "Choose other models"
+      "myself": "Other models",
+      "newVoices": "{count, plural, one {# new voice is} other {# new voices are}} ready to download (about 2 MB).",
+      "getVoices": "Download"
     },
     "voice": {
       "title": "Teach KIVO your voice",
       "sub": "Read 8 short phrases so KIVO knows it’s you. Stored encrypted on this PC, and you can delete it anytime."
     },
     "brain": {
-      "title": "Connect a brain",
-      "sub": "For questions and anything a command can’t do. Optional: commands like “mute” never need one. No API keys needed.",
+      "title": "How KIVO thinks",
+      "sub": "Questions and anything a command can’t do go to an AI brain. Optional: commands like “mute” never need one, and no API keys are needed.",
       "found": "Found on this PC",
       "searching": "Looking on this PC…",
       "nothingFound": "Nothing found on this PC. Connect OpenRouter, or add a brain later on the Brains page.",

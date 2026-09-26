@@ -110,17 +110,17 @@ Navigation (updated 2026-09-21; 13 items, with tabs inside pages):
 
 ## 4. Onboarding (plan §129–133)
 
-Updated 2026-09-26 (owner): **11 screens in 5 phases**, in the order a new user needs them, one
+Updated 2026-09-26 (owner): **12 screens in 5 phases**, in the order a new user needs them, one
 decision per screen, with the recommended choice preselected, plain words, and the technical ones
 explained on hover (`Explain`). The screens follow the app's theme (Light / Dark / System).
 
 | Phase | Steps |
 |---|---|
 | Welcome | 1 Welcome (the app's theme, an accent glow; the Island demonstrates itself) |
-| Voice | 2 Microphone and speaker (each follows the system default until one is picked; a microphone test with live bars and a speaker test) · 3 How KIVO hears and speaks (owner, 2026-09-26: two columns, **Listening** and **Speaking**, each with a Recommended / High / Medium / Low level from this PC's recommendation and its model's three numbered steps the user drives: **Download** (size and licence shown, nothing before the button; progress with Pause and Cancel, then Resume or Try again), **Load and test** (`voice.test`: loaded in a separate worker; a recognizer shows what it heard of KIVO's test sentence, a voice says it aloud), **Use this** (`voice.switch`); Continue unlocks when both are in use; a failure says why, with Test again, another level, or "Set up later"; other models a click away; the voice is picked under Speaking once it's in use, everyday or Anime) · 4 How you call KIVO ("Hey Kivo" and push-to-talk, each switchable, at least one always on; the Island plays a request; "Try it now" follows the user's first request) · 5 Your voice (optional enrollment, with consent) |
-| Brain | 6 Connect a brain (optional; sign-in, free options marked) · 7 Connect your apps and tools (optional; connectors, extension, MCP, skills) |
-| Control | 8 Permission mode · 9 Look & feel (theme, accent, Island position, chimes) · 10 Startup ("Open KIVO when Windows starts", keep running) |
-| Ready | 11 Try it (live Island demo) → **Finish opens the Control Center** |
+| Voice | 2 Microphone and speaker (each follows the system default until one is picked; a microphone test with live bars and a speaker test) · then **Listen → Think → Speak**, one page each, with that trail at the top (owner, 2026-09-26): 3 How KIVO listens · 4 How KIVO thinks (connect a brain; optional; sign-in, free options marked) · 5 How KIVO speaks. Listen and Speak are one calm column: a Recommended / High / Medium / Low level from this PC's recommendation and one card for its model with **Download · Test · Use** as three evenly spaced steps and one button that moves along them: Download (size and licence shown first; Pause and Cancel, then Resume or Try again), Test (`voice.test`: loaded in a separate worker; a recognizer shows what it heard of KIVO's test sentence, a voice says it aloud), Use this (`voice.switch`). Continue waits for the page's model; a failure says why, with Test again, another level, or "Set up later"; other models are a link away. Speak then shows the voices as tiles (six everyday, three Anime); voices not on the PC yet come with one small download |
+| Calling | 6 How you call KIVO ("Hey Kivo" and push-to-talk, each switchable, at least one always on; the Island plays a request; "Try it now" follows the user's first request) · 7 Your voice (optional enrollment, with consent) |
+| Control | 8 Connect your apps and tools (optional) · 9 Permission mode · 10 Look & feel · 11 Startup |
+| Ready | 12 Try it (live Island demo) → **Finish opens the Control Center** |
 
 **Ways to call KIVO (owner, 2026-09-26):** "Hey Kivo" (any enabled wake word, with microphone
 listening and the keyword model) and push-to-talk (the Push-to-talk capability; its keys are

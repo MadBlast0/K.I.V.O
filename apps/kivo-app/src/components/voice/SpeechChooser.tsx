@@ -356,9 +356,9 @@ export function VoiceList({ speech }: { speech: Speech }) {
   const { choices } = speech;
   const engine = choices?.engines.find((e) => e.id === choices.tts);
   if (!choices || !engine || engine.voices.length === 0 || !engine.ready) return null;
-  // Voices added to the model after it was installed (the Anime ones) come with its update.
+  // Voices added to the model after it was installed come with its update.
   const model = speech.models.find((m) => m.id === engine.model);
-  const outdated = model?.state === "updateAvailable" || model?.state === "downloading";
+  const outdated = engine.voices.some((v) => !v.ready);
   const language = (v: VoiceItem) =>
     v.languages.includes("*")
       ? t("speech.anyLanguage")
@@ -406,7 +406,7 @@ export function VoiceList({ speech }: { speech: Speech }) {
   return (
     <>
       <Section title={t("speech.voices")} aside={t("speech.voicesHint")} />
-      <Group>{everyday.map((v) => row(v, true))}</Group>
+      <Group>{everyday.map((v) => row(v, v.ready))}</Group>
       {anime.length > 0 && (
         <>
           <Section title={t("speech.anime")} aside={t("speech.animeHint")} />
@@ -432,7 +432,7 @@ export function VoiceList({ speech }: { speech: Speech }) {
                 }
               />
             )}
-            {anime.map((v) => row(v, !outdated))}
+            {anime.map((v) => row(v, v.ready))}
           </Group>
         </>
       )}

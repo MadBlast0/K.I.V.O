@@ -947,6 +947,9 @@ pub struct VoiceItem {
     pub languages: Vec<String>,
     /// `anime` for the Anime voices, empty for everyday ones.
     pub character: String,
+    /// Its files are on this PC (a voice added to a model after it was installed comes with the
+    /// model's update).
+    pub ready: bool,
 }
 
 /// KIVO's own benchmark of an engine on this PC.

@@ -17,7 +17,7 @@ import { CallKivo, useCallWays } from "../components/voice/CallKivo";
 import { useSpeech } from "../components/voice/useSpeech";
 import { Button, Group, Monogram, Pill, Row, Section, Spinner, useToast } from "../components/ui";
 import { DevicesStep } from "../components/onboarding/Devices";
-import { SpeechSetup, speechReady } from "../components/onboarding/SpeechSetup";
+import { Pipeline, SlotSetup, slotReady } from "../components/onboarding/SpeechSetup";
 import { AppsStep, LookStep, ModeStep, Reasons, StartupStep, TryStep, useAdvice } from "../components/onboarding/steps";
 import { IslandDemo, TryItNow } from "../components/onboarding/TryVoice";
 import { brainColor, monogram, type BrainsList, type DiscoverySection } from "../ipc/brains";
@@ -28,10 +28,11 @@ import { useRuntime } from "../ipc/runtime";
 const STEPS = [
   "welcome",
   "devices",
-  "speech",
+  "listen",
+  "brain",
+  "speak",
   "activation",
   "voice",
-  "brain",
   "apps",
   "mode",
   "look",
@@ -39,22 +40,30 @@ const STEPS = [
   "try",
 ] as const;
 type Step = (typeof STEPS)[number];
-/** The phases the progress capsule shows, and the steps in each. */
-const PHASES = ["welcome", "voice", "brain", "control", "ready"] as const;
+/** The phases the progress capsule shows, and the steps in each: KIVO hears, thinks and speaks
+ * one page each (owner, 2026-09-26). */
+const PHASES = ["welcome", "voice", "calling", "control", "ready"] as const;
 const PHASE_OF: Record<Step, number> = {
   welcome: 0,
   devices: 1,
-  speech: 1,
-  activation: 1,
-  voice: 1,
-  brain: 2,
-  apps: 2,
+  listen: 1,
+  brain: 1,
+  speak: 1,
+  activation: 2,
+  voice: 2,
+  apps: 3,
   mode: 3,
   look: 3,
   startup: 3,
   try: 4,
 };
 const OPTIONAL: ReadonlySet<Step> = new Set<Step>(["voice", "brain", "apps"]);
+/** The pages that show Listen → Think → Speak. */
+const PIPELINE: Partial<Record<Step, "listen" | "brain" | "speak">> = {
+  listen: "listen",
+  brain: "brain",
+  speak: "speak",
+};
 
 function Header({ step }: { step: Step }) {
   const { t } = useTranslation();
@@ -82,12 +91,17 @@ function Screen({ step, children }: { step: Step; children: ReactNode }) {
   const name = t(`onboarding.phase.${PHASES[phase]}`);
   return (
     <>
-      <div className="k-onboarding__eyebrow">
-        {inPhase.length > 1
-          ? t("onboarding.stepOf", { phase: name, n: inPhase.indexOf(step) + 1, total: inPhase.length })
-          : name}
-        {OPTIONAL.has(step) && ` · ${t("onboarding.optional")}`}
-      </div>
+      {/* Listen → Think → Speak says where setup is on those pages; the others count steps. */}
+      {PIPELINE[step] ? (
+        <Pipeline at={PIPELINE[step]} />
+      ) : (
+        <div className="k-onboarding__eyebrow">
+          {inPhase.length > 1
+            ? t("onboarding.stepOf", { phase: name, n: inPhase.indexOf(step) + 1, total: inPhase.length })
+            : name}
+          {OPTIONAL.has(step) && ` · ${t("onboarding.optional")}`}
+        </div>
+      )}
       <h2 className="k-onboarding__h">{t(`onboarding.${step}.title`)}</h2>
       <p className="k-onboarding__sub">{t(`onboarding.${step}.sub`)}</p>
       {children}
@@ -262,8 +276,9 @@ export function Onboarding({ onFinish }: { onFinish: (then?: string) => void }) 
   const last = index === STEPS.length - 1;
   // KIVO has to hear and speak before the steps that use it: Continue waits until both models
   // are here, loaded and tested; after a failure, "Set up later" is the way on.
-  const blocked = step === "speech" && !speechReady(speech);
-  const speechFailed = (["stt", "tts"] as const).some((slot) => speech.progress[slot]?.stage === "failed");
+  const slot = step === "listen" ? "stt" : step === "speak" ? "tts" : null;
+  const blocked = slot !== null && !slotReady(speech, slot);
+  const speechFailed = slot !== null && speech.progress[slot]?.stage === "failed";
 
   const finish = () =>
     request(Method.settingsSet, { general: { onboarded: true } })
@@ -284,7 +299,8 @@ export function Onboarding({ onFinish }: { onFinish: (then?: string) => void }) 
 
   const body: Record<Exclude<Step, "welcome">, ReactNode> = {
     devices: <DevicesStep />,
-    speech: <SpeechSetup speech={speech} />,
+    listen: <SlotSetup slot="stt" speech={speech} />,
+    speak: <SlotSetup slot="tts" speech={speech} />,
     activation: <Activation />,
     voice: <Enrollment onDone={() => go(1)} />,
     brain: <ConnectBrain advice={advice} />,
@@ -303,7 +319,7 @@ export function Onboarding({ onFinish }: { onFinish: (then?: string) => void }) 
         <AnimatePresence mode="wait" initial={false} custom={direction}>
           <motion.div
             key={step}
-            className={step === "speech" ? "k-onboarding__col k-onboarding__col--wide" : "k-onboarding__col"}
+            className="k-onboarding__col"
             initial={reduce ? false : { opacity: 0, x: 18 * direction }}
             animate={{ opacity: 1, x: 0 }}
             exit={reduce ? { opacity: 0 } : { opacity: 0, x: -18 * direction }}
@@ -318,9 +334,9 @@ export function Onboarding({ onFinish }: { onFinish: (then?: string) => void }) 
           {t("onboarding.back")}
         </Button>
         <span className="k-onboarding__spacer" />
-        {(OPTIONAL.has(step) || (step === "speech" && speechFailed)) && (
+        {(OPTIONAL.has(step) || speechFailed) && (
           <Button variant="plain" onClick={() => (last ? void finish() : go(1))}>
-            {step === "speech" ? t("onboarding.speech.later") : t("onboarding.skip")}
+            {slot !== null ? t("onboarding.speech.later") : t("onboarding.skip")}
           </Button>
         )}
         <Button variant="primary" disabled={blocked} onClick={() => (last ? void finish() : go(1))}>

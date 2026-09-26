@@ -794,7 +794,7 @@ fn smart_turn() -> ModelManifest {
     }
 }
 
-/// Kokoro-82M (Apache-2.0): the ONNX model, five English voices and three Japanese ones (Anime),
+/// Kokoro-82M (Apache-2.0): the ONNX model, six English voices and three Japanese ones (Anime),
 /// and misaki's US dictionaries
 /// (Apache-2.0) for KIVO's phonemizer (VOICE-09).
 fn kokoro() -> ModelManifest {
@@ -829,6 +829,7 @@ fn kokoro() -> ModelManifest {
             voice("am_michael", "1d1f21dd8da39c30705cd4c75d039d265e9bc4a2a93ed09bc9e1b1225eb95ba1"),
             voice("bf_emma", "669fe0647f9dd04fcab92f1439a40eeb4c8b4ab1f82e4996fe3d918ce4a63b73"),
             voice("bm_george", "c4b235a4c1f2cd3b939fed08b899ce9385638b763f7b73a59616c4fc9bd6c9bc"),
+            voice("am_fenrir", "c27989f741f7ee34d273a39d8a595cc0837d35f5ced9a29b7cc162614616df43"),
             // Anime: Kokoro's Japanese voices reading English, with their accent.
             voice("jf_alpha", "56b479360aad9f367aeb8cef908f9201cf48b4555e488c5f4590c9dfcd978bb6"),
             voice("jf_tebukuro", "29c6c0561b4288d59639677bebe7533c919743d5ea68d0d2ae992644beea6696"),

@@ -704,113 +704,169 @@
 .k-onboarding__try-line {
   margin: 0;
 }
-/* The speech step: Listening and Speaking side by side (stacked when narrow), each with its level
-   and its model's three steps. */
-.k-onboarding__col--wide {
-  max-width: 900px;
-}
-.k-setup {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 16px;
-  align-items: start;
-}
-.k-setup__col {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 18px;
-  border-radius: var(--r-l);
-  background: var(--group);
-  box-shadow: var(--shadow);
-}
-.k-setup__head {
+/* Listen → Think → Speak: where setup is, above those three pages. */
+.k-pipe {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 26px;
+  list-style: none;
+  margin: 0 0 18px;
+  padding: 0;
 }
-.k-setup__icon {
+.k-pipe__stage {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 11px;
+  border-radius: 13px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-3);
+  background: var(--fill);
+}
+.k-pipe__stage svg {
+  width: 13px;
+  height: 13px;
+}
+/* The line to the next stage, in the gap. */
+.k-pipe__stage:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  inset-inline-start: calc(100% + 5px);
+  top: 50%;
+  width: 16px;
+  height: 1.5px;
+  border-radius: 1px;
+  background: var(--border);
+}
+.k-pipe__stage.is-done::after {
+  background: var(--green);
+}
+.k-pipe__stage.is-on {
+  color: var(--on-acc);
+  background: var(--acc);
+}
+.k-pipe__stage.is-done {
+  color: var(--green-text);
+}
+
+/* The Listen and Speak pages: the level, one card for the model, then (Speak) the voices. */
+.k-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.k-slot .k-seg {
+  width: 100%;
+}
+.k-slot .k-seg__item {
+  flex: 1;
+}
+.k-slot__about {
+  margin: -2px 0 2px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.k-slot__card {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 20px;
+  border-radius: var(--r-l);
+  background: var(--group);
+  box-shadow:
+    0 0 0 1px var(--border),
+    var(--shadow);
+  transition: box-shadow var(--t-base);
+}
+.k-slot__card--empty {
+  align-items: center;
+  justify-content: center;
+  min-height: 190px;
+}
+.k-slot__card.is-ready {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--green) 45%, transparent),
+    var(--shadow);
+}
+.k-slot__model {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.k-slot__icon {
+  flex: none;
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
   background: var(--acc-soft);
   color: var(--acc-text);
 }
-.k-setup__icon svg {
-  width: 18px;
-  height: 18px;
+.k-slot__card.is-ready .k-slot__icon {
+  background: color-mix(in srgb, var(--green) 16%, transparent);
+  color: var(--green-text);
 }
-.k-setup__heading {
+.k-slot__icon svg {
+  width: 20px;
+  height: 20px;
+}
+.k-slot__name {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 1px;
-  font-size: 12px;
-  color: var(--text-3);
+  gap: 2px;
+  min-width: 0;
 }
-.k-setup__title {
-  margin: 0;
+.k-slot__name b {
   font-size: 16px;
   font-weight: 600;
-  color: var(--text);
+  letter-spacing: -0.01em;
 }
-.k-setup__col .k-seg {
-  width: 100%;
+.k-slot__name span {
+  font-size: 12.5px;
+  color: var(--text-3);
 }
-.k-setup__col .k-seg__item {
-  flex: 1;
-}
-.k-setup__about {
-  margin: 0;
-  color: var(--text-2);
-  font-size: 13px;
-  min-height: 2.6em;
-}
-.k-setup__model {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin: 0;
-  font-weight: 600;
-}
-.k-setup__steps {
+/* Download · Test · Use: three equal columns joined by a line. */
+.k-slot__steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
 }
-.k-setup__step {
+.k-slot__step {
   position: relative;
   display: flex;
-  gap: 12px;
-  padding-bottom: 14px;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-3);
 }
-/* The line joining the steps. */
-.k-setup__step:not(:last-child)::before {
+.k-slot__step:not(:last-child)::after {
   content: "";
   position: absolute;
-  inset-inline-start: 11px;
-  top: 26px;
-  bottom: 2px;
-  width: 2px;
+  top: 11px;
+  inset-inline-start: calc(50% + 16px);
+  width: calc(100% - 32px);
+  height: 2px;
   border-radius: 1px;
   background: var(--sep);
 }
-.k-setup__step.is-done:not(:last-child)::before {
+.k-slot__step.is-done:not(:last-child)::after {
   background: var(--green);
 }
-.k-setup__num {
-  flex: none;
+.k-slot__dot {
   display: grid;
   place-items: center;
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
   background: var(--fill-2);
   color: var(--text-3);
@@ -818,49 +874,175 @@
     background var(--t-base),
     color var(--t-base);
 }
-.k-setup__num svg {
-  width: 14px;
-  height: 14px;
+.k-slot__dot svg {
+  width: 13px;
+  height: 13px;
 }
-.k-setup__step.is-active .k-setup__num {
+.k-slot__step.is-on {
+  color: var(--text);
+}
+.k-slot__step.is-on .k-slot__dot {
   background: var(--acc);
   color: var(--on-acc);
 }
-.k-setup__step.is-done .k-setup__num {
+.k-slot__step.is-done {
+  color: var(--text-2);
+}
+.k-slot__step.is-done .k-slot__dot {
   background: var(--green);
   color: #fff;
 }
-.k-setup__step.is-bad .k-setup__num {
-  background: var(--orange);
-  color: #fff;
+.k-slot__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 34px;
+  padding-top: 14px;
+  border-top: 1px solid var(--sep);
 }
-.k-setup__body {
+.k-slot__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+.k-slot__status.is-good {
+  color: var(--green-text);
+}
+.k-slot__status.is-bad {
+  color: var(--orange-text);
+}
+.k-slot__actions {
+  flex: none;
+  display: flex;
+  gap: 8px;
+}
+.k-slot__more {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: none;
+  color: var(--text-3);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.k-slot__more:hover {
+  color: var(--text);
+}
+.k-slot__more svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Voices as tiles: the name and accent to pick it, a play button to hear it. */
+.k-voices {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 6px;
+}
+.k-voices__title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 8px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.k-voices__title span {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-3);
+}
+/* New voices for the installed model: one quiet row with its download. */
+.k-voices__new {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--r-m);
+  background: var(--acc-soft);
+  font-size: 13px;
+}
+.k-voices__new > svg {
+  width: 16px;
+  height: 16px;
+  color: var(--acc-text);
+}
+.k-voices__new > span {
+  flex: 1;
+}
+.k-voices__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.k-voice {
+  display: flex;
+  align-items: center;
+  border-radius: var(--r-m);
+  background: var(--group);
+  box-shadow: 0 0 0 1px var(--border);
+  transition: box-shadow var(--t-fast);
+}
+.k-voice.is-on {
+  box-shadow: 0 0 0 2px var(--acc);
+}
+.k-voice.is-off {
+  opacity: 0.5;
+}
+.k-voice__pick {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding-top: 2px;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 10px 4px 10px 12px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
 }
-.k-setup__step-title {
-  font-weight: 600;
+.k-voice__pick:disabled {
+  cursor: default;
+}
+.k-voice__pick b {
   font-size: 13.5px;
+  font-weight: 600;
 }
-.k-setup__step:not(.is-active, .is-done, .is-bad) .k-setup__step-title {
+.k-voice__pick span {
+  font-size: 11.5px;
   color: var(--text-3);
 }
-.k-setup__status {
-  font-size: 12.5px;
-  color: var(--text-2);
-  overflow-wrap: anywhere;
+.k-voice__play {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin-inline-end: 8px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--fill);
+  color: var(--text);
+  cursor: pointer;
 }
-.k-setup__step.is-bad .k-setup__status {
-  color: var(--orange-text);
+.k-voice__play:hover:not(:disabled) {
+  background: var(--fill-2);
 }
-.k-setup__buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+.k-voice__play svg {
+  width: 13px;
+  height: 13px;
 }
 /* Welcome follows the app’s theme (light, dark or the system’s), with a soft glow of the accent
    behind the Island. */

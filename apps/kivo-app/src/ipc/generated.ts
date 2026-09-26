@@ -526,7 +526,12 @@ style: string, languages: Array<string>,
 /**
  * `anime` for the Anime voices, empty for everyday ones.
  */
-character: string, };
+character: string, 
+/**
+ * Its files are on this PC (a voice added to a model after it was installed comes with the
+ * model's update).
+ */
+ready: boolean, };
 
 export type MeasuredItem = { realTimeFactor: number | null, latencyMs: number | null, wordErrorRate: number | null, 
 /**
