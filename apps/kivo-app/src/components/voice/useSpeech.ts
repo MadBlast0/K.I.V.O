@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   Method,
-  type MeasuredItem,
+  type BenchmarkReply,
   type ModelItem,
   type RecommendationItem,
   type SpeechChoices,
@@ -127,9 +127,9 @@ export function useSpeech() {
   /** "Benchmark this engine" (BENCH-15): measured on this PC, then the cards show it. */
   const benchmark = useCallback(
     async (engine: string) => {
-      const measured = await request<MeasuredItem>(Method.voiceBenchmark, { engine });
+      const reply = await request<BenchmarkReply>(Method.voiceBenchmark, { engine });
       load();
-      return measured;
+      return reply;
     },
     [request, load],
   );

@@ -7,7 +7,7 @@
  */
 import { useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import type { MeasuredItem, ProfileItem, SpeechEngineItem, VoiceItem } from "../../ipc/generated";
+import type { BenchmarkReply, ProfileItem, SpeechEngineItem, VoiceItem } from "../../ipc/generated";
 import {
   Alert,
   Button,
@@ -69,14 +69,13 @@ function useFacts() {
   };
 }
 
-/** KIVO's thresholds for a measured engine (`kivo_voice::registry::thresholds`, VOICE §10–11). */
-const BUDGET = { sttMs: 300, ttsMs: 300, rtf: 1, cancelMs: 100, wer: 0.1, noisyWer: 0.2 } as const;
-
 /** A real-time factor: "0.17×". */
 const x = (v: number) => `${v.toFixed(2)}×`;
 
-/** "Benchmark this engine" (BENCH-15): each measured number against KIVO's budget. */
-export function BenchmarkResult({ slot, measured }: { slot: Slot; measured: MeasuredItem }) {
+/** "Benchmark this engine" (BENCH-15): each measured number against KIVO's budget, which the
+ * runtime sends with it (VOICE §10–11). */
+export function BenchmarkResult({ slot, reply }: { slot: Slot; reply: BenchmarkReply }) {
+  const { measured, budget } = reply;
   const { t, i18n } = useTranslation();
   const ms = new Intl.NumberFormat(i18n.language, { style: "unit", unit: "millisecond", maximumFractionDigits: 0 });
   const pct = new Intl.NumberFormat(i18n.language, { style: "percent", maximumFractionDigits: 1 });
@@ -84,43 +83,49 @@ export function BenchmarkResult({ slot, measured }: { slot: Slot; measured: Meas
   type Line = [label: string, value: string, budget?: [limit: string, meets: boolean]];
   const lines: Line[] = [];
   const latency = measured.latencyMs;
-  const limit = slot === "stt" ? BUDGET.sttMs : BUDGET.ttsMs;
+  const latencyLimit = slot === "stt" ? budget.sttMs : budget.ttsMs;
   if (latency != null)
     lines.push([
       t(slot === "stt" ? "speech.bench.sttLatency" : "speech.bench.ttsLatency"),
       ms.format(latency),
-      [ms.format(limit), latency <= limit],
+      [ms.format(latencyLimit), latency <= latencyLimit],
     ]);
   const rtf = measured.realTimeFactor;
-  if (rtf != null) lines.push([t("speech.bench.rtf"), x(rtf), [x(BUDGET.rtf), rtf <= BUDGET.rtf]]);
+  if (rtf != null)
+    lines.push([t("speech.bench.rtf"), x(rtf), [x(budget.realTimeFactor), rtf <= budget.realTimeFactor]]);
   const wer = measured.wordErrorRate;
-  if (wer != null) lines.push([t("speech.bench.wer"), pct.format(wer), [pct.format(BUDGET.wer), wer <= BUDGET.wer]]);
+  if (wer != null)
+    lines.push([
+      t("speech.bench.wer"),
+      pct.format(wer),
+      [pct.format(budget.wordErrorRate), wer <= budget.wordErrorRate],
+    ]);
   const noisy = measured.noisyWordErrorRate;
   if (noisy != null)
     lines.push([
       t("speech.bench.noisyWer"),
       pct.format(noisy),
-      [pct.format(BUDGET.noisyWer), noisy <= BUDGET.noisyWer],
+      [pct.format(budget.noisyWordErrorRate), noisy <= budget.noisyWordErrorRate],
     ]);
   const cancel = measured.cancelMs;
   if (cancel != null)
-    lines.push([t("speech.bench.cancel"), ms.format(cancel), [ms.format(BUDGET.cancelMs), cancel <= BUDGET.cancelMs]]);
+    lines.push([t("speech.bench.cancel"), ms.format(cancel), [ms.format(budget.cancelMs), cancel <= budget.cancelMs]]);
   if (measured.cpuPercent != null) lines.push([t("speech.bench.cpu"), pct.format(measured.cpuPercent / 100)]);
   if (measured.memoryMb != null) lines.push([t("speech.bench.memory"), mb.format(measured.memoryMb)]);
   return (
     <div className="k-speech__bench" role="status">
       <b>{t("speech.benchmarkTitle")}</b>
       <dl>
-        {lines.map(([label, value, budget]) => (
+        {lines.map(([label, value, limit]) => (
           <div key={label} className="k-speech__bench-row">
             <dt>{label}</dt>
             <dd>
               {value}
-              {budget && (
+              {limit && (
                 <>
-                  <span className="k-meta">{t("speech.benchmarkBudget", { budget: budget[0] })}</span>
-                  <Tag tone={budget[1] ? "success" : "warning"}>
-                    {t(budget[1] ? "speech.benchmarkMeets" : "speech.benchmarkOver")}
+                  <span className="k-meta">{t("speech.benchmarkBudget", { budget: limit[0] })}</span>
+                  <Tag tone={limit[1] ? "success" : "warning"}>
+                    {t(limit[1] ? "speech.benchmarkMeets" : "speech.benchmarkOver")}
                   </Tag>
                 </>
               )}
@@ -179,7 +184,7 @@ export function SpeechChooser({ slot, speech, children }: { slot: Slot; speech: 
   const facts = useFacts();
   const [offer, setOffer] = useState<SpeechEngineItem | null>(null);
   const [sample, setSample] = useState<{ engine: string; text: string | null } | null>(null);
-  const [bench, setBench] = useState<{ engine: string; measured: MeasuredItem | null } | null>(null);
+  const [bench, setBench] = useState<{ engine: string; reply: BenchmarkReply | null } | null>(null);
   const { choices, recommendation } = speech;
   if (!choices) return null;
 
@@ -208,16 +213,16 @@ export function SpeechChooser({ slot, speech, children }: { slot: Slot; speech: 
       });
   };
   const runBenchmark = (engine: string) => {
-    setBench({ engine, measured: null });
+    setBench({ engine, reply: null });
     speech
       .benchmark(engine)
-      .then((measured) => setBench({ engine, measured }))
+      .then((reply) => setBench({ engine, reply }))
       .catch((e: unknown) => {
         setBench(null);
         toast(message(e));
       });
   };
-  const benchmarking = bench !== null && bench.measured === null;
+  const benchmarking = bench !== null && bench.reply === null;
   const model = offer?.model ? speech.models.find((m) => m.id === offer.model) : undefined;
 
   return (
@@ -277,8 +282,8 @@ export function SpeechChooser({ slot, speech, children }: { slot: Slot; speech: 
                 </div>
               )}
               {bench?.engine === engine.id &&
-                (bench.measured ? (
-                  <BenchmarkResult slot={slot} measured={bench.measured} />
+                (bench.reply ? (
+                  <BenchmarkResult slot={slot} reply={bench.reply} />
                 ) : (
                   <p className="k-speech__status" role="status">
                     <Spinner label={t("speech.benchmarking")} />

@@ -17,6 +17,7 @@ import {
   Switch,
   useToast,
 } from "../../components/ui";
+import { LANGUAGES, applyLanguage } from "../../i18n";
 import { Method } from "../../ipc/generated";
 import { useRuntime } from "../../ipc/runtime";
 import { MODES } from "../../lib/modes";
@@ -138,9 +139,9 @@ export function GeneralTab() {
           end={
             <Select
               label={t("settings.general.appLanguage")}
-              value="en"
-              onChange={() => {}}
-              items={[{ value: "en", label: names.of("en-US") ?? "English" }]}
+              value={i18n.language}
+              onChange={applyLanguage}
+              items={LANGUAGES.map((l) => ({ value: l.code, label: names.of(l.code) ?? l.name }))}
             />
           }
         />

@@ -312,6 +312,20 @@ impl TasksRpc {
                     .map(|file| json!({ "file": file }))
                     .map_err(refuse)
             }),
+            method::WORKSPACES_SET_AGENT => {
+                #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
+                struct P {
+                    id: String,
+                    agent: Option<String>,
+                }
+                parse::<P>(params).and_then(|p| {
+                    self.workspaces
+                        .set_agent(&p.id, p.agent.as_deref())
+                        .map_err(refuse)
+                        .and_then(|w| ok(&w))
+                })
+            }
             method::INSTRUCTIONS_GET => {
                 #[derive(Deserialize)]
                 #[serde(deny_unknown_fields)]

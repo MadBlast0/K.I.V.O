@@ -110,11 +110,6 @@ impl CaptureReader {
         f32::from_bits(self.shared.peak.swap(0, Ordering::Relaxed))
     }
 
-    /// A handle that reads the level without owning the reader (the level publisher).
-    pub fn level_meter(&self) -> LevelMeter {
-        LevelMeter(Arc::clone(&self.shared))
-    }
-
     pub fn dropped(&self) -> u64 {
         self.shared.dropped.load(Ordering::Relaxed)
     }
@@ -122,17 +117,6 @@ impl CaptureReader {
     /// Discards everything buffered (a new listening session starts from now).
     pub fn discard(&mut self) {
         self.ring.clear();
-    }
-}
-
-/// Reads the capture level from another thread.
-#[derive(Clone)]
-pub struct LevelMeter(Arc<Shared>);
-
-impl LevelMeter {
-    /// The loudest RMS since the last call (resets it).
-    pub fn take_peak(&self) -> f32 {
-        f32::from_bits(self.0.peak.swap(0, Ordering::Relaxed))
     }
 }
 

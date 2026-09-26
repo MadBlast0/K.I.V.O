@@ -16,10 +16,8 @@ tokio = { workspace = true, features = ["rt", "sync", "time", "macros", "process
 tokio-util.workspace = true
 tracing.workspace = true
 futures-util = { workspace = true, features = ["std"] }
-bytes.workspace = true
 reqwest.workspace = true
 async-trait.workspace = true
-uuid.workspace = true
 base64.workspace = true
 tokio-tungstenite.workspace = true
 

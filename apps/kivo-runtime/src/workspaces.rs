@@ -437,13 +437,26 @@ impl Workspaces {
         lock(&self.current).clone()
     }
 
-    pub fn set_current(&self, id: &str) -> Result<WorkspaceItem, String> {
-        let w = lock(&self.db)
+    /// Sets (or clears) the agent coding requests in workspace `id` go to; `agent` is a catalog
+    /// id of a CLI agent (CONVERSATION §4).
+    pub fn set_agent(&self, id: &str, agent: Option<&str>) -> Result<WorkspaceItem, String> {
+        if agent.is_some_and(|a| kivo_brain::catalog::entry(a).is_none_or(|e| e.agent.is_none())) {
+            return Err(text::t("workspace.notAnAgent"));
+        }
+        let db = lock(&self.db);
+        db.set_workspace_agent(id, agent)
+            .map_err(|e| e.to_string())?;
+        let w = db
             .workspace(id)
             .ok()
             .flatten()
             .ok_or_else(|| text::t("workspace.notFound"))?;
-        *lock(&self.current) = Some(w.clone());
+        drop(db);
+        let mut current = lock(&self.current);
+        if current.as_ref().is_some_and(|c| c.id == w.id) {
+            *current = Some(w.clone());
+        }
+        drop(current);
         Ok(self.item(w))
     }
 
@@ -599,6 +612,16 @@ mod tests {
         assert_eq!(item.agent_files, ["CLAUDE.md"]);
         w.set_instructions(&format!("workspace:{}", item.id), "Never touch /vendor.")
             .unwrap();
+        // Its own coding agent (CONVERSATION §4): only a CLI agent, kept on the current workspace.
+        assert!(w.set_agent(&item.id, Some("anthropic")).is_err());
+        let chosen = w.set_agent(&item.id, Some("codex")).unwrap();
+        assert_eq!(chosen.preferred_agent.as_deref(), Some("codex"));
+        assert_eq!(
+            w.current().and_then(|c| c.preferred_agent).as_deref(),
+            Some("codex")
+        );
+        w.set_agent(&item.id, None).unwrap();
+        assert_eq!(w.current().and_then(|c| c.preferred_agent), None);
         let context = w.context();
         assert!(context.contains("Never touch /vendor."), "{context}");
         assert!(

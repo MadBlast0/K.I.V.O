@@ -119,8 +119,6 @@ pub mod method {
     /// keeps running (`{ "keepRunning": true }`); the first time, the runtime shows the one-time
     /// notice (UX §1).
     pub const UI_WINDOW_CLOSED: &str = "ui.windowClosed";
-    /// Runtime → client notification: a model download's progress.
-    pub const MODEL_PROGRESS: &str = "models.progress";
     /// Wake words (VOICE §4): list, check a phrase, add or edit, delete, turn on/off or tune,
     /// hear it spoken, try it, record samples, tune from them, and a false-alarm test.
     pub const WAKE_LIST: &str = "wake.list";
@@ -267,6 +265,8 @@ pub mod method {
     pub const WORKSPACES_REMEMBER: &str = "workspaces.remember";
     pub const WORKSPACES_FORGET: &str = "workspaces.forget";
     pub const WORKSPACES_EXPORT_AGENTS: &str = "workspaces.exportAgentsMd";
+    /// The agent coding requests in a workspace go to (`agent`: a CLI agent's id, or null).
+    pub const WORKSPACES_SET_AGENT: &str = "workspaces.setAgent";
     pub const INSTRUCTIONS_GET: &str = "instructions.get";
     pub const INSTRUCTIONS_SET: &str = "instructions.set";
     /// Bypass permissions, with its opt-in and expiry (SEC-03).
@@ -976,6 +976,33 @@ pub struct MeasuredItem {
     pub measured_at: i64,
 }
 
+/// KIVO's thresholds for a measured speech engine (VOICE §10–11): what "Benchmark this engine"
+/// holds each number against.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SpeechBudget {
+    /// End of speech → final transcript.
+    pub stt_ms: f64,
+    /// Text → first audio.
+    pub tts_ms: f64,
+    /// Processing time over audio time.
+    pub real_time_factor: f64,
+    /// Cancel → silence.
+    pub cancel_ms: f64,
+    pub word_error_rate: f64,
+    pub noisy_word_error_rate: f64,
+}
+
+/// `voice.benchmark`'s answer: the numbers and the budget they're held against.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BenchmarkReply {
+    pub measured: MeasuredItem,
+    pub budget: SpeechBudget,
+}
+
 /// One curated profile and the engine behind it for the primary language (VOICE-43).
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -1111,7 +1138,6 @@ pub struct RpcError {
 }
 
 impl RpcError {
-    pub const PARSE: i32 = -32700;
     pub const INVALID_REQUEST: i32 = -32600;
     pub const METHOD_NOT_FOUND: i32 = -32601;
     pub const INVALID_PARAMS: i32 = -32602;

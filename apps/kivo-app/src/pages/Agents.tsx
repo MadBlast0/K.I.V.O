@@ -6,7 +6,8 @@
  *   "Start" (a folder and a mode; bypass asks first, CONV-14), and the desktop AI apps found in the
  *   installed apps (DISC-06).
  * - Workspaces (CONV-09/10/11): "About me" (global instructions), each remembered workspace with its
- *   instructions, the project's own agent files, "Export as AGENTS.md" and Forget. The runtime
+ *   instructions, its own coding agent, the project's own agent files, "Export as AGENTS.md" and
+ *   Forget. The runtime
  *   mirrors instructions to Markdown files and re-imports them when they are edited there.
  */
 import { useCallback, useEffect, useState } from "react";
@@ -474,8 +475,23 @@ function WorkspacesTab() {
   const { link, request } = useRuntime();
   const toast = useToast();
   const [workspaces, current, load] = useWorkspaces();
-  if (link?.status !== "connected") return <Note>{t("voice.notConnected")}</Note>;
+  const connected = link?.status === "connected";
+  // The CLI agents on this PC, for each workspace's own coding agent (CONVERSATION §4).
+  const [agents, setAgents] = useState<AgentItem[]>([]);
+  useEffect(() => {
+    if (!connected) return;
+    void request<AgentsOverview>(Method.agentsOverview)
+      .then((o) => setAgents(o.cli.filter((a) => a.installed)))
+      .catch(() => {});
+  }, [connected, request]);
+  if (!connected) return <Note>{t("voice.notConnected")}</Note>;
   const time = new Intl.DateTimeFormat(i18n.language, { dateStyle: "medium" });
+
+  const setAgent = (w: WorkspaceItem, agent: string) => {
+    request(Method.workspacesSetAgent, { id: w.id, agent: agent || null })
+      .then(load)
+      .catch((e: unknown) => toast(message(e)));
+  };
 
   const forget = (w: WorkspaceItem) => {
     request(Method.workspacesForget, { id: w.id })
@@ -511,6 +527,22 @@ function WorkspacesTab() {
                     {w.agentFiles.map((f) => (
                       <Pill key={f}>{f}</Pill>
                     ))}
+                    {agents.length > 0 && (
+                      <Select<string>
+                        label={t("workspaces.agent", { name: w.name })}
+                        icon="agent"
+                        value={w.preferredAgent ?? ""}
+                        onChange={(a) => setAgent(w, a)}
+                        items={[
+                          { value: "", label: t("workspaces.agentDefault") },
+                          ...agents.map((a) => ({ value: a.id, label: a.name })),
+                          // A chosen agent that was uninstalled still shows, so it can be changed.
+                          ...(w.preferredAgent && !agents.some((a) => a.id === w.preferredAgent)
+                            ? [{ value: w.preferredAgent, label: w.preferredAgent }]
+                            : []),
+                        ]}
+                      />
+                    )}
                     <Button size="sm" onClick={() => exportAgents(w)}>
                       {t("workspaces.export")}
                     </Button>

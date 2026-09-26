@@ -94,8 +94,8 @@ pub struct Workspace {
     pub name: String,
     /// The user said yes to remembering it (no: KIVO doesn't ask again).
     pub remembered: bool,
+    /// The agent coding requests in this workspace go to (`kivo_brain` catalog id).
     pub preferred_agent: Option<String>,
-    pub agent_mode: Option<String>,
     pub created_at: i64,
     pub last_used: i64,
 }
@@ -143,9 +143,8 @@ fn workspace_row(r: &Row<'_>) -> rusqlite::Result<Workspace> {
         name: r.get(2)?,
         remembered: r.get::<_, i64>(3)? == 1,
         preferred_agent: r.get(4)?,
-        agent_mode: r.get(5)?,
-        created_at: r.get(6)?,
-        last_used: r.get(7)?,
+        created_at: r.get(5)?,
+        last_used: r.get(6)?,
     })
 }
 
@@ -459,7 +458,7 @@ impl Database {
         Ok(self
             .connection()
             .query_row(
-                "SELECT id, path, name, remembered, preferred_agent, agent_mode, created_at,
+                "SELECT id, path, name, remembered, preferred_agent, created_at,
                         last_used
                  FROM workspaces WHERE profile_id = ?1 AND path = ?2 COLLATE NOCASE",
                 params![owner, path],
@@ -472,7 +471,7 @@ impl Database {
         Ok(self
             .connection()
             .query_row(
-                "SELECT id, path, name, remembered, preferred_agent, agent_mode, created_at,
+                "SELECT id, path, name, remembered, preferred_agent, created_at,
                         last_used
                  FROM workspaces WHERE id = ?1",
                 params![id],
@@ -485,7 +484,7 @@ impl Database {
     pub fn workspaces(&self) -> Result<Vec<Workspace>, DbError> {
         let owner = self.person()?;
         let mut stmt = self.connection().prepare(
-            "SELECT id, path, name, remembered, preferred_agent, agent_mode, created_at,
+            "SELECT id, path, name, remembered, preferred_agent, created_at,
                     last_used
              FROM workspaces WHERE profile_id = ?1 AND remembered = 1 ORDER BY last_used DESC",
         )?;
@@ -522,15 +521,11 @@ impl Database {
         Ok(())
     }
 
-    pub fn set_workspace_agent(
-        &self,
-        id: &str,
-        agent: Option<&str>,
-        mode: Option<&str>,
-    ) -> Result<(), DbError> {
+    /// Sets (or clears) the agent coding requests in workspace `id` go to.
+    pub fn set_workspace_agent(&self, id: &str, agent: Option<&str>) -> Result<(), DbError> {
         self.connection().execute(
-            "UPDATE workspaces SET preferred_agent = ?2, agent_mode = ?3 WHERE id = ?1",
-            params![id, agent, mode],
+            "UPDATE workspaces SET preferred_agent = ?2 WHERE id = ?1",
+            params![id, agent],
         )?;
         Ok(())
     }

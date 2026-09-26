@@ -230,6 +230,18 @@ describe("Workspaces and instructions (CONV-09/10/11)", () => {
     await settle();
     expect(calls).toContainEqual({ method: "workspaces.forget", params: { id: "w1" } });
   });
+
+  it("gives a workspace its own coding agent from the ones installed", async () => {
+    page("workspaces");
+    await settle();
+    fireEvent.click(screen.getByRole("combobox", { name: "Coding agent for kivo" }));
+    await settle();
+    // Codex isn't installed, so only Claude Code and the profile's own choice are offered.
+    expect(screen.queryByRole("option", { name: "Codex" })).toBeNull();
+    fireEvent.keyDown(screen.getByRole("option", { name: "Claude Code" }), { key: "Enter" });
+    await settle();
+    expect(calls).toContainEqual({ method: "workspaces.setAgent", params: { id: "w1", agent: "claude-code" } });
+  });
 });
 
 describe("initials", () => {

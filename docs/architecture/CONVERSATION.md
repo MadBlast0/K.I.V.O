@@ -121,7 +121,8 @@ which works but is less reliable.
 - **How:** the foreground VS Code folder, a terminal's working directory, a git repo KIVO acted
   in, or "in this project".
 - **What a workspace record holds:** path, name, instructions, memories, recent threads and
-  agent sessions, preferred agent and mode.
+  agent sessions, and its own coding agent (chosen on Agents → Workspaces; coding requests there
+  go to it first while it is healthy, otherwise the Coding profile decides).
 - **Confirmation:** KIVO asks once, "Remember *kivo-runtime* as a workspace?"
 
 ## 5. KIVO driving other AIs

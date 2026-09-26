@@ -200,6 +200,9 @@ pub struct RouteRequest<'a> {
     pub offline: bool,
     /// The privacy mode and the Cloud AI capability allow cloud brains at all.
     pub cloud_allowed: bool,
+    /// The agent the user chose for the current workspace (CONVERSATION §4): coding requests go
+    /// to it first while it's healthy.
+    pub workspace_agent: Option<&'a str>,
 }
 
 /// Where a request goes, and why.
@@ -344,8 +347,17 @@ pub fn route(
         (default.clone(), "your default brain".to_owned())
     };
 
-    // 5–6. Health, then the profile's preferences.
-    let options = candidates(&profile, available, req);
+    // 5–6. Health, then the profile's preferences; for coding, the workspace's own agent first.
+    let mut options = candidates(&profile, available, req);
+    let mut why = why;
+    if profile.id == "coding"
+        && let Some(agent) = req.workspace_agent
+        && let Some(at) = options.iter().position(|(a, _)| a.id == agent && a.healthy)
+    {
+        let chosen = options.remove(at);
+        options.insert(0, chosen);
+        why = "the agent you chose for this workspace".to_owned();
+    }
     let healthy: Vec<&(&Available, String)> = options.iter().filter(|(a, _)| a.healthy).collect();
     let Some((target, model)) = healthy.first().copied() else {
         return Err(
@@ -476,6 +488,7 @@ mod tests {
             sensitive: false,
             offline: false,
             cloud_allowed: true,
+            workspace_agent: None,
         }
     }
 
@@ -512,6 +525,40 @@ mod tests {
         assert_eq!(
             r.reason,
             "Coding · Claude Code — because this looked like a coding task"
+        );
+    }
+
+    #[test]
+    fn a_workspaces_own_agent_takes_its_coding_requests_while_healthy() {
+        let text = "explain this error in my Rust function";
+        let mut available = all();
+        available.push(brain("codex", true));
+        let mut req = request(text);
+        req.workspace_agent = Some("codex");
+        let r = route(&req, &built_in_profiles(), &available).unwrap();
+        assert_eq!(r.target.provider, "codex");
+        assert!(
+            r.reason.ends_with("the agent you chose for this workspace"),
+            "{}",
+            r.reason
+        );
+        // Other requests ignore it, and an unhealthy agent falls back to the usual order.
+        req.text = "what's the capital of Peru?";
+        assert_eq!(
+            route(&req, &built_in_profiles(), &available)
+                .unwrap()
+                .target
+                .provider,
+            "anthropic"
+        );
+        req.text = text;
+        available.last_mut().unwrap().healthy = false;
+        assert_eq!(
+            route(&req, &built_in_profiles(), &available)
+                .unwrap()
+                .target
+                .provider,
+            "claude-code"
         );
     }
 

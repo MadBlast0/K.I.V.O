@@ -18,7 +18,7 @@ use kivo_brain::{
     BrainEvent, ChatRequest, Message, NormalizedError, Part, PrivacyClass, ProviderKind, Role,
     Usage,
 };
-use kivo_core::event::{CancelReason, EventKind, IntentPath, ProviderEvent, TurnEvent};
+use kivo_core::event::{EventKind, IntentPath, ProviderEvent, TurnEvent};
 use kivo_core::text;
 use kivo_core::tool::{ConfirmSpec, ConfirmedBy, Initiator, Risk, Strength, ToolCall};
 use kivo_core::{Event, SessionInput, SessionState};
@@ -330,15 +330,24 @@ impl Engine {
         let sensitive = kivo_security::classify_labeled(&text, &config.privacy.labels)
             > kivo_security::privacy::cloud_limit(&config.privacy)
             || kivo_security::privacy::asks_to_stay_local(&text);
-        let mut routed = self
-            .brains
-            .route(&config, &text, choice.as_deref(), sensitive);
+        let workspace_agent = self
+            .workspaces()
+            .and_then(|w| w.current())
+            .and_then(|w| w.preferred_agent);
+        let route_now = || {
+            self.brains.route_in(
+                &config,
+                &text,
+                choice.as_deref(),
+                sensitive,
+                workspace_agent.as_deref(),
+            )
+        };
+        let mut routed = route_now();
         if matches!(routed, Err(RouteError::Unavailable(_))) {
             // Every candidate failed its last check: look again before saying so.
             self.brains.recheck_unhealthy().await;
-            routed = self
-                .brains
-                .route(&config, &text, choice.as_deref(), sensitive);
+            routed = route_now();
         }
         let mut route = match routed {
             Ok(route) => route,
@@ -1980,11 +1989,6 @@ impl Engine {
         let mut session = lock(&self.session);
         session.thread = Some(thread.to_owned());
         session.last = Some(Instant::now());
-    }
-
-    /// Stops a brain turn from outside (the Chat page's Stop), like Esc.
-    pub fn stop_brain(&self) {
-        self.cancel(CancelReason::UserButton);
     }
 }
 

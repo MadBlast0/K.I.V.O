@@ -481,11 +481,6 @@ impl Core {
         Some(previous)
     }
 
-    /// Bypass is on now.
-    pub fn bypass_on(&self) -> bool {
-        self.state.borrow().bypass_until.is_some()
-    }
-
     /// The collapsed Island's live activities (UX-15): adds or replaces one by id.
     pub fn set_activity(&self, activity: kivo_ipc::protocol::LiveActivity) {
         self.state.send_if_modified(|s| {

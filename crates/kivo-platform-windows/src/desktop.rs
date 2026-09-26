@@ -14,7 +14,6 @@ use crate::com::{Com, os_error};
 use kivo_platform::{
     AppEntry, Apps, PlatformError, PlatformResult, Rect, WindowId, WindowInfo, Windows,
 };
-use std::collections::HashMap;
 use windows::Win32::Foundation::{CloseHandle, HWND, LPARAM, RECT, WPARAM};
 use windows::Win32::Graphics::Dwm::{DWMWA_CLOAKED, DwmGetWindowAttribute};
 use windows::Win32::Storage::EnhancedStorage::{PKEY_AppUserModel_ID, PKEY_Link_TargetParsingPath};
@@ -342,17 +341,6 @@ impl Apps for WindowsApps {
 
 #[derive(Default)]
 pub struct WindowsWindows;
-
-impl WindowsWindows {
-    /// App windows grouped by app id (for the grammar's window index).
-    pub fn by_app(&self) -> HashMap<String, Vec<WindowInfo>> {
-        let mut map: HashMap<String, Vec<WindowInfo>> = HashMap::new();
-        for w in list_windows() {
-            map.entry(w.app_id.clone()).or_default().push(w);
-        }
-        map
-    }
-}
 
 fn check(id: WindowId) -> PlatformResult<HWND> {
     let h = hwnd(id);

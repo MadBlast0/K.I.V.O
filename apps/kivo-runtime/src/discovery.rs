@@ -327,15 +327,6 @@ impl Discovery {
             .ne(after.iter().map(|i| (&i.id, &i.data)))
     }
 
-    /// Every section.
-    pub async fn refresh_all(&self) -> bool {
-        let mut changed = false;
-        for section in [CLI, LOCAL] {
-            changed |= self.refresh(section).await;
-        }
-        changed
-    }
-
     /// Refreshes `section` when its results are older than `max_age` (page open, DISC-15).
     pub async fn refresh_if_older(&self, section: &str, max_age: Duration) -> bool {
         let checked = self.section(section).checked_at;

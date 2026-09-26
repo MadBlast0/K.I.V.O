@@ -188,13 +188,16 @@ runtime.request = (method: string, params?: unknown) => {
   }
   if (method === "voice.benchmark") {
     return Promise.resolve({
-      realTimeFactor: 0.08,
-      latencyMs: 140,
-      wordErrorRate: 0.05,
-      noisyWordErrorRate: 0.25,
-      cpuPercent: 4.2,
-      memoryMb: 310,
-      measuredAt: 2,
+      measured: {
+        realTimeFactor: 0.08,
+        latencyMs: 140,
+        wordErrorRate: 0.05,
+        noisyWordErrorRate: 0.25,
+        cpuPercent: 4.2,
+        memoryMb: 310,
+        measuredAt: 2,
+      },
+      budget: { sttMs: 300, ttsMs: 300, realTimeFactor: 1, cancelMs: 100, wordErrorRate: 0.1, noisyWordErrorRate: 0.2 },
     });
   }
   if (method === "voice.devices") {

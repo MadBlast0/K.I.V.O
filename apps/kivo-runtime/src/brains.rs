@@ -426,6 +426,18 @@ impl Brains {
         profile: Option<&str>,
         sensitive: bool,
     ) -> Result<Route, RouteError> {
+        self.route_in(config, text, profile, sensitive, None)
+    }
+
+    /// [`Self::route`] in a workspace whose chosen agent takes coding requests first.
+    pub fn route_in(
+        &self,
+        config: &KivoConfig,
+        text: &str,
+        profile: Option<&str>,
+        sensitive: bool,
+        workspace_agent: Option<&str>,
+    ) -> Result<Route, RouteError> {
         let available = self.available(config);
         let request = RouteRequest {
             text,
@@ -434,6 +446,7 @@ impl Brains {
             sensitive,
             offline: self.offline(),
             cloud_allowed: Self::cloud_allowed(config),
+            workspace_agent,
         };
         let cloud_ok = request.cloud_allowed;
         // With cloud brains off, only local ones are candidates at all.

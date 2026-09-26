@@ -27,7 +27,7 @@ const REFERENCE_SECONDS: usize = 2;
 /// The render-to-capture delay hint (AEC3 refines it itself): the reference is taken as the
 /// mixer fills the speaker's buffer, so the hint is the output plus input latency of a typical
 /// shared-mode WASAPI device.
-pub const DEFAULT_DELAY_MS: i32 = 40;
+const DELAY_HINT_MS: i32 = 40;
 
 struct Tapped {
     rate: u32,
@@ -226,14 +226,11 @@ pub struct EchoCanceller {
     capture: Vec<f32>,
     cleaned: Vec<f32>,
     frame_out: Vec<f32>,
-    delay_ms: i32,
     path: EchoPath,
     /// Microphone and cleaned power of recent frames with echo in them.
     settle: VecDeque<(f32, f32)>,
     /// It has removed at least `SETTLED_REDUCTION` of the echo (sticky until the output changes).
     settled: bool,
-    /// Microphone and cleaned power of the last `clean` call.
-    last: (f32, f32),
 }
 
 impl Default for EchoCanceller {
@@ -261,11 +258,9 @@ impl EchoCanceller {
             capture: Vec::new(),
             cleaned: Vec::new(),
             frame_out: vec![0.0; FRAME],
-            delay_ms: DEFAULT_DELAY_MS,
             path: EchoPath::default(),
             settle: VecDeque::new(),
             settled: false,
-            last: (0.0, 0.0),
         }
     }
 
@@ -281,17 +276,6 @@ impl EchoCanceller {
         self.settled = false;
     }
 
-    /// How much quieter the last cleaned audio was than the microphone, in dB. Echo alone comes
-    /// out 20 dB or more quieter once the canceller has settled; the user's voice mostly gets
-    /// through, so a small reduction means someone is talking (double talk).
-    pub fn last_reduction_db(&self) -> f32 {
-        let (heard, cleaned) = self.last;
-        if heard <= 1e-9 {
-            return 0.0;
-        }
-        10.0 * (heard / cleaned.max(1e-12)).log10()
-    }
-
     /// Whether what comes out can be trusted to be the user, not KIVO (barge-in, VOICE-31): with
     /// no echo path at once; with one, once the canceller has learned the room and removes at
     /// least 10 dB of KIVO's voice.
@@ -301,11 +285,6 @@ impl EchoCanceller {
             Some(true) => self.settled,
             None => false,
         }
-    }
-
-    /// The delay hint in ms (see `DEFAULT_DELAY_MS`).
-    pub fn set_delay_hint(&mut self, delay_ms: i32) {
-        self.delay_ms = delay_ms;
     }
 
     /// What was just played (at `rate`, mono): the canceller learns what to remove.
@@ -335,8 +314,6 @@ impl EchoCanceller {
     /// Cleans microphone audio (16 kHz mono) in place. Output lags input by up to 10 ms: the
     /// last partial frame waits for the next call.
     pub fn clean(&mut self, audio: &mut Vec<f32>) {
-        let power = |s: &[f32]| s.iter().map(|v| v * v).sum::<f32>();
-        let heard = power(audio);
         self.capture.extend_from_slice(audio);
         audio.clear();
         let mut offset = 0;
@@ -350,7 +327,7 @@ impl EchoCanceller {
                 continue;
             }
             self.cleaned.resize(FRAME, 0.0);
-            let _ = self.apm.set_stream_delay_ms(self.delay_ms);
+            let _ = self.apm.set_stream_delay_ms(DELAY_HINT_MS);
             if self
                 .apm
                 .process_capture_f32(&[frame], &mut [&mut self.cleaned[..]])
@@ -382,7 +359,6 @@ impl EchoCanceller {
             offset += FRAME;
         }
         self.capture.drain(..offset);
-        self.last = (heard, power(audio));
     }
 
     /// Anything still waiting (when the canceller is switched off).

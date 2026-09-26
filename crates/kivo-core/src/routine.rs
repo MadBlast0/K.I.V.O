@@ -177,14 +177,6 @@ impl Routine {
         })
     }
 
-    /// Whether something other than the user starts it (a schedule or an event): such runs are
-    /// unattended (ROUT-12).
-    pub fn is_unattended(&self) -> bool {
-        self.triggers
-            .iter()
-            .any(|t| matches!(t, Trigger::Schedule { .. } | Trigger::Event { .. }))
-    }
-
     /// Checks the schedules and times of day; the error says which is wrong.
     pub fn check_triggers(&self) -> Result<(), String> {
         for t in &self.triggers {

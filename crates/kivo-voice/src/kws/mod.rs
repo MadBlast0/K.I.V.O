@@ -271,11 +271,6 @@ impl KeywordSpotter {
         (spotter, refused)
     }
 
-    /// Changes the keywords, keeping the model.
-    pub fn set_keywords(self, keywords: Vec<Keyword>) -> (Self, Vec<Keyword>) {
-        Self::new(self.model, keywords)
-    }
-
     pub fn keywords(&self) -> &[Keyword] {
         &self.keywords
     }

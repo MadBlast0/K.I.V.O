@@ -1063,12 +1063,23 @@ impl Tasks {
         cancel: &CancellationToken,
     ) -> Result<String, String> {
         let config = self.core.config();
+        let folder = cwd.map_or_else(|| self.agents.workspace(), std::path::PathBuf::from);
         let id = match agent {
             Some(a) => a.to_owned(),
             None => {
+                // The agent chosen for this folder's workspace goes first (CONVERSATION §4).
+                let preferred = lock(&self.db)
+                    .workspace_by_path(
+                        &crate::workspaces::project_root(&folder)
+                            .display()
+                            .to_string(),
+                    )
+                    .ok()
+                    .flatten()
+                    .and_then(|w| w.preferred_agent);
                 let route = self
                     .brains
-                    .route(&config, prompt, Some("coding"), false)
+                    .route_in(&config, prompt, Some("coding"), false, preferred.as_deref())
                     .map_err(|e| e.to_string())?;
                 if route.kind != ProviderKind::Cli {
                     return Err(text::t("task.noAgent"));
@@ -1077,7 +1088,6 @@ impl Tasks {
             }
         };
         let found = self.brains.agent(&id);
-        let folder = cwd.map_or_else(|| self.agents.workspace(), std::path::PathBuf::from);
         let session = self
             .agents
             .session(&id, found.as_ref().map(|f| f.program.as_path()), &folder)

@@ -21,14 +21,14 @@ use kivo_core::tool::{ConfirmSpec, ConfirmedBy, GrantDuration, Risk, Strength};
 use kivo_core::{Event, EventMeta, ProfileId, SessionState, TaskId, Timestamp, TraceId, TurnId};
 use kivo_ipc::infer::Residency;
 use kivo_ipc::protocol::{
-    ActivityItem, AgentItem, AgentSessionItem, AgentsOverview, AuditItem, BrainChip,
-    CapabilityItem, Collision, ConnectorView, DesktopAiItem, DraftView, GrantItem, GrantLine,
-    IslandPlacement, LiveActivity, McpFoundView, McpServerView, McpToolView, MeasuredItem,
-    MemoryFolderView, MemoryLinkView, MemoryNoteDetail, MemoryNoteView, MemoryOverview,
-    MemorySuggestionView, MemoryTagView, ModelItem, Offer, ProfileItem, ProtocolVersion,
-    QuietIsland, RecommendationItem, RoutineCheck, RoutineView, ScreenPoint, SetupAdvice,
-    SkillView, SpeechChoices, SpeechEngineItem, SpeechStatus, StepView, TaskQuestion, TaskStepView,
-    TaskView, ToolItem, TurnView, UndoOffer, VoiceItem, WorkspaceItem,
+    ActivityItem, AgentItem, AgentSessionItem, AgentsOverview, AuditItem, BenchmarkReply,
+    BrainChip, CapabilityItem, Collision, ConnectorView, DesktopAiItem, DraftView, GrantItem,
+    GrantLine, IslandPlacement, LiveActivity, McpFoundView, McpServerView, McpToolView,
+    MeasuredItem, MemoryFolderView, MemoryLinkView, MemoryNoteDetail, MemoryNoteView,
+    MemoryOverview, MemorySuggestionView, MemoryTagView, ModelItem, Offer, ProfileItem,
+    ProtocolVersion, QuietIsland, RecommendationItem, RoutineCheck, RoutineView, ScreenPoint,
+    SetupAdvice, SkillView, SpeechBudget, SpeechChoices, SpeechEngineItem, SpeechStatus, StepView,
+    TaskQuestion, TaskStepView, TaskView, ToolItem, TurnView, UndoOffer, VoiceItem, WorkspaceItem,
 };
 use kivo_ipc::{Link, LinkStatus, RpcError, StateSnapshot, Welcome, method};
 use std::path::PathBuf;
@@ -105,6 +105,8 @@ fn render() -> String {
         SpeechEngineItem::decl(&cfg),
         VoiceItem::decl(&cfg),
         MeasuredItem::decl(&cfg),
+        SpeechBudget::decl(&cfg),
+        BenchmarkReply::decl(&cfg),
         ProfileItem::decl(&cfg),
         SpeechChoices::decl(&cfg),
         RecommendationItem::decl(&cfg),
@@ -321,6 +323,7 @@ fn render() -> String {
         ("workspacesRemember", method::WORKSPACES_REMEMBER),
         ("workspacesForget", method::WORKSPACES_FORGET),
         ("workspacesExportAgentsMd", method::WORKSPACES_EXPORT_AGENTS),
+        ("workspacesSetAgent", method::WORKSPACES_SET_AGENT),
         ("instructionsGet", method::INSTRUCTIONS_GET),
         ("instructionsSet", method::INSTRUCTIONS_SET),
         ("permissionsBypass", method::PERMISSIONS_BYPASS),

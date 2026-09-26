@@ -6,7 +6,7 @@
 //! (with their risk), URI verbs, UIA hints (control names to AutomationIds or roles), which tiers
 //! of the capability ladder to try first, and known quirks.
 
-use kivo_core::tool::{CapabilityTier, Risk};
+use kivo_core::tool::Risk;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -132,19 +132,6 @@ pub enum Tier {
     BrowserDom,
     Vision,
     Input,
-}
-
-impl Tier {
-    pub fn capability_tier(self) -> CapabilityTier {
-        match self {
-            Self::Native | Self::Uri => CapabilityTier::OsApi,
-            Self::AppCli => CapabilityTier::AppCli,
-            Self::Uia => CapabilityTier::Uia,
-            Self::BrowserDom => CapabilityTier::BrowserDom,
-            Self::Vision => CapabilityTier::Vision,
-            Self::Input => CapabilityTier::Input,
-        }
-    }
 }
 
 /// How to start a CLI agent in a visible terminal (CONVERSATION §5.2, CONV-14): the command,

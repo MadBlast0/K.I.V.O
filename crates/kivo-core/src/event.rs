@@ -37,11 +37,6 @@ impl Event {
         self.meta.task_id = Some(task);
         self
     }
-
-    pub fn traced(mut self, trace: TraceId) -> Self {
-        self.meta.trace_id = trace;
-        self
-    }
 }
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]

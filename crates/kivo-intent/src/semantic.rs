@@ -93,12 +93,6 @@ impl Semantic {
         })
     }
 
-    #[must_use]
-    pub fn with_threshold(mut self, threshold: f32) -> Self {
-        self.threshold = threshold;
-        self
-    }
-
     /// The best app or window named in the request, as a span of its words.
     fn find_slot(words: &[String], cx: &Context<'_>) -> Option<Slot> {
         let mut best: Option<(f32, Slot)> = None;

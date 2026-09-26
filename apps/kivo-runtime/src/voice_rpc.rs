@@ -11,7 +11,8 @@ use kivo_core::config::{SoundCue, SoundSet};
 use kivo_core::text;
 use kivo_ipc::infer::InferSlot;
 use kivo_ipc::protocol::{
-    MeasuredItem, ProfileItem, RecommendationItem, SpeechChoices, SpeechEngineItem, VoiceItem,
+    BenchmarkReply, MeasuredItem, ProfileItem, RecommendationItem, SpeechBudget, SpeechChoices,
+    SpeechEngineItem, VoiceItem,
 };
 use kivo_ipc::{RpcError, method};
 use kivo_platform::Secrets;
@@ -633,7 +634,10 @@ impl VoiceRpc {
                                     lock(&self.db).set_meta(crate::models::ENGINE_BENCH_KEY, &raw);
                             }
                             tracing::info!(engine = p.engine, ?measured, "engine benchmarked");
-                            ok(&measured_item(measured))
+                            ok(&BenchmarkReply {
+                                measured: measured_item(measured),
+                                budget: speech_budget(),
+                            })
                         }
                         Err(e) => Err(refuse(e)),
                     },
@@ -1142,6 +1146,19 @@ fn half() -> f32 {
 }
 
 /// KIVO's measurement of an engine, for the Voice page.
+/// KIVO's thresholds for a measured engine, as the benchmark card shows them.
+fn speech_budget() -> SpeechBudget {
+    use kivo_voice::registry::thresholds as t;
+    SpeechBudget {
+        stt_ms: t::STT_FINAL_MS,
+        tts_ms: t::TTS_FIRST_AUDIO_MS,
+        real_time_factor: t::REAL_TIME_FACTOR,
+        cancel_ms: t::CANCEL_MS,
+        word_error_rate: t::WORD_ERROR_RATE,
+        noisy_word_error_rate: t::NOISY_WORD_ERROR_RATE,
+    }
+}
+
 fn measured_item(m: kivo_voice::registry::Measured) -> MeasuredItem {
     MeasuredItem {
         real_time_factor: m.real_time_factor,

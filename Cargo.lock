@@ -2716,7 +2716,6 @@ version = "0.0.0"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
- "bytes",
  "futures-util",
  "kivo-core",
  "reqwest",
@@ -2727,7 +2726,6 @@ dependencies = [
  "tokio-tungstenite",
  "tokio-util",
  "tracing",
- "uuid",
 ]
 
 [[package]]
@@ -2828,7 +2826,6 @@ dependencies = [
  "tokio",
  "tokio-util",
  "toml 1.1.6+spec-1.1.0",
- "tracing",
  "url",
  "uuid",
 ]
@@ -2839,7 +2836,6 @@ version = "0.0.0"
 dependencies = [
  "regex",
  "serde",
- "serde_json",
  "sha2 0.10.9",
  "tempfile",
  "thiserror 2.0.20",

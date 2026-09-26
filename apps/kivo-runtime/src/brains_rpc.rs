@@ -4,7 +4,7 @@
 //! beyond a click in the UI, and no key ever travels back to it (SEC-19).
 
 use crate::activity::Recorder;
-use crate::brains::{Brains, parse_handle};
+use crate::brains::Brains;
 use crate::core::Core;
 use crate::discovery::{self, Discovery};
 use crate::engine::Engine;
@@ -146,13 +146,6 @@ impl BrainsRpc {
     #[must_use]
     pub fn with_exports(mut self, dir: std::path::PathBuf) -> Self {
         self.exports = Some(dir);
-        self
-    }
-
-    /// Uses other OpenRouter endpoints (tests).
-    #[must_use]
-    pub fn with_oauth(mut self, oauth: OpenRouterOAuth) -> Self {
-        self.oauth = oauth;
         self
     }
 
@@ -1163,9 +1156,4 @@ impl BrainsRpc {
 
 fn lock<T>(m: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
-}
-
-/// Does a connection's key handle point into KIVO's store (never a raw key)?
-pub fn is_handle(text: &str) -> bool {
-    parse_handle(text).is_some()
 }

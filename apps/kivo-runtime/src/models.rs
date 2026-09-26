@@ -329,11 +329,6 @@ impl Models {
         self.apply_engines(&self.core.config());
     }
 
-    /// Whether cloud engine `id` can be used now: allowed by privacy, and its key saved.
-    pub fn cloud_ready(&self, id: &str, config: &KivoConfig) -> bool {
-        speech_may_use(id, config) && self.cloud_access(id, config).is_some()
-    }
-
     /// Reads KIVO's latest `stt` and `tts` benchmark runs on this PC (VOICE-42).
     pub fn load_measurements(&self, db: &kivo_store::Database) {
         if let Ok(Some(raw)) = db.meta(VOICE_WER_KEY)

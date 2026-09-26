@@ -9,7 +9,7 @@ pub mod gate;
 pub mod mixer;
 pub mod resample;
 
-pub use capture::{CaptureReader, CaptureWriter, LevelMeter, capture_ring};
+pub use capture::{CaptureReader, CaptureWriter, capture_ring};
 pub use frames::{BATCH_80MS, Chunker, FRAME_10MS, History};
 pub use gate::{EnergyGate, level_db};
 pub use mixer::{DeviceFormat, Mixer};

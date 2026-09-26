@@ -877,6 +877,7 @@
     "yes": "Remember",
     "no": "Not now",
     "notFound": "KIVO can’t find that workspace.",
+    "notAnAgent": "That isn’t a coding agent KIVO knows.",
     "context": "The user is working in the workspace {name} ({path}).",
     "nothingToExport": "This workspace has no notes to export yet.",
     "remembered": "I’ll remember {name} as a workspace."

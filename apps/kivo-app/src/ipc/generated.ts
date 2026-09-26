@@ -550,6 +550,26 @@ memoryMb?: number,
  */
 measuredAt: number, };
 
+export type SpeechBudget = { 
+/**
+ * End of speech → final transcript.
+ */
+sttMs: number, 
+/**
+ * Text → first audio.
+ */
+ttsMs: number, 
+/**
+ * Processing time over audio time.
+ */
+realTimeFactor: number, 
+/**
+ * Cancel → silence.
+ */
+cancelMs: number, wordErrorRate: number, noisyWordErrorRate: number, };
+
+export type BenchmarkReply = { measured: MeasuredItem, budget: SpeechBudget, };
+
 export type ProfileItem = { slot: string, profile: string, 
 /**
  * `None`: "Not available yet", or none for this language (`otherLanguagesOnly`).
@@ -1187,6 +1207,7 @@ export const Method = {
   workspacesRemember: "workspaces.remember",
   workspacesForget: "workspaces.forget",
   workspacesExportAgentsMd: "workspaces.exportAgentsMd",
+  workspacesSetAgent: "workspaces.setAgent",
   instructionsGet: "instructions.get",
   instructionsSet: "instructions.set",
   permissionsBypass: "permissions.bypass",
